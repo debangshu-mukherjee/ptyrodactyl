@@ -7,6 +7,7 @@ notebooks/__pycache__/
 /src/pterodactyl/light/__pycache__/
 /data/__pycache__/
 /tests/__pycache__/
+/tests/electrons/__pycache__/
 /envs/__pycache__/
 *.py[cod]
 
@@ -18,6 +19,7 @@ notebooks/__pycache__/
 /src/pterodactyl/light/.vscode
 /notebooks/.vscode
 /tests/.vscode
+/tests/electrons/.vscode
 /data/.vscode
 /data/*/.vscode
 /envs/.vscode
@@ -99,6 +101,7 @@ target/
 /src/pterodactyl/light/.ipynb_checkpoints/
 /src/pterodactyl/electrons/.ipynb_checkpoints/
 /tests/.ipynb_checkpoints/
+/tests/electrons/.ipynb_checkpoints/
 /data/.ipynb_checkpoints/
 /data/*/.ipynb_checkpoints/
 /ens/.ipynb_checkpoints/

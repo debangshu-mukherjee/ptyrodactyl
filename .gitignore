@@ -44,7 +44,7 @@ parts/
 sdist/
 var/
 *.egg-info/
-/src/strain_data_processing.egg-info
+/src/pterodactyl.egg-info
 .installed.cfg
 *.egg
 
@@ -62,7 +62,7 @@ pip-delete-this-directory.txt
 cufile.log
 tests/cufile.log
 src/cufile.log
-src/strain_data_processing/cufile.log
+src/pterodactyl/cufile.log
 notebooks/cufile.log
 
 # Unit test / coverage reports

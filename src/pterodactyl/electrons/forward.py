@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from jax import Array
-from jaxtyping import Float, Complex, Shape
+from jaxtyping import Float, Complex, Shape, Int
 
 
 def transmission_func(
@@ -95,6 +95,90 @@ def propagation_func(
         prop
     )  # FFT shift the propagator
     return prop_shift.astype(jnp.complex64)
+
+
+def FourierCoords(
+    calibration: float, sizebeam: Int[Array, "2"]
+) -> tuple[float, Float[Array, "H W"]]:
+    FOV = sizebeam[0] * calibration
+    qx = (jnp.arange((-sizebeam[0] / 2), ((sizebeam[0] / 2)), 1)) / FOV
+    shifter = sizebeam[0] // 2
+    Lx = jnp.roll(qx, shifter)
+    Lya, Lxa = jnp.meshgrid(Lx, Lx)
+    L2 = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
+    L1: Float[Array, "H W"] = L2**0.5
+    dL = Lx[1] - Lx[0]
+    return dL, L1
+
+
+def FourierCalib(calibration: float, sizebeam: Int[Array, "2"]) -> Float[Array, "2"]:
+    FOV_y = sizebeam[0] * calibration
+    FOV_x = sizebeam[1] * calibration
+    qy = (jnp.arange((-sizebeam[0] / 2), ((sizebeam[0] / 2)), 1)) / FOV_y
+    qx = (jnp.arange((-sizebeam[1] / 2), ((sizebeam[1] / 2)), 1)) / FOV_x
+    shifter_y = sizebeam[0] // 2
+    shifter_x = sizebeam[1] // 2
+    Ly = jnp.roll(qy, shifter_y)
+    Lx = jnp.roll(qx, shifter_x)
+    dL_y = Ly[1] - Ly[0]
+    dL_x = Lx[1] - Lx[0]
+    return jnp.array([dL_y, dL_x])
+
+
+@jax.jit
+def make_probe(
+    aperture: float,
+    voltage: float,
+    image_size: Int[Array, "2"],
+    calibration_pm: float,
+    defocus: float = 0,
+    c3: float = 0,
+    c5: float = 0,
+) -> Complex[Array, "H W"]:
+    """
+    This calculates an electron probe based on the
+    size and the estimated Fourier co-ordinates with
+    the option of adding spherical aberration in the
+    form of defocus, C3 and C5
+    """
+    aperture = aperture / 1000
+    wavelength = wavelength_ang(voltage)
+    LMax = aperture / wavelength
+    image_y, image_x = image_size
+    x_FOV = image_x * 0.01 * calibration_pm
+    y_FOV = image_y * 0.01 * calibration_pm
+    qx = (jnp.arange((-image_x / 2), (image_x / 2), 1)) / x_FOV
+    x_shifter = image_x // 2
+    qy = (jnp.arange((-image_y / 2), (image_y / 2), 1)) / y_FOV
+    y_shifter = image_y // 2
+    Lx = jnp.roll(qx, x_shifter)
+    Ly = jnp.roll(qy, y_shifter)
+    Lya, Lxa = jnp.meshgrid(Lx, Ly)
+    L2 = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
+    inverse_real_matrix = L2**0.5
+    Adist = jnp.asarray(inverse_real_matrix <= LMax, dtype=jnp.complex64)
+    chi_probe = aberration(inverse_real_matrix, wavelength, defocus, c3, c5)
+    Adist *= jnp.exp(-1j * chi_probe)
+    probe_real_space = jnp.fft.ifftshift(jnp.fft.ifft2(Adist))
+    return probe_real_space
+
+
+@jax.jit
+def aberration(
+    fourier_coord: Float[Array, "H W"],
+    wavelength_ang: float,
+    defocus: float = 0,
+    c3: float = 0,
+    c5: float = 0,
+) -> Float[Array, "H W"]:
+    p_matrix = wavelength_ang * fourier_coord
+    chi = (
+        ((defocus * jnp.power(p_matrix, 2)) / 2)
+        + ((c3 * (1e7) * jnp.power(p_matrix, 4)) / 4)
+        + ((c5 * (1e7) * jnp.power(p_matrix, 6)) / 6)
+    )
+    chi_probe = (2 * jnp.pi * chi) / wavelength_ang
+    return chi_probe
 
 
 @jax.jit

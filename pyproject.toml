@@ -27,6 +27,7 @@ dependencies = [
     "tqdm >= 4.66.0",
     "jax >= 0.4.17",
     "jaxtyping >= 0.2.21",
+    "chex >= 0.1.85",
 ]
 
 [tool.setuptools]

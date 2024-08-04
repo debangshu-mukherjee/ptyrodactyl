@@ -1,8 +1,8 @@
-import pytest
+import chex
 import jax
 import jax.numpy as jnp
-from jax import Array
-from jaxtyping import Float, Complex, Shaped, Int
+import pytest
+from jaxtyping import Float, Complex, Int
 
 # Import your functions here
 from pterodactyl.electrons import (
@@ -13,66 +13,89 @@ from pterodactyl.electrons import (
     wavelength_ang,
 )
 
+
 # Set a random seed for reproducibility
-jax.random.PRNGKey(0)
+key = jax.random.PRNGKey(0)
 
 
-def test_FourierCoords():
+@chex.all_variants
+def test_FourierCoords(variant):
     calibration = 0.1
     sizebeam = jnp.array([128, 128])
-    dL, L1 = FourierCoords(calibration, sizebeam)
 
-    assert isinstance(dL, float)
-    assert isinstance(L1, jax.Array)
-    assert L1.shape == (128, 128)
-    assert jnp.isclose(dL, 1 / (128 * 0.1), atol=1e-6)
-    assert jnp.allclose(L1[64, 64], 0, atol=1e-6)  # Center should be close to 0
+    fn = variant(FourierCoords)
+    dL, L1 = fn(calibration, sizebeam)
+
+    chex.assert_type(dL, float)
+    chex.assert_shape(L1, (128, 128))
+    chex.assert_scalar_near(dL, 1 / (128 * 0.1), atol=1e-6)
+    chex.assert_scalar_near(L1[64, 64], 0, atol=1e-6)  # Center should be close to 0
 
 
-def test_FourierCalib():
+@chex.all_variants
+def test_FourierCalib(variant):
     calibration = 0.1
     sizebeam = jnp.array([128, 256])
-    result = FourierCalib(calibration, sizebeam)
 
-    assert isinstance(result, jax.Array)
-    assert result.shape == (2,)
-    assert jnp.isclose(result[0], 1 / (128 * 0.1), atol=1e-6)
-    assert jnp.isclose(result[1], 1 / (256 * 0.1), atol=1e-6)
+    fn = variant(FourierCalib)
+    result = fn(calibration, sizebeam)
+
+    chex.assert_shape(result, (2,))
+    chex.assert_scalar_near(result[0], 1 / (128 * 0.1), atol=1e-6)
+    chex.assert_scalar_near(result[1], 1 / (256 * 0.1), atol=1e-6)
 
 
-def test_make_probe():
+@chex.all_variants
+def test_make_probe(variant):
     aperture = 30.0  # mrad
     voltage = 300.0  # kV
     image_size = jnp.array([128, 128])
     calibration_pm = 10.0  # pm
 
-    probe = make_probe(aperture, voltage, image_size, calibration_pm)
+    fn = variant(make_probe)
+    probe = fn(aperture, voltage, image_size, calibration_pm)
 
-    assert isinstance(probe, jax.Array)
-    assert probe.shape == (128, 128)
-    assert probe.dtype == jnp.complex64
-    assert jnp.allclose(
+    chex.assert_shape(probe, (128, 128))
+    chex.assert_type(probe, jnp.complex64)
+    chex.assert_scalar_near(
         jnp.sum(jnp.abs(probe) ** 2), 1.0, atol=1e-6
     )  # Check normalization
 
 
-def test_aberration():
+@chex.all_variants
+def test_aberration(variant):
     fourier_coord = jnp.ones((128, 128))
     wavelength = 1.97e-12  # for 300 kV
     defocus = 50.0  # nm
     c3 = 1.0  # mm
     c5 = 1.0  # mm
 
-    result = aberration(fourier_coord, wavelength, defocus, c3, c5)
+    fn = variant(aberration)
+    result = fn(fourier_coord, wavelength, defocus, c3, c5)
 
-    assert isinstance(result, jax.Array)
-    assert result.shape == (128, 128)
-    assert jnp.all(result != 0)  # Should have non-zero values
+    chex.assert_shape(result, (128, 128))
+    chex.assert_trees_all_close(result, result, rtol=1e-5)  # Should be consistent
+    chex.assert_trees_all_finite(result)  # No NaNs or infs
 
 
-def test_wavelength_ang():
+@chex.all_variants
+def test_wavelength_ang(variant):
     voltage_kV = 300.0
-    wavelength = wavelength_ang(voltage_kV)
 
-    assert isinstance(wavelength, float)
-    assert jnp.isclose(wavelength, 1.97e-2, atol=1e-4)  # Expected wavelength for 300 kV
+    fn = variant(wavelength_ang)
+    wavelength = fn(voltage_kV)
+
+    chex.assert_type(wavelength, float)
+    chex.assert_scalar_near(
+        wavelength, 1.97e-2, atol=1e-4
+    )  # Expected wavelength for 300 kV
+
+
+@pytest.mark.parametrize("voltage", [100.0, 200.0, 300.0])
+@chex.all_variants
+def test_wavelength_ang_multiple_voltages(variant, voltage):
+    fn = variant(wavelength_ang)
+    wavelength = fn(voltage)
+
+    chex.assert_type(wavelength, float)
+    chex.assert_scalar_positive(wavelength)

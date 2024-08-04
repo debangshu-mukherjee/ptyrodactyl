@@ -50,7 +50,10 @@ def transmission_func(
 
 
 def propagation_func(
-    imsize: Shaped[Array, "2"], thickness_ang: float, voltage_kV: float, calib_ang: float
+    imsize: Shaped[Array, "2"],
+    thickness_ang: float,
+    voltage_kV: float,
+    calib_ang: float,
 ) -> Complex[Array, "H W"]:
     """
     Calculates the complex propagation function that results

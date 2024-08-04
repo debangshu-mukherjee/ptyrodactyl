@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from jax import Array
-from jaxtyping import Float, Complex, Shape, Int
+from jaxtyping import Float, Complex, Shaped, Int
 
 
 def transmission_func(
@@ -50,7 +50,7 @@ def transmission_func(
 
 
 def propagation_func(
-    imsize: Shape[Array, "2"], thickness_ang: float, voltage_kV: float, calib_ang: float
+    imsize: Shaped[Array, "2"], thickness_ang: float, voltage_kV: float, calib_ang: float
 ) -> Complex[Array, "H W"]:
     """
     Calculates the complex propagation function that results
@@ -59,7 +59,7 @@ def propagation_func(
 
     Parameters
     ----------
-    imsize:        Shape[Array, "2"]
+    imsize:        Shaped[Array, "2"]
                    Size of the image of the propagator
     thickness_ang: float
                    Distance between the slices in angstroms

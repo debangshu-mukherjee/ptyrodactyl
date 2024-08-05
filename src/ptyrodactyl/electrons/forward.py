@@ -5,30 +5,30 @@ from jaxtyping import Complex, Float, Int, Shaped
 
 
 def transmission_func(
-    pot_slice: Float[Array, "H W"], voltage_kV: float
+    pot_slice: Float[Array, "H W"], 
+    voltage_kV: float
 ) -> Complex[Array, "H W"]:
     """
     Calculates the complex transmission function from
     a single potential slice at a given electron accelerating
     voltage
 
-    Parameters
-    ----------
-    pot_slice:  Float[Array, "H W"]
-                potential slice in Kirkland units
-    voltage_kV: float
-                microscope operating voltage in kilo
-                electronVolts
+    Args:
+    - `pot_slice`, Float[Array, "H W"]:
+        potential slice in Kirkland units
+    - `voltage_kV`, float:
+        microscope operating voltage in kilo
+        electronVolts
 
-    Returns
-    -------
-    trans: Complex[Array, "H W"]
-           The transmission function of a single
-           crystal slice
+    Returns:
+    - `trans` Complex[Array, "H W"]:
+        The transmission function of a single
+        crystal slice
 
-    :Authors:
-    Debangshu Mukherjee <mukherjeed@ornl.gov>
-    JAX adaptation and type hinting: Assistant
+    Flow:
+    - Calculate the electron wavelength in angstroms
+    - Calculate the phase shift of the electron wave
+    - Calculate the transmission function
     """
     m_e: float = 9.109383e-31  # electron mass
     e_e: float = 1.602177e-19  # electron charge
@@ -46,7 +46,7 @@ def transmission_func(
         * ((m_e * c * c) + (e_e * voltage_kV * 1000))
     ) / ((2 * m_e * c * c) + (e_e * voltage_kV * 1000))
     trans: Complex[Array, "H W"] = jnp.exp(1j * sigma * pot_slice)
-    return trans.astype(jnp.complex64)
+    return trans
 
 
 def propagation_func(
@@ -60,25 +60,22 @@ def propagation_func(
     in the phase shift of the exit wave when it travels from
     one slice to the next in the multislice algorithm
 
-    Parameters
-    ----------
-    imsize:        Shaped[Array, "2"]
-                   Size of the image of the propagator
-    thickness_ang: float
-                   Distance between the slices in angstroms
-    voltage_kV:    float
-                   Accelerating voltage in kilovolts
-    calib_ang:     float
-                   Calibration or pixel size in angstroms
+    Args:
+    - `imsize`, Shaped[Array, "2"]:
+        Size of the image of the propagator
+    -  `thickness_ang`, float
+        Distance between the slices in angstroms
+    - `voltage_kV`, float
+        Accelerating voltage in kilovolts
+    - `calib_ang`, float
+        Calibration or pixel size in angstroms
 
-    Returns
-    -------
-    prop_shift:  Complex[Array, "H W"]
-                 This is of the same size given by imsize
+    Returns:
+    - `prop_shift` Complex[Array, "H W"]:
+        This is of the same size given by imsize
 
-    :Authors:
-    Debangshu Mukherjee <mukherjeed@ornl.gov>
-    JAX adaptation and type hinting: Assistant
+    Flow:
+    
     """
     FOV_y: float = imsize[0] * calib_ang
     FOV_x: float = imsize[1] * calib_ang
@@ -89,15 +86,15 @@ def propagation_func(
     Ly: Float[Array, "H"] = jnp.roll(qy, shifter_y)
     Lx: Float[Array, "W"] = jnp.roll(qx, shifter_x)
     Lya, Lxa = jnp.meshgrid(Lx, Ly)
-    L2: Float[Array, "H W"] = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
-    wavelength_ang: float = wavelength_ang(voltage_kV)
+    L_sq: Float[Array, "H W"] = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
+    lambda_angstrom: float = wavelength_ang(voltage_kV)
     prop: Complex[Array, "H W"] = jnp.exp(
-        (-1j) * jnp.pi * wavelength_ang * thickness_ang * L2
+        (-1j) * jnp.pi * lambda_angstrom * thickness_ang * L_sq
     )
     prop_shift: Complex[Array, "H W"] = jnp.fft.fftshift(
         prop
     )  # FFT shift the propagator
-    return prop_shift.astype(jnp.complex64)
+    return prop_shift
 
 
 def FourierCoords(
@@ -183,13 +180,24 @@ def aberration(
     chi_probe = (2 * jnp.pi * chi) / wavelength_ang
     return chi_probe
 
-
-@jax.jit
 def wavelength_ang(voltage_kV: float) -> float:
     """
     Calculates the relativistic electron wavelength
     in angstroms based on the microscope accelerating
     voltage
+    
+    Args:
+    - `voltage_kV`, float:
+        The microscope accelerating voltage in kilo
+        electronVolts
+    
+    Returns:
+    - `in_angstroms`, float:
+        The electron wavelength in angstroms
+        
+    Flow:
+    - Calculate the electron wavelength in meters
+    - Convert the wavelength to angstroms
     """
     m: float = 9.109383e-31  # mass of an electron
     e: float = 1.602177e-19  # charge of an electron
@@ -199,4 +207,6 @@ def wavelength_ang(voltage_kV: float) -> float:
     voltage: float = voltage_kV * 1000
     numerator: float = (h**2) * (c**2)
     denominator: float = (e * voltage) * ((2 * m * (c**2)) + (e * voltage))
-    return 1e10 * jnp.sqrt(numerator / denominator)  # in angstroms
+    wavelength_meters: float = jnp.sqrt(numerator / denominator)  # in meters
+    in_angstroms: float = 1e10 * wavelength_meters  # in angstroms
+    return in_angstroms

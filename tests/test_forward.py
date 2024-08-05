@@ -1,22 +1,24 @@
-from typing import Any
+from typing import NamedTuple
 
 import chex
 import jax
 import jax.numpy as jnp
 import pytest
-from jaxtyping import Array, Complex, Float, Shaped
+from jaxtyping import Array, Float, Int, Shaped
 
 # Import your functions here
-from ptyrodactyl.electrons import (propagation_func, 
-                                   transmission_func,
-                                   wavelength_ang)
+from ptyrodactyl.electrons import (fourier_coords, propagation_func,
+                                   transmission_func, wavelength_ang)
 
 # Set a random seed for reproducibility
 key = jax.random.PRNGKey(0)
 
+if __name__ == "__main__":
+    pytest.main([__file__])
+
 
 @chex.all_variants
-class TestWavelengthAng:
+class test_wavelength_ang:
 
     @pytest.fixture
     def voltage_kV(self):
@@ -36,7 +38,7 @@ class TestWavelengthAng:
 
     def test_array_input(self, variant) -> None:
         """Test wavelength_ang with array input."""
-        voltages: Float[jax.Array, "3"] = jnp.array([100.0, 200.0, 300.0])
+        voltages: Float[Array, "3"] = jnp.array([100.0, 200.0, 300.0])
         fn = jax.vmap(variant(wavelength_ang))
         results = fn(voltages)
 
@@ -78,7 +80,7 @@ class TestWavelengthAng:
 
 
 @chex.all_variants
-class TestTransmissionFunc:
+class test_transmission_func:
 
     @pytest.fixture
     def voltage_kV(self):
@@ -116,7 +118,7 @@ class TestTransmissionFunc:
         jitted_fn = jax.jit(variant(transmission_func))
         result = jitted_fn(pot_slice, voltage_kV)
 
-        assert isinstance(result, jax.Array)
+        assert isinstance(result, Array)
         chex.assert_type(result, jnp.complex64)
         chex.assert_shape(result, pot_slice.shape)
 
@@ -129,7 +131,7 @@ class TestTransmissionFunc:
         )
         grad_value = grad_fn(pot_slice, voltage_kV)
 
-        assert isinstance(grad_value, jax.Array)
+        assert isinstance(grad_value, Array)
         chex.assert_shape(grad_value, pot_slice.shape)
         chex.assert_trees_all_finite(grad_value)
 
@@ -153,7 +155,7 @@ class TestTransmissionFunc:
 
 
 @chex.all_variants
-class TestPropagationFunc:
+class test_propagation_func:
 
     @pytest.fixture
     def imsize(self) -> Shaped[Array, "2"]:
@@ -257,3 +259,122 @@ class TestPropagationFunc:
         fn = variant(propagation_func)
         with pytest.raises((ValueError, FloatingPointError)):
             fn(imsize, invalid_input, invalid_input, invalid_input)
+
+
+@chex.all_variants
+class test_fourier_coords:
+
+    @pytest.fixture
+    def calibration(self) -> float:
+        return 0.1
+
+    @pytest.fixture(params=[(64, 64), (64, 128), (128, 64)])
+    def image_size(self, request) -> Int[Array, "2"]:
+        return jnp.array(request.param)
+
+    def test_basic_functionality(self, variant, calibration, image_size):
+        """Test basic functionality of FourierCoords."""
+        fn = variant(fourier_coords)
+        result = fn(calibration, image_size)
+
+        assert isinstance(result, NamedTuple)
+        assert hasattr(result, "array")
+        assert hasattr(result, "calib_y")
+        assert hasattr(result, "calib_x")
+        chex.assert_shape(result.array, tuple(image_size))
+        chex.assert_type(result.array, jnp.float32)
+        chex.assert_type(result.calib_y, float)
+        chex.assert_type(result.calib_x, float)
+
+    def test_output_properties(self, variant, calibration, image_size):
+        """Test specific properties of the output."""
+        fn = variant(fourier_coords)
+        result = fn(calibration, image_size)
+
+        # Check that the center of the array is zero
+        center = tuple(size // 2 for size in image_size)
+        assert jnp.isclose(result.array[center], 0, atol=1e-6)
+
+        # Check that the calibrations are correct
+        expected_calib_y = 1 / (image_size[0] * calibration)
+        expected_calib_x = 1 / (image_size[1] * calibration)
+        assert jnp.isclose(result.calib_y, expected_calib_y, rtol=1e-6)
+        assert jnp.isclose(result.calib_x, expected_calib_x, rtol=1e-6)
+
+    def test_jit_compilation(self, variant, calibration, image_size):
+        """Test that FourierCoords can be JIT-compiled."""
+        jitted_fn = jax.jit(variant(fourier_coords))
+        result = jitted_fn(calibration, image_size)
+
+        assert isinstance(result, NamedTuple)
+        chex.assert_shape(result.array, tuple(image_size))
+
+    def test_different_input_shapes(self, variant, calibration):
+        """Test FourierCoords with different input shapes, including asymmetric ones."""
+        fn = variant(fourier_coords)
+        shapes = [(32, 32), (64, 64), (128, 128), (64, 128), (128, 64)]
+
+        for shape in shapes:
+            image_size = jnp.array(shape)
+            result = fn(calibration, image_size)
+            chex.assert_shape(result.array, shape)
+            assert (
+                result.calib_y != result.calib_x
+                if shape[0] != shape[1]
+                else result.calib_y == result.calib_x
+            )
+
+    def test_calibration_dependency(self, variant, image_size):
+        """Test that the output changes with different calibrations."""
+        fn = variant(fourier_coords)
+        result1 = fn(0.1, image_size)
+        result2 = fn(0.2, image_size)
+
+        assert not jnp.allclose(result1.array, result2.array)
+        assert not jnp.isclose(result1.calib_y, result2.calib_y)
+        assert not jnp.isclose(result1.calib_x, result2.calib_x)
+
+    def test_symmetry(self, variant, calibration, image_size):
+        """Test that the output array is symmetric along each axis."""
+        fn = variant(fourier_coords)
+        result = fn(calibration, image_size)
+
+        assert jnp.allclose(result.array, jnp.flip(result.array, axis=0))
+        assert jnp.allclose(result.array, jnp.flip(result.array, axis=1))
+
+    def test_gradient(self, variant, calibration, image_size):
+        """Test that FourierCoords is differentiable with respect to calibration."""
+        fn = variant(fourier_coords)
+
+        def loss(cal):
+            return jnp.sum(fn(cal, image_size).array)
+
+        grad_fn = jax.grad(loss)
+        grad_value = grad_fn(calibration)
+
+        assert jnp.isfinite(grad_value)
+        assert grad_value != 0
+
+    @pytest.mark.parametrize(
+        "invalid_calibration", [-1.0, 0.0, float("nan"), float("inf")]
+    )
+    def test_invalid_calibration(self, variant, invalid_calibration, image_size):
+        """Test FourierCoords behavior with invalid calibration inputs."""
+        fn = variant(fourier_coords)
+        with pytest.raises((ValueError, FloatingPointError)):
+            fn(invalid_calibration, image_size)
+
+    @pytest.mark.parametrize(
+        "invalid_size",
+        [
+            jnp.array([-64, 64]),
+            jnp.array([64, -64]),
+            jnp.array([0, 64]),
+            jnp.array([64, 0]),
+        ],
+    )
+    def test_invalid_image_size(self, variant, calibration, invalid_size):
+        """Test FourierCoords behavior with invalid image size inputs."""
+        fn = variant(fourier_coords)
+        with pytest.raises(ValueError):
+            fn(calibration, invalid_size)

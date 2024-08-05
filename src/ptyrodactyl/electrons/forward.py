@@ -1,3 +1,5 @@
+from typing import Any, NamedTuple
+
 import jax
 import jax.numpy as jnp
 from jax import Array
@@ -5,8 +7,7 @@ from jaxtyping import Complex, Float, Int, Shaped
 
 
 def transmission_func(
-    pot_slice: Float[Array, "H W"], 
-    voltage_kV: float
+    pot_slice: Float[Array, "H W"], voltage_kV: float
 ) -> Complex[Array, "H W"]:
     """
     Calculates the complex transmission function from
@@ -75,7 +76,7 @@ def propagation_func(
         This is of the same size given by imsize
 
     Flow:
-    
+
     """
     FOV_y: float = imsize[0] * calib_ang
     FOV_x: float = imsize[1] * calib_ang
@@ -97,18 +98,55 @@ def propagation_func(
     return prop_shift
 
 
-def FourierCoords(
-    calibration: float, sizebeam: Int[Array, "2"]
-) -> tuple[float, Float[Array, "H W"]]:
-    FOV = sizebeam[0] * calibration
-    qx = (jnp.arange((-sizebeam[0] / 2), ((sizebeam[0] / 2)), 1)) / FOV
-    shifter = sizebeam[0] // 2
-    Lx = jnp.roll(qx, shifter)
-    Lya, Lxa = jnp.meshgrid(Lx, Lx)
-    L2 = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
-    L1: Float[Array, "H W"] = L2**0.5
-    dL = Lx[1] - Lx[0]
-    return dL, L1
+def fourier_coords(calibration: float, image_size: Int[Array, "2"]) -> NamedTuple:
+    """
+    Return the Fourier coordinates
+
+    Args:
+    - `calibration`, float:
+        The pixel size in angstroms in real space
+    - `image_size`, Int[Array, "2"]:
+        The size of the beam in pixels
+
+    Returns:
+    - A NamedTuple with the following fields:
+        - `array`, Any[Array, "* *"]:
+            The array values
+        - `calib_y`, float:
+            Calibration along the first axis
+        - `calib_x`, float:
+            Calibration along the second axis
+    """
+    real_fov_y: float = image_size[0] * calibration  # real space field of view in y
+    real_fov_x: float = image_size[1] * calibration  # real space field of view in x
+    inverse_arr_y: Float[Array, "H"] = (
+        jnp.arange((-image_size[0] / 2), ((image_size[0] / 2)), 1)
+    ) / real_fov_y  # inverse space array y
+    inverse_arr_x: Float[Array, "W"] = (
+        jnp.arange((-image_size[1] / 2), ((image_size[1] / 2)), 1)
+    ) / real_fov_x  # inverse space array x
+    shifter_y: float = image_size[0] // 2
+    shifter_x: float = image_size[1] // 2
+    inverse_shifted_y: Float[Array, "H"] = jnp.roll(
+        inverse_arr_y, shifter_y
+    )  # shifted inverse space array y
+    inverse_shifted_x: Float[Array, "W"] = jnp.roll(
+        inverse_arr_x, shifter_x
+    )  # shifted inverse space array y
+    inverse_xx: Float[Array, "H W"]
+    inverse_yy: Float[Array, "H W"]
+    inverse_xx, inverse_yy = jnp.meshgrid(inverse_shifted_x, inverse_shifted_y)
+    inv_squared = jnp.multiply(inverse_yy, inverse_yy) + jnp.multiply(
+        inverse_xx, inverse_xx
+    )
+    inverse_array: Float[Array, "H W"] = inv_squared**0.5
+    calib_inverse_y: float = inverse_arr_y[1] - inverse_arr_y[0]
+    calib_inverse_x: float = inverse_arr_x[1] - inverse_arr_x[0]
+    calibrated_array = NamedTuple(
+        "array_with_calibrations",
+        [("array", Any[Array, "* *"]), ("calib_y", float), ("calib_x", float)],
+    )
+    return calibrated_array(inverse_array, calib_inverse_y, calib_inverse_x)
 
 
 def FourierCalib(calibration: float, sizebeam: Int[Array, "2"]) -> Float[Array, "2"]:
@@ -180,21 +218,22 @@ def aberration(
     chi_probe = (2 * jnp.pi * chi) / wavelength_ang
     return chi_probe
 
+
 def wavelength_ang(voltage_kV: float) -> float:
     """
     Calculates the relativistic electron wavelength
     in angstroms based on the microscope accelerating
     voltage
-    
+
     Args:
     - `voltage_kV`, float:
         The microscope accelerating voltage in kilo
         electronVolts
-    
+
     Returns:
     - `in_angstroms`, float:
         The electron wavelength in angstroms
-        
+
     Flow:
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms

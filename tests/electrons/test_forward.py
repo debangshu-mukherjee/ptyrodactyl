@@ -5,7 +5,7 @@ import pytest
 from jaxtyping import Float, Complex, Int
 
 # Import your functions here
-from pterodactyl.electrons import (
+from ptyrodactyl.electrons import (
     FourierCoords,
     FourierCalib,
     make_probe,

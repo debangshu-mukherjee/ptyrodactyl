@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jnp
 from jax import Array
-from jaxtyping import Float, Complex, Shaped, Int
+from jaxtyping import Complex, Float, Int, Shaped
 
 
 def transmission_func(

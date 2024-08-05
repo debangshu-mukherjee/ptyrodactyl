@@ -1,6 +1,6 @@
 [project]
-name = "pterodactyl"
-version = "2024.08.04"
+name = "ptyrodactyl"
+version = "2024.08.05"
 description = "Ptychography through differentiable programming in JAX"
 authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 license = {file = "LICENSE"}
@@ -22,12 +22,13 @@ dependencies = [
     "numpy >= 1.13.0",
     "scipy >= 1.0.0",
     "matplotlib >= 2.2.0",
-    "scikit-image >= 0.13.0",
     "matplotlib-scalebar >= 0.5.0",
     "tqdm >= 4.66.0",
     "jax >= 0.4.17",
     "jaxtyping >= 0.2.21",
     "chex >= 0.1.85",
+    "optax >= 0.1.8",
+    "pytest >= 8.0.0",
 ]
 
 [tool.setuptools]

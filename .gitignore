@@ -7,7 +7,7 @@ notebooks/__pycache__/
 /src/ptyrodactyl/light/__pycache__/
 /data/__pycache__/
 /tests/__pycache__/
-/tests/electrons/__pycache__/
+/tests/test_electrons/__pycache__/
 /envs/__pycache__/
 *.py[cod]
 
@@ -19,13 +19,20 @@ notebooks/__pycache__/
 /src/ptyrodactyl/light/.vscode
 /notebooks/.vscode
 /tests/.vscode
-/tests/electrons/.vscode
+/tests/test_electrons/.vscode
 /data/.vscode
 /data/*/.vscode
 /envs/.vscode
 
 .pyre_configuration
 /src/.pyre_configuration
+/src/ptyrodactyl/.pyre_configuration
+/src/ptyrodactyl/electrons/.pyre_configuration
+/src/ptyrodactyl/light/.pyre_configuration
+/notebooks/.pyre_configuration
+/tests/.pyre_configuration
+/tests/test_electrons/.pyre_configuration
+/data/.pyre_configuration
 
 # C extensions
 *.so
@@ -101,7 +108,7 @@ target/
 /src/ptyrodactyl/light/.ipynb_checkpoints/
 /src/ptyrodactyl/electrons/.ipynb_checkpoints/
 /tests/.ipynb_checkpoints/
-/tests/electrons/.ipynb_checkpoints/
+/tests/test_electrons/.ipynb_checkpoints/
 /data/.ipynb_checkpoints/
 /data/*/.ipynb_checkpoints/
 /ens/.ipynb_checkpoints/

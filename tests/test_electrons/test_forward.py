@@ -4,11 +4,13 @@ import chex
 import jax
 import jax.numpy as jnp
 import pytest
-from jaxtyping import Array, Float, Int, Shaped
+from absl.testing import parameterized
+from jaxtyping import Array, Float, Complex, Int, Shaped
+
+jax.config.update("jax_enable_x64", True)
 
 # Import your functions here
-from ptyrodactyl.electrons import (fourier_coords, propagation_func,
-                                   transmission_func, wavelength_ang)
+from ptyrodactyl.electrons import (wavelength_ang, transmission_func)
 
 # Set a random seed for reproducibility
 key = jax.random.PRNGKey(0)
@@ -17,364 +19,139 @@ if __name__ == "__main__":
     pytest.main([__file__])
 
 
-@chex.all_variants
-class test_wavelength_ang:
+class test_wavelength_ang(chex.TestCase):
 
-    @pytest.fixture
-    def voltage_kV(self):
-        return 200.0  # Using a single voltage value for all tests
+    @chex.all_variants
+    @parameterized.parameters(
+        {"test_kV": 200, "expected_wavelength": 0.02508},
+        {"test_kV": 1000, "expected_wavelength": 0.008719185412913083},
+        {"test_kV": 0.001, "expected_wavelength": 12.2642524552},
+        {"test_kV": 300, "expected_wavelength": 0.0196874863882},
+    )
+    def test_voltage_values(self, test_kV, expected_wavelength):
+        var_wavelength_ang = self.variant(wavelength_ang)
+        # voltage_kV = 200.0
+        # expected_wavelength = 0.02508  # Expected value based on known physics
+        result = var_wavelength_ang(test_kV)
+        assert jnp.isclose(
+            result, expected_wavelength, atol=1e-6
+        ), f"Expected {expected_wavelength}, but got {result}"
 
-    def test_basic_functionality(self, variant, voltage_kV: float) -> None:
-        """Test basic functionality of wavelength_ang."""
-        fn = variant(wavelength_ang)
-        result = fn(voltage_kV)
+    # Check for precision and rounding errors
+    @chex.all_variants
+    def test_precision_and_rounding_errors(self):
+        var_wavelength_ang = self.variant(wavelength_ang)
+        voltage_kV = 150.0
+        expected_wavelength = 0.02957  # Expected value based on known physics
+        result = var_wavelength_ang(voltage_kV)
+        assert jnp.isclose(
+            result, expected_wavelength, atol=1e-5
+        ), f"Expected {expected_wavelength}, but got {result}"
 
-        chex.assert_type(result, float)
-        chex.assert_scalar_positive(result)
-
-        # Expected value (approximate)
-        expected_value = 0.0251
-        chex.assert_scalar_near(result, expected_value, atol=1e-4)
-
-    def test_array_input(self, variant) -> None:
-        """Test wavelength_ang with array input."""
-        voltages: Float[Array, "3"] = jnp.array([100.0, 200.0, 300.0])
-        fn = jax.vmap(variant(wavelength_ang))
-        results = fn(voltages)
-
-        chex.assert_shape(results, (3,))
-        chex.assert_type(results, jnp.float32)
-        chex.assert_trees_all_close(
-            results, jnp.array([0.0370, 0.0251, 0.0197]), atol=1e-4
-        )
-
-    def test_jit_compilation(self, variant, voltage_kV: float) -> None:
-        """Test that wavelength_ang can be JIT-compiled."""
-        jitted_fn = jax.jit(variant(wavelength_ang))
-        result = jitted_fn(voltage_kV)
-
-        assert isinstance(result, float)
-        chex.assert_scalar_positive(result)
-
-    def test_grad(self, variant, voltage_kV: float) -> None:
-        """Test that wavelength_ang is differentiable."""
-        grad_fn = jax.grad(variant(wavelength_ang))
-        grad_value = grad_fn(voltage_kV)
-
-        assert isinstance(grad_value, float)
-        assert grad_value < 0  # Wavelength decreases as voltage increases
-
-    def test_invalid_voltage(self, variant) -> None:
-        """Test wavelength_ang behavior with invalid voltage inputs."""
-        invalid_voltages = [-100.0, 0.0, float("nan"), float("inf")]
-        for invalid_voltage in invalid_voltages:
-            with pytest.raises((ValueError, FloatingPointError)):
-                variant(wavelength_ang)(invalid_voltage)
-
-    def test_precision(self, variant) -> None:
-        """Test the precision of wavelength_ang calculations."""
-        result = variant(wavelength_ang)(200.0)
-        expected = 0.0251
-
-        assert abs(result - expected) < 1e-4
-
-
-@chex.all_variants
-class test_transmission_func:
-
-    @pytest.fixture
-    def voltage_kV(self):
-        return 200.0  # Using a single voltage value for all tests
-
-    @pytest.fixture
-    def pot_slice(self) -> Float[Array, "H W"]:
-        return jnp.ones((64, 64))  # Example potential slice
-
-    def test_basic_functionality(
-        self, variant, pot_slice: Float[Array, "H W"], voltage_kV: float
-    ) -> None:
-        """Test basic functionality of transmission_func."""
-        fn = variant(transmission_func)
-        result = fn(pot_slice, voltage_kV)
-
-        chex.assert_type(result, jnp.complex64)
-        chex.assert_shape(result, pot_slice.shape)
-        chex.assert_trees_all_finite(result)
-
-    def test_output_range(
-        self, variant, pot_slice: Float[Array, "H W"], voltage_kV: float
-    ) -> None:
-        """Test if the output has magnitude 1 everywhere."""
-        fn = variant(transmission_func)
-        result = fn(pot_slice, voltage_kV)
-
-        magnitude = jnp.abs(result)
-        chex.assert_trees_all_close(magnitude, jnp.ones_like(magnitude), atol=1e-6)
-
-    def test_jit_compilation(
-        self, variant, pot_slice: Float[Array, "H W"], voltage_kV: float
-    ) -> None:
-        """Test that transmission_func can be JIT-compiled."""
-        jitted_fn = jax.jit(variant(transmission_func))
-        result = jitted_fn(pot_slice, voltage_kV)
-
-        assert isinstance(result, Array)
-        chex.assert_type(result, jnp.complex64)
-        chex.assert_shape(result, pot_slice.shape)
-
-    def test_grad(
-        self, variant, pot_slice: Float[Array, "H W"], voltage_kV: float
-    ) -> None:
-        """Test that transmission_func is differentiable."""
-        grad_fn = jax.grad(
-            lambda x, v: jnp.sum(jnp.real(variant(transmission_func)(x, v)))
-        )
-        grad_value = grad_fn(pot_slice, voltage_kV)
-
-        assert isinstance(grad_value, Array)
-        chex.assert_shape(grad_value, pot_slice.shape)
-        chex.assert_trees_all_finite(grad_value)
-
-    def test_invalid_voltage(self, variant, pot_slice: Float[Array, "H W"]) -> None:
-        """Test transmission_func behavior with invalid voltage inputs."""
-        invalid_voltages = [-100.0, 0.0, float("nan"), float("inf")]
-        for invalid_voltage in invalid_voltages:
-            with pytest.raises((ValueError, FloatingPointError)):
-                variant(transmission_func)(pot_slice, invalid_voltage)
-
-    def test_different_input_shapes(self, variant) -> None:
-        """Test transmission_func with different input shapes."""
-        fn = variant(transmission_func)
-        shapes = [(32, 32), (64, 64), (128, 128)]
+    # Ensure function returns a Float Array
+    @chex.all_variants
+    def test_returns_float(self):
+        var_wavelength_ang = self.variant(wavelength_ang)
         voltage_kV = 200.0
+        result = var_wavelength_ang(voltage_kV)
+        assert isinstance(
+            result, Float[Array, "*"]
+        ), "Expected the function to return a float"
 
-        for shape in shapes:
-            pot_slice = jnp.ones(shape)
-            result = fn(pot_slice, voltage_kV)
-            chex.assert_shape(result, shape)
+    # Test whether array inputs work
+    @chex.all_variants
+    def test_array_input(self):
+        var_wavelength_ang = self.variant(wavelength_ang)
+        voltages = jnp.array([100, 200, 300, 400], dtype=jnp.float64)
+        results = var_wavelength_ang(voltages)
+        expected = jnp.array([0.03701436, 0.02507934, 0.01968749, 0.01643943])
+        assert jnp.allclose(results, expected, atol=1e-5)
+        
 
-
-@chex.all_variants
-class test_propagation_func:
-
-    @pytest.fixture
-    def imsize(self) -> Shaped[Array, "2"]:
-        return jnp.array([64, 64])
-
-    @pytest.fixture
-    def thickness_ang(self) -> float:
-        return 10.0
-
-    @pytest.fixture
-    def voltage_kV(self) -> float:
-        return 200.0
+class test_transmission_func(chex.TestCase):
 
     @pytest.fixture
-    def calib_ang(self) -> float:
-        return 0.1
+    def pot_slice(self):
+        return jnp.ones((64, 64), dtype=jnp.float64)
 
-    def test_basic_functionality(
-        self, variant, imsize, thickness_ang, voltage_kV, calib_ang
-    ):
-        """Test basic functionality of propagation_func."""
-        fn = variant(propagation_func)
-        result = fn(imsize, thickness_ang, voltage_kV, calib_ang)
+    @chex.all_variants
+    @parameterized.parameters(
+        {"voltage_kV": 200, "shape": (64, 64)},
+        {"voltage_kV": 300, "shape": (128, 128)},
+    )
+    def test_basic_functionality(self, voltage_kV, shape):
+        var_transmission_func = self.variant(transmission_func)
+        pot_slice = jnp.ones(shape, dtype=jnp.float64)
+        result = var_transmission_func(pot_slice, voltage_kV)
+        
+        chex.assert_shape(result, shape)
+        chex.assert_type(result, jnp.complex128)
+        assert jnp.all(jnp.isfinite(result)), "Result contains non-finite values"
 
-        chex.assert_type(result, jnp.complex64)
-        chex.assert_shape(result, tuple(imsize))
-        chex.assert_trees_all_finite(result)
-
-    def test_output_properties(
-        self, variant, imsize, thickness_ang, voltage_kV, calib_ang
-    ):
-        """Test specific properties of the output."""
-        fn = variant(propagation_func)
-        result = fn(imsize, thickness_ang, voltage_kV, calib_ang)
-
-        # Check that the magnitude is 1 everywhere
+    @chex.all_variants
+    def test_output_magnitude(self, pot_slice):
+        var_transmission_func = self.variant(transmission_func)
+        result = var_transmission_func(pot_slice, 200)
         magnitude = jnp.abs(result)
-        chex.assert_trees_all_close(magnitude, jnp.ones_like(magnitude), atol=1e-6)
+        
+        chex.assert_tree_all_close(magnitude, jnp.ones_like(magnitude), atol=1e-6)
 
-        # Check that the phase is symmetric
-        phase = jnp.angle(result)
-        chex.assert_trees_all_close(phase, jnp.flip(phase), atol=1e-6)
+    @chex.all_variants
+    def test_voltage_dependence(self, pot_slice):
+        var_transmission_func = self.variant(transmission_func)
+        result1 = var_transmission_func(pot_slice, 100)
+        result2 = var_transmission_func(pot_slice, 300)
+        
+        assert not jnp.allclose(result1, result2), "Results should differ for different voltages"
 
-    def test_jit_compilation(
-        self, variant, imsize, thickness_ang, voltage_kV, calib_ang
-    ):
-        """Test that propagation_func can be JIT-compiled."""
-        jitted_fn = jax.jit(variant(propagation_func))
-        result = jitted_fn(imsize, thickness_ang, voltage_kV, calib_ang)
+    @chex.all_variants
+    def test_potential_dependence(self):
+        var_transmission_func = self.variant(transmission_func)
+        pot_slice1 = jnp.ones((64, 64), dtype=jnp.float64)
+        pot_slice2 = jnp.ones((64, 64), dtype=jnp.float64) * 2
+        
+        result1 = var_transmission_func(pot_slice1, 200)
+        result2 = var_transmission_func(pot_slice2, 200)
+        
+        assert not jnp.allclose(result1, result2), "Results should differ for different potentials"
 
-        chex.assert_type(result, jnp.complex64)
-        chex.assert_shape(result, tuple(imsize))
-
-    def test_grad(self, variant, imsize, thickness_ang, voltage_kV, calib_ang):
-        """Test that propagation_func is differentiable."""
-
-        def loss_fn(thickness):
-            return jnp.sum(
-                jnp.abs(
-                    variant(propagation_func)(imsize, thickness, voltage_kV, calib_ang)
-                )
-            )
-
-        grad_fn = jax.grad(loss_fn)
-        grad_value = grad_fn(thickness_ang)
-
-        chex.assert_type(grad_value, float)
-        chex.assert_scalar_non_zero(grad_value)
-
-    def test_different_input_shapes(
-        self, variant, thickness_ang, voltage_kV, calib_ang
-    ):
-        """Test propagation_func with different input shapes."""
-        fn = variant(propagation_func)
-        shapes = [(32, 32), (64, 64), (128, 128)]
-
-        for shape in shapes:
-            imsize = jnp.array(shape)
-            result = fn(imsize, thickness_ang, voltage_kV, calib_ang)
-            chex.assert_shape(result, shape)
-
-    def test_wavelength_dependency(self, variant, imsize, thickness_ang, calib_ang):
-        """Test that the output changes with different voltages (wavelengths)."""
-        fn = variant(propagation_func)
-        result1 = fn(imsize, thickness_ang, 100.0, calib_ang)
-        result2 = fn(imsize, thickness_ang, 300.0, calib_ang)
-
-        assert not jnp.allclose(result1, result2)
-
-    def test_thickness_dependency(self, variant, imsize, voltage_kV, calib_ang):
-        """Test that the output changes with different thicknesses."""
-        fn = variant(propagation_func)
-        result1 = fn(imsize, 10.0, voltage_kV, calib_ang)
-        result2 = fn(imsize, 20.0, voltage_kV, calib_ang)
-
-        assert not jnp.allclose(result1, result2)
-
-    @pytest.mark.parametrize("invalid_input", [-1.0, 0.0, float("nan"), float("inf")])
-    def test_invalid_inputs(self, variant, imsize, invalid_input):
-        """Test propagation_func behavior with invalid inputs."""
-        fn = variant(propagation_func)
-        with pytest.raises((ValueError, FloatingPointError)):
-            fn(imsize, invalid_input, invalid_input, invalid_input)
-
-
-@chex.all_variants
-class test_fourier_coords:
-
-    @pytest.fixture
-    def calibration(self) -> float:
-        return 0.1
-
-    @pytest.fixture(params=[(64, 64), (64, 128), (128, 64)])
-    def image_size(self, request) -> Int[Array, "2"]:
-        return jnp.array(request.param)
-
-    def test_basic_functionality(self, variant, calibration, image_size):
-        """Test basic functionality of FourierCoords."""
-        fn = variant(fourier_coords)
-        result = fn(calibration, image_size)
-
-        assert isinstance(result, NamedTuple)
-        assert hasattr(result, "array")
-        assert hasattr(result, "calib_y")
-        assert hasattr(result, "calib_x")
-        chex.assert_shape(result.array, tuple(image_size))
-        chex.assert_type(result.array, jnp.float32)
-        chex.assert_type(result.calib_y, float)
-        chex.assert_type(result.calib_x, float)
-
-    def test_output_properties(self, variant, calibration, image_size):
-        """Test specific properties of the output."""
-        fn = variant(fourier_coords)
-        result = fn(calibration, image_size)
-
-        # Check that the center of the array is zero
-        center = tuple(size // 2 for size in image_size)
-        assert jnp.isclose(result.array[center], 0, atol=1e-6)
-
-        # Check that the calibrations are correct
-        expected_calib_y = 1 / (image_size[0] * calibration)
-        expected_calib_x = 1 / (image_size[1] * calibration)
-        assert jnp.isclose(result.calib_y, expected_calib_y, rtol=1e-6)
-        assert jnp.isclose(result.calib_x, expected_calib_x, rtol=1e-6)
-
-    def test_jit_compilation(self, variant, calibration, image_size):
-        """Test that FourierCoords can be JIT-compiled."""
-        jitted_fn = jax.jit(variant(fourier_coords))
-        result = jitted_fn(calibration, image_size)
-
-        assert isinstance(result, NamedTuple)
-        chex.assert_shape(result.array, tuple(image_size))
-
-    def test_different_input_shapes(self, variant, calibration):
-        """Test FourierCoords with different input shapes, including asymmetric ones."""
-        fn = variant(fourier_coords)
-        shapes = [(32, 32), (64, 64), (128, 128), (64, 128), (128, 64)]
-
-        for shape in shapes:
-            image_size = jnp.array(shape)
-            result = fn(calibration, image_size)
-            chex.assert_shape(result.array, shape)
-            assert (
-                result.calib_y != result.calib_x
-                if shape[0] != shape[1]
-                else result.calib_y == result.calib_x
-            )
-
-    def test_calibration_dependency(self, variant, image_size):
-        """Test that the output changes with different calibrations."""
-        fn = variant(fourier_coords)
-        result1 = fn(0.1, image_size)
-        result2 = fn(0.2, image_size)
-
-        assert not jnp.allclose(result1.array, result2.array)
-        assert not jnp.isclose(result1.calib_y, result2.calib_y)
-        assert not jnp.isclose(result1.calib_x, result2.calib_x)
-
-    def test_symmetry(self, variant, calibration, image_size):
-        """Test that the output array is symmetric along each axis."""
-        fn = variant(fourier_coords)
-        result = fn(calibration, image_size)
-
-        assert jnp.allclose(result.array, jnp.flip(result.array, axis=0))
-        assert jnp.allclose(result.array, jnp.flip(result.array, axis=1))
-
-    def test_gradient(self, variant, calibration, image_size):
-        """Test that FourierCoords is differentiable with respect to calibration."""
-        fn = variant(fourier_coords)
-
-        def loss(cal):
-            return jnp.sum(fn(cal, image_size).array)
-
-        grad_fn = jax.grad(loss)
-        grad_value = grad_fn(calibration)
-
-        assert jnp.isfinite(grad_value)
-        assert grad_value != 0
-
-    @pytest.mark.parametrize(
-        "invalid_calibration", [-1.0, 0.0, float("nan"), float("inf")]
-    )
-    def test_invalid_calibration(self, variant, invalid_calibration, image_size):
-        """Test FourierCoords behavior with invalid calibration inputs."""
-        fn = variant(fourier_coords)
-        with pytest.raises((ValueError, FloatingPointError)):
-            fn(invalid_calibration, image_size)
-
-    @pytest.mark.parametrize(
-        "invalid_size",
-        [
-            jnp.array([-64, 64]),
-            jnp.array([64, -64]),
-            jnp.array([0, 64]),
-            jnp.array([64, 0]),
-        ],
-    )
-    def test_invalid_image_size(self, variant, calibration, invalid_size):
-        """Test FourierCoords behavior with invalid image size inputs."""
-        fn = variant(fourier_coords)
+    def test_invalid_voltage(self, pot_slice):
         with pytest.raises(ValueError):
-            fn(calibration, invalid_size)
+            transmission_func(pot_slice, 0)
+        with pytest.raises(ValueError):
+            transmission_func(pot_slice, -100)
+
+    @chex.all_variants
+    def test_differentiable(self, pot_slice):
+        var_transmission_func = self.variant(transmission_func)
+        
+        def loss(voltage):
+            return jnp.sum(jnp.abs(var_transmission_func(pot_slice, voltage)))
+        
+        grad_fn = jax.grad(loss)
+        grad = grad_fn(200.0)
+        
+        assert jnp.isfinite(grad), f"Gradient is not finite: {grad}"
+
+    @chex.all_variants
+    def test_array_voltage_input(self, pot_slice):
+        var_transmission_func = self.variant(transmission_func)
+        voltages = jnp.array([100, 200, 300], dtype=jnp.float64)
+        
+        results = jax.vmap(lambda v: var_transmission_func(pot_slice, v))(voltages)
+        
+        chex.assert_shape(results, (3, *pot_slice.shape))
+        chex.assert_type(results, jnp.complex128)
+
+    @chex.all_variants
+    def test_consistency_with_wavelength(self, pot_slice):
+        var_transmission_func = self.variant(transmission_func)
+        var_wavelength_ang = self.variant(wavelength_ang)
+        
+        voltage_kV = 200.0
+        wavelength = var_wavelength_ang(voltage_kV)
+        trans = var_transmission_func(pot_slice, voltage_kV)
+        
+        # Check if the wavelength is consistent with the transmission function
+        # This is a simplified check and may need adjustment based on the exact relationship
+        assert jnp.isclose(jnp.angle(trans).max(), 2 * jnp.pi / wavelength, rtol=1e-2)

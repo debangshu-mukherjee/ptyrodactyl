@@ -5,9 +5,12 @@ import jax.numpy as jnp
 from jax import Array
 from jaxtyping import Complex, Float, Int, Shaped
 
+jax.config.update("jax_enable_x64", True)
+
 
 def transmission_func(
-    pot_slice: Float[Array, "H W"], voltage_kV: float
+    pot_slice: Float[Array, "H W"], 
+    voltage_kV: int | float | Float[Array, "*"]
 ) -> Complex[Array, "H W"]:
     """
     Calculates the complex transmission function from
@@ -17,7 +20,7 @@ def transmission_func(
     Args:
     - `pot_slice`, Float[Array, "H W"]:
         potential slice in Kirkland units
-    - `voltage_kV`, float:
+    - `voltage_kV`, int | float | Float[Array, "*"]:
         microscope operating voltage in kilo
         electronVolts
 
@@ -27,25 +30,31 @@ def transmission_func(
         crystal slice
 
     Flow:
-    - Calculate the electron wavelength in angstroms
-    - Calculate the phase shift of the electron wave
-    - Calculate the transmission function
+    - Calculate the electron energy in electronVolts
+    - Calculate the wavelength in angstroms
+    - Calculate the Einstein energy
+    - Calculate the sigma value, which is the constant for the phase shift
+    - Calculate the transmission function as a complex exponential
     """
-    m_e: float = 9.109383e-31  # electron mass
-    e_e: float = 1.602177e-19  # electron charge
-    c: float = 299792458  # speed of light
-    h: float = 6.62607e-34  # planck's constant
-    numerator: float = (h**2) * (c**2)
-    denominator: float = (e_e * voltage_kV * 1000) * (
-        (2 * m_e * (c**2)) + (e_e * voltage_kV * 1000)
+    if voltage_kV <= 0:
+        raise ValueError("Voltage must be greater than 0")
+
+    voltage: Float[Array, "*"] = jnp.multiply(
+        jnp.float64(voltage_kV), jnp.float64(1000)
     )
-    wavelength_ang: float = 1e10 * jnp.sqrt(
-        numerator / denominator
+
+    m_e: Float[Array, "*"] = jnp.float64(9.109383e-31)  # mass of an electron
+    e_e: Float[Array, "*"] = jnp.float64(1.602177e-19)  # charge of an electron
+    c: Float[Array, "*"] = jnp.float64(299792458.0)  # speed of light
+
+    eV = jnp.multiply(e_e, voltage)
+    lambda_angstrom: Float[Array, "*"] = wavelength_ang(
+        voltage_kV
     )  # wavelength in angstroms
-    sigma: float = (
-        (2 * jnp.pi / (wavelength_ang * voltage_kV * 1000))
-        * ((m_e * c * c) + (e_e * voltage_kV * 1000))
-    ) / ((2 * m_e * c * c) + (e_e * voltage_kV * 1000))
+    einstein_energy = jnp.multiply(m_e, jnp.square(c))  # Einstein energy
+    sigma: Float[Array, "*"] = (
+        (2 * jnp.pi / (lambda_angstrom * voltage)) * (einstein_energy + eV)
+    ) / ((2 * einstein_energy) + eV)
     trans: Complex[Array, "H W"] = jnp.exp(1j * sigma * pot_slice)
     return trans
 
@@ -219,33 +228,41 @@ def aberration(
     return chi_probe
 
 
-def wavelength_ang(voltage_kV: float) -> float:
+def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, "*"]:
     """
     Calculates the relativistic electron wavelength
     in angstroms based on the microscope accelerating
     voltage
 
     Args:
-    - `voltage_kV`, float:
+    - `voltage_kV`, int | float | Float[Array, "*"]:
         The microscope accelerating voltage in kilo
         electronVolts
 
     Returns:
-    - `in_angstroms`, float:
+    - `in_angstroms`, Float[Array, "*"]:
         The electron wavelength in angstroms
 
     Flow:
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms
     """
-    m: float = 9.109383e-31  # mass of an electron
-    e: float = 1.602177e-19  # charge of an electron
-    c: float = 299792458.0  # speed of light
-    h: float = 6.62607e-34  # Planck's constant
+    if voltage_kV <= 0:
+        raise ValueError("Voltage must be greater than 0")
 
-    voltage: float = voltage_kV * 1000
-    numerator: float = (h**2) * (c**2)
-    denominator: float = (e * voltage) * ((2 * m * (c**2)) + (e * voltage))
-    wavelength_meters: float = jnp.sqrt(numerator / denominator)  # in meters
-    in_angstroms: float = 1e10 * wavelength_meters  # in angstroms
+    m: Float[Array, "*"] = jnp.float64(9.109383e-31)  # mass of an electron
+    e: Float[Array, "*"] = jnp.float64(1.602177e-19)  # charge of an electron
+    c: Float[Array, "*"] = jnp.float64(299792458.0)  # speed of light
+    h: Float[Array, "*"] = jnp.float64(6.62607e-34)  # Planck's constant
+
+    voltage: Float[Array, "*"] = jnp.multiply(
+        jnp.float64(voltage_kV), jnp.float64(1000)
+    )
+    eV = jnp.multiply(e, voltage)
+    numerator: Float[Array, "*"] = jnp.multiply(jnp.square(h), jnp.square(c))
+    denominator: Float[Array, "*"] = jnp.multiply(eV, ((2 * m * jnp.square(c)) + eV))
+    wavelength_meters: Float[Array, "*"] = jnp.sqrt(
+        numerator / denominator
+    )  # in meters
+    in_angstroms: Float[Array, "*"] = 1e10 * wavelength_meters  # in angstroms
     return in_angstroms

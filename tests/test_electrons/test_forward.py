@@ -5,12 +5,12 @@ import jax
 import jax.numpy as jnp
 import pytest
 from absl.testing import parameterized
-from jaxtyping import Array, Float, Complex, Int, Shaped
+from jaxtyping import Array, Complex, Float, Int, Shaped
 
 jax.config.update("jax_enable_x64", True)
 
 # Import your functions here
-from ptyrodactyl.electrons import (wavelength_ang, transmission_func)
+from ptyrodactyl.electrons import transmission_func, wavelength_ang
 
 # Set a random seed for reproducibility
 key = jax.random.PRNGKey(0)
@@ -66,7 +66,7 @@ class test_wavelength_ang(chex.TestCase):
         results = var_wavelength_ang(voltages)
         expected = jnp.array([0.03701436, 0.02507934, 0.01968749, 0.01643943])
         assert jnp.allclose(results, expected, atol=1e-5)
-        
+
 
 class test_transmission_func(chex.TestCase):
 
@@ -83,7 +83,7 @@ class test_transmission_func(chex.TestCase):
         var_transmission_func = self.variant(transmission_func)
         pot_slice = jnp.ones(shape, dtype=jnp.float64)
         result = var_transmission_func(pot_slice, voltage_kV)
-        
+
         chex.assert_shape(result, shape)
         chex.assert_type(result, jnp.complex128)
         assert jnp.all(jnp.isfinite(result)), "Result contains non-finite values"
@@ -93,7 +93,7 @@ class test_transmission_func(chex.TestCase):
         var_transmission_func = self.variant(transmission_func)
         result = var_transmission_func(pot_slice, 200)
         magnitude = jnp.abs(result)
-        
+
         chex.assert_tree_all_close(magnitude, jnp.ones_like(magnitude), atol=1e-6)
 
     @chex.all_variants
@@ -101,19 +101,23 @@ class test_transmission_func(chex.TestCase):
         var_transmission_func = self.variant(transmission_func)
         result1 = var_transmission_func(pot_slice, 100)
         result2 = var_transmission_func(pot_slice, 300)
-        
-        assert not jnp.allclose(result1, result2), "Results should differ for different voltages"
+
+        assert not jnp.allclose(
+            result1, result2
+        ), "Results should differ for different voltages"
 
     @chex.all_variants
     def test_potential_dependence(self):
         var_transmission_func = self.variant(transmission_func)
         pot_slice1 = jnp.ones((64, 64), dtype=jnp.float64)
         pot_slice2 = jnp.ones((64, 64), dtype=jnp.float64) * 2
-        
+
         result1 = var_transmission_func(pot_slice1, 200)
         result2 = var_transmission_func(pot_slice2, 200)
-        
-        assert not jnp.allclose(result1, result2), "Results should differ for different potentials"
+
+        assert not jnp.allclose(
+            result1, result2
+        ), "Results should differ for different potentials"
 
     def test_invalid_voltage(self, pot_slice):
         with pytest.raises(ValueError):
@@ -124,22 +128,22 @@ class test_transmission_func(chex.TestCase):
     @chex.all_variants
     def test_differentiable(self, pot_slice):
         var_transmission_func = self.variant(transmission_func)
-        
+
         def loss(voltage):
             return jnp.sum(jnp.abs(var_transmission_func(pot_slice, voltage)))
-        
+
         grad_fn = jax.grad(loss)
         grad = grad_fn(200.0)
-        
+
         assert jnp.isfinite(grad), f"Gradient is not finite: {grad}"
 
     @chex.all_variants
     def test_array_voltage_input(self, pot_slice):
         var_transmission_func = self.variant(transmission_func)
         voltages = jnp.array([100, 200, 300], dtype=jnp.float64)
-        
+
         results = jax.vmap(lambda v: var_transmission_func(pot_slice, v))(voltages)
-        
+
         chex.assert_shape(results, (3, *pot_slice.shape))
         chex.assert_type(results, jnp.complex128)
 
@@ -147,11 +151,11 @@ class test_transmission_func(chex.TestCase):
     def test_consistency_with_wavelength(self, pot_slice):
         var_transmission_func = self.variant(transmission_func)
         var_wavelength_ang = self.variant(wavelength_ang)
-        
+
         voltage_kV = 200.0
         wavelength = var_wavelength_ang(voltage_kV)
         trans = var_transmission_func(pot_slice, voltage_kV)
-        
+
         # Check if the wavelength is consistent with the transmission function
         # This is a simplified check and may need adjustment based on the exact relationship
         assert jnp.isclose(jnp.angle(trans).max(), 2 * jnp.pi / wavelength, rtol=1e-2)

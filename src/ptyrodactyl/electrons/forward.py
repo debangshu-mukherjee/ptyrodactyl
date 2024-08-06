@@ -3,19 +3,27 @@ from typing import Any, NamedTuple
 import jax
 import jax.numpy as jnp
 from jax import Array
-from jaxtyping import Complex, Float, Int, Shaped
+from jaxtyping import Complex, Float, Int, Shaped, jaxtyped
+from typeguard import typechecked as typechecker
+
+import ptyrodactyl.electrons as pte
 
 jax.config.update("jax_enable_x64", True)
 
 
+@jaxtyped(typechecker=typechecker)
 def transmission_func(
-    pot_slice: Float[Array, "H W"], 
-    voltage_kV: int | float | Float[Array, "*"]
+    pot_slice: Float[Array, "H W"], voltage_kV: int | float | Float[Array, "*"]
 ) -> Complex[Array, "H W"]:
     """
     Calculates the complex transmission function from
     a single potential slice at a given electron accelerating
-    voltage
+    voltage.
+
+    Because this is JAX - you assume that the input
+    is clean, and you don't need to check for negative
+    or NaN values. Your preprocessing steps should check
+    for them - not the function itself.
 
     Args:
     - `pot_slice`, Float[Array, "H W"]:
@@ -36,8 +44,6 @@ def transmission_func(
     - Calculate the sigma value, which is the constant for the phase shift
     - Calculate the transmission function as a complex exponential
     """
-    if voltage_kV <= 0:
-        raise ValueError("Voltage must be greater than 0")
 
     voltage: Float[Array, "*"] = jnp.multiply(
         jnp.float64(voltage_kV), jnp.float64(1000)
@@ -48,7 +54,7 @@ def transmission_func(
     c: Float[Array, "*"] = jnp.float64(299792458.0)  # speed of light
 
     eV = jnp.multiply(e_e, voltage)
-    lambda_angstrom: Float[Array, "*"] = wavelength_ang(
+    lambda_angstrom: Float[Array, "*"] = pte.wavelength_ang(
         voltage_kV
     )  # wavelength in angstroms
     einstein_energy = jnp.multiply(m_e, jnp.square(c))  # Einstein energy
@@ -228,11 +234,17 @@ def aberration(
     return chi_probe
 
 
+@jaxtyped(typechecker=typechecker)
 def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, "*"]:
     """
     Calculates the relativistic electron wavelength
     in angstroms based on the microscope accelerating
-    voltage
+    voltage.
+
+    Because this is JAX - you assume that the input
+    is clean, and you don't need to check for negative
+    or NaN values. Your preprocessing steps should check
+    for them - not the function itself.
 
     Args:
     - `voltage_kV`, int | float | Float[Array, "*"]:
@@ -247,9 +259,6 @@ def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, 
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms
     """
-    if voltage_kV <= 0:
-        raise ValueError("Voltage must be greater than 0")
-
     m: Float[Array, "*"] = jnp.float64(9.109383e-31)  # mass of an electron
     e: Float[Array, "*"] = jnp.float64(1.602177e-19)  # charge of an electron
     c: Float[Array, "*"] = jnp.float64(299792458.0)  # speed of light

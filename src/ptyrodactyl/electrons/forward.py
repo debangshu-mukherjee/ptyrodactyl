@@ -2,9 +2,9 @@ from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
-# from typeguard import typechecked as typechecker
 from beartype import beartype as typechecker
-from jax import Array
+# from typeguard import typechecked as typechecker
+from jax import Array, lax
 from jaxtyping import Complex, Float, Int, Shaped, jaxtyped
 
 import ptyrodactyl.electrons as pte
@@ -66,6 +66,7 @@ def transmission_func(
     return trans
 
 
+@jaxtyped(typechecker=typechecker)
 def propagation_func(
     imsize: Shaped[Array, "2"],
     thickness_ang: float,
@@ -88,30 +89,27 @@ def propagation_func(
         Calibration or pixel size in angstroms
 
     Returns:
-    - `prop_shift` Complex[Array, "H W"]:
-        This is of the same size given by imsize
-
-    Flow:
-
+    - `prop` Complex[Array, "H W"]:
+        The propagation function of the same size given by imsize
     """
-    FOV_y: float = imsize[0] * calib_ang
-    FOV_x: float = imsize[1] * calib_ang
-    qy: Float[Array, "H"] = (jnp.arange((-imsize[0] / 2), ((imsize[0] / 2)), 1)) / FOV_y
-    qx: Float[Array, "W"] = (jnp.arange((-imsize[1] / 2), ((imsize[1] / 2)), 1)) / FOV_x
-    shifter_y: int = imsize[0] // 2
-    shifter_x: int = imsize[1] // 2
-    Ly: Float[Array, "H"] = jnp.roll(qy, shifter_y)
-    Lx: Float[Array, "W"] = jnp.roll(qx, shifter_x)
-    Lya, Lxa = jnp.meshgrid(Lx, Ly)
-    L_sq: Float[Array, "H W"] = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
-    lambda_angstrom: float = wavelength_ang(voltage_kV)
+    # Generate frequency arrays directly using fftfreq
+    qy: Float[Array, "H"] = jnp.fft.fftfreq(imsize[0], d=calib_ang)
+    qx: Float[Array, "W"] = jnp.fft.fftfreq(imsize[1], d=calib_ang)
+
+    # Create 2D meshgrid of frequencies
+    Lya, Lxa = jnp.meshgrid(qy, qx, indexing="ij")
+
+    # Calculate squared sum of frequencies
+    L_sq: Float[Array, "H W"] = jnp.square(Lxa) + jnp.square(Lya)
+
+    # Calculate wavelength
+    lambda_angstrom: float = pte.wavelength_ang(voltage_kV)
+
+    # Compute the propagation function
     prop: Complex[Array, "H W"] = jnp.exp(
         (-1j) * jnp.pi * lambda_angstrom * thickness_ang * L_sq
     )
-    prop_shift: Complex[Array, "H W"] = jnp.fft.fftshift(
-        prop
-    )  # FFT shift the propagator
-    return prop_shift
+    return prop
 
 
 def fourier_coords(calibration: float, image_size: Int[Array, "2"]) -> NamedTuple:
@@ -290,7 +288,7 @@ def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, 
 
 
 @jaxtyped(typechecker=typechecker)
-def cbed_single_slice(
+def cbed_single_slice_single_beam(
     pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
 ) -> Float[Array, "H W"]:
     """
@@ -315,7 +313,48 @@ def cbed_single_slice(
 
 
 @jaxtyped(typechecker=typechecker)
-def cbed_multi_slice(
+def cbed_single_slice_multi_beam(
+    pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W M"]
+) -> Float[Array, "H W"]:
+    """
+    Calculates the CBED pattern for a single slice when the
+    beam is multimodal. After the calculation, we do a non-coherent
+    sum, where the intensities are summed together, rather than the
+    complex values being summed.
+
+    Args:
+    - `pot_slice`, Complex[Array, "H W"]:
+        The potential slice
+    - `beam`, Complex[Array, "H W M"]:
+        The electron beam, where the last dimension is the number of modes
+
+    Returns:
+    - `cbed`, Float[Array, "H W"]:
+        The calculated CBED pattern
+    """
+
+    def process_single_mode(beam_mode: Complex[Array, "H W"]) -> Complex[Array, "H W"]:
+        real_space_mode: Complex[Array, "H W"] = jnp.multiply(pot_slice, beam_mode)
+        return jnp.fft.fftshift(jnp.fft.fft2(real_space_mode))
+
+    # Vectorize the process_single_mode function over the last axis of beam
+    vectorized_process: Complex[Array, "H W *"] = jax.vmap(
+        process_single_mode, in_axes=-1, out_axes=-1
+    )
+
+    # Apply the vectorized function to all modes at once
+    fourier_space_modes: Complex[Array, "H W M"] = vectorized_process(beam)
+
+    # Sum the intensities of all modes
+    cbed: Float[Array, "H W"] = jnp.sum(
+        jnp.square(jnp.abs(fourier_space_modes)), axis=-1
+    )
+
+    return cbed
+
+
+@jaxtyped(typechecker=typechecker)
+def cbed_multi_slice_single_beam(
     pot_slice: Complex[Array, "H W S"],
     beam: Complex[Array, "H W"],
     slice_thickness: float,
@@ -343,9 +382,6 @@ def cbed_multi_slice(
     slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
         beam.shape, slice_thickness, voltage_kV, calib_ang
     )
-    slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
-        beam.shape, slice_thickness, voltage_kV, calib_ang
-    )
 
     def body_fun(carry, x):
         real_space_convolve, beam = carry
@@ -365,4 +401,97 @@ def cbed_multi_slice(
         jnp.fft.fft2(real_space_convolve)
     )
     cbed: Float[Array, "H W"] = jnp.square(jnp.abs(fourier_space))
+    return cbed
+
+
+@jaxtyped(typechecker=typechecker)
+def cbed_multi_slice_multi_beam(
+    pot_slice: Complex[Array, "H W S"],
+    beam: Complex[Array, "H W M"],
+    slice_thickness: float,
+    voltage_kV: float,
+    calib_ang: float,
+) -> Float[Array, "H W"]:
+    """
+    Calculates the CBED pattern for multiple slices and multiple beam modes.
+
+    This function computes the Convergent Beam Electron Diffraction (CBED) pattern
+    by propagating multiple beam modes through multiple potential slices.
+
+    Args:
+    - `pot_slice` (Complex[Array, "H W S"]):
+        The potential slices. H and W are height and width, S is the number of slices.
+    - `beam` (Complex[Array, "H W M"]):
+        The electron beam modes. M is the number of modes.
+    - `slice_thickness` (float):
+        The thickness of each slice in angstroms.
+    - `voltage_kV` (float):
+        The accelerating voltage in kilovolts.
+    - `calib_ang` (float):
+        The calibration in angstroms.
+
+    Returns:
+    -  `cbed` (Float[Array, "H W"]):
+        The calculated CBED pattern.
+    """
+
+    # Calculate the transmission function for a single slice
+    slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
+        beam.shape[:2], slice_thickness, voltage_kV, calib_ang
+    )
+
+    def process_slice(carry, pot_slice_i):
+        """
+        Process a single potential slice for all beam modes.
+
+        This function is used within lax.scan to iterate over slices.
+
+        Args:
+        - `carry`: A tuple containing the current convolution state and the beam.
+        - `pot_slice_i`: A single potential slice.
+
+        Returns:
+        - A tuple containing the updated convolution state and None (scan accumulator).
+        """
+        convolve, _ = carry
+        # Multiply the potential slice with all beam modes
+        this_slice = jnp.multiply(pot_slice_i, beam)
+        # Propagate the slice through free space
+        propagated_slice = jnp.fft.ifft2(
+            jnp.multiply(jnp.fft.fft2(this_slice), slice_transmission[:, :, None])
+        )
+        # Update the convolution state
+        new_convolve = jnp.multiply(convolve, propagated_slice)
+        return (new_convolve, beam), None
+
+    def process_beam_mode(beam_mode):
+        """
+        Process all slices for a single beam mode.
+
+        This function uses lax.scan to iterate over all slices for one beam mode.
+
+        Args:
+        - `beam_mode`: A single beam mode.
+
+        Returns:
+        - The Fourier transform of the final convolution state.
+        """
+        # Initialize the convolution state
+        initial_carry = (jnp.ones_like(beam_mode, dtype=jnp.complex64), beam_mode)
+        # Scan over all slices
+        (real_space_convolve, _), _ = lax.scan(
+            process_slice, initial_carry, pot_slice.transpose(2, 0, 1)
+        )
+        # Compute and return the Fourier transform
+        return jnp.fft.fftshift(jnp.fft.fft2(real_space_convolve))
+
+    # Use vmap to process all beam modes in parallel
+    fourier_space_mode = jax.vmap(process_beam_mode, in_axes=-1, out_axes=-1)(beam)
+
+    # Compute the intensity for each mode
+    cbed_mode: Float[Array, "H W M"] = jnp.square(jnp.abs(fourier_space_mode))
+
+    # Sum the intensities across all modes
+    cbed: Float[Array, "H W"] = jnp.sum(cbed_mode, axis=-1)
+
     return cbed

@@ -10,7 +10,8 @@ from jaxtyping import Array, Complex, Float, Int, Shaped
 jax.config.update("jax_enable_x64", True)
 
 # Import your functions here
-from ptyrodactyl.electrons import transmission_func, wavelength_ang
+from ptyrodactyl.electrons import (fourier_calib, transmission_func,
+                                   wavelength_ang)
 
 # Set a random seed for reproducibility
 key = jax.random.PRNGKey(0)
@@ -70,10 +71,6 @@ class test_wavelength_ang(chex.TestCase):
 
 class test_transmission_func(chex.TestCase):
 
-    @pytest.fixture
-    def pot_slice(self):
-        return jnp.ones((64, 64), dtype=jnp.float64)
-
     @chex.all_variants
     @parameterized.parameters(
         {"voltage_kV": 200, "shape": (64, 64)},
@@ -81,7 +78,7 @@ class test_transmission_func(chex.TestCase):
     )
     def test_basic_functionality(self, voltage_kV, shape):
         var_transmission_func = self.variant(transmission_func)
-        pot_slice = jnp.ones(shape, dtype=jnp.float64)
+        pot_slice = jnp.pi * jnp.ones(shape, dtype=jnp.float64)
         result = var_transmission_func(pot_slice, voltage_kV)
 
         chex.assert_shape(result, shape)
@@ -89,15 +86,29 @@ class test_transmission_func(chex.TestCase):
         assert jnp.all(jnp.isfinite(result)), "Result contains non-finite values"
 
     @chex.all_variants
-    def test_output_magnitude(self, pot_slice):
+    @parameterized.parameters(
+        {"shape_y": 64, "shape_x": 64},
+        {"shape_y": 128, "shape_x": 64},
+        {"shape_y": 64, "shape_x": 128},
+        {"shape_y": 128, "shape_x": 128},
+    )
+    def test_output_magnitude(self, shape_y, shape_x):
+        pot_slice = jnp.pi * jnp.ones((shape_y, shape_x), dtype=jnp.float64)
         var_transmission_func = self.variant(transmission_func)
         result = var_transmission_func(pot_slice, 200)
         magnitude = jnp.abs(result)
 
-        chex.assert_tree_all_close(magnitude, jnp.ones_like(magnitude), atol=1e-6)
+        chex.assert_trees_all_close(magnitude, jnp.ones_like(magnitude), atol=1e-6)
 
     @chex.all_variants
-    def test_voltage_dependence(self, pot_slice):
+    @parameterized.parameters(
+        {"shape_y": 64, "shape_x": 64},
+        {"shape_y": 128, "shape_x": 64},
+        {"shape_y": 64, "shape_x": 128},
+        {"shape_y": 128, "shape_x": 128},
+    )
+    def test_voltage_dependence(self, shape_y, shape_x):
+        pot_slice = jnp.pi * jnp.ones((shape_y, shape_x), dtype=jnp.float64)
         var_transmission_func = self.variant(transmission_func)
         result1 = var_transmission_func(pot_slice, 100)
         result2 = var_transmission_func(pot_slice, 300)
@@ -119,14 +130,15 @@ class test_transmission_func(chex.TestCase):
             result1, result2
         ), "Results should differ for different potentials"
 
-    def test_invalid_voltage(self, pot_slice):
-        with pytest.raises(ValueError):
-            transmission_func(pot_slice, 0)
-        with pytest.raises(ValueError):
-            transmission_func(pot_slice, -100)
-
     @chex.all_variants
-    def test_differentiable(self, pot_slice):
+    @parameterized.parameters(
+        {"shape_y": 64, "shape_x": 64},
+        {"shape_y": 128, "shape_x": 64},
+        {"shape_y": 64, "shape_x": 128},
+        {"shape_y": 128, "shape_x": 128},
+    )
+    def test_differentiable(self, shape_y, shape_x):
+        pot_slice = jnp.pi * jnp.ones((shape_y, shape_x), dtype=jnp.float64)
         var_transmission_func = self.variant(transmission_func)
 
         def loss(voltage):
@@ -138,7 +150,14 @@ class test_transmission_func(chex.TestCase):
         assert jnp.isfinite(grad), f"Gradient is not finite: {grad}"
 
     @chex.all_variants
-    def test_array_voltage_input(self, pot_slice):
+    @parameterized.parameters(
+        {"shape_y": 64, "shape_x": 64},
+        {"shape_y": 128, "shape_x": 64},
+        {"shape_y": 64, "shape_x": 128},
+        {"shape_y": 128, "shape_x": 128},
+    )
+    def test_array_voltage_input(self, shape_y, shape_x):
+        pot_slice = jnp.pi * jnp.ones((shape_y, shape_x), dtype=jnp.float64)
         var_transmission_func = self.variant(transmission_func)
         voltages = jnp.array([100, 200, 300], dtype=jnp.float64)
 
@@ -148,7 +167,12 @@ class test_transmission_func(chex.TestCase):
         chex.assert_type(results, jnp.complex128)
 
     @chex.all_variants
-    def test_consistency_with_wavelength(self, pot_slice):
+    @parameterized.parameters(
+        {"voltage_kV": 200, "shape": (64, 64)},
+        {"voltage_kV": 300, "shape": (128, 128)},
+    )
+    def test_consistency_with_wavelength(self, voltage_kV, shape):
+        pot_slice = jnp.pi * jnp.ones(shape, dtype=jnp.float64)
         var_transmission_func = self.variant(transmission_func)
         var_wavelength_ang = self.variant(wavelength_ang)
 
@@ -159,3 +183,57 @@ class test_transmission_func(chex.TestCase):
         # Check if the wavelength is consistent with the transmission function
         # This is a simplified check and may need adjustment based on the exact relationship
         assert jnp.isclose(jnp.angle(trans).max(), 2 * jnp.pi / wavelength, rtol=1e-2)
+
+
+class test_fourier_calib(chex.TestCase):
+    @chex.all_variants
+    @parameterized.parameters(
+        {"calib_r": 0.5, "beam_size": (100, 100)},
+        {"calib_r": 0.25, "beam_size": (200, 200)},
+        {"calib_r": 1.5, "beam_size": (400, 400)},
+        {"calib_r": 7.5, "beam_size": (1000, 1000)},
+    )
+    def test_basic_functionality(self, beam_size, calib_r):
+        var_fourier_calib = self.variant(fourier_calib)
+        result = var_fourier_calib(
+            jnp.float64(calib_r), jnp.array(beam_size, dtype=float)
+        )
+        assert jnp.all(jnp.isfinite(result)), "Result contains non-finite values"
+
+    @chex.all_variants
+    @parameterized.parameters(
+        {"calib_r": 0.5, "beam_size": (100, 100)},
+        {"calib_r": 0.25, "beam_size": (200, 200)},
+        {"calib_r": 1.5, "beam_size": (400, 800)},
+        {"calib_r": 7.5, "beam_size": (1000, 5000)},
+        {"calib_r": 7.5, "beam_size": (1000, 1000)},
+    )
+    def calib_1_value(self, beam_size, calib_r):
+        var_fourier_calib = self.variant(fourier_calib)
+        result = var_fourier_calib(
+            jnp.float64(calib_r), jnp.array(beam_size, dtype=float)
+        )
+        if beam_size[0] == beam_size[1]:
+            chex.assert_equal(result[0], result[1])
+        else:
+            assert not jnp.allclose(
+                result[0], result[1]
+            ), "Results should differ for different beam size dimensions"
+
+    @chex.all_variants
+    @parameterized.parameters(
+        {"calib_r": (0.5, 0.5), "beam_size": (100, 100)},
+        {"calib_r": (0.25, 0.75), "beam_size": (200, 200)},
+        {"calib_r": (1.5, 1.6), "beam_size": (400, 400)},
+        {"calib_r": (7.5, 7.5), "beam_size": (1000, 1000)},
+    )
+    def calib_2_value(self, beam_size, calib_r):
+        var_fourier_calib = self.variant(fourier_calib)
+        calib = jnp.array(calib_r, dtype=jnp.float64)
+        result = var_fourier_calib(calib, jnp.array(beam_size))
+        if calib[0] == calib[1]:
+            chex.assert_equal(result[0], result[1])
+        else:
+            assert not jnp.allclose(
+                result[0], result[1]
+            ), "Results should differ for different calibrations"

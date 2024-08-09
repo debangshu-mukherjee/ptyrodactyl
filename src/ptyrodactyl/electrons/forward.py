@@ -2,9 +2,10 @@ from typing import Any, NamedTuple
 
 import jax
 import jax.numpy as jnp
+# from typeguard import typechecked as typechecker
+from beartype import beartype as typechecker
 from jax import Array
 from jaxtyping import Complex, Float, Int, Shaped, jaxtyped
-from typeguard import typechecked as typechecker
 
 import ptyrodactyl.electrons as pte
 
@@ -13,8 +14,8 @@ jax.config.update("jax_enable_x64", True)
 
 @jaxtyped(typechecker=typechecker)
 def transmission_func(
-    pot_slice: Float[Array, "H W"], voltage_kV: int | float | Float[Array, "*"]
-) -> Complex[Array, "H W"]:
+    pot_slice: Float[Array, "*"], voltage_kV: int | float | Float[Array, "*"]
+) -> Complex[Array, "*"]:
     """
     Calculates the complex transmission function from
     a single potential slice at a given electron accelerating
@@ -26,14 +27,14 @@ def transmission_func(
     for them - not the function itself.
 
     Args:
-    - `pot_slice`, Float[Array, "H W"]:
+    - `pot_slice`, Float[Array, "*"]:
         potential slice in Kirkland units
     - `voltage_kV`, int | float | Float[Array, "*"]:
         microscope operating voltage in kilo
         electronVolts
 
     Returns:
-    - `trans` Complex[Array, "H W"]:
+    - `trans` Complex[Array, "*"]:
         The transmission function of a single
         crystal slice
 
@@ -61,7 +62,7 @@ def transmission_func(
     sigma: Float[Array, "*"] = (
         (2 * jnp.pi / (lambda_angstrom * voltage)) * (einstein_energy + eV)
     ) / ((2 * einstein_energy) + eV)
-    trans: Complex[Array, "H W"] = jnp.exp(1j * sigma * pot_slice)
+    trans: Complex[Array, "*"] = jnp.exp(1j * sigma * pot_slice)
     return trans
 
 
@@ -164,18 +165,29 @@ def fourier_coords(calibration: float, image_size: Int[Array, "2"]) -> NamedTupl
     return calibrated_array(inverse_array, calib_inverse_y, calib_inverse_x)
 
 
-def FourierCalib(calibration: float, sizebeam: Int[Array, "2"]) -> Float[Array, "2"]:
-    FOV_y = sizebeam[0] * calibration
-    FOV_x = sizebeam[1] * calibration
-    qy = (jnp.arange((-sizebeam[0] / 2), ((sizebeam[0] / 2)), 1)) / FOV_y
-    qx = (jnp.arange((-sizebeam[1] / 2), ((sizebeam[1] / 2)), 1)) / FOV_x
-    shifter_y = sizebeam[0] // 2
-    shifter_x = sizebeam[1] // 2
-    Ly = jnp.roll(qy, shifter_y)
-    Lx = jnp.roll(qx, shifter_x)
-    dL_y = Ly[1] - Ly[0]
-    dL_x = Lx[1] - Lx[0]
-    return jnp.array([dL_y, dL_x])
+@jaxtyped(typechecker=typechecker)
+def fourier_calib(
+    real_space_calib: float | Float[Array, "*"],
+    sizebeam: Int[Array, "2"],
+) -> Float[Array, "2"]:
+    """
+    Generate the Fourier calibration for the beam
+
+    Args:
+    - `real_space_calib`, float | Float[Array, "*"]:
+        The pixel size in angstroms in real space
+    - `sizebeam`, Int[Array, "2"]:
+        The size of the beam in pixels
+
+    Returns:
+    - `inverse_space_calib`, Float[Array, "2"]:
+        The Fourier calibration in angstroms
+    """
+    field_of_view: Float[Array, "*"] = jnp.multiply(
+        jnp.float64(sizebeam), real_space_calib
+    )
+    inverse_space_calib = 1 / field_of_view
+    return inverse_space_calib
 
 
 @jax.jit
@@ -275,3 +287,82 @@ def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, 
     )  # in meters
     in_angstroms: Float[Array, "*"] = 1e10 * wavelength_meters  # in angstroms
     return in_angstroms
+
+
+@jaxtyped(typechecker=typechecker)
+def cbed_single_slice(
+    pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
+) -> Float[Array, "H W"]:
+    """
+    Simplest form of the CBED calculation
+
+    Args:
+    - `pot_slice`, Complex[Array, "H W"]:
+        The potential slice
+    - `beam`, Complex[Array, "H W"]:
+        The electron beam
+
+    Returns:
+    - `cbed`, Float[Array, "H W"]:
+        The calculated CBED pattern
+    """
+    real_space_convolve: Complex[Array, "H W"] = jnp.multiply(pot_slice, beam)
+    fourier_space: Complex[Array, "H W"] = jnp.fft.fftshift(
+        jnp.fft.fft2(real_space_convolve)
+    )
+    cbed: Float[Array, "H W"] = jnp.square(jnp.abs(fourier_space))
+    return cbed
+
+
+@jaxtyped(typechecker=typechecker)
+def cbed_multi_slice(
+    pot_slice: Complex[Array, "H W S"],
+    beam: Complex[Array, "H W"],
+    slice_thickness: float,
+    voltage_kV: float,
+    calib_ang: float,
+) -> Float[Array, "H W"]:
+    """
+    Multi-slice form of the CBED calculation,
+    where the potential slice is in the form of
+    a stack of slices, with the last dimension
+    being the number of slices
+
+    Args:
+    - `pot_slice`, Complex[Array, "H W S"]:
+        The potential slice
+    - `beam`, Complex[Array, "H W"]:
+        The electron beam
+    - `slice_thickness`, float:
+        The thickness of the slices in angstroms
+
+    Returns:
+    - `cbed`, Float[Array, "H W"]:
+        The calculated CBED pattern
+    """
+    slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
+        beam.shape, slice_thickness, voltage_kV, calib_ang
+    )
+    slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
+        beam.shape, slice_thickness, voltage_kV, calib_ang
+    )
+
+    def body_fun(carry, x):
+        real_space_convolve, beam = carry
+        this_slice = jnp.multiply(x, beam)
+        propagated_slice = jnp.fft.ifft2(
+            jnp.multiply(jnp.fft.fft2(this_slice), slice_transmission)
+        )
+        new_real_space_convolve = jnp.multiply(real_space_convolve, propagated_slice)
+        return (new_real_space_convolve, beam), None
+
+    initial_carry = (jnp.ones_like(beam, dtype=jnp.complex64), beam)
+    (real_space_convolve, _), _ = jax.lax.scan(
+        body_fun, initial_carry, pot_slice.transpose(2, 0, 1)
+    )
+
+    fourier_space: Complex[Array, "H W"] = jnp.fft.fftshift(
+        jnp.fft.fft2(real_space_convolve)
+    )
+    cbed: Float[Array, "H W"] = jnp.square(jnp.abs(fourier_space))
+    return cbed

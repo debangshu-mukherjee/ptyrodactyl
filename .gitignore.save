@@ -1,0 +1,106 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+notebooks/__pycache__/
+/src/__pycache__/
+/src/pterodactyl/__pycache__/
+/src/pterodactyl/electrons/__pycache__/
+/src/pterodactyl/light/__pycache__/
+/data/__pycache__/
+/tests/__pycache__/
+/envs/__pycache__/
+*.py[cod]
+
+# VS Code settings
+/.vscode
+/src/.vscode
+/src/pterodactyl/.vscode
+/src/pterodactyl/electrons/.vscode
+/src/pterodactyl/light/.vscode
+/notebooks/.vscode
+/tests/.vscode
+/data/.vscode
+/data/*/.vscode
+/envs/.vscode
+
+.pyre_configuration
+/src/.pyre_configuration
+
+# C extensions
+*.so
+*.pyc
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+/src/strain_data_processing.egg-info
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+*.swp
+
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+cufile.log
+tests/cufile.log
+src/cufile.log
+src/strain_data_processing/cufile.log
+notebooks/cufile.log
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*,cover
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Emacs
+.#*
+
+# Notebook Checkpoints
+.ipynb_checkpoints/
+/src/.ipynb_checkpoints/
+/notebooks/.ipynb_checkpoints/
+/src/pterodactyl/.ipynb_checkpoints/
+/src/pterodactyl/light/.ipynb_checkpoints/
+/src/pterodactyl/electrons/.ipynb_checkpoints/
+/tests/.ipynb_checkpoints/
+/data/.ipynb_checkpoints/
+/data/*/.ipynb_checkpoints/
+/ens/.ipynb_checkpoints/
+/.mypy_cache/
+/.pytest_cache/

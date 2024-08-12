@@ -12,7 +12,7 @@ import ptyrodactyl.electrons as pte
 jax.config.update("jax_enable_x64", True)
 
 
-@jaxtyped(typechecker=typechecker)
+
 def transmission_func(
     pot_slice: Float[Array, "*"], voltage_kV: int | float | Float[Array, "*"]
 ) -> Complex[Array, "*"]:
@@ -66,12 +66,13 @@ def transmission_func(
     return trans
 
 
-@jaxtyped(typechecker=typechecker)
+
 def propagation_func(
-    imsize: Shaped[Array, "2"],
-    thickness_ang: float,
-    voltage_kV: float,
-    calib_ang: float,
+    imsize_y: int,
+    imsize_x: int,
+    thickness_ang: Float[Array, "*"],
+    voltage_kV: Float[Array, "*"],
+    calib_ang: Float[Array, "*"],
 ) -> Complex[Array, "H W"]:
     """
     Calculates the complex propagation function that results
@@ -79,13 +80,15 @@ def propagation_func(
     one slice to the next in the multislice algorithm
 
     Args:
-    - `imsize`, Shaped[Array, "2"]:
-        Size of the image of the propagator
-    -  `thickness_ang`, float
+    - `imsize_y`, (int):
+        Size of the image of the propagator in y axis
+    - `imsize_x`, (int):
+        Size of the image of the propagator in x axis
+    -  `thickness_ang`, (Float[Array, "*"])
         Distance between the slices in angstroms
-    - `voltage_kV`, float
+    - `voltage_kV`, (Float[Array, "*"])
         Accelerating voltage in kilovolts
-    - `calib_ang`, float
+    - `calib_ang`, (Float[Array, "*"])
         Calibration or pixel size in angstroms
 
     Returns:
@@ -93,8 +96,8 @@ def propagation_func(
         The propagation function of the same size given by imsize
     """
     # Generate frequency arrays directly using fftfreq
-    qy: Float[Array, "H"] = jnp.fft.fftfreq(imsize[0], d=calib_ang)
-    qx: Float[Array, "W"] = jnp.fft.fftfreq(imsize[1], d=calib_ang)
+    qy: Float[Array, "H"] = jnp.fft.fftfreq(imsize_y, d=calib_ang)
+    qx: Float[Array, "W"] = jnp.fft.fftfreq(imsize_x, d=calib_ang)
 
     # Create 2D meshgrid of frequencies
     Lya, Lxa = jnp.meshgrid(qy, qx, indexing="ij")
@@ -163,7 +166,7 @@ def fourier_coords(calibration: float, image_size: Int[Array, "2"]) -> NamedTupl
     return calibrated_array(inverse_array, calib_inverse_y, calib_inverse_x)
 
 
-@jaxtyped(typechecker=typechecker)
+
 def fourier_calib(
     real_space_calib: float | Float[Array, "*"],
     sizebeam: Int[Array, "2"],
@@ -287,7 +290,7 @@ def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, 
     return in_angstroms
 
 
-@jaxtyped(typechecker=typechecker)
+#@jaxtyped(typechecker=typechecker)
 def cbed_single_slice_single_beam(
     pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
 ) -> Float[Array, "H W"]:
@@ -312,7 +315,7 @@ def cbed_single_slice_single_beam(
     return cbed
 
 
-@jaxtyped(typechecker=typechecker)
+#@jaxtyped(typechecker=typechecker)
 def cbed_single_slice_multi_beam(
     pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W M"]
 ) -> Float[Array, "H W"]:
@@ -353,13 +356,13 @@ def cbed_single_slice_multi_beam(
     return cbed
 
 
-@jaxtyped(typechecker=typechecker)
+#@jaxtyped(typechecker=typechecker)
 def cbed_multi_slice_single_beam(
     pot_slice: Complex[Array, "H W S"],
     beam: Complex[Array, "H W"],
-    slice_thickness: float,
-    voltage_kV: float,
-    calib_ang: float,
+    slice_thickness: Float[Array, "*"],
+    voltage_kV: Float[Array, "*"],
+    calib_ang: Float[Array, "*"],
 ) -> Float[Array, "H W"]:
     """
     Multi-slice form of the CBED calculation,
@@ -368,19 +371,25 @@ def cbed_multi_slice_single_beam(
     being the number of slices
 
     Args:
-    - `pot_slice`, Complex[Array, "H W S"]:
+    - `pot_slice`, (Complex[Array, "H W S"]):
         The potential slice
-    - `beam`, Complex[Array, "H W"]:
+    - `beam`, (Complex[Array, "H W"]):
         The electron beam
-    - `slice_thickness`, float:
+    - `slice_thickness`, (Float[Array, "*"]):
         The thickness of the slices in angstroms
+    - `voltage_kV`, (Float[Array, "*"]):
+        The accelerating voltage in kilovolts
+    - `calib_ang`, (Float[Array, "*"]):
+        The calibration in angstroms
 
     Returns:
-    - `cbed`, Float[Array, "H W"]:
+    - `cbed`, (Float[Array, "H W"]):
         The calculated CBED pattern
     """
-    slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
-        beam.shape, slice_thickness, voltage_kV, calib_ang
+    size_y, size_x = beam.shape
+    propagation_func_jit = jax.jit(pte.propagation_func, static_argnums=(0, 1))
+    slice_transmission: Complex[Array, "H W"] = propagation_func_jit(
+        size_y, size_x, slice_thickness, voltage_kV, calib_ang
     )
 
     def body_fun(carry, x):
@@ -404,13 +413,13 @@ def cbed_multi_slice_single_beam(
     return cbed
 
 
-@jaxtyped(typechecker=typechecker)
+#@jaxtyped(typechecker=typechecker)
 def cbed_multi_slice_multi_beam(
     pot_slice: Complex[Array, "H W S"],
     beam: Complex[Array, "H W M"],
-    slice_thickness: float,
-    voltage_kV: float,
-    calib_ang: float,
+    slice_thickness: Float[Array, "*"],
+    voltage_kV: Float[Array, "*"],
+    calib_ang: Float[Array, "*"],
 ) -> Float[Array, "H W"]:
     """
     Calculates the CBED pattern for multiple slices and multiple beam modes.
@@ -423,11 +432,11 @@ def cbed_multi_slice_multi_beam(
         The potential slices. H and W are height and width, S is the number of slices.
     - `beam` (Complex[Array, "H W M"]):
         The electron beam modes. M is the number of modes.
-    - `slice_thickness` (float):
+    - `slice_thickness` (Float[Array, "*"]):
         The thickness of each slice in angstroms.
-    - `voltage_kV` (float):
+    - `voltage_kV` (Float[Array, "*"]):
         The accelerating voltage in kilovolts.
-    - `calib_ang` (float):
+    - `calib_ang` (Float[Array, "*"]):
         The calibration in angstroms.
 
     Returns:

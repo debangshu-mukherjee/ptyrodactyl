@@ -1,4 +1,4 @@
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, Tuple
 
 import jax
 import jax.numpy as jnp
@@ -219,7 +219,7 @@ def make_probe(
     Lya, Lxa = jnp.meshgrid(Lx, Ly)
     L2 = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
     inverse_real_matrix = L2**0.5
-    Adist = jnp.asarray(inverse_real_matrix <= LMax, dtype=jnp.complex64)
+    Adist = jnp.asarray(inverse_real_matrix <= LMax, dtype=jnp.complex128)
     chi_probe = aberration(inverse_real_matrix, wavelength, defocus, c3, c5)
     Adist *= jnp.exp(-1j * chi_probe)
     probe_real_space = jnp.fft.ifftshift(jnp.fft.ifft2(Adist))
@@ -398,7 +398,7 @@ def cbed_multi_slice_single_beam(
         new_real_space_convolve = jnp.multiply(real_space_convolve, propagated_slice)
         return (new_real_space_convolve, beam), None
 
-    initial_carry = (jnp.ones_like(beam, dtype=jnp.complex64), beam)
+    initial_carry = (jnp.ones_like(beam, dtype=jnp.complex128), beam)
     (real_space_convolve, _), _ = jax.lax.scan(
         body_fun, initial_carry, pot_slice.transpose(2, 0, 1)
     )
@@ -408,6 +408,7 @@ def cbed_multi_slice_single_beam(
     )
     cbed: Float[Array, "H W"] = jnp.square(jnp.abs(fourier_space))
     return cbed
+
 
 def cbed_multi_slice_single_beam_slice(
     pot_slice: Complex[Array, "H W S"],
@@ -427,7 +428,7 @@ def cbed_multi_slice_single_beam_slice(
         The electron beam
     - `transmission_slice` (Complex[Array, "H W"]):
         The transmission function for a single slice. You do't need to
-        recalculate it then if you are doing the same CBED calculations 
+        recalculate it then if you are doing the same CBED calculations
         many times.
 
     Returns:
@@ -444,7 +445,7 @@ def cbed_multi_slice_single_beam_slice(
         new_real_space_convolve = jnp.multiply(real_space_convolve, propagated_slice)
         return (new_real_space_convolve, beam), None
 
-    initial_carry = (jnp.ones_like(beam, dtype=jnp.complex64), beam)
+    initial_carry = (jnp.ones_like(beam, dtype=jnp.complex128), beam)
     (real_space_convolve, _), _ = jax.lax.scan(
         body_fun, initial_carry, pot_slice.transpose(2, 0, 1)
     )
@@ -489,48 +490,57 @@ def cbed_multi_slice_multi_beam(
 
     # Calculate the transmission function for a single slice
     slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
-        beam.shape[:2], slice_thickness, voltage_kV, calib_ang
+        beam.shape[0], beam.shape[1], slice_thickness, voltage_kV, calib_ang
     )
 
-    def process_slice(carry, pot_slice_i):
+    def process_slice(
+        carry: Tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
+        pot_slice_i: Complex[Array, "H W"],
+    ) -> Tuple[Tuple[Complex[Array, "H W"], Complex[Array, "H W"]], None]:
         """
         Process a single potential slice for all beam modes.
 
         This function is used within lax.scan to iterate over slices.
 
         Args:
-        - `carry`: A tuple containing the current convolution state and the beam.
-        - `pot_slice_i`: A single potential slice.
+        - `carry` (Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]):
+        - `pot_slice_i` (Complex[Array, "H W"]):
+            A single potential slice.
 
         Returns:
         - A tuple containing the updated convolution state and None (scan accumulator).
         """
-        convolve, _ = carry
-        # Multiply the potential slice with all beam modes
-        this_slice = jnp.multiply(pot_slice_i, beam)
+        convolve, beam_mode = carry
+        # Multiply the potential slice with the current beam mode
+        this_slice: Complex[Array, "H W"] = jnp.multiply(pot_slice_i, beam_mode)
         # Propagate the slice through free space
-        propagated_slice = jnp.fft.ifft2(
-            jnp.multiply(jnp.fft.fft2(this_slice), slice_transmission[:, :, None])
+        propagated_slice: Complex[Array, "H W"] = jnp.fft.ifft2(
+            jnp.multiply(jnp.fft.fft2(this_slice), slice_transmission)
         )
         # Update the convolution state
-        new_convolve = jnp.multiply(convolve, propagated_slice)
-        return (new_convolve, beam), None
+        new_convolve: Complex[Array, "H W"] = jnp.multiply(convolve, propagated_slice)
+        return (new_convolve, beam_mode), None
 
-    def process_beam_mode(beam_mode):
+    def process_beam_mode(beam_mode: Complex[Array, "H W"]):
         """
         Process all slices for a single beam mode.
 
         This function uses lax.scan to iterate over all slices for one beam mode.
 
         Args:
-        - `beam_mode`: A single beam mode.
+        - `beam_mode` (Complex[Array, "H W"]):
+            A single beam mode.
 
         Returns:
         - The Fourier transform of the final convolution state.
         """
         # Initialize the convolution state
-        initial_carry = (jnp.ones_like(beam_mode, dtype=jnp.complex64), beam_mode)
+        initial_carry: Tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
+            jnp.ones_like(beam_mode, dtype=jnp.complex128),
+            beam_mode,
+        )
         # Scan over all slices
+        real_space_convolve: Complex[Array, "H W"]
         (real_space_convolve, _), _ = lax.scan(
             process_slice, initial_carry, pot_slice.transpose(2, 0, 1)
         )
@@ -538,15 +548,18 @@ def cbed_multi_slice_multi_beam(
         return jnp.fft.fftshift(jnp.fft.fft2(real_space_convolve))
 
     # Use vmap to process all beam modes in parallel
-    fourier_space_mode = jax.vmap(process_beam_mode, in_axes=-1, out_axes=-1)(beam)
+    fourier_space_modes: Complex[Array, "H W M"] = jax.vmap(
+        process_beam_mode, in_axes=-1, out_axes=-1
+    )(beam)
 
     # Compute the intensity for each mode
-    cbed_mode: Float[Array, "H W M"] = jnp.square(jnp.abs(fourier_space_mode))
+    cbed_mode: Float[Array, "H W M"] = jnp.square(jnp.abs(fourier_space_modes))
 
     # Sum the intensities across all modes
     cbed: Float[Array, "H W"] = jnp.sum(cbed_mode, axis=-1)
 
     return cbed
+
 
 def cbed_multi_slice_multi_beam_slice(
     pot_slice: Complex[Array, "H W S"],
@@ -566,7 +579,7 @@ def cbed_multi_slice_multi_beam_slice(
         The electron beam modes. M is the number of modes.
     - `transmission_slice` (Complex[Array, "*"]):
         The transmission function for a single slice. You do't need to
-        recalculate it then if you are doing the same CBED calculations 
+        recalculate it then if you are doing the same CBED calculations
         many times.
 
     Returns:
@@ -574,45 +587,54 @@ def cbed_multi_slice_multi_beam_slice(
         The calculated CBED pattern.
     """
 
-    def process_slice(carry, pot_slice_i):
+    def process_slice(
+        carry: Tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
+        pot_slice_i: Complex[Array, "H W"],
+    ) -> Tuple[Tuple[Complex[Array, "H W"], Complex[Array, "H W"]], None]:
         """
         Process a single potential slice for all beam modes.
 
         This function is used within lax.scan to iterate over slices.
 
         Args:
-        - `carry`: A tuple containing the current convolution state and the beam.
-        - `pot_slice_i`: A single potential slice.
+        - `carry` (Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]):
+        - `pot_slice_i` (Complex[Array, "H W"]):
+            A single potential slice.
 
         Returns:
         - A tuple containing the updated convolution state and None (scan accumulator).
         """
-        convolve, _ = carry
-        # Multiply the potential slice with all beam modes
-        this_slice = jnp.multiply(pot_slice_i, beam)
+        convolve, beam_mode = carry
+        # Multiply the potential slice with the current beam mode
+        this_slice: Complex[Array, "H W"] = jnp.multiply(pot_slice_i, beam_mode)
         # Propagate the slice through free space
-        propagated_slice = jnp.fft.ifft2(
-            jnp.multiply(jnp.fft.fft2(this_slice), transmission_slice[:, :, None])
+        propagated_slice: Complex[Array, "H W"] = jnp.fft.ifft2(
+            jnp.multiply(jnp.fft.fft2(this_slice), transmission_slice)
         )
         # Update the convolution state
-        new_convolve = jnp.multiply(convolve, propagated_slice)
-        return (new_convolve, beam), None
+        new_convolve: Complex[Array, "H W"] = jnp.multiply(convolve, propagated_slice)
+        return (new_convolve, beam_mode), None
 
-    def process_beam_mode(beam_mode):
+    def process_beam_mode(beam_mode: Complex[Array, "H W"]):
         """
         Process all slices for a single beam mode.
 
         This function uses lax.scan to iterate over all slices for one beam mode.
 
         Args:
-        - `beam_mode`: A single beam mode.
+        - `beam_mode` (Complex[Array, "H W"]):
+            A single beam mode.
 
         Returns:
         - The Fourier transform of the final convolution state.
         """
         # Initialize the convolution state
-        initial_carry = (jnp.ones_like(beam_mode, dtype=jnp.complex64), beam_mode)
+        initial_carry: Tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
+            jnp.ones_like(beam_mode, dtype=jnp.complex128),
+            beam_mode,
+        )
         # Scan over all slices
+        real_space_convolve: Complex[Array, "H W"]
         (real_space_convolve, _), _ = lax.scan(
             process_slice, initial_carry, pot_slice.transpose(2, 0, 1)
         )
@@ -620,10 +642,12 @@ def cbed_multi_slice_multi_beam_slice(
         return jnp.fft.fftshift(jnp.fft.fft2(real_space_convolve))
 
     # Use vmap to process all beam modes in parallel
-    fourier_space_mode = jax.vmap(process_beam_mode, in_axes=-1, out_axes=-1)(beam)
+    fourier_space_modes: Complex[Array, "H W M"] = jax.vmap(
+        process_beam_mode, in_axes=-1, out_axes=-1
+    )(beam)
 
     # Compute the intensity for each mode
-    cbed_mode: Float[Array, "H W M"] = jnp.square(jnp.abs(fourier_space_mode))
+    cbed_mode: Float[Array, "H W M"] = jnp.square(jnp.abs(fourier_space_modes))
 
     # Sum the intensities across all modes
     cbed: Float[Array, "H W"] = jnp.sum(cbed_mode, axis=-1)

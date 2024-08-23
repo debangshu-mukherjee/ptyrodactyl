@@ -3,6 +3,7 @@ from typing import Any, NamedTuple, Tuple
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
+
 # from typeguard import typechecked as typechecker
 from jax import Array, lax
 from jaxtyping import Complex, Float, Int, Shaped, jaxtyped
@@ -135,10 +136,10 @@ def fourier_coords(calibration: float, image_size: Int[Array, "2"]) -> NamedTupl
     real_fov_y: float = image_size[0] * calibration  # real space field of view in y
     real_fov_x: float = image_size[1] * calibration  # real space field of view in x
     inverse_arr_y: Float[Array, "H"] = (
-        jnp.arange((-image_size[0] / 2), ((image_size[0] / 2)), 1)
+        jnp.arange((-image_size[0] / 2), (image_size[0] / 2), 1)
     ) / real_fov_y  # inverse space array y
     inverse_arr_x: Float[Array, "W"] = (
-        jnp.arange((-image_size[1] / 2), ((image_size[1] / 2)), 1)
+        jnp.arange((-image_size[1] / 2), (image_size[1] / 2), 1)
     ) / real_fov_x  # inverse space array x
     shifter_y: float = image_size[0] // 2
     shifter_x: float = image_size[1] // 2

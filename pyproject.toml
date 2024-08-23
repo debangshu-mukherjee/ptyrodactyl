@@ -1,6 +1,6 @@
 [project]
 name = "ptyrodactyl"
-version = "2024.08.12"
+version = "2024.08.21"
 description = "Ptychography through differentiable programming in JAX"
 authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 license = {file = "LICENSE"}
@@ -30,6 +30,8 @@ dependencies = [
     "chex >= 0.1.85",
     "optax >= 0.1.8",
     "pytest >= 8.0.0",
+    "ruff>=0.6.2",
+    "uv>=0.3.2",
 ]
 
 [tool.setuptools]

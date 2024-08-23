@@ -10,12 +10,16 @@ from jaxtyping import Array, Complex, Float, Int, Shaped
 jax.config.update("jax_enable_x64", True)
 
 # Import your functions here
-from ptyrodactyl.electrons import (cbed_multi_slice_multi_beam,
-                                   cbed_multi_slice_single_beam,
-                                   cbed_single_slice_multi_beam,
-                                   cbed_single_slice_single_beam,
-                                   fourier_calib, propagation_func,
-                                   transmission_func, wavelength_ang)
+from ptyrodactyl.electrons import (
+    cbed_multi_slice_multi_beam,
+    cbed_multi_slice_single_beam,
+    cbed_single_slice_multi_beam,
+    cbed_single_slice_single_beam,
+    fourier_calib,
+    propagation_func,
+    transmission_func,
+    wavelength_ang,
+)
 
 # Set a random seed for reproducibility
 key = jax.random.PRNGKey(0)
@@ -25,7 +29,6 @@ if __name__ == "__main__":
 
 
 class test_wavelength_ang(chex.TestCase):
-
     @chex.all_variants
     @parameterized.parameters(
         {"test_kV": 200, "expected_wavelength": 0.02508},
@@ -74,7 +77,6 @@ class test_wavelength_ang(chex.TestCase):
 
 
 class test_transmission_func(chex.TestCase):
-
     @chex.all_variants
     @parameterized.parameters(
         {"voltage_kV": 200, "shape": (64, 64)},
@@ -244,7 +246,6 @@ class test_fourier_calib(chex.TestCase):
 
 
 class test_cbed_multi_slice_single_beam(chex.TestCase):
-
     @chex.all_variants()
     @parameterized.parameters(
         {
@@ -358,7 +359,6 @@ class test_cbed_multi_slice_single_beam(chex.TestCase):
 
 
 class test_cbed_single_slice_single_beam(chex.TestCase):
-
     @chex.all_variants()
     @parameterized.parameters(
         {"shape": (10, 10)},
@@ -438,7 +438,6 @@ class test_cbed_single_slice_single_beam(chex.TestCase):
 
 
 class test_cbed_single_slice_multi_beam(chex.TestCase):
-
     @chex.all_variants()
     @parameterized.parameters(
         {"shape": (10, 10), "num_modes": 1},
@@ -542,7 +541,6 @@ class test_cbed_single_slice_multi_beam(chex.TestCase):
 
 
 class test_cbed_multi_slice_multi_beam(chex.TestCase):
-
     @chex.all_variants()
     @parameterized.parameters(
         {

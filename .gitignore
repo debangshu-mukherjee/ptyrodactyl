@@ -23,6 +23,9 @@ notebooks/__pycache__/
 /data/.vscode
 /data/*/.vscode
 /envs/.vscode
+/.venv
+/.ruff_cache
+/.coverage
 
 .pyre_configuration
 /src/.pyre_configuration

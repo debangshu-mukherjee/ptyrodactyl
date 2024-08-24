@@ -10,16 +10,12 @@ from jaxtyping import Array, Complex, Float, Int, Shaped
 jax.config.update("jax_enable_x64", True)
 
 # Import your functions here
-from ptyrodactyl.electrons import (
-    cbed_multi_slice_multi_beam,
-    cbed_multi_slice_single_beam,
-    cbed_single_slice_multi_beam,
-    cbed_single_slice_single_beam,
-    fourier_calib,
-    propagation_func,
-    transmission_func,
-    wavelength_ang,
-)
+from ptyrodactyl.electrons import (cbed_multi_slice_multi_beam,
+                                   cbed_multi_slice_single_beam,
+                                   cbed_single_slice_multi_beam,
+                                   cbed_single_slice_single_beam,
+                                   fourier_calib, propagation_func,
+                                   transmission_func, wavelength_ang)
 
 # Set a random seed for reproducibility
 key = jax.random.PRNGKey(0)

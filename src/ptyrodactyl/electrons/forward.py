@@ -1,3 +1,4 @@
+from functools import partial
 from typing import Any, NamedTuple, Tuple
 
 import jax
@@ -5,6 +6,8 @@ import jax.numpy as jnp
 from beartype import beartype as typechecker
 # from typeguard import typechecked as typechecker
 from jax import Array, lax
+from jax.sharding import Mesh
+from jax.sharding import PartitionSpec as P
 from jaxtyping import Complex, Float, Int, jaxtyped
 
 import ptyrodactyl.electrons as pte
@@ -295,16 +298,19 @@ def cbed(
     calib_ang: Float[Array, "*"],
 ) -> Float[Array, "H W"]:
     """
-    Calculates the CBED pattern for single/multiple slices and single/multiple beam modes.
-
-    This function computes the Convergent Beam Electron Diffraction (CBED) pattern
-    by propagating one or more beam modes through one or more potential slices.
+    Calculates the CBED pattern for single/multiple slices
+    and single/multiple beam modes. This function computes
+    the Convergent Beam Electron Diffraction (CBED) pattern
+    by propagating one or more beam modes through one or
+    more potential slices.
 
     Args:
     - `pot_slice` (Complex[Array, "H W *S"]):
-        The potential slice(s). H and W are height and width, S is the number of slices (optional).
+        The potential slice(s). H and W are height and width,
+        S is the number of slices (optional).
     - `beam` (Complex[Array, "H W *M"]):
-        The electron beam mode(s). M is the number of modes (optional).
+        The electron beam mode(s).
+        M is the number of modes (optional).
     - `slice_thickness` (Float[Array, "*"]):
         The thickness of each slice in angstroms.
     - `voltage_kV` (Float[Array, "*"]):
@@ -364,21 +370,28 @@ def cbed_no_slice(
     slice_transmission: Complex[Array, "*"],
 ) -> Float[Array, "H W"]:
     """
-    Calculates the CBED pattern for single/multiple slices and single/multiple beam modes.
+    Calculates the CBED pattern for single/multiple slices
+    and single/multiple beam modes.
 
-    This function computes the Convergent Beam Electron Diffraction (CBED) pattern
-    by propagating one or more beam modes through one or more potential slices.
-    This version takes in a pre-calculated transmission function for going from one slice to the next,
-    which is useful for calculating the CBED pattern multiple times wherte the transmission
-    function remains the same., example is 4D-STEM.
+    This function computes the Convergent Beam Electron
+    Diffraction (CBED) pattern by propagating one or more
+    beam modes through one or more potential slices.
+    This version takes in a pre-calculated transmission
+    function for going from one slice to the next, which is
+    useful for calculating the CBED pattern multiple times
+    where the transmission function remains the same.,
+    example is 4D-STEM.
 
     Args:
     - `pot_slice` (Complex[Array, "H W *S"]):
-        The potential slice(s). H and W are height and width, S is the number of slices (optional).
+        The potential slice(s). H and W are height and width,
+        S is the number of slices (optional).
     - `beam` (Complex[Array, "H W *M"]):
-        The electron beam mode(s). M is the number of modes (optional).
+        The electron beam mode(s).
+        M is the number of modes (optional).
     - `slice_transmission` (Complex[Array, "*"]):
-        The pre-calculated transmission function for going from one slice to the next.
+        The pre-calculated transmission function
+        for going from one slice to the next.
 
     Returns:
     -  `cbed_pattern` (Float[Array, "H W"]):
@@ -419,3 +432,117 @@ def cbed_no_slice(
     cbed_pattern: Float[Array, "H W"] = jnp.sum(cbed_mode, axis=-1)
 
     return cbed_pattern
+
+
+def shift_beam_fourier(
+    beam: Complex[Array, "H W M"],
+    pos: Float[Array, "... 2"],
+    calib_ang: Float[Array, "*"],
+) -> Complex[Array, "... H W M"]:
+    """
+    Shifts the beam to new position(s) using Fourier shifting.
+
+    Args:
+    - beam (Complex[Array, "H W M"]):
+        The electron beam modes.
+    - pos (Float[Array, "... 2"]):
+        The (y, x) position(s) to shift to in pixels.
+        Can be a single position [2] or multiple [..., 2].
+    - calib_ang (Float[Array, "*"]):
+        The calibration in angstroms.
+
+    Returns:
+    - shifted_beams (Complex[Array, "... H W M"]):
+        The shifted beam(s) for all position(s) and mode(s).
+    """
+    H, W, M = beam.shape
+
+    # Ensure pos is at least 2D, even for a single position
+    pos = jnp.atleast_2d(pos)
+
+    # Convert positions from real space to Fourier space
+    fy = pos[..., 0] / (H * calib_ang)
+    fx = pos[..., 1] / (W * calib_ang)
+
+    # Create phase ramps in Fourier space for all positions
+    y, x = jnp.meshgrid(jnp.fft.fftfreq(H), jnp.fft.fftfreq(W), indexing="ij")
+    phase_ramps = jnp.exp(
+        -2j * jnp.pi * (fy[..., None, None] * y + fx[..., None, None] * x)
+    )
+
+    # Apply shifts to each mode for all positions
+    fft_beam = jnp.fft.fft2(beam, axes=(0, 1))
+    shifted_fft_beams = fft_beam * phase_ramps[..., None]
+    shifted_beams = jnp.fft.ifft2(shifted_fft_beams, axes=(-3, -2))
+
+    return shifted_beams
+
+
+@partial(jax.jit, static_argnames=["devices"])
+def stem_4d(
+    pot_slice: Complex[Array, "H W S"],
+    beam: Complex[Array, "H W M"],
+    pos_list: Float[Array, "P 2"],
+    slice_thickness: Float[Array, "*"],
+    voltage_kV: Float[Array, "*"],
+    calib_ang: Float[Array, "*"],
+    devices: jax.Array,
+) -> Float[Array, "P H W"]:
+    """
+    Calculates the 4D-STEM pattern for multiple probe positions with sharding.
+
+    Args:
+    - pot_slice (Complex[Array, "H W S"]):
+        The potential slices.
+    - beam (Complex[Array, "H W M"]):
+        The electron beam modes.
+    - pos_list (Float[Array, "... 2"]):
+        List of (y, x) probe positions in pixels.
+    - slice_thickness (Float[Array, "*"]):
+        The thickness of each slice in angstroms.
+    - voltage_kV (Float[Array, "*"]):
+        The accelerating voltage in kilovolts.
+    - calib_ang (Float[Array, "*"]):
+        The calibration in angstroms.
+    - devices (jax.Array):
+        Array of devices to use for sharding.
+
+    Returns:
+    - stem_pattern (Float[Array, "... H W"]):
+        The calculated 4D-STEM pattern.
+    """
+    # Set up device mesh
+    mesh = Mesh(devices, ("devices",))
+
+    # Define sharding strategy
+    pos_sharding = P("devices", None)  # Shard along the position dimension
+    beam_sharding = P(None, None, None)  # Don't shard the beam
+    pot_slice_sharding = P(None, None, None)  # Don't shard the potential slices
+    shifted_beams_sharding = P(
+        "devices", None, None, None
+    )  # Shard shifted beams along position dimension
+
+    # Shard inputs
+    with mesh:
+        pos_list = jax.device_put(pos_list, pos_sharding)
+        beam = jax.device_put(beam, beam_sharding)
+        pot_slice = jax.device_put(pot_slice, pot_slice_sharding)
+
+    # Calculate the transmission function once
+    slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
+        beam.shape[0], beam.shape[1], slice_thickness, voltage_kV, calib_ang
+    )
+
+    # Shift the beam to all positions and shard the result
+    with mesh:
+        shifted_beams = jax.device_put(
+            shift_beam_fourier(beam, pos_list, calib_ang), shifted_beams_sharding
+        )
+
+    # Calculate CBED patterns for all positions
+    def calc_cbed(electron_beam):
+        return cbed_no_slice(pot_slice, electron_beam, slice_transmission)
+
+    stem_pattern = jax.vmap(calc_cbed, in_axes=0, out_axes=0)(shifted_beams)
+
+    return stem_pattern

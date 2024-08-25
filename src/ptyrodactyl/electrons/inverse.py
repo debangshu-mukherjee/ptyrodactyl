@@ -1,92 +1,109 @@
-from typing import Any, NamedTuple
+from typing import Dict, Tuple
 
 import jax
 import jax.numpy as jnp
-import optax
-from jaxtyping import Array, Complex, Float, Int, Shaped
+from jaxtyping import Array, Complex, Float
 
 import ptyrodactyl.electrons as pte
 import ptyrodactyl.tools as ptt
 
-
-def loss_fn(
-    params,
-    beam,
-    pos_list,
-    slice_thickness,
-    voltage_kV,
-    calib_ang,
-    devices,
-    experimental_4dstem,
-):
+def single_slice_ptychography(
+    experimental_4dstem: Float[Array, "P H W"],
+    initial_pot_slice: Complex[Array, "H W"],
+    initial_beam: Complex[Array, "H W"],
+    pos_list: Float[Array, "P 2"],
+    slice_thickness: Float[Array, "*"],
+    voltage_kV: Float[Array, "*"],
+    calib_ang: Float[Array, "*"],
+    devices: jax.Array,
+    num_iterations: int = 1000,
+    learning_rate: float = 0.001,
+    loss_type: str = "mse",
+) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
     """
-    Compute the loss between the calculated 4D-STEM pattern and the experimental data.
+    Create and run an optimization routine for 4D-STEM reconstruction.
 
     Args:
-    - params: The parameters to optimize (e.g., potential slices)
-    - beam, pos_list, slice_thickness, voltage_kV, calib_ang, devices: Same as in stem_4d
-    - experimental_4dstem: The experimental 4D-STEM data to match
+    - experimental_4dstem (Float[Array, "P H W"]):
+        Experimental 4D-STEM data.
+    - initial_pot_slice (Complex[Array, "H W"]):
+        Initial guess for potential slice.
+    - initial_beam (Complex[Array, "H W"]):
+        Initial guess for electron beam.
+    - pos_list (Float[Array, "P 2"]):
+        List of probe positions.
+    - slice_thickness (Float[Array, "*"]):
+        Thickness of each slice.
+    - voltage_kV (Float[Array, "*"]):
+        Accelerating voltage.
+    - calib_ang (Float[Array, "*"]):
+        Calibration in angstroms.
+    - devices (jax.Array):
+        Array of devices for sharding.
+    - num_iterations (int):
+        Number of optimization iterations.
+    - learning_rate (float):
+        Learning rate for optimization.
+    - loss_type (str):
+        Type of loss function to use.
 
     Returns:
-    - loss: The computed loss
+    - Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
+        Optimized potential slice and beam.
     """
-    # Unpack parameters if necessary
-    pot_slice = params  # Assuming params directly represents the potential slices
 
-    # Calculate 4D-STEM pattern
-    calc_4dstem = pte.stem_4d(
-        pot_slice, beam, pos_list, slice_thickness, voltage_kV, calib_ang, devices
-    )
-
-    # Compute loss
-    loss = jnp.sum(jnp.abs(calc_4dstem - experimental_4dstem))
-
-    return loss
-
-
-def optimize_potential(
-    initial_params,
-    beam,
-    pos_list,
-    slice_thickness,
-    voltage_kV,
-    calib_ang,
-    devices,
-    experimental_4dstem,
-    num_iterations=1000,
-):
-    """
-    Optimize the potential slices to match the experimental 4D-STEM data.
-
-    Args:
-    - initial_params: Initial guess for the potential slices
-    - Other args: Same as in loss_fn
-    - num_iterations: Number of optimization iterations
-
-    Returns:
-    - optimized_params: The optimized potential slices
-    """
-    # Initialize optimizer
-    optimizer = optax.adam(learning_rate=1e-3)
-    opt_state = optimizer.init(initial_params)
-
-    # Optimization loop
-    params = initial_params
-    for i in range(num_iterations):
-        loss, grads = grad_fn(
-            params,
-            beam,
+    # Create the forward function
+    def forward_fn(pot_slice, beam):
+        return pte.stem_4d(
+            pot_slice[None, ...],
+            beam[None, ...],
             pos_list,
             slice_thickness,
             voltage_kV,
             calib_ang,
             devices,
-            experimental_4dstem,
         )
-        updates, opt_state = optimizer.update(grads, opt_state)
-        params = optax.apply_updates(params, updates)
+
+    # Create the loss function
+    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+
+    # Create a function that returns both loss and gradients
+    @jax.jit
+    def loss_and_grad(
+        pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
+    ) -> Tuple[Float[Array, ""], Dict[str, Complex[Array, "H W"]]]:
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(pot_slice, beam)
+        return loss, {"pot_slice": grads[0], "beam": grads[1]}
+
+    # Initialize optimizer states
+    pot_slice_state = (
+        jnp.zeros_like(initial_pot_slice),
+        jnp.zeros_like(initial_pot_slice),
+        jnp.array(0),
+    )
+    beam_state = (jnp.zeros_like(initial_beam), jnp.zeros_like(initial_beam), jnp.array(0))
+
+    # Optimization loop
+    pot_slice = initial_pot_slice
+    beam = initial_beam
+
+    @jax.jit
+    def update_step(pot_slice, beam, pot_slice_state, beam_state):
+        loss, grads = loss_and_grad(pot_slice, beam)
+        pot_slice, pot_slice_state = ptt.complex_adam(
+            pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
+        )
+        beam, beam_state = ptt.complex_adam(
+            beam, grads["beam"], beam_state, learning_rate
+        )
+        return pot_slice, beam, pot_slice_state, beam_state, loss
+
+    for i in range(num_iterations):
+        pot_slice, beam, pot_slice_state, beam_state, loss = update_step(
+            pot_slice, beam, pot_slice_state, beam_state
+        )
 
         if i % 100 == 0:
             print(f"Iteration {i}, Loss: {loss}")
 
-    return params
+    return pot_slice, beam

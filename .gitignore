@@ -5,6 +5,7 @@ notebooks/__pycache__/
 /src/ptyrodactyl/__pycache__/
 /src/ptyrodactyl/electrons/__pycache__/
 /src/ptyrodactyl/light/__pycache__/
+/src/ptyrodactyl/tools/__pycache__/
 /data/__pycache__/
 /tests/__pycache__/
 /tests/test_electrons/__pycache__/
@@ -105,16 +106,17 @@ target/
 .#*
 
 # Notebook Checkpoints
-.ipynb_checkpoints/
-/src/.ipynb_checkpoints/
-/notebooks/.ipynb_checkpoints/
-/src/ptyrodactyl/.ipynb_checkpoints/
-/src/ptyrodactyl/light/.ipynb_checkpoints/
-/src/ptyrodactyl/electrons/.ipynb_checkpoints/
-/tests/.ipynb_checkpoints/
-/tests/test_electrons/.ipynb_checkpoints/
-/data/.ipynb_checkpoints/
-/data/*/.ipynb_checkpoints/
-/ens/.ipynb_checkpoints/
+.ipynb_checkpoints
+/src/.ipynb_checkpoints
+/notebooks/.ipynb_checkpoints
+/src/ptyrodactyl/.ipynb_checkpoints
+/src/ptyrodactyl/light/.ipynb_checkpoints
+/src/ptyrodactyl/electrons/.ipynb_checkpoints
+/src/ptyrodactyl/tools/.ipynb_checkpoints
+/tests/.ipynb_checkpoints
+/tests/test_electrons/.ipynb_checkpoints
+/data/.ipynb_checkpoints
+/data/*/.ipynb_checkpoints
+/ens/.ipynb_checkpoints
 /.mypy_cache/
 /.pytest_cache/

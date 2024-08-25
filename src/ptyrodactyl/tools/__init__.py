@@ -11,4 +11,5 @@ are used for creating complex valued Adam, Adagrad and RMSprop optimizers.
 
 """
 
+from .loss_functions import *
 from .optimizers import *

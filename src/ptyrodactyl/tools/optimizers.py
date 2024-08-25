@@ -1,4 +1,4 @@
-from typing import Any, Callable, Tuple
+from typing import Any, Callable, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
@@ -6,40 +6,59 @@ from jaxtyping import Array, Complex, Float
 
 
 def wirtinger_grad(
-    f: Callable[[Complex[Array, "..."], Any], Float[Array, "..."]]
-) -> Callable[[Complex[Array, "..."], Any], Complex[Array, "..."]]:
+    f: Callable[..., Float[Array, "..."]], argnums: Union[int, Sequence[int]] = 0
+) -> Callable[..., Union[Complex[Array, "..."], Tuple[Complex[Array, "..."], ...]]]:
     """
     Compute the Wirtinger gradient of a complex-valued function.
 
     This function returns a new function that computes the Wirtinger gradient
-    of the input function f with respect to its first argument.
+    of the input function f with respect to the specified argument(s).
 
     Args:
-    - f (Callable[[Complex[Array, "..."], Any], Float[Array, "..."]]):
+    - f (Callable[..., Float[Array, "..."]]):
         A complex-valued function to differentiate.
+    - argnums (Union[int, Sequence[int]]):
+        Specifies which argument(s) to compute the gradient with respect to.
+        Can be an int or a sequence of ints. Default is 0.
 
     Returns:
-    - grad_f (Callable[[Complex[Array, "..."], Any], Complex[Array, "..."]]):
-        A function that computes the Wirtinger gradient of f.
+    - grad_f (Callable[..., Union[Complex[Array, "..."], Tuple[Complex[Array, "..."], ...]]]):
+        A function that computes the Wirtinger gradient of f with respect to the specified argument(s).
     """
 
-    def grad_f(z: Complex[Array, "..."], *args: Any) -> Complex[Array, "..."]:
-        r = jnp.real(z)
-        i = jnp.imag(z)
+    def grad_f(
+        *args: Any,
+    ) -> Union[Complex[Array, "..."], Tuple[Complex[Array, "..."], ...]]:
+        def split_complex(args):
+            return tuple(
+                jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args
+            ) + tuple(
+                jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg)
+                for arg in args
+            )
 
-        def f_real(
-            r: Float[Array, "..."], i: Float[Array, "..."], *args: Any
-        ) -> Float[Array, "..."]:
-            return jnp.real(f(r + 1j * i, *args))
+        def combine_complex(r, i):
+            return tuple(
+                rr + 1j * ii if jnp.iscomplexobj(arg) else rr
+                for rr, ii, arg in zip(r, i, args)
+            )
 
-        def f_imag(
-            r: Float[Array, "..."], i: Float[Array, "..."], *args: Any
-        ) -> Float[Array, "..."]:
-            return jnp.imag(f(r + 1j * i, *args))
+        split_args = split_complex(args)
+        n = len(args)
 
-        gr = jax.grad(f_real, argnums=0)(r, i, *args)
-        gi = jax.grad(f_imag, argnums=1)(r, i, *args)
-        return gr + 1j * gi
+        def f_real(*split_args):
+            return jnp.real(f(*combine_complex(split_args[:n], split_args[n:])))
+
+        def f_imag(*split_args):
+            return jnp.imag(f(*combine_complex(split_args[:n], split_args[n:])))
+
+        gr = jax.grad(f_real, argnums=argnums)(*split_args)
+        gi = jax.grad(f_imag, argnums=argnums)(*split_args)
+
+        if isinstance(argnums, int):
+            return gr + 1j * gi
+        else:
+            return tuple(grr + 1j * gii for grr, gii in zip(gr, gi))
 
     return grad_f
 

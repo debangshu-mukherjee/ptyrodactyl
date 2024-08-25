@@ -1,8 +1,19 @@
-from typing import Any, Callable, Sequence, Tuple, Union
+from typing import Any, Callable, NamedTuple, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Complex, Float
+
+
+class OptimizerState(NamedTuple):
+    m: Array  # First moment estimate
+    v: Array  # Second moment estimate
+    step: Array  # Step count
+
+
+class Optimizer(NamedTuple):
+    init: Callable
+    update: Callable
 
 
 def wirtinger_grad(
@@ -202,3 +213,66 @@ def complex_rmsprop(
     new_params = params - update
 
     return new_params, new_moving_avg_squared_grads
+
+
+def init_adam(shape: tuple) -> OptimizerState:
+    return OptimizerState(jnp.zeros(shape), jnp.zeros(shape), jnp.array(0))
+
+
+def init_adagrad(shape: tuple) -> OptimizerState:
+    return OptimizerState(jnp.zeros(shape), jnp.zeros(shape), jnp.array(0))
+
+
+def init_rmsprop(shape: tuple) -> OptimizerState:
+    return OptimizerState(None, jnp.zeros(shape), jnp.array(0))
+
+
+def adam_update(
+    params: Complex[Array, "..."],
+    grads: Complex[Array, "..."],
+    state: OptimizerState,
+    learning_rate: float = 0.001,
+    beta1: float = 0.9,
+    beta2: float = 0.999,
+    eps: float = 1e-8,
+) -> tuple[Complex[Array, "..."], OptimizerState]:
+    m, v, step = state
+    step += 1
+    m = beta1 * m + (1 - beta1) * grads
+    v = beta2 * v + (1 - beta2) * jnp.abs(grads) ** 2
+    m_hat = m / (1 - beta1**step)
+    v_hat = v / (1 - beta2**step)
+    update = learning_rate * m_hat / (jnp.sqrt(v_hat) + eps)
+    new_params = params - update
+    return new_params, OptimizerState(m, v, step)
+
+
+def adagrad_update(
+    params: Complex[Array, "..."],
+    grads: Complex[Array, "..."],
+    state: OptimizerState,
+    learning_rate: float = 0.01,
+    eps: float = 1e-8,
+) -> tuple[Complex[Array, "..."], OptimizerState]:
+    _, v, step = state
+    step += 1
+    v += jnp.abs(grads) ** 2
+    update = learning_rate * grads / (jnp.sqrt(v) + eps)
+    new_params = params - update
+    return new_params, OptimizerState(None, v, step)
+
+
+def rmsprop_update(
+    params: Complex[Array, "..."],
+    grads: Complex[Array, "..."],
+    state: OptimizerState,
+    learning_rate: float = 0.001,
+    decay_rate: float = 0.9,
+    eps: float = 1e-8,
+) -> tuple[Complex[Array, "..."], OptimizerState]:
+    _, v, step = state
+    step += 1
+    v = decay_rate * v + (1 - decay_rate) * jnp.abs(grads) ** 2
+    update = learning_rate * grads / (jnp.sqrt(v) + eps)
+    new_params = params - update
+    return new_params, OptimizerState(None, v, step)

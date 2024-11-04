@@ -28,7 +28,6 @@ def single_slice_ptychography(
     slice_thickness: Float[Array, "*"],
     voltage_kV: Float[Array, "*"],
     calib_ang: Float[Array, "*"],
-    devices: jax.Array,
     num_iterations: int = 1000,
     learning_rate: float = 0.001,
     loss_type: str = "mse",
@@ -75,7 +74,6 @@ def single_slice_ptychography(
             slice_thickness,
             voltage_kV,
             calib_ang,
-            devices,
         )
 
     # Create the loss function

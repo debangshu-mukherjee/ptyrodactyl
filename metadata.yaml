@@ -1,0 +1,48 @@
+---
+code_id: 147893
+open_source: true
+repository_link: "https://code.ornl.gov/intersect-em/pterodactyl"
+project_type: "OS"
+software_type: "S"
+official_use_only: {}
+developers:
+- email: "mukherjeed@ornl.gov"
+  orcid: "0000-0003-0437-9807"
+  first_name: "Debangshu"
+  last_name: "Mukherjee"
+  middle_name: ""
+  affiliations:
+  - "Oak Ridge National Laboratory (ORNL), Oak Ridge, TN (United States)"
+contributors: []
+sponsoring_organizations:
+- organization_name: "USDOE Laboratory Directed Research and Development (LDRD) Program"
+  funding_identifiers: []
+  primary_award: "AC05-00OR22725"
+  DOE: true
+contributing_organizations: []
+research_organizations: []
+related_identifiers: []
+award_dois: []
+release_date: "2024-11-24"
+software_title: "ptyrodactyl"
+doi: "10.11578/dc.20241124.1"
+description: "Ptychography through Differentiable Programming\nThe aim of this project\
+  \ is to write the forward problem: aka writing the microscope data generation, both\
+  \ for electron and optical microscopes in JAX so that it's end to end differentiable\
+  \ and using this differentiability to run modern optimizers such as Adam and Adagrad\
+  \ to solve for the inverse problem - which is ptychography in our case."
+programming_languages:
+- "Python"
+version_number: "2024.10.24"
+country_of_origin: "United States"
+licenses:
+- "MIT License"
+date_record_added: "2024-11-24"
+date_record_updated: "2024-11-24"
+is_migration: false
+is_file_certified: false
+last_editor: "mukherjeed@ornl.gov"
+is_limited: false
+links:
+- rel: "citation"
+  href: "https://www.osti.gov/doecode/biblio/147893"

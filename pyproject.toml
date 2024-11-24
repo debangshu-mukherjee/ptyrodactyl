@@ -1,6 +1,6 @@
 [project]
 name = "ptyrodactyl"
-version = "2024.08.26"
+version = "2024.11.24"
 description = "Ptychography through differentiable programming in JAX"
 authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 license = {file = "LICENSE"}

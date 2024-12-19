@@ -12,6 +12,9 @@ notebooks/__pycache__/
 /envs/__pycache__/
 *.py[cod]
 
+# test data
+/data/*.npy
+
 # VS Code settings
 /.vscode
 /src/.vscode

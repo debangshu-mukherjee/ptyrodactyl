@@ -1,6 +1,6 @@
 [project]
 name = "ptyrodactyl"
-version = "2024.11.24"
+version = "2024.12.23"
 description = "Ptychography through differentiable programming in JAX"
 authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 license = {file = "LICENSE"}
@@ -20,22 +20,22 @@ classifiers = [
     "Environment :: GPU :: NVIDIA CUDA",
 ]
 dependencies = [
-    "numpy >= 1.13.0",
+    "numpy>=1.13.0",
     "scipy >= 1.0.0",
     "matplotlib >= 2.2.0",
     "matplotlib-scalebar >= 0.5.0",
     "tqdm >= 4.66.0",
-    "jax >= 0.4.17",
-    "jaxtyping >= 0.2.21",
+    "jax[cuda12]>=0.4.17",
+    "jaxtyping>=0.2.21",
     "chex >= 0.1.85",
     "optax >= 0.1.8",
     "pytest >= 8.0.0",
-    "ruff>=0.6.2",
-    "uv>=0.3.2",
+    "beartype>=0.19.0",
 ]
 
 [tool.setuptools]
 include-package-data = true
+license-files = []
 
 [tool.setuptools.packages.find]
 namespaces = true

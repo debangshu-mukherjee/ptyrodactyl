@@ -14,8 +14,8 @@ jax.config.update("jax_enable_x64", True)
 
 
 def transmission_func(
-    pot_slice: Float[Array, "*"], voltage_kV: int | float | Float[Array, "*"]
-) -> Complex[Array, "*"]:
+    pot_slice: Float[Array, " *"], voltage_kV: int | float | Float[Array, " *"]
+) -> Complex[Array, " *"]:
     """
     Description
     -----------

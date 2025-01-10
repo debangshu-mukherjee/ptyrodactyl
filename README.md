@@ -1,3 +1,6 @@
+[![PyPI Downloads](https://static.pepy.tech/badge/ptyrodactyl)](https://pepy.tech/projects/ptyrodactyl)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # Ptychography through Differentiable Programming
 
 The aim of this project is to write the _forward_ problem: aka writing the microscope data generation, both for electron and optical microscopes in [JAX](https://github.com/google/jax) so that it's end to end differentiable and using this differentiability to run modern optimizers such as [Adam](

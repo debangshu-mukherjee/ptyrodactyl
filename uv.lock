@@ -183,6 +183,10 @@ wheels = [
 ]
 
 [package.optional-dependencies]
+cuda = [
+    { name = "jax-cuda12-plugin", extra = ["with-cuda"] },
+    { name = "jaxlib" },
+]
 cuda12 = [
     { name = "jax-cuda12-plugin", extra = ["with-cuda"] },
     { name = "jaxlib" },
@@ -697,7 +701,7 @@ source = { editable = "." }
 dependencies = [
     { name = "beartype" },
     { name = "chex" },
-    { name = "jax", extra = ["cuda12"] },
+    { name = "jax", extra = ["cuda", "cuda12"] },
     { name = "jaxtyping" },
     { name = "matplotlib" },
     { name = "matplotlib-scalebar" },
@@ -712,7 +716,7 @@ dependencies = [
 requires-dist = [
     { name = "beartype", specifier = ">=0.19.0" },
     { name = "chex", specifier = ">=0.1.85" },
-    { name = "jax", extras = ["cuda12"], specifier = ">=0.4.17" },
+    { name = "jax", extras = ["cuda", "cuda11", "cuda12"], specifier = ">=0.4.17" },
     { name = "jaxtyping", specifier = ">=0.2.21" },
     { name = "matplotlib", specifier = ">=2.2.0" },
     { name = "matplotlib-scalebar", specifier = ">=0.5.0" },
@@ -845,7 +849,7 @@ name = "tqdm"
 version = "4.66.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "colorama", marker = "platform_system == 'Windows'" },
+    { name = "colorama", marker = "sys_platform == 'win32'" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/58/83/6ba9844a41128c62e810fddddd72473201f3eacde02046066142a2d96cc5/tqdm-4.66.5.tar.gz", hash = "sha256:e1020aef2e5096702d8a025ac7d16b1577279c9d63f8375b63083e9a5f0fcbad", size = 169504 }
 wheels = [

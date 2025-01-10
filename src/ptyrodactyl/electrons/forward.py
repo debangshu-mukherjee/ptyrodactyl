@@ -1,21 +1,27 @@
 from functools import partial
 from typing import Any, NamedTuple, Tuple, Union
+from typing_extensions import TypeAlias
 
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
 # from typeguard import typechecked as typechecker
 from jax import lax
-from jaxtyping import Array, Complex, Float, Int, jaxtyped
+from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 import ptyrodactyl.electrons as pte
 
 jax.config.update("jax_enable_x64", True)
 
+num_type: TypeAlias = int | float  # Non-JAX scalar number
+scalar_number: TypeAlias = (
+    int | float | Num[Array, ""]
+)  # Scalar number that is outputted from a JAX function
+
 
 def transmission_func(
-    pot_slice: Float[Array, " *"], voltage_kV: int | float | Float[Array, " *"]
-) -> Complex[Array, " *"]:
+    pot_slice: Float[Array, "#a #b"], voltage_kV: scalar_number
+) -> Complex[Array, ""]:
     """
     Description
     -----------
@@ -30,15 +36,15 @@ def transmission_func(
 
     Parameters
     ----------
-    - `pot_slice` (Float[Array, "*"]):
+    - `pot_slice` (Float[Array, "#a #b"]):
         potential slice in Kirkland units
-    - `voltage_kV` (int | float | Float[Array, "*"]):
+    - `voltage_kV` (scalar_number):
         microscope operating voltage in kilo
         electronVolts
 
     Returns
     -------
-    - `trans` (Complex[Array, "*"]):
+    - `trans` (Complex[Array, "#a #b"]):
         The transmission function of a single
         crystal slice
 
@@ -51,32 +57,30 @@ def transmission_func(
     - Calculate the transmission function as a complex exponential
     """
 
-    voltage: Float[Array, "*"] = jnp.multiply(
-        jnp.float64(voltage_kV), jnp.float64(1000)
-    )
+    voltage: Float[Array, ""] = jnp.multiply(voltage_kV, 1000.0)
 
-    m_e: Float[Array, "*"] = jnp.float64(9.109383e-31)  # mass of an electron
-    e_e: Float[Array, "*"] = jnp.float64(1.602177e-19)  # charge of an electron
-    c: Float[Array, "*"] = jnp.float64(299792458.0)  # speed of light
+    m_e: num_type = 9.109383e-31  # mass of an electron
+    e_e: num_type = 1.602177e-19  # charge of an electron
+    c: num_type = 299792458.0  # speed of light
 
-    eV = jnp.multiply(e_e, voltage)
-    lambda_angstrom: Float[Array, "*"] = pte.wavelength_ang(
+    eV: Float[Array, ""] = jnp.multiply(e_e, voltage)
+    lambda_angstrom: Float[Array, ""] = pte.wavelength_ang(
         voltage_kV
     )  # wavelength in angstroms
     einstein_energy = jnp.multiply(m_e, jnp.square(c))  # Einstein energy
-    sigma: Float[Array, "*"] = (
+    sigma: Float[Array, ""] = (
         (2 * jnp.pi / (lambda_angstrom * voltage)) * (einstein_energy + eV)
     ) / ((2 * einstein_energy) + eV)
-    trans: Complex[Array, "*"] = jnp.exp(1j * sigma * pot_slice)
+    trans: Complex[Array, "#a #b"] = jnp.exp(1j * sigma * pot_slice)
     return trans
 
 
 def propagation_func(
     imsize_y: int,
     imsize_x: int,
-    thickness_ang: Float[Array, "*"],
-    voltage_kV: Float[Array, "*"],
-    calib_ang: Float[Array, "*"],
+    thickness_ang: scalar_number,
+    voltage_kV: scalar_number,
+    calib_ang: scalar_number,
 ) -> Complex[Array, "H W"]:
     """
     Description
@@ -91,18 +95,18 @@ def propagation_func(
         Size of the image of the propagator in y axis
     - `imsize_x`, (int):
         Size of the image of the propagator in x axis
-    -  `thickness_ang`, (Float[Array, "*"])
+    -  `thickness_ang`, (scalar_number):
         Distance between the slices in angstroms
-    - `voltage_kV`, (Float[Array, "*"])
+    - `voltage_kV`, (scalar_number):
         Accelerating voltage in kilovolts
-    - `calib_ang`, (Float[Array, "*"])
+    - `calib_ang`, (scalar_number):
         Calibration or pixel size in angstroms
 
     Returns
     -------
     - `prop` (Complex[Array, "H W"]):
         The propagation function of the same size given by imsize
-        
+
     Flow
     ----
     - Generate frequency arrays directly using fftfreq
@@ -111,21 +115,21 @@ def propagation_func(
     - Calculate wavelength
     - Compute the propagation function
     """
-    
+
     # Generate frequency arrays directly using fftfreq
-    qy: Float[Array, "H"] = jnp.fft.fftfreq(imsize_y, d=calib_ang)
-    qx: Float[Array, "W"] = jnp.fft.fftfreq(imsize_x, d=calib_ang)
+    qy: Num[Array, "H"] = jnp.fft.fftfreq(imsize_y, d=calib_ang)
+    qx: Num[Array, "W"] = jnp.fft.fftfreq(imsize_x, d=calib_ang)
 
     # Create 2D meshgrid of frequencies
-    Lya: Float[Array, "H W"]
-    Lxa: Float[Array, "H W"]
+    Lya: Num[Array, "H W"]
+    Lxa: Num[Array, "H W"]
     Lya, Lxa = jnp.meshgrid(qy, qx, indexing="ij")
 
     # Calculate squared sum of frequencies
-    L_sq: Float[Array, "H W"] = jnp.square(Lxa) + jnp.square(Lya)
+    L_sq: Num[Array, "H W"] = jnp.square(Lxa) + jnp.square(Lya)
 
     # Calculate wavelength
-    lambda_angstrom: float = pte.wavelength_ang(voltage_kV)
+    lambda_angstrom: Float[Array, ""] = pte.wavelength_ang(voltage_kV)
 
     # Compute the propagation function
     prop: Complex[Array, "H W"] = jnp.exp(
@@ -156,7 +160,7 @@ def fourier_coords(calibration: float, image_size: Int[Array, "2"]) -> NamedTupl
             Calibration along the first axis
         - `calib_x` (float):
             Calibration along the second axis
-            
+
     Flow
     ----
     - Calculate the real space field of view in y and x
@@ -219,7 +223,7 @@ def fourier_calib(
     -------
     - `inverse_space_calib` (Float[Array, "2"]):
         The Fourier calibration in angstroms
-        
+
     Flow
     ----
     - Calculate the field of view in real space
@@ -234,7 +238,7 @@ def fourier_calib(
 
 @jax.jit
 def make_probe(
-    aperture: Union[float, int],
+    aperture: num_type,
     voltage: Union[float, int],
     image_size: Int[Array, "2"],
     calibration_pm: float,
@@ -249,7 +253,7 @@ def make_probe(
     size and the estimated Fourier co-ordinates with
     the option of adding spherical aberration in the
     form of defocus, C3 and C5
-    
+
     Parameters
     ----------
     - `aperture` (Union[float, int]):
@@ -267,12 +271,12 @@ def make_probe(
         The C3 value in angstroms
     - `c5` (float):
         The C5 value in angstroms
-        
+
     Returns
     -------
     - `probe_real_space` (Complex[Array, "H W"]):
         The calculated electron probe in real space
-        
+
     Flow
     ----
     - Convert the aperture to radians
@@ -284,10 +288,10 @@ def make_probe(
     - Create meshgrid of shifted inverse space arrays
     - Calculate the inverse array
     - Calculate the calibration in y and x
-    - Calculate the probe in real space  
+    - Calculate the probe in real space
     """
     aperture = aperture / 1000
-    wavelength = wavelength_ang(voltage)
+    wavelength = pte.wavelength_ang(voltage)
     LMax = aperture / wavelength
     image_y, image_x = image_size
     x_FOV = image_x * 0.01 * calibration_pm
@@ -311,22 +315,22 @@ def make_probe(
 @jax.jit
 def aberration(
     fourier_coord: Float[Array, "H W"],
-    wavelength_ang: float,
-    defocus: float = 0,
-    c3: float = 0,
-    c5: float = 0,
+    lambda_angstrom: scalar_number,
+    defocus: num_type = 0,
+    c3: num_type = 0,
+    c5: num_type = 0,
 ) -> Float[Array, "H W"]:
     """
     Description
     -----------
     This calculates the aberration function for the
     electron probe based on the Fourier co-ordinates
-    
+
     Parameters
     ----------
     - `fourier_coord` (Float[Array, "H W"]):
         The Fourier co-ordinates
-    - `wavelength_ang` (float):
+    - `lambda_angstrom` (scalar_number):
         The wavelength in angstroms
     - `defocus` (float):
         The defocus value in angstroms
@@ -334,30 +338,30 @@ def aberration(
         The C3 value in angstroms
     - `c5` (float):
         The C5 value in angstroms
-        
+
     Returns
     -------
     - `chi_probe` (Float[Array, "H W"]):
         The calculated aberration function
-        
+
     Flow
     ----
     - Calculate the phase shift
     - Calculate the chi value
     - Calculate the chi probe value
     """
-    p_matrix = wavelength_ang * fourier_coord
-    chi = (
+    p_matrix = lambda_angstrom * fourier_coord
+    chi: Float[Array, "H W"] = (
         ((defocus * jnp.power(p_matrix, 2)) / 2)
         + ((c3 * (1e7) * jnp.power(p_matrix, 4)) / 4)
         + ((c5 * (1e7) * jnp.power(p_matrix, 6)) / 6)
     )
-    chi_probe = (2 * jnp.pi * chi) / wavelength_ang
+    chi_probe: Float[Array, "H W"] = (2 * jnp.pi * chi) / lambda_angstrom
     return chi_probe
 
 
 @jaxtyped(typechecker=typechecker)
-def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, "*"]:
+def wavelength_ang(voltage_kV: num_type | Float[Array, "#a"]) -> Float[Array, "#a"]:
     """
     Description
     -----------
@@ -372,7 +376,7 @@ def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, 
 
     Parameters
     ----------
-    - `voltage_kV` (int | float | Float[Array, "*"]):
+    - `voltage_kV` (num_type | Float[Array, "#a"]):
         The microscope accelerating voltage in kilo
         electronVolts
 
@@ -386,30 +390,29 @@ def wavelength_ang(voltage_kV: int | float | Float[Array, "*"]) -> Float[Array, 
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms
     """
-    m: Float[Array, "*"] = jnp.float64(9.109383e-31)  # mass of an electron
-    e: Float[Array, "*"] = jnp.float64(1.602177e-19)  # charge of an electron
-    c: Float[Array, "*"] = jnp.float64(299792458.0)  # speed of light
-    h: Float[Array, "*"] = jnp.float64(6.62607e-34)  # Planck's constant
+    m: float = 9.109383e-31  # mass of an electron
+    e: float = 1.602177e-19  # charge of an electron
+    c: float = 299792458.0  # speed of light
+    h: float = 6.62607e-34  # Planck's constant
 
-    voltage: Float[Array, "*"] = jnp.multiply(
-        jnp.float64(voltage_kV), jnp.float64(1000)
+    eV: Float[Array, "#a"] = (
+        jnp.float64(voltage_kV) * jnp.float64(1000.0) * jnp.float64(e)
     )
-    eV = jnp.multiply(e, voltage)
-    numerator: Float[Array, "*"] = jnp.multiply(jnp.square(h), jnp.square(c))
-    denominator: Float[Array, "*"] = jnp.multiply(eV, ((2 * m * jnp.square(c)) + eV))
-    wavelength_meters: Float[Array, "*"] = jnp.sqrt(
+    numerator: Float[Array, ""] = jnp.float64(h * c)
+    denominator: Float[Array, "#a"] = jnp.multiply(eV, ((2 * m * jnp.square(c)) + eV))
+    wavelength_meters: Float[Array, "#a"] = jnp.sqrt(
         numerator / denominator
     )  # in meters
-    in_angstroms: Float[Array, "*"] = 1e10 * wavelength_meters  # in angstroms
-    return in_angstroms
+    lambda_angstroms: Float[Array, "#a"] = 1e10 * wavelength_meters  # in angstroms
+    return lambda_angstroms
 
 
 def cbed(
-    pot_slice: Complex[Array, "H W *S"],
-    beam: Complex[Array, "H W *M"],
-    slice_thickness: Float[Array, "*"],
-    voltage_kV: Float[Array, "*"],
-    calib_ang: Float[Array, "*"],
+    pot_slice: Complex[Array, "H W #S"],
+    beam: Complex[Array, "H W #M"],
+    slice_thickness: Float[Array, ""],
+    voltage_kV: Float[Array, "#v"],
+    calib_ang: Float[Array, ""],
 ) -> Float[Array, "H W"]:
     """
     Description
@@ -422,24 +425,24 @@ def cbed(
 
     Parameters
     ----------
-    - `pot_slice` (Complex[Array, "H W *S"]):
+    - `pot_slice` (Complex[Array, "H W #S"]):
         The potential slice(s). H and W are height and width,
         S is the number of slices (optional).
-    - `beam` (Complex[Array, "H W *M"]):
+    - `beam` (Complex[Array, "H W #M"]):
         The electron beam mode(s).
         M is the number of modes (optional).
-    - `slice_thickness` (Float[Array, "*"]):
+    - `slice_thickness` (Float[Array, ""]):
         The thickness of each slice in angstroms.
-    - `voltage_kV` (Float[Array, "*"]):
-        The accelerating voltage in kilovolts.
-    - `calib_ang` (Float[Array, "*"]):
+    - `voltage_kV` (Float[Array, "#v"]):
+        The accelerating voltage(s) in kilovolts.
+    - `calib_ang` (Float[Array, ""]):
         The calibration in angstroms.
 
     Returns
     -------
     -  `cbed_pattern` (Float[Array, "H W"]):
         The calculated CBED pattern.
-    
+
     Flow
     ----
     - Ensure 3D arrays even for single slice/mode
@@ -451,8 +454,8 @@ def cbed(
     - Sum the intensities across all modes.
     """
     # Ensure 3D arrays even for single slice/mode
-    pot_slice: Complex[Array, "H W *S"] = jnp.atleast_3d(pot_slice)
-    beam: Complex[Array, "H W *M"] = jnp.atleast_3d(beam)
+    pot_slice: Complex[Array, "H W #S"] = jnp.atleast_3d(pot_slice)
+    beam: Complex[Array, "H W #M"] = jnp.atleast_3d(beam)
 
     # Calculate the transmission function for a single slice
     slice_transmission: Complex[Array, "H W"] = pte.propagation_func(
@@ -528,7 +531,7 @@ def cbed_no_slice(
     -------
     -  `cbed_pattern` (Float[Array, "H W"]):
         The calculated CBED pattern.
-        
+
     Flow
     ----
     - Ensure 3D arrays even for single slice/mode
@@ -599,7 +602,7 @@ def shift_beam_fourier(
     -------
     - shifted_beams (Complex[Array, "... H W M"]):
         The shifted beam(s) for all position(s) and mode(s).
-        
+
     Flow
     ----
     - Convert positions from real space to Fourier space
@@ -663,7 +666,7 @@ def stem_4d(
     Returns
     -------
     - stem_pattern (Float[Array, "P H W"]): The calculated 4D-STEM pattern.
-    
+
     Flow
     ----
     - Calculate the transmission function once

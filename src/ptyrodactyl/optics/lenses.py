@@ -1,4 +1,4 @@
-from beartype.typing import NamedTuple, Tuple
+from beartype.typing import NamedTuple, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
@@ -225,7 +225,7 @@ def double_convex_lens(
     diameter: Float[Array, ""],
     n: Float[Array, ""],
     center_thickness: Float[Array, ""],
-    R_ratio: Float[Array, ""] = jnp.array(1.0),
+    R_ratio: Optional[Float[Array, ""]] = jnp.array(1.0),
 ) -> LensParams:
     """
     Description
@@ -242,8 +242,9 @@ def double_convex_lens(
         Refractive index
     - `center_thickness` (Float[Array, ""]):
         Center thickness
-    - `R_ratio` (Float[Array, ""]):
-        Ratio of R2/R1 (default: 1.0 for symmetric lens)
+    - `R_ratio` (Optional[Float[Array, ""]]):
+        Ratio of R2/R1. 
+        default is 1.0 for symmetric lens
 
     Returns
     -------
@@ -275,7 +276,7 @@ def double_concave_lens(
     diameter: Float[Array, ""],
     n: Float[Array, ""],
     center_thickness: Float[Array, ""],
-    R_ratio: Float[Array, ""] = jnp.array(1.0),
+    R_ratio: Optional[Float[Array, ""]] = jnp.array(1.0),
 ) -> LensParams:
     """
     Description
@@ -284,7 +285,17 @@ def double_concave_lens(
 
     Parameters
     ----------
-    Same as create_double_convex_lens
+    - `focal_length` (Float[Array, ""]):
+        Desired focal length
+    - `diameter` (Float[Array, ""]):
+        Lens diameter
+    - `n` (Float[Array, ""]):
+        Refractive index
+    - `center_thickness` (Float[Array, ""]):
+        Center thickness
+    - `R_ratio` (Optional[Float[Array, ""]]):
+        Ratio of R2/R1. 
+        default is 1.0 for symmetric lens
 
     Returns
     -------
@@ -317,18 +328,29 @@ def plano_convex_lens(
     diameter: Float[Array, ""],
     n: Float[Array, ""],
     center_thickness: Float[Array, ""],
-    convex_first: Bool[Array, ""] = jnp.array(True),
+    convex_first: Optional[Bool[Array, ""]] = jnp.array(True),
 ) -> LensParams:
     """
     Description
     -----------
     Create parameters for a plano-convex lens.
-
+    
     Parameters
     ----------
-    - Same as create_double_convex_lens, plus:
-    - `convex_first` (Bool[Array, ""]):
-        If True, first surface is convex (default: True)
+    - `focal_length` (Float[Array, ""]):
+        Desired focal length
+    - `diameter` (Float[Array, ""]):
+        Lens diameter
+    - `n` (Float[Array, ""]):
+        Refractive index
+    - `center_thickness` (Float[Array, ""]):
+        Center thickness
+    - `R_ratio` (Optional[Float[Array, ""]]):
+        Ratio of R2/R1. 
+        default is 1.0 for symmetric lens
+    - `convex_first` (Optional[Bool[Array, ""]]):
+        If True, first surface is convex. 
+        Default: True
 
     Returns
     -------
@@ -363,7 +385,7 @@ def plano_concave_lens(
     diameter: Float[Array, ""],
     n: Float[Array, ""],
     center_thickness: Float[Array, ""],
-    concave_first: Bool[Array, ""] = jnp.array(True),
+    concave_first: Optional[Bool[Array, ""]] = jnp.array(True),
 ) -> LensParams:
     """
     Description
@@ -372,8 +394,18 @@ def plano_concave_lens(
 
     Parameters
     ----------
-    - Same as create_double_convex_lens, plus:
-    - `concave_first` (Bool[Array, ""]):
+    - `focal_length` (Float[Array, ""]):
+        Desired focal length
+    - `diameter` (Float[Array, ""]):
+        Lens diameter
+    - `n` (Float[Array, ""]):
+        Refractive index
+    - `center_thickness` (Float[Array, ""]):
+        Center thickness
+    - `R_ratio` (Optional[Float[Array, ""]]):
+        Ratio of R2/R1. 
+        default is 1.0 for symmetric lens
+    - `concave_first` (Optional[Bool[Array, ""]]):
         If True, first surface is concave (default: True)
 
     Returns
@@ -410,7 +442,7 @@ def meniscus_lens(
     n: Float[Array, ""],
     center_thickness: Float[Array, ""],
     R_ratio: Float[Array, ""],
-    convex_first: Bool[Array, ""] = jnp.array(True),
+    convex_first: Optional[Bool[Array, ""]] = jnp.array(True),
 ) -> LensParams:
     """
     Description

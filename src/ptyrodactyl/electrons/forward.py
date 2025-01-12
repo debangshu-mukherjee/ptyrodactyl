@@ -1,6 +1,5 @@
 from functools import partial
 from typing import Any, NamedTuple, Tuple, Union
-from typing_extensions import TypeAlias
 
 import jax
 import jax.numpy as jnp
@@ -8,6 +7,7 @@ from beartype import beartype as typechecker
 # from typeguard import typechecked as typechecker
 from jax import lax
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
+from typing_extensions import TypeAlias
 
 import ptyrodactyl.electrons as pte
 

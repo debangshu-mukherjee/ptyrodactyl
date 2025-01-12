@@ -1,7 +1,7 @@
 """
-============================================================
-Tools for JAX ptychography - for light, electrons and X-Rays
-============================================================
+==================================================
+Tools for JAX ptychography - for light microscopes
+==================================================
 
 .. currentmodule:: ptyrodactyl.light
 

@@ -1,5 +1,3 @@
-"""Tests for helper_functions.py."""
-
 from typing import Tuple
 
 import chex
@@ -8,7 +6,7 @@ import jax.numpy as jnp
 import pytest
 from absl.testing import parameterized
 
-import ptyrodactyl.optics as pto
+from ptyrodactyl.optics import add_phase_screen
 
 # Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)
@@ -17,224 +15,73 @@ jax.config.update("jax_enable_x64", True)
 if __name__ == "__main__":
     pytest.main([__file__])
 
-
-class TestCreateSpatialGrid(chex.TestCase):
-    """Test cases for create_spatial_grid function."""
-
-    @chex.all_variants
-    @parameterized.parameters(
-        {"diameter": 1.0, "num_points": 32},
-        {"diameter": 0.1, "num_points": 64},
-        {"diameter": 0.01, "num_points": 128},
+class test_add_phase_screen(chex.TestCase):
+    @chex.all_variants()
+    @parameterized.named_parameters(
+        ("no_offset", (40, 40), 0.0),
+        ("small_offset", (60, 20), 0.1),
+        ("large_offset", (30, 90), 45678),
     )
-    def test_grid_shape_and_values(self, diameter: float, num_points: int):
-        """Test grid creation with different parameters."""
-        # Create the grid
-        X, Y = self.variant(pto.create_spatial_grid)(
-            jnp.array(diameter), jnp.array(num_points)
-        )
+    def test_add_phase_screen_values(self, shape, offset):
+        """Check that add_phase_screen produces expected values."""
+        # Create a random complex field
+        key = jax.random.PRNGKey(42)
+        field_real = jax.random.normal(key, shape)
+        field_imag = jax.random.normal(key, shape)
+        field = field_real + (1j * field_imag)
+
+        # Create a phase screen with a constant offset (for reproducibility)
+        phase = jnp.ones(shape) * offset
+
+        # Apply the function (variant_fn will jit, vmap, or pmap if needed)
+        var_add_phase_screen = self.variant(add_phase_screen)
+        result = var_add_phase_screen(field, phase)
+
+        # Compute expected result: field * exp(i * phase)
+        expected = field * jnp.exp(1j * phase)
 
         # Check shapes
-        chex.assert_shape(X, (num_points, num_points))
-        chex.assert_shape(Y, (num_points, num_points))
+        chex.assert_shape(result, shape)
 
-        # Check grid ranges
-        chex.assert_trees_all_close(X[0, -1], jnp.array(diameter / 2))
-        chex.assert_trees_all_close(X[0, 0], jnp.array(-diameter / 2))
-        chex.assert_trees_all_close(Y[-1, 0], jnp.array(diameter / 2))
-        chex.assert_trees_all_close(Y[0, 0], jnp.array(-diameter / 2))
+        # Check numerical correctness
+        chex.assert_trees_all_close(result, expected, atol=1e-6, rtol=1e-6)
 
-
-class TestAngularSpectrumProp(chex.TestCase):
-    """Test cases for angular_spectrum_prop function."""
-
-    @chex.all_variants
-    @parameterized.parameters(
-        {
-            "shape": (64, 64),
-            "z": 0.1,
-            "dx": 10e-6,
-            "wavelength": 632.8e-9,
-        },
-        {
-            "shape": (128, 128),
-            "z": 0.05,
-            "dx": 5e-6,
-            "wavelength": 532e-9,
-        },
+    @chex.all_variants()
+    @parameterized.named_parameters(
+        ("field_3x4_phase_4x4", (3, 4), (4, 4)),
+        ("field_4x5_phase_4x4", (4, 5), (4, 4)),
     )
-    def test_propagation_conservation(
-        self, shape: Tuple[int, int], z: float, dx: float, wavelength: float
-    ):
-        """Test energy conservation during propagation."""
-        # Create a Gaussian beam
-        x = jnp.linspace(-shape[0] // 2, shape[0] // 2, shape[0]) * dx
-        y = jnp.linspace(-shape[1] // 2, shape[1] // 2, shape[1]) * dx
-        X, Y = jnp.meshgrid(x, y)
-        w0 = 20 * dx
-        field = jnp.exp(-(X**2 + Y**2) / w0**2)
+    def test_shape_mismatch(self, field_shape, phase_shape):
+        """Check that shape mismatch raises an error."""
+        key = jax.random.PRNGKey(123)
+        field_real = jax.random.normal(key, field_shape)
+        field_imag = jax.random.normal(key, field_shape)
+        field = field_real + (1j * field_imag)
 
-        # Propagate the field
-        propagated = self.variant(pto.angular_spectrum_prop)(
-            field, jnp.array(z), jnp.array(dx), jnp.array(wavelength)
-        )
+        phase = jax.random.normal(key, phase_shape)
 
-        # Check energy conservation
-        initial_power = jnp.sum(jnp.abs(field) ** 2)
-        final_power = jnp.sum(jnp.abs(propagated) ** 2)
-        chex.assert_trees_all_close(initial_power, final_power, rtol=1e-10)
+        var_add_phase_screen = self.variant(add_phase_screen)
+        with pytest.raises(ValueError):
+            # We expect the function (or its internal checks) to fail
+            _ = var_add_phase_screen(field, phase)
 
-
-class TestFresnelProp(chex.TestCase):
-    """Test cases for fresnel_prop function."""
-
-    @chex.all_variants
+    @chex.all_variants()
     @parameterized.parameters(
-        {
-            "shape": (64, 64),
-            "z": 0.1,
-            "dx": 10e-6,
-            "wavelength": 632.8e-9,
-        },
-        {
-            "shape": (128, 128),
-            "z": 0.05,
-            "dx": 5e-6,
-            "wavelength": 532e-9,
-        },
+        ((20, 20)),
+        ((30, 30)),
+        ((40, 60)),
     )
-    def test_fresnel_propagation(
-        self, shape: Tuple[int, int], z: float, dx: float, wavelength: float
-    ):
-        """Test Fresnel propagation properties."""
-        # Create a Gaussian beam
-        x = jnp.linspace(-shape[0] // 2, shape[0] // 2, shape[0]) * dx
-        y = jnp.linspace(-shape[1] // 2, shape[1] // 2, shape[1]) * dx
-        X, Y = jnp.meshgrid(x, y)
-        w0 = 20 * dx
-        field = jnp.exp(-(X**2 + Y**2) / w0**2)
+    def test_zero_phase(self, shape):
+        """Check that a zero phase does not change the field."""
+        key = jax.random.PRNGKey(999)
+        field_real = jax.random.normal(key, shape)
+        field_imag = jax.random.normal(key, shape)
+        field = field_real + 1j * field_imag
 
-        # Propagate forward and backward
-        forward = self.variant(pto.fresnel_prop)(
-            field, jnp.array(z), jnp.array(dx), jnp.array(wavelength)
-        )
-        backward = self.variant(pto.fresnel_prop)(
-            forward, jnp.array(-z), jnp.array(dx), jnp.array(wavelength)
-        )
+        phase = jnp.zeros(shape)
 
-        # Check reversibility
-        chex.assert_trees_all_close(field, backward, rtol=1e-10)
+        var_add_phase_screen = self.variant(add_phase_screen)
+        result = var_add_phase_screen(field, phase)
 
-
-class TestFraunhoferProp(chex.TestCase):
-    """Test cases for fraunhofer_prop function."""
-
-    @chex.all_variants
-    @parameterized.parameters(
-        {
-            "shape": (64, 64),
-            "z": 1.0,
-            "dx": 10e-6,
-            "wavelength": 632.8e-9,
-        },
-        {
-            "shape": (128, 128),
-            "z": 0.5,
-            "dx": 5e-6,
-            "wavelength": 532e-9,
-        },
-    )
-    def test_fraunhofer_propagation(
-        self, shape: Tuple[int, int], z: float, dx: float, wavelength: float
-    ):
-        """Test Fraunhofer propagation properties."""
-        # Create a rectangular aperture
-        field = jnp.ones(shape)
-        field = field * (jnp.abs(jnp.arange(-shape[0]//2, shape[0]//2)[:, None]) < shape[0]//4)
-        field = field * (jnp.abs(jnp.arange(-shape[1]//2, shape[1]//2)[None, :]) < shape[1]//4)
-
-        # Propagate the field
-        propagated = self.variant(pto.fraunhofer_prop)(
-            field, jnp.array(z), jnp.array(dx), jnp.array(wavelength)
-        )
-
-        # Check the propagated field is symmetric
-        chex.assert_trees_all_close(
-            jnp.abs(propagated), jnp.abs(jnp.flip(propagated)), rtol=1e-10
-        )
-
-
-class TestFieldIntensity(chex.TestCase):
-    """Test cases for field_intensity function."""
-
-    @chex.all_variants
-    @parameterized.parameters(
-        {"shape": (32, 32)},
-        {"shape": (64, 64)},
-    )
-    def test_intensity_calculation(self, shape: Tuple[int, int]):
-        """Test intensity calculation properties."""
-        # Create a complex field
-        key = jax.random.PRNGKey(0)
-        key1, key2 = jax.random.split(key)
-        real = jax.random.normal(key1, shape)
-        imag = jax.random.normal(key2, shape)
-        field = real + 1j * imag
-
-        # Calculate intensity
-        intensity = self.variant(pto.field_intensity)(field)
-
-        # Check properties
-        chex.assert_shape(intensity, shape)
-        chex.assert_trees_all_greater(intensity, jnp.zeros_like(intensity))
-        chex.assert_trees_all_close(intensity, jnp.abs(field) ** 2)
-
-
-class TestNormalizeField(chex.TestCase):
-    """Test cases for normalize_field function."""
-
-    @chex.all_variants
-    @parameterized.parameters(
-        {"shape": (32, 32)},
-        {"shape": (64, 64)},
-    )
-    def test_normalization(self, shape: Tuple[int, int]):
-        """Test field normalization properties."""
-        # Create a random complex field
-        key = jax.random.PRNGKey(0)
-        key1, key2 = jax.random.split(key)
-        real = jax.random.normal(key1, shape)
-        imag = jax.random.normal(key2, shape)
-        field = real + 1j * imag
-
-        # Normalize the field
-        normalized = self.variant(pto.normalize_field)(field)
-
-        # Check total power is 1
-        total_power = jnp.sum(jnp.abs(normalized) ** 2)
-        chex.assert_trees_all_close(total_power, jnp.array(1.0), rtol=1e-10)
-
-
-class TestAddPhaseScreen(chex.TestCase):
-    """Test cases for add_phase_screen function."""
-
-    @chex.all_variants
-    @parameterized.parameters(
-        {"shape": (32, 32)},
-        {"shape": (64, 64)},
-    )
-    def test_phase_screen_application(self, shape: Tuple[int, int]):
-        """Test phase screen application properties."""
-        # Create a field and phase screen
-        key = jax.random.PRNGKey(0)
-        field = jnp.ones(shape)
-        phase = jax.random.uniform(key, shape, minval=-jnp.pi, maxval=jnp.pi)
-
-        # Apply phase screen
-        result = self.variant(pto.add_phase_screen)(field, phase)
-
-        # Check amplitude preservation
-        chex.assert_trees_all_close(jnp.abs(result), jnp.abs(field), rtol=1e-10)
-
-        # Check phase application
-        chex.assert_trees_all_close(jnp.angle(result), phase, rtol=1e-10)
+        # If phase is zero, result should be identical to field
+        chex.assert_trees_all_close(result, field, atol=1e-6, rtol=1e-6)

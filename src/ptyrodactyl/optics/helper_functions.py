@@ -1,9 +1,8 @@
-from beartype.typing import NamedTuple, Tuple
-
 import jax
 import jax.numpy as jnp
-from jax.tree_util import register_pytree_node_class
 from beartype import beartype
+from beartype.typing import NamedTuple, Tuple
+from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 
 import ptyrodactyl.optics as pto
@@ -28,7 +27,7 @@ class GridParams(NamedTuple):
         Phase profile of the optical field
     - `transmission` (Float[Array, "H W"]):
         Transmission profile of the optical field
-        
+
     Notes
     -----
     This class is registered as a PyTree node, making it compatible with JAX transformations
@@ -40,7 +39,7 @@ class GridParams(NamedTuple):
     Y: Float[Array, "H W"]
     phase_profile: Float[Array, "H W"]
     transmission: Float[Array, "H W"]
-    
+
     def tree_flatten(self):
         # Return a tuple of arrays (the children) and None (the auxiliary data)
         return (

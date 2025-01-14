@@ -1,9 +1,8 @@
-from beartype.typing import NamedTuple, Tuple, Optional
-
 import jax
 import jax.numpy as jnp
-from jax.tree_util import register_pytree_node_class
 from beartype import beartype
+from beartype.typing import NamedTuple, Optional, Tuple
+from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 import ptyrodactyl.optics as pto
@@ -32,7 +31,7 @@ class LensParams(NamedTuple):
         Radius of curvature of the first surface in meters (positive for convex)
     - `R2` (Float[Array, ""]):
         Radius of curvature of the second surface in meters (positive for convex)
-        
+
     Notes
     -----
     This class is registered as a PyTree node, making it compatible with JAX transformations
@@ -46,7 +45,7 @@ class LensParams(NamedTuple):
     center_thickness: Float[Array, ""]
     R1: Float[Array, ""]
     R2: Float[Array, ""]
-    
+
     def tree_flatten(self):
         # Return a tuple of arrays (the children) and None (the auxiliary data)
         return (
@@ -65,6 +64,7 @@ class LensParams(NamedTuple):
     def tree_unflatten(cls, aux_data, children):
         # Reconstruct the NamedTuple from flattened data
         return cls(*children)
+
 
 @jaxtyped(typechecker=beartype)
 def lens_thickness_profile(
@@ -120,6 +120,7 @@ def lens_thickness_profile(
 
     return thickness
 
+
 @jaxtyped(typechecker=beartype)
 def lens_focal_length(
     n: Float[Array, ""],
@@ -152,6 +153,7 @@ def lens_focal_length(
     """
     f: Float[Array, ""] = 1 / ((n - 1) * (1 / R1 - 1 / R2))
     return f
+
 
 @jaxtyped(typechecker=beartype)
 def create_lens_phase(
@@ -270,7 +272,7 @@ def double_convex_lens(
     - `center_thickness` (Float[Array, ""]):
         Center thickness
     - `R_ratio` (Optional[Float[Array, ""]]):
-        Ratio of R2/R1. 
+        Ratio of R2/R1.
         default is 1.0 for symmetric lens
 
     Returns
@@ -321,7 +323,7 @@ def double_concave_lens(
     - `center_thickness` (Float[Array, ""]):
         Center thickness
     - `R_ratio` (Optional[Float[Array, ""]]):
-        Ratio of R2/R1. 
+        Ratio of R2/R1.
         default is 1.0 for symmetric lens
 
     Returns
@@ -361,7 +363,7 @@ def plano_convex_lens(
     Description
     -----------
     Create parameters for a plano-convex lens.
-    
+
     Parameters
     ----------
     - `focal_length` (Float[Array, ""]):
@@ -373,10 +375,10 @@ def plano_convex_lens(
     - `center_thickness` (Float[Array, ""]):
         Center thickness
     - `R_ratio` (Optional[Float[Array, ""]]):
-        Ratio of R2/R1. 
+        Ratio of R2/R1.
         default is 1.0 for symmetric lens
     - `convex_first` (Optional[Bool[Array, ""]]):
-        If True, first surface is convex. 
+        If True, first surface is convex.
         Default: True
 
     Returns
@@ -430,7 +432,7 @@ def plano_concave_lens(
     - `center_thickness` (Float[Array, ""]):
         Center thickness
     - `R_ratio` (Optional[Float[Array, ""]]):
-        Ratio of R2/R1. 
+        Ratio of R2/R1.
         default is 1.0 for symmetric lens
     - `concave_first` (Optional[Bool[Array, ""]]):
         If True, first surface is concave (default: True)

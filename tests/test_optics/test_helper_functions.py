@@ -1,10 +1,9 @@
-from beartype.typing import Tuple
-
 import chex
 import jax
 import jax.numpy as jnp
 import pytest
 from absl.testing import parameterized
+from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 from ptyrodactyl.optics import add_phase_screen
@@ -27,7 +26,9 @@ class test_add_phase_screen(chex.TestCase):
         key1, key2 = jax.random.split(key)
         field_real = jax.random.normal(key1, shape, dtype=jnp.float64)
         field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
-        field: Complex[Array, "H W"] = (field_real + (1j * field_imag)).astype(jnp.complex128)
+        field: Complex[Array, "H W"] = (field_real + (1j * field_imag)).astype(
+            jnp.complex128
+        )
 
         # Create a phase screen with a constant offset (for reproducibility)
         phase: Float[Array, "H W"] = jnp.ones(shape, dtype=jnp.float64) * offset
@@ -50,15 +51,21 @@ class test_add_phase_screen(chex.TestCase):
         {"field_shape": (40, 40), "phase_shape": (60, 40)},
         {"field_shape": (60, 20), "phase_shape": (20, 60)},
     )
-    def test_shape_mismatch(self, field_shape: Tuple[int, int], phase_shape: Tuple[int, int]):
+    def test_shape_mismatch(
+        self, field_shape: Tuple[int, int], phase_shape: Tuple[int, int]
+    ):
         """Check that shape mismatch raises an error."""
         key = jax.random.PRNGKey(123)
         key1, key2 = jax.random.split(key)
         field_real = jax.random.normal(key1, field_shape, dtype=jnp.float64)
         field_imag = jax.random.normal(key2, field_shape, dtype=jnp.float64)
-        field: Complex[Array, "H W"] = (field_real + (1j * field_imag)).astype(jnp.complex128)
+        field: Complex[Array, "H W"] = (field_real + (1j * field_imag)).astype(
+            jnp.complex128
+        )
 
-        phase: Float[Array, "H W"] = jax.random.normal(key, phase_shape, dtype=jnp.float64)
+        phase: Float[Array, "H W"] = jax.random.normal(
+            key, phase_shape, dtype=jnp.float64
+        )
 
         var_add_phase_screen = self.variant(add_phase_screen)
         with pytest.raises(ValueError):
@@ -77,7 +84,9 @@ class test_add_phase_screen(chex.TestCase):
         key1, key2 = jax.random.split(key)
         field_real = jax.random.normal(key1, shape, dtype=jnp.float64)
         field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
-        field: Complex[Array, "H W"] = (field_real + 1j * field_imag).astype(jnp.complex128)
+        field: Complex[Array, "H W"] = (field_real + 1j * field_imag).astype(
+            jnp.complex128
+        )
 
         phase: Float[Array, "H W"] = jnp.zeros(shape, dtype=jnp.float64)
 

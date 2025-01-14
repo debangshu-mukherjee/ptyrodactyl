@@ -41,6 +41,12 @@ license-files = []
 namespaces = true
 where = ["src"]
 
+[tool.uv]
+dev-dependencies = [
+    "ipykernel>=6.29.5",
+    "uv>=0.5.18",
+]
+
 [project.urls]
 Homepage = "https://code.ornl.gov/intersect-em/pterodactyl"
 

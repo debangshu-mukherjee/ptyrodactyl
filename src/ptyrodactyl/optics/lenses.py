@@ -2,6 +2,7 @@ from beartype.typing import NamedTuple, Tuple, Optional
 
 import jax
 import jax.numpy as jnp
+from jax.tree_util import register_pytree_node_class
 from beartype import beartype
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
@@ -10,6 +11,7 @@ import ptyrodactyl.optics as pto
 jax.config.update("jax_enable_x64", True)
 
 
+@register_pytree_node_class
 class LensParams(NamedTuple):
     """
     Description
@@ -30,6 +32,12 @@ class LensParams(NamedTuple):
         Radius of curvature of the first surface in meters (positive for convex)
     - `R2` (Float[Array, ""]):
         Radius of curvature of the second surface in meters (positive for convex)
+        
+    Notes
+    -----
+    This class is registered as a PyTree node, making it compatible with JAX transformations
+    like jit, grad, and vmap. The auxiliary data in tree_flatten is None as all relevant
+    data is stored in JAX arrays.
     """
 
     focal_length: Float[Array, ""]
@@ -38,6 +46,25 @@ class LensParams(NamedTuple):
     center_thickness: Float[Array, ""]
     R1: Float[Array, ""]
     R2: Float[Array, ""]
+    
+    def tree_flatten(self):
+        # Return a tuple of arrays (the children) and None (the auxiliary data)
+        return (
+            (
+                self.focal_length,
+                self.diameter,
+                self.n,
+                self.center_thickness,
+                self.R1,
+                self.R2,
+            ),
+            None,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        # Reconstruct the NamedTuple from flattened data
+        return cls(*children)
 
 @jaxtyped(typechecker=beartype)
 def lens_thickness_profile(

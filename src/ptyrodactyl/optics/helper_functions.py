@@ -2,6 +2,7 @@ from beartype.typing import NamedTuple, Tuple
 
 import jax
 import jax.numpy as jnp
+from jax.tree_util import register_pytree_node_class
 from beartype import beartype
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 
@@ -10,6 +11,7 @@ import ptyrodactyl.optics as pto
 jax.config.update("jax_enable_x64", True)
 
 
+@register_pytree_node_class
 class GridParams(NamedTuple):
     """
     Description
@@ -26,12 +28,35 @@ class GridParams(NamedTuple):
         Phase profile of the optical field
     - `transmission` (Float[Array, "H W"]):
         Transmission profile of the optical field
+        
+    Notes
+    -----
+    This class is registered as a PyTree node, making it compatible with JAX transformations
+    like jit, grad, and vmap. The auxiliary data in tree_flatten is None as all relevant
+    data is stored in JAX arrays.
     """
 
     X: Float[Array, "H W"]
     Y: Float[Array, "H W"]
     phase_profile: Float[Array, "H W"]
     transmission: Float[Array, "H W"]
+    
+    def tree_flatten(self):
+        # Return a tuple of arrays (the children) and None (the auxiliary data)
+        return (
+            (
+                self.X,
+                self.Y,
+                self.phase_profile,
+                self.transmission,
+            ),
+            None,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        # Reconstruct the NamedTuple from flattened data
+        return cls(*children)
 
 
 @jaxtyped(typechecker=beartype)
@@ -377,7 +402,7 @@ def normalize_field(field: Complex[Array, "H W"]) -> Complex[Array, "H W"]:
 
 @jaxtyped(typechecker=beartype)
 def add_phase_screen(
-    field: Complex[Array, "H W"],
+    field: Num[Array, "H W"],
     phase: Float[Array, "H W"],
 ) -> Complex[Array, "H W"]:
     """

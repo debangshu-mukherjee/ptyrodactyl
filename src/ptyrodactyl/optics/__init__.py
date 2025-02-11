@@ -1,6 +1,8 @@
 """
 ==================================================
-Tools for JAX ptychography - for light microscopes
+
+JAX ptychography - for light microscopes
+
 ==================================================
 
 .. currentmodule:: ptyrodactyl.light
@@ -15,3 +17,4 @@ of various lenses.
 
 from .helper_functions import *
 from .lenses import *
+from .epie import *

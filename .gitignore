@@ -9,6 +9,11 @@ notebooks/__pycache__/
 /data/__pycache__/
 /tests/__pycache__/
 /tests/test_electrons/__pycache__/
+/data/__pycache__/
+/data/*/__pycache__/
+/data/
+/data/optical/
+/data/electrons/
 /envs/__pycache__/
 *.py[cod]
 

@@ -151,7 +151,7 @@ def lens_focal_length(
     - Apply the lensmaker's equation
     - Return the calculated focal length
     """
-    f: Float[Array, ""] = 1 / ((n - 1) * (1 / R1 - 1 / R2))
+    f: Float[Array, ""] = 1.0 / ((n - 1.0) * (1.0 / R1 - 1.0 / R2))
     return f
 
 

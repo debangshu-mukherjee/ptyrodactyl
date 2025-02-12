@@ -688,3 +688,50 @@ def stem_4d(
     stem_pattern = jax.vmap(calc_cbed, in_axes=0, out_axes=0)(shifted_beams)
 
     return stem_pattern
+
+
+def stem_4d_multi(
+    pot_slices: Complex[Array, "H W S"],
+    beam: Complex[Array, "H W M"],
+    pos_list: Float[Array, "P 2"],
+    slice_thickness: Float[Array, ""],
+    voltage_kV: Float[Array, ""],
+    calib_ang: Float[Array, ""],
+) -> Float[Array, "P H W"]:
+    """
+    Calculates 4D-STEM pattern for multiple slices.
+
+    This function propagates the beam through multiple slices
+    before calculating the final diffraction pattern.
+    """
+    # Calculate transmission function once (same for all slices)
+    slice_transmission = pte.propagation_func(
+        beam.shape[0], beam.shape[1], slice_thickness, voltage_kV, calib_ang
+    )
+
+    # Shift beam to all positions
+    shifted_beams = pte.shift_beam_fourier(beam, pos_list, calib_ang)
+
+    # Calculate patterns for all positions
+    def calc_multi_slice_cbed(electron_beam):
+        # Start with initial beam
+        wave = electron_beam
+
+        # Propagate through all slices
+        for i in range(pot_slices.shape[-1]):
+            # Apply transmission function for current slice
+            wave = wave * pot_slices[..., i : i + 1]
+
+            # Propagate to next slice
+            if i < pot_slices.shape[-1] - 1:  # Don't propagate after last slice
+                wave = jnp.fft.ifft2(jnp.fft.fft2(wave) * slice_transmission[..., None])
+
+        # Calculate final diffraction pattern
+        fourier = jnp.fft.fftshift(jnp.fft.fft2(wave), axes=(0, 1))
+        intensity = jnp.sum(jnp.abs(fourier) ** 2, axis=-1)
+        return intensity
+
+    # Apply to all probe positions
+    stem_pattern = jax.vmap(calc_multi_slice_cbed, in_axes=0, out_axes=0)(shifted_beams)
+
+    return stem_pattern

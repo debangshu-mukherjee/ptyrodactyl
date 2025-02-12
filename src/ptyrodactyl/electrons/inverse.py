@@ -1,7 +1,6 @@
-from typing import Any, Callable, Dict, NamedTuple, Tuple
-
 import jax
 import jax.numpy as jnp
+from beartype.typing import Callable, Dict, NamedTuple, Optional, Tuple
 from jaxtyping import Array, Complex, Float
 
 import ptyrodactyl.electrons as pte
@@ -18,6 +17,108 @@ def get_optimizer(optimizer_name: str) -> ptt.Optimizer:
     if optimizer_name not in OPTIMIZERS:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
     return OPTIMIZERS[optimizer_name]
+
+
+class LRSchedulerState(NamedTuple):
+    """State maintained by learning rate schedulers."""
+
+    step: int
+    learning_rate: float
+    initial_lr: float
+
+
+SchedulerFn = Callable[[LRSchedulerState], tuple[float, LRSchedulerState]]
+
+
+def create_cosine_scheduler(
+    total_steps: int,
+    final_lr_factor: float = 0.01,
+) -> SchedulerFn:
+    """
+    Creates a cosine learning rate scheduler.
+
+    Args:
+        total_steps: Total number of optimization steps
+        final_lr_factor: Final learning rate as a fraction of initial
+    """
+
+    @jax.jit
+    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+        progress = jnp.minimum(state.step / total_steps, 1.0)
+        cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * progress))
+        lr = state.initial_lr * (final_lr_factor + (1 - final_lr_factor) * cosine_decay)
+        new_state = LRSchedulerState(
+            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
+        )
+        return lr, new_state
+
+    return scheduler_fn
+
+
+def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
+    """
+    Creates a step decay scheduler that reduces learning rate by gamma every step_size steps.
+
+    Args:
+        step_size: Number of steps between learning rate drops
+        gamma: Multiplicative factor for learning rate decay
+    """
+
+    @jax.jit
+    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+        num_drops = state.step // step_size
+        lr = state.initial_lr * (gamma**num_drops)
+        new_state = LRSchedulerState(
+            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
+        )
+        return lr, new_state
+
+    return scheduler_fn
+
+
+def create_warmup_cosine_scheduler(
+    total_steps: int,
+    warmup_steps: int,
+    final_lr_factor: float = 0.01,
+) -> SchedulerFn:
+    """
+    Creates a scheduler with linear warmup followed by cosine decay.
+
+    Args:
+        total_steps: Total number of optimization steps
+        warmup_steps: Number of warmup steps
+        final_lr_factor: Final learning rate as a fraction of initial
+    """
+
+    @jax.jit
+    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+        # Linear warmup
+        warmup_progress = jnp.minimum(state.step / warmup_steps, 1.0)
+        warmup_lr = state.initial_lr * warmup_progress
+
+        # Cosine decay after warmup
+        remaining_steps = total_steps - warmup_steps
+        decay_progress = jnp.maximum(0.0, state.step - warmup_steps) / remaining_steps
+        decay_progress = jnp.minimum(decay_progress, 1.0)
+        cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * decay_progress))
+        decay_lr = state.initial_lr * (
+            final_lr_factor + (1 - final_lr_factor) * cosine_decay
+        )
+
+        # Choose between warmup and decay
+        lr = jnp.where(state.step < warmup_steps, warmup_lr, decay_lr)
+
+        new_state = LRSchedulerState(
+            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
+        )
+        return lr, new_state
+
+    return scheduler_fn
+
+
+def init_scheduler_state(initial_lr: float) -> LRSchedulerState:
+    """Initialize scheduler state with given learning rate."""
+    return LRSchedulerState(step=0, learning_rate=initial_lr, initial_lr=initial_lr)
 
 
 def single_slice_ptychography(
@@ -228,3 +329,460 @@ def single_slice_poscorrected(
             print(f"Iteration {i}, Loss: {loss}")
 
     return pot_slice, beam, pos_list
+
+
+def multi_slice_ptychography(
+    experimental_4dstem: Float[Array, "P H W"],
+    initial_pot_slices: Complex[Array, "H W S"],  # S is number of slices
+    initial_beam: Complex[Array, "H W"],
+    pos_list: Float[Array, "P 2"],
+    slice_thickness: Float[Array, ""],
+    voltage_kV: Float[Array, ""],
+    calib_ang: Float[Array, ""],
+    num_iterations: int = 1000,
+    learning_rate: float = 0.001,
+    loss_type: str = "mse",
+    optimizer_name: str = "adam",
+    scheduler_fn: Optional[SchedulerFn] = None,
+) -> Tuple[Complex[Array, "H W S"], Complex[Array, "H W"]]:
+    """
+    Multi-slice ptychographic reconstruction.
+
+    Args:
+        experimental_4dstem: Experimental 4D-STEM data
+        initial_pot_slices: Initial guess for potential slices
+        initial_beam: Initial guess for electron beam
+        pos_list: List of probe positions
+        slice_thickness: Thickness of each slice
+        voltage_kV: Accelerating voltage
+        calib_ang: Calibration in angstroms
+        num_iterations: Number of optimization iterations
+        learning_rate: Initial learning rate
+        loss_type: Type of loss function
+        optimizer_name: Name of optimizer to use
+        scheduler_fn: Optional learning rate scheduler
+
+    Returns:
+        Tuple of optimized potential slices and beam
+    """
+
+    # Create the forward function for multiple slices
+    def forward_fn(pot_slices: Complex[Array, "H W S"], beam: Complex[Array, "H W"]):
+        return pte.stem_4d_multi(
+            pot_slices,
+            beam[None, ...],
+            pos_list,
+            slice_thickness,
+            voltage_kV,
+            calib_ang,
+        )
+
+    # Create the loss function
+    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+
+    # Get loss and gradients
+    @jax.jit
+    def loss_and_grad(
+        pot_slices: Complex[Array, "H W S"], beam: Complex[Array, "H W"]
+    ) -> Tuple[Float[Array, ""], Dict[str, Array]]:
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(pot_slices, beam)
+        return loss, {"pot_slices": grads[0], "beam": grads[1]}
+
+    # Initialize optimizer
+    optimizer = get_optimizer(optimizer_name)
+    pot_slices_state = optimizer.init(initial_pot_slices.shape)
+    beam_state = optimizer.init(initial_beam.shape)
+
+    # Initialize scheduler if provided
+    if scheduler_fn is not None:
+        scheduler_state = init_scheduler_state(learning_rate)
+
+    # Initialize variables
+    pot_slices = initial_pot_slices
+    beam = initial_beam
+    current_lr = learning_rate
+
+    @jax.jit
+    def update_step(pot_slices, beam, pot_slices_state, beam_state, lr):
+        loss, grads = loss_and_grad(pot_slices, beam)
+        pot_slices, pot_slices_state = optimizer.update(
+            pot_slices, grads["pot_slices"], pot_slices_state, lr
+        )
+        beam, beam_state = optimizer.update(beam, grads["beam"], beam_state, lr)
+        return pot_slices, beam, pot_slices_state, beam_state, loss
+
+    for i in range(num_iterations):
+        # Update learning rate if scheduler is provided
+        if scheduler_fn is not None:
+            current_lr, scheduler_state = scheduler_fn(scheduler_state)
+
+        # Perform optimization step
+        pot_slices, beam, pot_slices_state, beam_state, loss = update_step(
+            pot_slices, beam, pot_slices_state, beam_state, current_lr
+        )
+
+        if i % 100 == 0:
+            print(f"Iteration {i}, Loss: {loss}, LR: {current_lr}")
+
+    return pot_slices, beam
+
+
+class ProbeState(NamedTuple):
+    """State for probe mode reconstruction."""
+
+    modes: Complex[Array, "H W M"]  # M is number of modes
+    weights: Float[Array, "M"]  # Mode occupation numbers
+
+
+def initialize_probe_modes(
+    base_probe: Complex[Array, "H W"], num_modes: int, random_seed: int = 42
+) -> ProbeState:
+    """
+    Initialize multiple probe modes from a base probe.
+
+    Args:
+        base_probe: Base probe function
+        num_modes: Number of modes to generate
+        random_seed: Random seed for initialization
+
+    Returns:
+        ProbeState with initialized modes and weights
+    """
+    key = jax.random.PRNGKey(random_seed)
+
+    # Initialize modes with small random perturbations of base probe
+    perturbations = (
+        jax.random.normal(
+            key,
+            shape=(base_probe.shape[0], base_probe.shape[1], num_modes),
+            dtype=base_probe.dtype,
+        )
+        * 0.1
+    )
+
+    modes = jnp.tile(base_probe[..., None], (1, 1, num_modes)) + perturbations
+
+    # Initialize weights with decreasing values
+    weights = jnp.exp(-jnp.arange(num_modes, dtype=jnp.float32))
+    weights = weights / jnp.sum(weights)  # Normalize
+
+    return ProbeState(modes=modes, weights=weights)
+
+
+def multi_mode_ptychography(
+    experimental_4dstem: Float[Array, "P H W"],
+    initial_pot_slices: Complex[Array, "H W S"],
+    initial_probe_state: ProbeState,
+    pos_list: Float[Array, "P 2"],
+    slice_thickness: Float[Array, ""],
+    voltage_kV: Float[Array, ""],
+    calib_ang: Float[Array, ""],
+    num_iterations: int = 1000,
+    learning_rate: float = 0.001,
+    weight_learning_rate: float = 0.0001,  # Separate LR for weights
+    loss_type: str = "mse",
+    optimizer_name: str = "adam",
+    scheduler_fn: Optional[SchedulerFn] = None,
+) -> Tuple[Complex[Array, "H W S"], ProbeState]:
+    """
+    Multi-mode ptychographic reconstruction.
+
+    Args:
+        experimental_4dstem: Experimental 4D-STEM data
+        initial_pot_slices: Initial guess for potential slices
+        initial_probe_state: Initial probe modes and weights
+        pos_list: List of probe positions
+        slice_thickness: Thickness of each slice
+        voltage_kV: Accelerating voltage
+        calib_ang: Calibration in angstroms
+        num_iterations: Number of optimization iterations
+        learning_rate: Initial learning rate
+        weight_learning_rate: Learning rate for mode weights
+        loss_type: Type of loss function
+        optimizer_name: Name of optimizer to use
+        scheduler_fn: Optional learning rate scheduler
+
+    Returns:
+        Tuple of optimized potential slices and probe state
+    """
+
+    def forward_fn(
+        pot_slices: Complex[Array, "H W S"],
+        probe_modes: Complex[Array, "H W M"],
+        mode_weights: Float[Array, "M"],
+    ):
+        # Calculate pattern for each mode
+        patterns = pte.stem_4d_multi(
+            pot_slices,
+            probe_modes,
+            pos_list,
+            slice_thickness,
+            voltage_kV,
+            calib_ang,
+        )
+
+        # Weight patterns by mode occupations
+        weighted_sum = jnp.sum(
+            patterns[..., None] * mode_weights[None, None, None, :], axis=-1
+        )
+        return weighted_sum
+
+    # Create loss function
+    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+
+    @jax.jit
+    def loss_and_grad(
+        pot_slices: Complex[Array, "H W S"],
+        probe_state: ProbeState,
+    ) -> Tuple[Float[Array, ""], dict]:
+        loss, grads = jax.value_and_grad(
+            lambda p, m, w: loss_func(p, m, w), argnums=(0, 1, 2)
+        )(pot_slices, probe_state.modes, probe_state.weights)
+
+        return loss, {"pot_slices": grads[0], "modes": grads[1], "weights": grads[2]}
+
+    # Initialize optimizers
+    optimizer = get_optimizer(optimizer_name)
+    pot_slices_state = optimizer.init(initial_pot_slices.shape)
+    modes_state = optimizer.init(initial_probe_state.modes.shape)
+    weights_state = optimizer.init(initial_probe_state.weights.shape)
+
+    if scheduler_fn is not None:
+        scheduler_state = init_scheduler_state(learning_rate)
+
+    pot_slices = initial_pot_slices
+    probe_state = initial_probe_state
+    current_lr = learning_rate
+
+    @jax.jit
+    def update_step(pot_slices, probe_state, opt_states, lr, weight_lr):
+        pot_slices_state, modes_state, weights_state = opt_states
+        loss, grads = loss_and_grad(pot_slices, probe_state)
+
+        # Update potential slices and modes
+        pot_slices, pot_slices_state = optimizer.update(
+            pot_slices, grads["pot_slices"], pot_slices_state, lr
+        )
+        modes, modes_state = optimizer.update(
+            probe_state.modes, grads["modes"], modes_state, lr
+        )
+
+        # Update weights with separate learning rate
+        weights, weights_state = optimizer.update(
+            probe_state.weights, grads["weights"], weights_state, weight_lr
+        )
+
+        # Normalize weights
+        weights = jnp.abs(weights)  # Ensure positive
+        weights = weights / jnp.sum(weights)  # Normalize
+
+        new_probe_state = ProbeState(modes=modes, weights=weights)
+        new_opt_states = (pot_slices_state, modes_state, weights_state)
+
+        return pot_slices, new_probe_state, new_opt_states, loss
+
+    for i in range(num_iterations):
+        if scheduler_fn is not None:
+            current_lr, scheduler_state = scheduler_fn(scheduler_state)
+
+        opt_states = (pot_slices_state, modes_state, weights_state)
+        pot_slices, probe_state, opt_states, loss = update_step(
+            pot_slices, probe_state, opt_states, current_lr, weight_learning_rate
+        )
+        pot_slices_state, modes_state, weights_state = opt_states
+
+        if i % 100 == 0:
+            print(f"Iteration {i}, Loss: {loss}, LR: {current_lr}")
+            print(f"Mode weights: {probe_state.weights}")
+
+    return pot_slices, probe_state
+
+
+class MixedState(NamedTuple):
+    """Represents a mixed quantum state."""
+
+    states: Complex[Array, "H W N"]  # N different states
+    probabilities: Float[Array, "N"]  # Occupation probabilities
+
+
+def initialize_mixed_states(
+    base_state: Complex[Array, "H W"],
+    num_states: int,
+    energy_spread: float = 0.5,  # eV
+    random_seed: int = 42,
+) -> MixedState:
+    """
+    Initialize mixed states for partial temporal coherence.
+
+    Args:
+        base_state: Base state (e.g., probe)
+        num_states: Number of states in mixture
+        energy_spread: Energy spread in eV (FWHM)
+        random_seed: Random seed for initialization
+
+    Returns:
+        MixedState with initialized states and probabilities
+    """
+    key = jax.random.PRNGKey(random_seed)
+
+    # Generate energy offsets with Gaussian distribution
+    sigma = energy_spread / (2.355)  # Convert FWHM to sigma
+    energies = jax.random.normal(key, shape=(num_states,)) * sigma
+
+    # Create states with phase variations
+    phase_factors = jnp.exp(1j * energies[:, None, None])
+    states = base_state[None, ...] * phase_factors
+
+    # Calculate probabilities (Gaussian distribution)
+    probabilities = jnp.exp(-(energies**2) / (2 * sigma**2))
+    probabilities = probabilities / jnp.sum(probabilities)
+
+    return MixedState(states=states.transpose(1, 2, 0), probabilities=probabilities)
+
+
+class MixedStateParams(NamedTuple):
+    """Parameters for mixed state reconstruction"""
+
+    num_modes: int
+    mode_weights: Float[Array, "M"]  # Weights for each mode
+
+
+def multi_mode_ptychography(
+    experimental_4dstem: Float[Array, "P H W"],
+    initial_pot_slices: Complex[Array, "H W S"],
+    initial_modes: Complex[Array, "H W M"],  # M different probe modes
+    mode_weights: Float[Array, "M"],  # Weights for each mode
+    pos_list: Float[Array, "P 2"],
+    slice_thickness: Float[Array, ""],
+    voltage_kV: Float[Array, ""],
+    calib_ang: Float[Array, ""],
+    num_iterations: int = 1000,
+    learning_rate: float = 0.001,
+    loss_type: str = "mse",
+    optimizer_name: str = "adam",
+    scheduler_fn: Optional[SchedulerFn] = None,
+) -> Tuple[Complex[Array, "H W S"], Complex[Array, "H W M"], Float[Array, "M"]]:
+    """
+    Multi-mode ptychographic reconstruction with optional mixed state.
+
+    Args:
+        experimental_4dstem: Experimental 4D-STEM data
+        initial_pot_slices: Initial guess for potential slices
+        initial_modes: Initial guess for probe modes
+        mode_weights: Initial weights for each mode
+        pos_list: List of probe positions
+        slice_thickness: Thickness of each slice
+        voltage_kV: Accelerating voltage
+        calib_ang: Calibration in angstroms
+        num_iterations: Number of optimization iterations
+        learning_rate: Initial learning rate
+        loss_type: Type of loss function
+        optimizer_name: Name of optimizer to use
+        scheduler_fn: Optional learning rate scheduler
+
+    Returns:
+        Tuple of optimized potential slices, probe modes, and mode weights
+    """
+    # Normalize mode weights
+    mode_weights = mode_weights / jnp.sum(mode_weights)
+
+    def forward_fn(
+        pot_slices: Complex[Array, "H W S"],
+        modes: Complex[Array, "H W M"],
+        weights: Float[Array, "M"],
+    ) -> Float[Array, "P H W"]:
+        return pte.stem_4d_mixed_state(
+            pot_slices,
+            modes,
+            weights,
+            pos_list,
+            slice_thickness,
+            voltage_kV,
+            calib_ang,
+        )
+
+    # Create loss function
+    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+
+    @jax.jit
+    def loss_and_grad(
+        pot_slices: Complex[Array, "H W S"],
+        modes: Complex[Array, "H W M"],
+        weights: Float[Array, "M"],
+    ) -> Tuple[Float[Array, ""], Dict[str, Array]]:
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
+            pot_slices, modes, weights
+        )
+        return loss, {"pot_slices": grads[0], "modes": grads[1], "weights": grads[2]}
+
+    # Initialize optimizers
+    optimizer = get_optimizer(optimizer_name)
+    pot_slices_state = optimizer.init(initial_pot_slices.shape)
+    modes_state = optimizer.init(initial_modes.shape)
+    weights_state = optimizer.init(mode_weights.shape)
+
+    if scheduler_fn is not None:
+        scheduler_state = init_scheduler_state(learning_rate)
+
+    # Initialize variables
+    pot_slices = initial_pot_slices
+    modes = initial_modes
+    weights = mode_weights
+    current_lr = learning_rate
+
+    @jax.jit
+    def update_step(
+        pot_slices, modes, weights, pot_slices_state, modes_state, weights_state, lr
+    ):
+        loss, grads = loss_and_grad(pot_slices, modes, weights)
+
+        # Update potential slices and modes
+        pot_slices, pot_slices_state = optimizer.update(
+            pot_slices, grads["pot_slices"], pot_slices_state, lr
+        )
+        modes, modes_state = optimizer.update(modes, grads["modes"], modes_state, lr)
+
+        # Update weights and normalize
+        weights, weights_state = optimizer.update(
+            weights, grads["weights"], weights_state, lr
+        )
+        weights = weights / jnp.sum(weights)  # Ensure normalization
+
+        return (
+            pot_slices,
+            modes,
+            weights,
+            pot_slices_state,
+            modes_state,
+            weights_state,
+            loss,
+        )
+
+    for i in range(num_iterations):
+        # Update learning rate if scheduler is provided
+        if scheduler_fn is not None:
+            current_lr, scheduler_state = scheduler_fn(scheduler_state)
+
+        # Perform optimization step
+        (
+            pot_slices,
+            modes,
+            weights,
+            pot_slices_state,
+            modes_state,
+            weights_state,
+            loss,
+        ) = update_step(
+            pot_slices,
+            modes,
+            weights,
+            pot_slices_state,
+            modes_state,
+            weights_state,
+            current_lr,
+        )
+
+        if i % 100 == 0:
+            print(f"Iteration {i}, Loss: {loss}, LR: {current_lr}")
+
+    return pot_slices, modes, weights

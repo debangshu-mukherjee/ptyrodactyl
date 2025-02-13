@@ -19,108 +19,6 @@ def get_optimizer(optimizer_name: str) -> ptt.Optimizer:
     return OPTIMIZERS[optimizer_name]
 
 
-class LRSchedulerState(NamedTuple):
-    """State maintained by learning rate schedulers."""
-
-    step: int
-    learning_rate: float
-    initial_lr: float
-
-
-SchedulerFn = Callable[[LRSchedulerState], tuple[float, LRSchedulerState]]
-
-
-def create_cosine_scheduler(
-    total_steps: int,
-    final_lr_factor: float = 0.01,
-) -> SchedulerFn:
-    """
-    Creates a cosine learning rate scheduler.
-
-    Args:
-        total_steps: Total number of optimization steps
-        final_lr_factor: Final learning rate as a fraction of initial
-    """
-
-    @jax.jit
-    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
-        progress = jnp.minimum(state.step / total_steps, 1.0)
-        cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * progress))
-        lr = state.initial_lr * (final_lr_factor + (1 - final_lr_factor) * cosine_decay)
-        new_state = LRSchedulerState(
-            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
-        )
-        return lr, new_state
-
-    return scheduler_fn
-
-
-def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
-    """
-    Creates a step decay scheduler that reduces learning rate by gamma every step_size steps.
-
-    Args:
-        step_size: Number of steps between learning rate drops
-        gamma: Multiplicative factor for learning rate decay
-    """
-
-    @jax.jit
-    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
-        num_drops = state.step // step_size
-        lr = state.initial_lr * (gamma**num_drops)
-        new_state = LRSchedulerState(
-            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
-        )
-        return lr, new_state
-
-    return scheduler_fn
-
-
-def create_warmup_cosine_scheduler(
-    total_steps: int,
-    warmup_steps: int,
-    final_lr_factor: float = 0.01,
-) -> SchedulerFn:
-    """
-    Creates a scheduler with linear warmup followed by cosine decay.
-
-    Args:
-        total_steps: Total number of optimization steps
-        warmup_steps: Number of warmup steps
-        final_lr_factor: Final learning rate as a fraction of initial
-    """
-
-    @jax.jit
-    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
-        # Linear warmup
-        warmup_progress = jnp.minimum(state.step / warmup_steps, 1.0)
-        warmup_lr = state.initial_lr * warmup_progress
-
-        # Cosine decay after warmup
-        remaining_steps = total_steps - warmup_steps
-        decay_progress = jnp.maximum(0.0, state.step - warmup_steps) / remaining_steps
-        decay_progress = jnp.minimum(decay_progress, 1.0)
-        cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * decay_progress))
-        decay_lr = state.initial_lr * (
-            final_lr_factor + (1 - final_lr_factor) * cosine_decay
-        )
-
-        # Choose between warmup and decay
-        lr = jnp.where(state.step < warmup_steps, warmup_lr, decay_lr)
-
-        new_state = LRSchedulerState(
-            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
-        )
-        return lr, new_state
-
-    return scheduler_fn
-
-
-def init_scheduler_state(initial_lr: float) -> LRSchedulerState:
-    """Initialize scheduler state with given learning rate."""
-    return LRSchedulerState(step=0, learning_rate=initial_lr, initial_lr=initial_lr)
-
-
 def single_slice_ptychography(
     experimental_4dstem: Float[Array, "P H W"],
     initial_pot_slice: Complex[Array, "H W"],
@@ -343,7 +241,7 @@ def multi_slice_ptychography(
     learning_rate: float = 0.001,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
-    scheduler_fn: Optional[SchedulerFn] = None,
+    scheduler_fn: Optional[ptt.SchedulerFn] = None,
 ) -> Tuple[Complex[Array, "H W S"], Complex[Array, "H W"]]:
     """
     Multi-slice ptychographic reconstruction.
@@ -395,7 +293,7 @@ def multi_slice_ptychography(
 
     # Initialize scheduler if provided
     if scheduler_fn is not None:
-        scheduler_state = init_scheduler_state(learning_rate)
+        scheduler_state = ptt.init_scheduler_state(learning_rate)
 
     # Initialize variables
     pot_slices = initial_pot_slices
@@ -427,16 +325,9 @@ def multi_slice_ptychography(
     return pot_slices, beam
 
 
-class ProbeState(NamedTuple):
-    """State for probe mode reconstruction."""
-
-    modes: Complex[Array, "H W M"]  # M is number of modes
-    weights: Float[Array, "M"]  # Mode occupation numbers
-
-
 def initialize_probe_modes(
     base_probe: Complex[Array, "H W"], num_modes: int, random_seed: int = 42
-) -> ProbeState:
+) -> pte.ProbeState:
     """
     Initialize multiple probe modes from a base probe.
 
@@ -466,13 +357,13 @@ def initialize_probe_modes(
     weights = jnp.exp(-jnp.arange(num_modes, dtype=jnp.float32))
     weights = weights / jnp.sum(weights)  # Normalize
 
-    return ProbeState(modes=modes, weights=weights)
+    return pte.ProbeState(modes=modes, weights=weights)
 
 
 def multi_mode_ptychography(
     experimental_4dstem: Float[Array, "P H W"],
     initial_pot_slices: Complex[Array, "H W S"],
-    initial_probe_state: ProbeState,
+    initial_probe_state: pte.ProbeState,
     pos_list: Float[Array, "P 2"],
     slice_thickness: Float[Array, ""],
     voltage_kV: Float[Array, ""],
@@ -482,8 +373,8 @@ def multi_mode_ptychography(
     weight_learning_rate: float = 0.0001,  # Separate LR for weights
     loss_type: str = "mse",
     optimizer_name: str = "adam",
-    scheduler_fn: Optional[SchedulerFn] = None,
-) -> Tuple[Complex[Array, "H W S"], ProbeState]:
+    scheduler_fn: Optional[ptt.SchedulerFn] = None,
+) -> Tuple[Complex[Array, "H W S"], pte.ProbeState]:
     """
     Multi-mode ptychographic reconstruction.
 
@@ -533,7 +424,7 @@ def multi_mode_ptychography(
     @jax.jit
     def loss_and_grad(
         pot_slices: Complex[Array, "H W S"],
-        probe_state: ProbeState,
+        probe_state: pte.ProbeState,
     ) -> Tuple[Float[Array, ""], dict]:
         loss, grads = jax.value_and_grad(
             lambda p, m, w: loss_func(p, m, w), argnums=(0, 1, 2)
@@ -548,7 +439,7 @@ def multi_mode_ptychography(
     weights_state = optimizer.init(initial_probe_state.weights.shape)
 
     if scheduler_fn is not None:
-        scheduler_state = init_scheduler_state(learning_rate)
+        scheduler_state = ptt.init_scheduler_state(learning_rate)
 
     pot_slices = initial_pot_slices
     probe_state = initial_probe_state
@@ -576,7 +467,7 @@ def multi_mode_ptychography(
         weights = jnp.abs(weights)  # Ensure positive
         weights = weights / jnp.sum(weights)  # Normalize
 
-        new_probe_state = ProbeState(modes=modes, weights=weights)
+        new_probe_state = pte.ProbeState(modes=modes, weights=weights)
         new_opt_states = (pot_slices_state, modes_state, weights_state)
 
         return pot_slices, new_probe_state, new_opt_states, loss
@@ -598,19 +489,12 @@ def multi_mode_ptychography(
     return pot_slices, probe_state
 
 
-class MixedState(NamedTuple):
-    """Represents a mixed quantum state."""
-
-    states: Complex[Array, "H W N"]  # N different states
-    probabilities: Float[Array, "N"]  # Occupation probabilities
-
-
 def initialize_mixed_states(
     base_state: Complex[Array, "H W"],
     num_states: int,
     energy_spread: float = 0.5,  # eV
     random_seed: int = 42,
-) -> MixedState:
+) -> pte.MixedQuantumStates:
     """
     Initialize mixed states for partial temporal coherence.
 
@@ -637,14 +521,9 @@ def initialize_mixed_states(
     probabilities = jnp.exp(-(energies**2) / (2 * sigma**2))
     probabilities = probabilities / jnp.sum(probabilities)
 
-    return MixedState(states=states.transpose(1, 2, 0), probabilities=probabilities)
-
-
-class MixedStateParams(NamedTuple):
-    """Parameters for mixed state reconstruction"""
-
-    num_modes: int
-    mode_weights: Float[Array, "M"]  # Weights for each mode
+    return pte.MixedQuantumStates(
+        states=states.transpose(1, 2, 0), probabilities=probabilities
+    )
 
 
 def multi_mode_ptychography(
@@ -660,7 +539,7 @@ def multi_mode_ptychography(
     learning_rate: float = 0.001,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
-    scheduler_fn: Optional[SchedulerFn] = None,
+    scheduler_fn: Optional[ptt.SchedulerFn] = None,
 ) -> Tuple[Complex[Array, "H W S"], Complex[Array, "H W M"], Float[Array, "M"]]:
     """
     Multi-mode ptychographic reconstruction with optional mixed state.
@@ -722,7 +601,7 @@ def multi_mode_ptychography(
     weights_state = optimizer.init(mode_weights.shape)
 
     if scheduler_fn is not None:
-        scheduler_state = init_scheduler_state(learning_rate)
+        scheduler_state = ptt.init_scheduler_state(learning_rate)
 
     # Initialize variables
     pot_slices = initial_pot_slices

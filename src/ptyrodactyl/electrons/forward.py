@@ -1,26 +1,19 @@
 from functools import partial
-from typing import Any, NamedTuple, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
-# from typeguard import typechecked as typechecker
+from beartype.typing import NamedTuple, Optional, Tuple, Union
 from jax import lax
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
-from typing_extensions import TypeAlias
 
 import ptyrodactyl.electrons as pte
 
 jax.config.update("jax_enable_x64", True)
 
-num_type: TypeAlias = int | float  # Non-JAX scalar number
-scalar_number: TypeAlias = (
-    int | float | Num[Array, ""]
-)  # Scalar number that is outputted from a JAX function
-
 
 def transmission_func(
-    pot_slice: Float[Array, "#a #b"], voltage_kV: scalar_number
+    pot_slice: Float[Array, "#a #b"], voltage_kV: Num[Array, ""]
 ) -> Complex[Array, ""]:
     """
     Description
@@ -59,9 +52,9 @@ def transmission_func(
 
     voltage: Float[Array, ""] = jnp.multiply(voltage_kV, 1000.0)
 
-    m_e: num_type = 9.109383e-31  # mass of an electron
-    e_e: num_type = 1.602177e-19  # charge of an electron
-    c: num_type = 299792458.0  # speed of light
+    m_e: Float[Array, ""] = 9.109383e-31  # mass of an electron
+    e_e: Float[Array, ""] = 1.602177e-19  # charge of an electron
+    c: Float[Array, ""] = 299792458.0  # speed of light
 
     eV: Float[Array, ""] = jnp.multiply(e_e, voltage)
     lambda_angstrom: Float[Array, ""] = pte.wavelength_ang(
@@ -78,9 +71,9 @@ def transmission_func(
 def propagation_func(
     imsize_y: int,
     imsize_x: int,
-    thickness_ang: scalar_number,
-    voltage_kV: scalar_number,
-    calib_ang: scalar_number,
+    thickness_ang: Num[Array, ""],
+    voltage_kV: Num[Array, ""],
+    calib_ang: Float[Array, ""],
 ) -> Complex[Array, "H W"]:
     """
     Description
@@ -198,7 +191,7 @@ def fourier_coords(calibration: float, image_size: Int[Array, "2"]) -> NamedTupl
     calib_inverse_x: float = inverse_arr_x[1] - inverse_arr_x[0]
     calibrated_array = NamedTuple(
         "array_with_calibrations",
-        [("array", Any[Array, "* *"]), ("calib_y", float), ("calib_x", float)],
+        [("array", Num[Array, "* *"]), ("calib_y", float), ("calib_x", float)],
     )
     return calibrated_array(inverse_array, calib_inverse_y, calib_inverse_x)
 
@@ -238,7 +231,7 @@ def fourier_calib(
 
 @jax.jit
 def make_probe(
-    aperture: num_type,
+    aperture: Num[Array, ""],
     voltage: Union[float, int],
     image_size: Int[Array, "2"],
     calibration_pm: float,
@@ -315,10 +308,10 @@ def make_probe(
 @jax.jit
 def aberration(
     fourier_coord: Float[Array, "H W"],
-    lambda_angstrom: scalar_number,
-    defocus: num_type = 0,
-    c3: num_type = 0,
-    c5: num_type = 0,
+    lambda_angstrom: Num[Array, ""],
+    defocus: Optional[Float[Array, ""]] = jnp.asarray(0.0),
+    c3: Optional[Float[Array, ""]] = jnp.asarray(0.0),
+    c5: Optional[Float[Array, ""]] = jnp.asarray(0.0),
 ) -> Float[Array, "H W"]:
     """
     Description
@@ -330,14 +323,17 @@ def aberration(
     ----------
     - `fourier_coord` (Float[Array, "H W"]):
         The Fourier co-ordinates
-    - `lambda_angstrom` (scalar_number):
+    - `lambda_angstrom` (Num[Array, ""]):
         The wavelength in angstroms
-    - `defocus` (float):
-        The defocus value in angstroms
-    - `c3` (float):
-        The C3 value in angstroms
-    - `c5` (float):
-        The C5 value in angstroms
+    - `defocus` (Float[Array, ""]):
+        The defocus value in angstroms.
+        Default is 0.0
+    - `c3` (Float[Array, ""]):
+        The C3 value in angstroms.
+        Default is 0.0
+    - `c5` (Float[Array, ""]):
+        The C5 value in angstroms.
+        Default is 0.0
 
     Returns
     -------
@@ -361,7 +357,7 @@ def aberration(
 
 
 @jaxtyped(typechecker=typechecker)
-def wavelength_ang(voltage_kV: num_type | Float[Array, "#a"]) -> Float[Array, "#a"]:
+def wavelength_ang(voltage_kV: Num[Array, "#a"]) -> Float[Array, "#a"]:
     """
     Description
     -----------
@@ -735,3 +731,71 @@ def stem_4d_multi(
     stem_pattern = jax.vmap(calc_multi_slice_cbed, in_axes=0, out_axes=0)(shifted_beams)
 
     return stem_pattern
+
+
+def stem_4d_mixed_state(
+    pot_slices: Complex[Array, "H W S"],
+    modes: Complex[Array, "H W M"],
+    mode_weights: Float[Array, "M"],
+    pos_list: Float[Array, "P 2"],
+    slice_thickness: Float[Array, ""],
+    voltage_kV: Float[Array, ""],
+    calib_ang: Float[Array, ""],
+) -> Float[Array, "P H W"]:
+    """
+    Calculates 4D-STEM pattern for multiple modes and slices with mixed state.
+    """
+    # Calculate transmission function
+    slice_transmission = pte.propagation_func(
+        modes.shape[0], modes.shape[1], slice_thickness, voltage_kV, calib_ang
+    )
+
+    # Shift all modes to all positions
+    shifted_modes = pte.shift_beam_fourier(modes, pos_list, calib_ang)
+
+    def calc_mixed_state_cbed(shifted_mode_set):
+        # Process each mode
+        def process_mode(mode):
+            wave = mode
+            # Propagate through slices
+            for i in range(pot_slices.shape[-1]):
+                wave = wave * pot_slices[..., i]
+                if i < pot_slices.shape[-1] - 1:
+                    wave = jnp.fft.ifft2(jnp.fft.fft2(wave) * slice_transmission)
+            return wave
+
+        # Apply to all modes
+        waves = jax.vmap(process_mode)(shifted_mode_set)
+
+        # Calculate diffraction patterns for all modes
+        fourier = jnp.fft.fftshift(jnp.fft.fft2(waves), axes=(0, 1))
+        mode_intensities = jnp.abs(fourier) ** 2
+
+        # Weight and sum the mode intensities
+        weighted_sum = jnp.sum(mode_intensities * mode_weights[:, None, None], axis=0)
+        return weighted_sum
+
+    # Apply to all probe positions
+    stem_pattern = jax.vmap(calc_mixed_state_cbed)(shifted_modes)
+
+    return stem_pattern
+
+
+def initialize_random_modes(
+    shape: Tuple[int, int], num_modes: int, dtype=jnp.complex128
+) -> Complex[Array, "H W M"]:
+    """Initialize random orthogonal modes."""
+    key = jax.random.PRNGKey(0)
+    modes = jax.random.normal(key, (shape[0], shape[1], num_modes), dtype=dtype)
+
+    # Orthogonalize modes using QR decomposition
+    modes_flat = modes.reshape(-1, num_modes)
+    q, r = jnp.linalg.qr(modes_flat)
+    modes = q.reshape(shape[0], shape[1], num_modes)
+
+    return modes
+
+
+def normalize_mode_weights(weights: Float[Array, "M"]) -> Float[Array, "M"]:
+    """Normalize mode weights to sum to 1."""
+    return weights / jnp.sum(weights)

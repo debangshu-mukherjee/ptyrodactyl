@@ -1,8 +1,105 @@
-from typing import Any, Callable, NamedTuple, Sequence, Tuple, Union
+from beartype.typing import Any, Callable, NamedTuple, Sequence, Tuple, Union
 
 import jax
 import jax.numpy as jnp
 from jaxtyping import Array, Complex, Float
+
+class LRSchedulerState(NamedTuple):
+    """State maintained by learning rate schedulers."""
+
+    step: int
+    learning_rate: float
+    initial_lr: float
+    
+SchedulerFn = Callable[[LRSchedulerState], tuple[float, LRSchedulerState]]
+
+def create_cosine_scheduler(
+    total_steps: int,
+    final_lr_factor: float = 0.01,
+) -> SchedulerFn:
+    """
+    Creates a cosine learning rate scheduler.
+
+    Args:
+        total_steps: Total number of optimization steps
+        final_lr_factor: Final learning rate as a fraction of initial
+    """
+
+    @jax.jit
+    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+        progress = jnp.minimum(state.step / total_steps, 1.0)
+        cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * progress))
+        lr = state.initial_lr * (final_lr_factor + (1 - final_lr_factor) * cosine_decay)
+        new_state = LRSchedulerState(
+            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
+        )
+        return lr, new_state
+
+    return scheduler_fn
+
+def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
+    """
+    Creates a step decay scheduler that reduces learning rate by gamma every step_size steps.
+
+    Args:
+        step_size: Number of steps between learning rate drops
+        gamma: Multiplicative factor for learning rate decay
+    """
+
+    @jax.jit
+    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+        num_drops = state.step // step_size
+        lr = state.initial_lr * (gamma**num_drops)
+        new_state = LRSchedulerState(
+            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
+        )
+        return lr, new_state
+
+    return scheduler_fn
+
+def create_warmup_cosine_scheduler(
+    total_steps: int,
+    warmup_steps: int,
+    final_lr_factor: float = 0.01,
+) -> SchedulerFn:
+    """
+    Creates a scheduler with linear warmup followed by cosine decay.
+
+    Args:
+        total_steps: Total number of optimization steps
+        warmup_steps: Number of warmup steps
+        final_lr_factor: Final learning rate as a fraction of initial
+    """
+
+    @jax.jit
+    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+        # Linear warmup
+        warmup_progress = jnp.minimum(state.step / warmup_steps, 1.0)
+        warmup_lr = state.initial_lr * warmup_progress
+
+        # Cosine decay after warmup
+        remaining_steps = total_steps - warmup_steps
+        decay_progress = jnp.maximum(0.0, state.step - warmup_steps) / remaining_steps
+        decay_progress = jnp.minimum(decay_progress, 1.0)
+        cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * decay_progress))
+        decay_lr = state.initial_lr * (
+            final_lr_factor + (1 - final_lr_factor) * cosine_decay
+        )
+
+        # Choose between warmup and decay
+        lr = jnp.where(state.step < warmup_steps, warmup_lr, decay_lr)
+
+        new_state = LRSchedulerState(
+            step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
+        )
+        return lr, new_state
+
+    return scheduler_fn
+
+
+def init_scheduler_state(initial_lr: float) -> LRSchedulerState:
+    """Initialize scheduler state with given learning rate."""
+    return LRSchedulerState(step=0, learning_rate=initial_lr, initial_lr=initial_lr)
 
 
 class OptimizerState(NamedTuple):

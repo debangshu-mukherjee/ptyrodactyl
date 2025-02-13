@@ -12,5 +12,6 @@ the experimental data.
 
 """
 
+from .classes import *
 from .forward import *
 from .inverse import *

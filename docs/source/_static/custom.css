@@ -1,0 +1,67 @@
+.highlight-python .annotation {
+    color: #2980b9;
+    font-weight: normal;
+}
+
+dl.field-list > dt {
+    word-break: break-word;
+}
+
+.section > h2 {
+    margin-top: 2em;
+}
+
+.rubric {
+    font-size: 1.2em;
+    color: #2980b9;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 0.3em;
+}
+
+dl.field-list code.literal {
+    background: #f8f9fa;
+    border: none;
+    padding: 2px 5px;
+    color: #2980b9;
+}
+
+/* Style for all custom sections */
+.rubric {
+    font-size: 1.35em;
+    color: #2980b9;
+    border-bottom: 2px solid #2980b9;
+    padding-bottom: 0.3em;
+    margin-top: 1.5em;
+    margin-bottom: 1em;
+}
+
+/* Parameter formatting */
+.field-list p {
+    margin: 0;
+    padding: 0;
+}
+
+/* Style for parameter names */
+.field-list strong code {
+    font-weight: bold;
+    color: #000000;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+/* Style for parameter types */
+.field-list em {
+    font-style: italic;
+    color: #666666;
+}
+
+/* Spacing between parameters */
+.field-list dt {
+    margin-top: 1em;
+}
+
+/* Parameter description indentation */
+.field-list dd {
+    margin-left: 2em;
+}

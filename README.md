@@ -2,7 +2,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI version](https://badge.fury.io/py/ptyrodactyl.svg)](https://badge.fury.io/py/ptyrodactyl)
 [![Documentation Status](https://readthedocs.org/projects/ptyrodactyl/badge/?version=latest)](https://ptyrodactyl.readthedocs.io/en/latest/?badge=latest)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14757400.svg)](https://doi.org/10.5281/zenodo.14757400)
+[![DOI](https://zenodo.org/badge/905915185.svg)](https://doi.org/10.5281/zenodo.14861992)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 # Ptychography through Differentiable Programming

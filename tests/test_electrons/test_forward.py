@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
 
 class test_wavelength_ang(chex.TestCase):
-    @chex.all_variants
+    @chex.all_variants(with_pmap=True, without_device=False)
     @parameterized.parameters(
         {"test_kV": 200, "expected_wavelength": 0.02508},
         {"test_kV": 1000, "expected_wavelength": 0.008719185412913083},
@@ -30,18 +30,18 @@ class test_wavelength_ang(chex.TestCase):
     )
     def test_voltage_values(self, test_kV, expected_wavelength):
         var_wavelength_ang = self.variant(wavelength_ang)
-        # voltage_kV = 200.0
-        # expected_wavelength = 0.02508  # Expected value based on known physics
-        result = var_wavelength_ang(test_kV)
+        # Convert to JAX array to match type annotation
+        voltage_kV = jnp.asarray(test_kV, dtype=jnp.float64)
+        result = var_wavelength_ang(voltage_kV)
         assert jnp.isclose(
             result, expected_wavelength, atol=1e-6
         ), f"Expected {expected_wavelength}, but got {result}"
 
     # Check for precision and rounding errors
-    @chex.all_variants
+    @chex.all_variants(with_pmap=True, without_device=False)
     def test_precision_and_rounding_errors(self):
         var_wavelength_ang = self.variant(wavelength_ang)
-        voltage_kV = 150.0
+        voltage_kV = jnp.asarray(150.0, dtype=jnp.float64)
         expected_wavelength = 0.02957  # Expected value based on known physics
         result = var_wavelength_ang(voltage_kV)
         assert jnp.isclose(
@@ -49,17 +49,17 @@ class test_wavelength_ang(chex.TestCase):
         ), f"Expected {expected_wavelength}, but got {result}"
 
     # Ensure function returns a Float Array
-    @chex.all_variants
+    @chex.all_variants(with_pmap=True, without_device=False)
     def test_returns_float(self):
         var_wavelength_ang = self.variant(wavelength_ang)
-        voltage_kV = 200.0
+        voltage_kV = jnp.asarray(200.0, dtype=jnp.float64)
         result = var_wavelength_ang(voltage_kV)
         assert isinstance(
             result, Float[Array, "*"]
         ), "Expected the function to return a float"
 
     # Test whether array inputs work
-    @chex.all_variants
+    @chex.all_variants(with_pmap=True, without_device=False)
     def test_array_input(self):
         var_wavelength_ang = self.variant(wavelength_ang)
         voltages = jnp.array([100, 200, 300, 400], dtype=jnp.float64)

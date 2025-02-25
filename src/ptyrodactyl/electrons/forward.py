@@ -357,7 +357,7 @@ def aberration(
 
 
 @jaxtyped(typechecker=typechecker)
-def wavelength_ang(voltage_kV: Num[Array, "#a"]) -> Float[Array, "#a"]:
+def wavelength_ang(voltage_kV: Num[Array, "..."]) -> Float[Array, "..."]:
     """
     Description
     -----------
@@ -372,34 +372,34 @@ def wavelength_ang(voltage_kV: Num[Array, "#a"]) -> Float[Array, "#a"]:
 
     Parameters
     ----------
-    - `voltage_kV` (num_type | Float[Array, "#a"]):
+    - `voltage_kV` (num_type | Float[Array, "..."]):
         The microscope accelerating voltage in kilo
-        electronVolts
+        electronVolts. Can be a scalar or array.
 
     Returns
     -------
-    - `in_angstroms (Float[Array, "*"]):
-        The electron wavelength in angstroms
+    - `in_angstroms (Float[Array, "..."]):
+        The electron wavelength in angstroms with same shape as input
 
     Flow
     ----
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms
     """
-    m: float = 9.109383e-31  # mass of an electron
-    e: float = 1.602177e-19  # charge of an electron
-    c: float = 299792458.0  # speed of light
-    h: float = 6.62607e-34  # Planck's constant
+    m: Float[Array, ""] = jnp.asarray(9.109383e-31)  # mass of an electron
+    e: Float[Array, ""] = jnp.asarray(1.602177e-19)  # charge of an electron
+    c: Float[Array, ""] = jnp.asarray(299792458.0)  # speed of light
+    h: Float[Array, ""] = jnp.asarray(6.62607e-34)  # Planck's constant
 
-    eV: Float[Array, "#a"] = (
+    eV: Float[Array, ""] = (
         jnp.float64(voltage_kV) * jnp.float64(1000.0) * jnp.float64(e)
     )
-    numerator: Float[Array, ""] = jnp.float64(h * c)
-    denominator: Float[Array, "#a"] = jnp.multiply(eV, ((2 * m * jnp.square(c)) + eV))
-    wavelength_meters: Float[Array, "#a"] = jnp.sqrt(
+    numerator: Float[Array, ""] = jnp.multiply(jnp.square(h), jnp.square(c))
+    denominator: Float[Array, ""] = jnp.multiply(eV, ((2 * m * jnp.square(c)) + eV))
+    wavelength_meters: Float[Array, ""] = jnp.sqrt(
         numerator / denominator
     )  # in meters
-    lambda_angstroms: Float[Array, "#a"] = 1e10 * wavelength_meters  # in angstroms
+    lambda_angstroms: Float[Array, ""] = jnp.asarray(1e10) * wavelength_meters  # in angstroms
     return lambda_angstroms
 
 

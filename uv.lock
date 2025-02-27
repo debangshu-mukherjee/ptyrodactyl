@@ -1685,7 +1685,7 @@ wheels = [
 
 [[package]]
 name = "ptyrodactyl"
-version = "2025.2.12"
+version = "2025.2.22"
 source = { editable = "." }
 dependencies = [
     { name = "beartype" },

@@ -1,8 +1,8 @@
-from beartype.typing import Any, Callable, NamedTuple, Sequence, Tuple, Union
-
 import jax
 import jax.numpy as jnp
+from beartype.typing import Any, Callable, NamedTuple, Sequence, Tuple, Union
 from jaxtyping import Array, Complex, Float
+
 
 class LRSchedulerState(NamedTuple):
     """State maintained by learning rate schedulers."""
@@ -10,8 +10,10 @@ class LRSchedulerState(NamedTuple):
     step: int
     learning_rate: float
     initial_lr: float
-    
+
+
 SchedulerFn = Callable[[LRSchedulerState], tuple[float, LRSchedulerState]]
+
 
 def create_cosine_scheduler(
     total_steps: int,
@@ -37,6 +39,7 @@ def create_cosine_scheduler(
 
     return scheduler_fn
 
+
 def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     """
     Creates a step decay scheduler that reduces learning rate by gamma every step_size steps.
@@ -56,6 +59,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
         return lr, new_state
 
     return scheduler_fn
+
 
 def create_warmup_cosine_scheduler(
     total_steps: int,

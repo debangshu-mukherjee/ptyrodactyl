@@ -1,16 +1,13 @@
-from typing import NamedTuple
-
 import chex
 import jax
 import jax.numpy as jnp
 import pytest
 from absl.testing import parameterized
-from jaxtyping import Array, Complex, Float, Int, Shaped
+from jaxtyping import Array, Float
 
 jax.config.update("jax_enable_x64", True)
 
-# Import your functions here
-from ptyrodactyl.electrons import (fourier_calib, propagation_func,
+from ptyrodactyl.electrons import (fourier_calib, propagation_func, cbed,
                                    transmission_func, wavelength_ang)
 
 # Set a random seed for reproducibility
@@ -235,3 +232,225 @@ class test_fourier_calib(chex.TestCase):
             assert not jnp.allclose(
                 result[0], result[1]
             ), "Results should differ for different calibrations"
+            
+            
+class test_cbed(chex.TestCase):
+    @chex.all_variants(with_pmap=True, without_device=False)
+    def test_basic_functionality(self):
+        var_cbed = self.variant(cbed)
+        
+        # Create simple test inputs
+        H, W = 64, 64  # Small size for faster tests
+        num_slices = 2
+        
+        # Create trivial potential slices (uniform phase shift)
+        pot_slice = jnp.ones((H, W, num_slices), dtype=jnp.complex64)
+        
+        # Create a simple probe beam (centered Gaussian)
+        x = jnp.arange(0, W)
+        y = jnp.arange(0, H)
+        X, Y = jnp.meshgrid(y, x, indexing="ij")
+        center_x, center_y = W // 2, H // 2
+        sigma = 10
+        
+        beam = jnp.exp(-((X - center_x)**2 + (Y - center_y)**2) / (2 * sigma**2))
+        beam = beam.astype(jnp.complex64)
+        
+        # Set other parameters
+        slice_thickness = 2.0
+        voltage_kV = 200.0
+        calib_ang = 0.1
+        
+        # Run the CBED function
+        result = var_cbed(pot_slice, beam, slice_thickness, voltage_kV, calib_ang)
+        
+        # Basic shape check
+        assert result.shape == (H, W), f"Expected shape ({H}, {W}), got {result.shape}"
+        
+        # Check that result is real and positive
+        assert jnp.isreal(result).all(), "Expected real values in result"
+        assert jnp.all(result >= 0), "Expected non-negative values in result"
+        
+        # Check for expected symmetry in the CBED pattern (should be centro-symmetric)
+        center_intensity = result[H//2, W//2]
+        assert center_intensity > 0, "Expected non-zero intensity at center"
+
+    @chex.all_variants(with_pmap=True, without_device=False)
+    def test_2d_input_auto_expansion(self):
+        var_cbed = self.variant(cbed)
+        
+        # Create 2D inputs (without slice/mode dimensions)
+        H, W = 64, 64
+        
+        # Create trivial potential slice (2D)
+        pot_slice = jnp.ones((H, W), dtype=jnp.complex64)
+        
+        # Create a simple probe beam (2D)
+        x = jnp.arange(0, W)
+        y = jnp.arange(0, H)
+        X, Y = jnp.meshgrid(y, x, indexing="ij")
+        center_x, center_y = W // 2, H // 2
+        sigma = 10
+        
+        beam = jnp.exp(-((X - center_x)**2 + (Y - center_y)**2) / (2 * sigma**2))
+        beam = beam.astype(jnp.complex64)
+        
+        # Set other parameters
+        slice_thickness = 2.0
+        voltage_kV = 200.0
+        calib_ang = 0.1
+        
+        # Run the CBED function with 2D inputs
+        result = var_cbed(pot_slice, beam, slice_thickness, voltage_kV, calib_ang)
+        
+        # Check shape
+        assert result.shape == (H, W), f"Expected shape ({H}, {W}), got {result.shape}"
+
+    @chex.all_variants(with_pmap=True, without_device=False)
+    def test_multiple_beam_modes(self):
+        var_cbed = self.variant(cbed)
+        
+        # Create inputs with multiple beam modes
+        H, W = 64, 64
+        num_slices = 2
+        num_modes = 3
+        
+        # Create trivial potential slices
+        pot_slice = jnp.ones((H, W, num_slices), dtype=jnp.complex64)
+        
+        # Create multiple beam modes (shifted Gaussians)
+        x = jnp.arange(0, W)
+        y = jnp.arange(0, H)
+        X, Y = jnp.meshgrid(y, x, indexing="ij")
+        center_x, center_y = W // 2, H // 2
+        sigma = 10
+        
+        # Create an array of beam modes
+        modes = []
+        offsets = [(-10, 0), (0, 0), (10, 0)]  # Different beam positions
+        
+        for dx, dy in offsets:
+            mode = jnp.exp(-((X - (center_x + dx))**2 + (Y - (center_y + dy))**2) / (2 * sigma**2))
+            modes.append(mode)
+        
+        beam = jnp.stack(modes, axis=-1).astype(jnp.complex64)
+        
+        # Set other parameters
+        slice_thickness = 2.0
+        voltage_kV = 200.0
+        calib_ang = 0.1
+        
+        # Run the CBED function with multiple modes
+        result = var_cbed(pot_slice, beam, slice_thickness, voltage_kV, calib_ang)
+        
+        # Check shape - should still be 2D despite multiple modes
+        assert result.shape == (H, W), f"Expected shape ({H}, {W}), got {result.shape}"
+        
+        # The result should have higher total intensity than with a single mode
+        # First calculate single mode result for comparison
+        single_result = var_cbed(pot_slice, beam[..., 0:1], slice_thickness, voltage_kV, calib_ang)
+        
+        # Total intensity should be higher with multiple modes
+        assert jnp.sum(result) > jnp.sum(single_result), "Expected higher intensity with multiple modes"
+
+    @chex.all_variants(with_pmap=True, without_device=False)
+    def test_dtype_consistency(self):
+        var_cbed = self.variant(cbed)
+        
+        # Create inputs with different dtypes
+        H, W = 64, 64
+        
+        # Test with both complex64 and complex128
+        for dtype in [jnp.complex64, jnp.complex128]:
+            # Create potential slice
+            pot_slice = jnp.ones((H, W, 1), dtype=dtype)
+            
+            # Create beam
+            x = jnp.arange(0, W)
+            y = jnp.arange(0, H)
+            X, Y = jnp.meshgrid(y, x, indexing="ij")
+            center_x, center_y = W // 2, H // 2
+            sigma = 10
+            
+            beam = jnp.exp(-((X - center_x)**2 + (Y - center_y)**2) / (2 * sigma**2))
+            beam = beam.astype(dtype)[..., jnp.newaxis]
+            
+            # Set other parameters
+            slice_thickness = 2.0
+            voltage_kV = 200.0
+            calib_ang = 0.1
+            
+            # This should run without dtype errors
+            result = var_cbed(pot_slice, beam, slice_thickness, voltage_kV, calib_ang)
+            
+            # Check output type (should be float32 or float64 depending on input)
+            expected_float_dtype = jnp.float32 if dtype == jnp.complex64 else jnp.float64
+            assert result.dtype == expected_float_dtype, f"Expected {expected_float_dtype}, got {result.dtype}"
+
+    @chex.all_variants(with_pmap=True, without_device=False)
+    @parameterized.parameters(
+        {"voltage_kV": 100.0, "calib_ang": 0.05},
+        {"voltage_kV": 200.0, "calib_ang": 0.1},
+        {"voltage_kV": 300.0, "calib_ang": 0.2},
+    )
+    def test_parameter_variations(self, voltage_kV, calib_ang):
+        var_cbed = self.variant(cbed)
+        
+        # Create simple inputs
+        H, W = 64, 64
+        
+        # Create potential slice
+        pot_slice = jnp.ones((H, W, 1), dtype=jnp.complex64)
+        
+        # Create beam
+        x = jnp.arange(0, W)
+        y = jnp.arange(0, H)
+        X, Y = jnp.meshgrid(y, x, indexing="ij")
+        center_x, center_y = W // 2, H // 2
+        sigma = 10
+        
+        beam = jnp.exp(-((X - center_x)**2 + (Y - center_y)**2) / (2 * sigma**2))
+        beam = beam.astype(jnp.complex64)[..., jnp.newaxis]
+        
+        # Set slice thickness
+        slice_thickness = 2.0
+        
+        # Run the CBED function with different parameters
+        result = var_cbed(pot_slice, beam, slice_thickness, voltage_kV, calib_ang)
+        
+        # Basic shape and type checks
+        assert result.shape == (H, W), f"Expected shape ({H}, {W}), got {result.shape}"
+        assert jnp.isreal(result).all(), "Expected real values in result"
+        assert jnp.all(result >= 0), "Expected non-negative values in result"
+
+    @chex.all_variants(with_pmap=True, without_device=False)
+    def test_jit_compatibility(self):
+        # Create inputs
+        H, W = 64, 64
+        
+        # Create potential slice
+        pot_slice = jnp.ones((H, W, 1), dtype=jnp.complex64)
+        
+        # Create beam
+        x = jnp.arange(0, W)
+        y = jnp.arange(0, H)
+        X, Y = jnp.meshgrid(y, x, indexing="ij")
+        center_x, center_y = W // 2, H // 2
+        sigma = 10
+        
+        beam = jnp.exp(-((X - center_x)**2 + (Y - center_y)**2) / (2 * sigma**2))
+        beam = beam.astype(jnp.complex64)[..., jnp.newaxis]
+        
+        # Set other parameters
+        slice_thickness = jnp.array(2.0)
+        voltage_kV = jnp.array(200.0)
+        calib_ang = jnp.array(0.1)
+        
+        # Define a JIT-compiled version
+        jitted_cbed = jax.jit(cbed)
+        
+        # This should compile and run without errors
+        result = jitted_cbed(pot_slice, beam, slice_thickness, voltage_kV, calib_ang)
+        
+        # Basic check
+        assert result.shape == (H, W), f"Expected shape ({H}, {W}), got {result.shape}"

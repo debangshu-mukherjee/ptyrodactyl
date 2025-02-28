@@ -6,7 +6,7 @@ from beartype import beartype as typechecker
 from beartype.typing import Optional, TypeAlias, Union
 from jax import lax
 from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
-                       jaxtyped)
+                       PRNGKeyArray, jaxtyped)
 
 import ptyrodactyl.electrons as pte
 
@@ -18,6 +18,7 @@ scalar_float: TypeAlias = Union[float, Float[Array, ""]]
 scalar_int: TypeAlias = Union[int, Int[Array, ""]]
 
 
+@jaxtyped(typechecker=typechecker)
 def transmission_func(
     pot_slice: Float[Array, "a b"], voltage_kV: scalar_numeric
 ) -> Complex[Array, ""]:
@@ -191,6 +192,7 @@ def fourier_coords(
     return calibrated_inverse_array
 
 
+@jaxtyped(typechecker=typechecker)
 def fourier_calib(
     real_space_calib: Float[Array, ""] | Float[Array, "2"],
     sizebeam: Int[Array, "2"],
@@ -224,7 +226,7 @@ def fourier_calib(
     return inverse_space_calib
 
 
-@jax.jit
+@jaxtyped(typechecker=typechecker)
 def make_probe(
     aperture: scalar_numeric,
     voltage: scalar_numeric,
@@ -303,7 +305,7 @@ def make_probe(
     return probe_real_space
 
 
-@jax.jit
+@jaxtyped(typechecker=typechecker)
 def aberration(
     fourier_coord: Float[Array, "H W"],
     lambda_angstrom: scalar_float,
@@ -480,6 +482,7 @@ def cbed(
     return cbed_pattern
 
 
+@jaxtyped(typechecker=typechecker)
 def shift_beam_fourier(
     beam: Union[Float[Array, "H W *M"], Complex[Array, "H W *M"]],
     pos: Float[Array, "#P 2"],
@@ -611,19 +614,71 @@ def stem_4D(
     return cbed_patterns
 
 
-def initialize_random_modes(
-    shape: Int[Array, ""], num_modes: Int[Array, ""], dtype=jnp.complex128
-) -> Complex[Array, "H W M"]:
-    """Initialize random orthogonal modes."""
-    key = jax.random.PRNGKey(0)
-    modes = jax.random.normal(key, (shape[0], shape[1], num_modes), dtype=dtype)
-    modes_flat = modes.reshape(-1, num_modes)
-    q, r = jnp.linalg.qr(modes_flat)
-    modes = q.reshape(shape[0], shape[1], num_modes)
+@jaxtyped(typechecker=typechecker)
+def decompose_beam_to_modes(
+    beam: Complex[Array, "H W"],
+    num_modes: scalar_int,
+    first_mode_weight: Optional[scalar_float] = 0.6,
+) -> pte.ProbeModes:
+    """
+    Description
+    -----------
+    Decomposes a single electron beam into multiple orthogonal modes
+    while preserving the total intensity.
 
-    return modes
+    Parameters
+    ----------
+    - `beam` (Complex[Array, "H W"]):
+        The original electron beam.
+    - `num_modes` (scalar_int):
+        The number of modes to decompose into.
+    - `first_mode_weight` (Optional[scalar_float]):
+        The weight of the first mode. Default is 0.6.
+        The remaining weight is divided equally among the other modes.
+        Must be below 1.0.
 
+    Returns
+    -------
+    - A PyTree with the following fields:
+        - `modes` (Complex[Array, "H W M"]):
+            The orthogonal modes.
+        - `weights` (Float[Array, "M"]):
+            The mode occupation numbers.
 
-def normalize_mode_weights(weights: Float[Array, "M"]) -> Float[Array, "M"]:
-    """Normalize mode weights to sum to 1."""
-    return weights / jnp.sum(weights)
+    Flow
+    ----
+    - Flatten the 2D beam into a vector
+    - Create a random complex matrix
+    - Use QR decomposition to create orthogonal modes
+    - Scale the modes to preserve total intensity
+    - Reshape back to original spatial dimensions
+    """
+    H: int
+    W: int
+    H, W = beam.shape
+    TP: int = H * W
+    beam_flat: Complex[Array, "TP"] = beam.reshape(-1)
+    key: PRNGKeyArray = jax.random.PRNGKey(0)
+    key1: PRNGKeyArray
+    key2: PRNGKeyArray
+    key1, key2 = jax.random.split(key)
+    random_real: Float[Array, "TP M"] = jax.random.normal(
+        key1, (TP, num_modes), dtype=jnp.float64
+    )
+    random_imag: Float[Array, "TP M"] = jax.random.normal(
+        key2, (TP, num_modes), dtype=jnp.float64
+    )
+    random_matrix: Complex[Array, "TP M"] = random_real + (1j * random_imag)
+    Q: Complex[Array, "TP M"]
+    Q, _ = jnp.linalg.qr(random_matrix, mode="reduced")
+    original_intensity: Float[Array, "TP"] = jnp.square(jnp.abs(beam_flat))
+    weights: Float[Array, "M"] = jnp.zeros(num_modes, dtype=jnp.float64)
+    weights = weights.at[0].set(first_mode_weight)
+    remaining_weight: scalar_float = (1.0 - first_mode_weight) / max(1, num_modes - 1)
+    weights = weights.at[1:].set(remaining_weight)
+    sqrt_weights: Float[Array, "M"] = jnp.sqrt(weights)
+    sqrt_intensity: Float[Array, "TP 1"] = jnp.sqrt(original_intensity).reshape(-1, 1)
+    weighted_modes: Complex[Array, "TP M"] = Q * sqrt_intensity * sqrt_weights
+    multimodal_beam: Complex[Array, "H W M"] = weighted_modes.reshape(H, W, num_modes)
+    probe_modes = pte.ProbeModes(modes=multimodal_beam, weights=weights)
+    return probe_modes

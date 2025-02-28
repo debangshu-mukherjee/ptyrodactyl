@@ -1,11 +1,14 @@
 import jax
+from beartype import beartype as typechecker
 from beartype.typing import NamedTuple
 from jax.tree_util import register_pytree_node_class
-from jaxtyping import Array, Bool, Complex, Float, Int, Num
+from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 
 
+
+@jaxtyped(typechecker=typechecker)
 @register_pytree_node_class
 class CalibratedArray(NamedTuple):
     """
@@ -47,12 +50,13 @@ class CalibratedArray(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=typechecker)
 @register_pytree_node_class
-class ProbeState(NamedTuple):
-    """ "
+class ProbeModes(NamedTuple):
+    """
     Description
     -----------
-    PyTree structure for electron probe state.
+    PyTree structure for multimodal electron probe state.
 
     Attributes
     ----------
@@ -79,6 +83,7 @@ class ProbeState(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=typechecker)
 @register_pytree_node_class
 class MixedQuantumStates(NamedTuple):
     """ "
@@ -111,6 +116,7 @@ class MixedQuantumStates(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=typechecker)
 @register_pytree_node_class
 class MixedStateParams(NamedTuple):
     """ "

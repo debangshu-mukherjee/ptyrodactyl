@@ -1,5 +1,3 @@
-from functools import partial
-
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker

@@ -389,7 +389,7 @@ def single_slice_multi_modal(
     calib_ang: scalar_float,
     save_every: Optional[scalar_int] = 10,
     num_iterations: Optional[scalar_int] = 1000,
-    learning_rate: Optional[Union[scalar_float, Float[Array, "3"]]] = 0.01,
+    learning_rate: Optional[Union[scalar_float, Float[Array, "2"]]] = 0.01,
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[
@@ -426,8 +426,12 @@ def single_slice_multi_modal(
     - `num_iterations` (scalar_int):
         Number of optimization iterations.
         Optional, default is 1000.
-    - `learning_rate` (scalar_float):
+    - `learning_rate` (Optional[Union[scalar_float, Float[Array, "2"]]]):
         Learning rate for potential slice and beam optimization.
+        If the learning rate is a scalar, it is used for both 
+        potential slice and position optimization. If it is an array,
+        the first element is used for potential slice and beam optimization,
+        and the second element is used for position optimization.
         Optional, default is 0.01.
     - `loss_type` (str):
         Type of loss function to use.
@@ -488,7 +492,7 @@ def single_slice_multi_modal(
             beam, grads["beam"], beam_state, learning_rate
         )
         pos_list, pos_state = optimizer.update(
-            pos_list, grads["pos_list"], pos_state, pos_learning_rate
+            pos_list, grads["pos_list"], pos_state, learning_rate[1]
         )
         return pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss
 

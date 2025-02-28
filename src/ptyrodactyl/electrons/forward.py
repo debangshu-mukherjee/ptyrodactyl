@@ -372,13 +372,13 @@ def wavelength_ang(voltage_kV: scalar_numeric) -> Float[Array, ""]:
 
     Parameters
     ----------
-    - `voltage_kV` (scalar_numeric]):
+    - `voltage_kV` (scalar_numeric):
         The microscope accelerating voltage in kilo
         electronVolts. Can be a scalar or array.
 
     Returns
     -------
-    - `in_angstroms (Float[Array, "..."]):
+    - `in_angstroms` (Float[Array, ""]):
         The electron wavelength in angstroms with same shape as input
 
     Flow

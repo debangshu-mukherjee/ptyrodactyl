@@ -163,21 +163,28 @@ def single_slice_ptychography(
     return pot_slice, beam, intermediate_potslice, intermediate_beam
 
 
+@jaxtyped(typechecker=typechecker)
 def single_slice_poscorrected(
     experimental_4dstem: Float[Array, "P H W"],
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: Complex[Array, "H W"],
     initial_pos_list: Float[Array, "P 2"],
-    slice_thickness: Float[Array, "*"],
-    voltage_kV: Float[Array, "*"],
-    calib_ang: Float[Array, "*"],
+    slice_thickness: scalar_numeric,
+    voltage_kV: scalar_numeric,
+    calib_ang: scalar_float,
     save_every: Optional[scalar_int] = 10,
     num_iterations: Optional[scalar_int] = 1000,
-    learning_rate: Optional[float] = 0.001,
-    pos_learning_rate: float = 0.01,
-    loss_type: str = "mse",
-    optimizer_name: str = "adam",
-) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"], Float[Array, "P 2"]]:
+    learning_rate: Optional[scalar_float] = 0.001,
+    pos_learning_rate: Optional[scalar_float] = 0.01,
+    loss_type: Optional[str] = "mse",
+    optimizer_name: Optional[str] = "adam",
+) -> Tuple[
+    Complex[Array, "H W"],
+    Complex[Array, "H W"],
+    Float[Array, "P 2"],
+    Complex[Array, "H W S"],
+    Complex[Array, "H W S"],
+]:
     """
     Description
     -----------
@@ -193,28 +200,43 @@ def single_slice_poscorrected(
         Initial guess for electron beam.
     - `initial_pos_list` (Float[Array, "P 2"]):
         Initial list of probe positions.
-    - `slice_thickness` (Float[Array, "*"]):
+    - `slice_thickness` (scalar_numeric):
         Thickness of each slice.
-    - `voltage_kV` (Float[Array, "*"]):
+    - `voltage_kV` (scalar_numeric):
         Accelerating voltage.
-    - `calib_ang` (Float[Array, "*"]):
+    - `calib_ang` (scalar_float):
         Calibration in angstroms.
     - `save_every` (scalar_int):
         Save every nth iteration.
         Optional, default is 10.
-    - `num_iterations` (int):
+    - `num_iterations` (scalar_int):
         Number of optimization iterations.
-    - `learning_rate` (float):
+        Optional, default is 1000.
+    - `learning_rate` (scalar_float):
         Learning rate for potential slice and beam optimization.
-    - `pos_learning_rate` (float):
+        Optional, default is 0.001.
+    - `pos_learning_rate` (scalar_float):
         Learning rate for position optimization.
+        Optional, default is 0.01.
     - `loss_type` (str):
         Type of loss function to use.
+        Optional, default is "mse".
+    - `optimizer_name` (str):
+        Name of optimizer to use.
+        Optional, default is "adam".
 
     Returns
     -------
-    - Tuple[Complex[Array, "H W"], Complex[Array, "H W"], Float[Array, "P 2"]]:
-        Optimized potential slice, beam, and corrected positions.
+    - `pot_slice` (Complex[Array, "H W"]):
+        Optimized potential slice.
+    - `beam` (Complex[Array, "H W"]):
+        Optimized electron beam.
+    - `pos_list` (Float[Array, "P 2"]):
+        Optimized list of probe positions.
+    - `intermediate_potslice` (Complex[Array, "H W S"]):
+        Intermediate potential slices.
+    - `intermediate_beam` (Complex[Array, "H W S"]):
+        Intermediate electron beams.
     """
 
     def forward_fn(pot_slice, beam, pos_list):
@@ -263,22 +285,43 @@ def single_slice_poscorrected(
     beam = initial_beam
     pos_list = initial_pos_list
 
-    for i in range(num_iterations):
+    intermediate_potslice = jnp.zeros(
+        shape=(
+            initial_pot_slice.shape[0],
+            initial_pot_slice.shape[1],
+            jnp.floor(num_iterations / save_every),
+        ),
+        dtype=initial_pot_slice.dtype,
+    )
+    intermediate_beam = jnp.zeros(
+        shape=(
+            initial_beam.shape[0],
+            initial_beam.shape[1],
+            jnp.floor(num_iterations / save_every),
+        ),
+        dtype=initial_beam.dtype,
+    )
+
+    for ii in range(num_iterations):
         pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = (
             update_step(
                 pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
             )
         )
 
-        if i % 100 == 0:
-            print(f"Iteration {i}, Loss: {loss}")
+        if ii % save_every == 0:
+            print(f"Iteration {ii}, Loss: {loss}")
+            saver: scalar_int = jnp.floor(ii / save_every)
+            intermediate_potslice.at[:, :, saver].set(pot_slice)
+            intermediate_beam.at[:, :, saver].set(beam)
 
-    return pot_slice, beam, pos_list
+    return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
 
 
+@jaxtyped(typechecker=typechecker)
 def multi_slice_ptychography(
     experimental_4dstem: Float[Array, "P H W"],
-    initial_pot_slices: Complex[Array, "H W S"],  # S is number of slices
+    initial_pot_slices: Complex[Array, "H W S"],
     initial_beam: Complex[Array, "H W"],
     pos_list: Float[Array, "P 2"],
     slice_thickness: Float[Array, ""],
@@ -375,7 +418,7 @@ def multi_slice_ptychography(
 def multi_mode_ptychography(
     experimental_4dstem: Float[Array, "P H W"],
     initial_pot_slices: Complex[Array, "H W S"],
-    initial_probe_state: pte.ProbeState,
+    initial_probe_state: pte.ProbeModes,
     pos_list: Float[Array, "P 2"],
     slice_thickness: Float[Array, ""],
     voltage_kV: Float[Array, ""],

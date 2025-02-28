@@ -7,7 +7,6 @@ from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 jax.config.update("jax_enable_x64", True)
 
 
-
 @jaxtyped(typechecker=typechecker)
 @register_pytree_node_class
 class CalibratedArray(NamedTuple):

@@ -1,10 +1,14 @@
 import jax
 from beartype import beartype as typechecker
-from beartype.typing import NamedTuple
+from beartype.typing import NamedTuple, TypeAlias, Union
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
+
+scalar_numeric: TypeAlias = Union[int, float, Num[Array, ""]]
+scalar_float: TypeAlias = Union[float, Float[Array, ""]]
+scalar_int: TypeAlias = Union[int, Int[Array, ""]]
 
 
 @jaxtyped(typechecker=typechecker)
@@ -17,20 +21,20 @@ class CalibratedArray(NamedTuple):
 
     Attributes
     ----------
-    - `data_array` (Num[Array, "H W"] | Num[Array, "W W"]):
+    - `data_array` (Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]):
         The actual array data
-    - `calib_y` (Float[Array, ""]):
+    - `calib_y` (scalar_float):
         Calibration in y direction
-    - `calib_x` (Float[Array, ""]):
+    - `calib_x` (scalar_float):
         Calibration in x direction
     - `real_space` (Bool[Array, ""]):
         Whether the array is in real space.
         If False, it is in reciprocal space.
     """
 
-    data_array: Num[Array, "H W"] | Num[Array, "W W"]
-    calib_y: Float[Array, ""]
-    calib_x: Float[Array, ""]
+    data_array: Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]
+    calib_y: scalar_float
+    calib_x: scalar_float
     real_space: Bool[Array, ""]
 
     def tree_flatten(self):
@@ -84,61 +88,28 @@ class ProbeModes(NamedTuple):
 
 @jaxtyped(typechecker=typechecker)
 @register_pytree_node_class
-class MixedQuantumStates(NamedTuple):
-    """ "
+class PotentialSlices(NamedTuple):
+    """
     Description
     -----------
-    PyTree structure for mixed probe quantum states.
+    PyTree structure for multimodal electron probe state.
 
     Attributes
     ----------
-    - `states` (Complex[Array, "H W N"]):
-        N different states
-    - `weights` (Float[Array, "M"]):
-        Occupation probabilities
+    - `slices` (Complex[Array, "H W S"]):
+        S is number of slices
+    - `slice_thickness` (scalar_numeric):
+        Mode occupation numbers
     """
 
-    states: Complex[Array, "H W N"]
-    probabilities: Float[Array, "N"]
+    slices: Complex[Array, "H W S"]
+    slice_thickness: scalar_numeric
 
     def tree_flatten(self):
         return (
             (
-                self.states,
-                self.probabilities,
-            ),
-            None,
-        )
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
-
-
-@jaxtyped(typechecker=typechecker)
-@register_pytree_node_class
-class MixedStateParams(NamedTuple):
-    """ "
-    Description
-    -----------
-    PyTree structure for mixed probe quantum states.
-
-    Attributes
-    ----------
-    - `num_modes` (Int[Array, ""]):
-        number of modes
-    - `mode_weights` (Float[Array, "M"]):
-        Weights for each mode
-    """
-
-    num_modes: Int[Array, ""]
-    mode_weights: Float[Array, "M"]
-
-    def tree_flatten(self):
-        return (
-            (
-                self.num_modes,
-                self.mode_weights,
+                self.slices,
+                self.slice_thickness,
             ),
             None,
         )

@@ -4,7 +4,7 @@ from beartype import beartype as typechecker
 from beartype.typing import Optional, TypeAlias, Union
 from jax import lax
 from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
-                       PRNGKeyArray, jaxtyped)
+                       PRNGKeyArray, PyTree, jaxtyped)
 
 import ptyrodactyl.electrons as pte
 
@@ -127,7 +127,7 @@ def propagation_func(
 
 @jaxtyped(typechecker=typechecker)
 def fourier_coords(
-    calibration: Float[Array, ""] | Float[Array, "2"], image_size: Int[Array, "2"]
+    calibration: scalar_float | Float[Array, "2"], image_size: Int[Array, "2"]
 ) -> pte.CalibratedArray:
     """
     Description
@@ -136,7 +136,7 @@ def fourier_coords(
 
     Parameters
     ----------
-    - `calibration` (Float[Array, ""] | Float[Array, "2"]):
+    - `calibration` (scalar_float | Float[Array, "2"]):
         The pixel size in angstroms in real space
     - `image_size`, (Int[Array, "2"]):
         The size of the beam in pixels
@@ -401,11 +401,9 @@ def wavelength_ang(voltage_kV: scalar_numeric) -> Float[Array, ""]:
 
 @jaxtyped(typechecker=typechecker)
 def cbed(
-    pot_slice: Complex[Array, "H W *S"],
-    beam: Complex[Array, "H W *M"],
-    slice_thickness: scalar_numeric,
+    pot_slices: pte.PotentialSlices,
+    beam: pte.ProbeModes,
     voltage_kV: scalar_numeric,
-    calib_ang: scalar_float,
 ) -> Float[Array, "H W"]:
     """
     Description
@@ -418,18 +416,24 @@ def cbed(
 
     Parameters
     ----------
-    - `pot_slice` (Complex[Array, "H W *S"]),
-        The potential slice(s). H and W are height and width,
-        S is the number of slices (optional).
-    - `beam` (Complex[Array, "H W *M"]),
-        The electron beam mode(s).
-        M is the number of modes (optional).
-    - `slice_thickness` (scalar_numeric):
-        The thickness of each slice in angstroms.
+    - `pot_slices` (PotentialSlices):,
+        The potential slice(s). It has the following attributes:
+        - `slices` (Complex[Array, "H W S"]):
+            Individual potential slices.
+            S is number of slices
+        - `slice_thickness` (scalar_numeric):
+            Mode occupation numbers
+        - `calib` (scalar_float):
+            Pixel Calibration
+    - `beam` (ProbeModes):
+        - `modes` (Complex[Array, "H W *M"]):
+            M is number of modes
+        - `weights` (Float[Array, "M"]):
+            Mode occupation numbers
+        - `calib` (scalar_float):
+            Pixel Calibration
     - `voltage_kV` (scalar_numeric):
-        The accelerating voltage(s) in kilovolts.
-    - `calib_ang` (scalar_float):
-        The calibration in angstroms.
+        The accelerating voltage in kilovolts.
 
     Returns
     -------
@@ -446,12 +450,13 @@ def cbed(
     - Compute the intensity for each mode
     - Sum the intensities across all modes.
     """
+    calib_ang = jnp.amin([pot_slices.calib, beam.calib])
     dtype = beam.dtype
     pot_slice = jnp.atleast_3d(pot_slice)
     beam = jnp.atleast_3d(beam)
     num_slices = pot_slice.shape[-1]
     slice_transmission = propagation_func(
-        beam.shape[0], beam.shape[1], slice_thickness, voltage_kV, calib_ang
+        beam.shape[0], beam.shape[1], pot_slices.slice_thickness, voltage_kV, calib_ang
     ).astype(dtype)
     init_wave = jnp.copy(beam)
 
@@ -476,8 +481,12 @@ def cbed(
     )
     intensity_per_mode = jnp.square(jnp.abs(fourier_space_pattern))
     cbed_pattern = jnp.sum(intensity_per_mode, axis=-1)
-
-    return cbed_pattern
+    real_space_fov = jnp.multiply(beam.shape[0], calib_ang)
+    inverse_space_calib = 1 / real_space_fov
+    cbed_pytree: PyTree = pte.CalibratedArray(
+        cbed_pattern, inverse_space_calib, inverse_space_calib, False
+    )
+    return cbed_pytree
 
 
 @jaxtyped(typechecker=typechecker)
@@ -614,7 +623,7 @@ def stem_4D(
 
 @jaxtyped(typechecker=typechecker)
 def decompose_beam_to_modes(
-    beam: Complex[Array, "H W"],
+    beam: pte.ProbeModes,
     num_modes: scalar_int,
     first_mode_weight: Optional[scalar_float] = 0.6,
 ) -> pte.ProbeModes:
@@ -642,6 +651,8 @@ def decompose_beam_to_modes(
             The orthogonal modes.
         - `weights` (Float[Array, "M"]):
             The mode occupation numbers.
+        - `calib` (scalar_float):
+            The pixel calibration.
 
     Flow
     ----
@@ -678,5 +689,5 @@ def decompose_beam_to_modes(
     sqrt_intensity: Float[Array, "TP 1"] = jnp.sqrt(original_intensity).reshape(-1, 1)
     weighted_modes: Complex[Array, "TP M"] = Q * sqrt_intensity * sqrt_weights
     multimodal_beam: Complex[Array, "H W M"] = weighted_modes.reshape(H, W, num_modes)
-    probe_modes = pte.ProbeModes(modes=multimodal_beam, weights=weights)
+    probe_modes: PyTree = pte.ProbeModes(modes=multimodal_beam, weights=weights)
     return probe_modes

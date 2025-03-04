@@ -1,8 +1,9 @@
 import jax
 from beartype import beartype as typechecker
-from beartype.typing import NamedTuple, TypeAlias, Union
+from beartype.typing import NamedTuple, TypeAlias, Union, Optional
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
+import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
@@ -63,20 +64,25 @@ class ProbeModes(NamedTuple):
 
     Attributes
     ----------
-    - `modes` (Complex[Array, "H W M"]):
+    - `modes` (Complex[Array, "H W *M"]):
         M is number of modes
-    - `weights` (Float[Array, "M"]):
-        Mode occupation numbers
+    - `weights` (Optional[Float[Array, "M"]]):
+        Mode occupation numbers.
+        Default is 1.0 for an unimodal beam.
+    - `calib` (scalar_float):
+        Pixel Calibration
     """
 
     modes: Complex[Array, "H W M"]
-    weights: Float[Array, "M"]
+    weights: Optional[Float[Array, "M"]] = jnp.asarray(1.0)
+    calib: scalar_float
 
     def tree_flatten(self):
         return (
             (
                 self.modes,
                 self.weights,
+                self.calib,
             ),
             None,
         )
@@ -97,19 +103,24 @@ class PotentialSlices(NamedTuple):
     Attributes
     ----------
     - `slices` (Complex[Array, "H W S"]):
+        Individual potential slices.
         S is number of slices
     - `slice_thickness` (scalar_numeric):
         Mode occupation numbers
+    - `calib` (scalar_float):
+        Pixel Calibration
     """
 
-    slices: Complex[Array, "H W S"]
+    slices: Complex[Array, "H W *S"]
     slice_thickness: scalar_numeric
+    calib: scalar_float
 
     def tree_flatten(self):
         return (
             (
                 self.slices,
                 self.slice_thickness,
+                self.calib,
             ),
             None,
         )

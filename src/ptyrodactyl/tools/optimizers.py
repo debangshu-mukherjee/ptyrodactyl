@@ -1,6 +1,6 @@
 import jax
 import jax.numpy as jnp
-from beartype.typing import Any, Callable, NamedTuple, Sequence, Tuple, Union
+from beartype.typing import Any, Callable, NamedTuple, Sequence, Tuple, Union, Optional
 from jaxtyping import Array, Complex, Float
 
 
@@ -118,24 +118,33 @@ class Optimizer(NamedTuple):
 
 
 def wirtinger_grad(
-    f: Callable[..., Float[Array, "..."]], argnums: Union[int, Sequence[int]] = 0
+    func2diff: Callable[..., Float[Array, "..."]],
+    argnums: Optional[Union[int, Sequence[int]]] = 0,
 ) -> Callable[..., Union[Complex[Array, "..."], Tuple[Complex[Array, "..."], ...]]]:
     """
+    Description
+    -----------
     Compute the Wirtinger gradient of a complex-valued function.
-
     This function returns a new function that computes the Wirtinger gradient
     of the input function f with respect to the specified argument(s).
+    This is based on the formula for Wirtinger derivative: 
+    
+    ∂f/∂z = ½(∂f/∂x - i∂f/∂y)
 
-    Args:
-    - f (Callable[..., Float[Array, "..."]]):
+    Parameters
+    ----------
+    - `func2diff` (Callable[..., Float[Array, "..."]]):
         A complex-valued function to differentiate.
-    - argnums (Union[int, Sequence[int]]):
+    - `argnums` (Union[int, Sequence[int]]):
         Specifies which argument(s) to compute the gradient with respect to.
         Can be an int or a sequence of ints. Default is 0.
 
-    Returns:
-    - grad_f (Callable[..., Union[Complex[Array, "..."], Tuple[Complex[Array, "..."], ...]]]):
-        A function that computes the Wirtinger gradient of f with respect to the specified argument(s).
+    Returns
+    -------
+    - grad_f (Callable[..., Union[Complex[Array, "..."], 
+              Tuple[Complex[Array, "..."], ...]]]):
+        A function that computes the Wirtinger gradient of f with respect to 
+        the specified argument(s).
     """
 
     def grad_f(
@@ -159,18 +168,18 @@ def wirtinger_grad(
         n = len(args)
 
         def f_real(*split_args):
-            return jnp.real(f(*combine_complex(split_args[:n], split_args[n:])))
+            return jnp.real(func2diff(*combine_complex(split_args[:n], split_args[n:])))
 
         def f_imag(*split_args):
-            return jnp.imag(f(*combine_complex(split_args[:n], split_args[n:])))
+            return jnp.imag(func2diff(*combine_complex(split_args[:n], split_args[n:])))
 
         gr = jax.grad(f_real, argnums=argnums)(*split_args)
         gi = jax.grad(f_imag, argnums=argnums)(*split_args)
 
         if isinstance(argnums, int):
-            return gr + 1j * gi
+            return 0.5 * (gr - 1j * gi)
         else:
-            return tuple(grr + 1j * gii for grr, gii in zip(gr, gi))
+            return tuple(0.5 * (grr - 1j * gii) for grr, gii in zip(gr, gi))
 
     return grad_f
 

@@ -1,9 +1,9 @@
 import jax
+import jax.numpy as jnp
 from beartype import beartype as typechecker
-from beartype.typing import NamedTuple, TypeAlias, Union, Optional
+from beartype.typing import NamedTuple, Optional, TypeAlias, Union
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
-import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 

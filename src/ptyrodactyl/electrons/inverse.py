@@ -232,7 +232,7 @@ def single_slice_poscorrected(
         Optional, default is 1000.
     - `learning_rate` (Optional[Union[scalar_float, Float[Array, "2"]]]):
         Learning rate for potential slice and beam optimization.
-        If the learning rate is a scalar, it is used for both 
+        If the learning rate is a scalar, it is used for both
         potential slice and position optimization. If it is an array,
         the first element is used for potential slice and beam optimization,
         and the second element is used for position optimization.
@@ -287,9 +287,9 @@ def single_slice_poscorrected(
     pot_slice_state = optimizer.init(initial_potential.data_array.shape)
     beam_state = optimizer.init(initial_beam.data_array.shape)
     pos_state = optimizer.init(initial_pos_list.shape)
-    
+
     learning_rate = jnp.array(learning_rate)
-    
+
     if len(learning_rate) == 1:
         learning_rate = jnp.array([learning_rate, learning_rate])
 
@@ -428,7 +428,7 @@ def single_slice_multi_modal(
         Optional, default is 1000.
     - `learning_rate` (Optional[Union[scalar_float, Float[Array, "2"]]]):
         Learning rate for potential slice and beam optimization.
-        If the learning rate is a scalar, it is used for both 
+        If the learning rate is a scalar, it is used for both
         potential slice and position optimization. If it is an array,
         the first element is used for potential slice and beam optimization,
         and the second element is used for position optimization.

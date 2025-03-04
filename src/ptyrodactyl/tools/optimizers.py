@@ -1,6 +1,7 @@
 import jax
 import jax.numpy as jnp
-from beartype.typing import Any, Callable, NamedTuple, Sequence, Tuple, Union, Optional
+from beartype.typing import (Any, Callable, NamedTuple, Optional, Sequence,
+                             Tuple, Union)
 from jaxtyping import Array, Complex, Float
 
 
@@ -127,8 +128,8 @@ def wirtinger_grad(
     Compute the Wirtinger gradient of a complex-valued function.
     This function returns a new function that computes the Wirtinger gradient
     of the input function f with respect to the specified argument(s).
-    This is based on the formula for Wirtinger derivative: 
-    
+    This is based on the formula for Wirtinger derivative:
+
     ∂f/∂z = ½(∂f/∂x - i∂f/∂y)
 
     Parameters
@@ -141,9 +142,9 @@ def wirtinger_grad(
 
     Returns
     -------
-    - grad_f (Callable[..., Union[Complex[Array, "..."], 
+    - grad_f (Callable[..., Union[Complex[Array, "..."],
               Tuple[Complex[Array, "..."], ...]]]):
-        A function that computes the Wirtinger gradient of f with respect to 
+        A function that computes the Wirtinger gradient of f with respect to
         the specified argument(s).
     """
 

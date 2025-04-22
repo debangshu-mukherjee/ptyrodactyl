@@ -1,69 +1,12 @@
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import NamedTuple, Optional, Tuple
-from jax.tree_util import register_pytree_node_class
+from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
-
-import ptyrodactyl.optics as pto
+from ptyrodactyl.optics.types import *
+from ptyrodactyl.optics.helper_functions import *
 
 jax.config.update("jax_enable_x64", True)
-
-
-@register_pytree_node_class
-class LensParams(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for lens parameters
-
-    Attributes
-    ----------
-    - `focal_length` (Float[Array, ""]):
-        Focal length of the lens in meters
-    - `diameter` (Float[Array, ""]):
-        Diameter of the lens in meters
-    - `n` (Float[Array, ""]):
-        Refractive index of the lens material
-    - `center_thickness` (Float[Array, ""]):
-        Thickness at the center of the lens in meters
-    - `R1` (Float[Array, ""]):
-        Radius of curvature of the first surface in meters (positive for convex)
-    - `R2` (Float[Array, ""]):
-        Radius of curvature of the second surface in meters (positive for convex)
-
-    Notes
-    -----
-    This class is registered as a PyTree node, making it compatible with JAX transformations
-    like jit, grad, and vmap. The auxiliary data in tree_flatten is None as all relevant
-    data is stored in JAX arrays.
-    """
-
-    focal_length: Float[Array, ""]
-    diameter: Float[Array, ""]
-    n: Float[Array, ""]
-    center_thickness: Float[Array, ""]
-    R1: Float[Array, ""]
-    R2: Float[Array, ""]
-
-    def tree_flatten(self):
-        # Return a tuple of arrays (the children) and None (the auxiliary data)
-        return (
-            (
-                self.focal_length,
-                self.diameter,
-                self.n,
-                self.center_thickness,
-                self.R1,
-                self.R2,
-            ),
-            None,
-        )
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        # Reconstruct the NamedTuple from flattened data
-        return cls(*children)
 
 
 @jaxtyped(typechecker=beartype)
@@ -197,7 +140,7 @@ def create_lens_phase(
     r: Float[Array, "H W"] = jnp.sqrt(X**2 + Y**2)
 
     # Calculate thickness profile
-    thickness: Float[Array, "H W"] = pto.calculate_thickness_profile(
+    thickness: Float[Array, "H W"] = lens_thickness_profile(
         r, params.R1, params.R2, params.center_thickness, params.diameter
     )
 
@@ -242,7 +185,7 @@ def propagate_through_lens(
     - Add phase profile
     - Return modified field
     """
-    output_field: Complex[Array, "H W"] = pto.add_phase_screen(
+    output_field: Complex[Array, "H W"] = add_phase_screen(
         field * transmission, phase_profile
     )
     return output_field

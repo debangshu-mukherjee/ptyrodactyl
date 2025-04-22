@@ -68,13 +68,12 @@ class ProbeModes(NamedTuple):
         M is number of modes
     - `weights` (Optional[Float[Array, "M"]]):
         Mode occupation numbers.
-        Default is 1.0 for an unimodal beam.
     - `calib` (scalar_float):
         Pixel Calibration
     """
 
     modes: Complex[Array, "H W M"]
-    weights: Optional[Float[Array, "M"]] = jnp.asarray(1.0)
+    weights: Float[Array, "M"]
     calib: scalar_float
 
     def tree_flatten(self):

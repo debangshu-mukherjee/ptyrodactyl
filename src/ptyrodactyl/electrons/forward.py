@@ -623,7 +623,7 @@ def stem_4D(
 
 @jaxtyped(typechecker=typechecker)
 def decompose_beam_to_modes(
-    beam: pte.ProbeModes,
+    beam: pte.CalibratedArray,
     num_modes: scalar_int,
     first_mode_weight: Optional[scalar_float] = 0.6,
 ) -> pte.ProbeModes:
@@ -635,8 +635,7 @@ def decompose_beam_to_modes(
 
     Parameters
     ----------
-    - `beam` (Complex[Array, "H W"]):
-        The original electron beam.
+    - `beam` (pte.CalibratedArray):
     - `num_modes` (scalar_int):
         The number of modes to decompose into.
     - `first_mode_weight` (Optional[scalar_float]):

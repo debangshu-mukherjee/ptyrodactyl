@@ -12,7 +12,7 @@ the experimental data.
 
 """
 
-from .dataclasses import *
+from .types import *
 from .forward import *
 from .inverse import *
 from .preprocessing import *

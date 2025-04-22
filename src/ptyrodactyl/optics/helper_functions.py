@@ -1,61 +1,11 @@
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import NamedTuple, Tuple
-from jax.tree_util import register_pytree_node_class
+from beartype.typing import Tuple
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
-
-import ptyrodactyl.optics as pto
+from ptyrodactyl.optics.types import *
 
 jax.config.update("jax_enable_x64", True)
-
-
-@register_pytree_node_class
-class GridParams(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for computational grid parameters
-
-    Attributes
-    ----------
-    - `X` (Float[Array, "H W"]):
-        Spatial grid in the x-direction
-    - `Y` (Float[Array, "H W"]):
-        Spatial grid in the y-direction
-    - `phase_profile` (Float[Array, "H W"]):
-        Phase profile of the optical field
-    - `transmission` (Float[Array, "H W"]):
-        Transmission profile of the optical field
-
-    Notes
-    -----
-    This class is registered as a PyTree node, making it compatible with JAX transformations
-    like jit, grad, and vmap. The auxiliary data in tree_flatten is None as all relevant
-    data is stored in JAX arrays.
-    """
-
-    X: Float[Array, "H W"]
-    Y: Float[Array, "H W"]
-    phase_profile: Float[Array, "H W"]
-    transmission: Float[Array, "H W"]
-
-    def tree_flatten(self):
-        # Return a tuple of arrays (the children) and None (the auxiliary data)
-        return (
-            (
-                self.X,
-                self.Y,
-                self.phase_profile,
-                self.transmission,
-            ),
-            None,
-        )
-
-    @classmethod
-    def tree_unflatten(cls, aux_data, children):
-        # Reconstruct the NamedTuple from flattened data
-        return cls(*children)
 
 
 @jaxtyped(typechecker=beartype)
@@ -231,7 +181,7 @@ def fresnel_prop(
     quadratic_phase: Float[Array, "H W"] = k / (2 * z) * (X**2 + Y**2)
 
     # Apply quadratic phase to the input field
-    field_with_phase: Complex[Array, "H W"] = pto.add_phase_screen(
+    field_with_phase: Complex[Array, "H W"] = add_phase_screen(
         field, quadratic_phase
     )
 
@@ -253,7 +203,7 @@ def fresnel_prop(
     )
 
     # Apply the transfer function in the Fourier domain
-    propagated_ft: Complex[Array, "H W"] = pto.add_phase_screen(
+    propagated_ft: Complex[Array, "H W"] = add_phase_screen(
         field_ft, transfer_phase
     )
 
@@ -266,7 +216,7 @@ def fresnel_prop(
     final_quadratic_phase: Float[Array, "H W"] = k / (2 * z) * (X**2 + Y**2)
 
     # Apply final quadratic phase factor
-    final_propagated_field: Complex[Array, "H W"] = pto.add_phase_screen(
+    final_propagated_field: Complex[Array, "H W"] = add_phase_screen(
         propagated_field, final_quadratic_phase
     )
 

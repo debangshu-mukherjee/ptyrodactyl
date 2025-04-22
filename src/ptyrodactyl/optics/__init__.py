@@ -15,6 +15,7 @@ of various lenses.
 
 """
 
-from .epie import *
+from .pie import *
 from .helper_functions import *
 from .lenses import *
+from .types import *

@@ -3,8 +3,8 @@ import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
-from ptyrodactyl.optics.types import *
-from ptyrodactyl.optics.helper_functions import *
+from .types import LensParams
+from .helper import add_phase_screen
 
 jax.config.update("jax_enable_x64", True)
 

@@ -39,7 +39,6 @@ class LensParams(NamedTuple):
     R2: Float[Array, ""]
 
     def tree_flatten(self):
-        # Return a tuple of arrays (the children) and None (the auxiliary data)
         return (
             (
                 self.focal_length,
@@ -54,7 +53,6 @@ class LensParams(NamedTuple):
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        # Reconstruct the NamedTuple from flattened data
         return cls(*children)
     
 @register_pytree_node_class
@@ -88,7 +86,6 @@ class GridParams(NamedTuple):
     transmission: Float[Array, "H W"]
 
     def tree_flatten(self):
-        # Return a tuple of arrays (the children) and None (the auxiliary data)
         return (
             (
                 self.X,
@@ -101,5 +98,4 @@ class GridParams(NamedTuple):
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        # Reconstruct the NamedTuple from flattened data
         return cls(*children)

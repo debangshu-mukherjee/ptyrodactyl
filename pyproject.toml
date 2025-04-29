@@ -24,7 +24,7 @@ dependencies = [
     "matplotlib >= 2.2.0",
     "matplotlib-scalebar >= 0.5.0",
     "tqdm >= 4.66.0",
-    "jax[cuda,cuda11,cuda12]>=0.4.17",
+    "jax",
     "jaxtyping>=0.2.21",
     "chex >= 0.1.85",
     "optax >= 0.1.8",
@@ -46,6 +46,7 @@ where = ["src"]
 dev-dependencies = [
     "ipykernel>=6.29.5",
     "uv>=0.5.18",
+    "jax[cuda,cuda11,cuda12]>=0.4.17",
 ]
 
 [project.urls]

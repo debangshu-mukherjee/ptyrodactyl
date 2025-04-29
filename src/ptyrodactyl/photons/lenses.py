@@ -3,7 +3,7 @@ import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
-from .types import LensParams
+from .types import LensParams, scalar_float, scalar_num
 from .helper import add_phase_screen
 
 jax.config.update("jax_enable_x64", True)
@@ -66,10 +66,10 @@ def lens_thickness_profile(
 
 @jaxtyped(typechecker=beartype)
 def lens_focal_length(
-    n: Float[Array, ""],
-    R1: Float[Array, ""],
-    R2: Float[Array, ""],
-) -> Float[Array, ""]:
+    n: scalar_float,
+    R1: scalar_num,
+    R2: scalar_num,
+) -> scalar_float:
     """
     Description
     -----------
@@ -77,16 +77,16 @@ def lens_focal_length(
 
     Parameters
     ----------
-    - `n` (Float[Array, ""]):
+    - `n` (scalar_float):
         Refractive index of the lens material
-    - `R1` (Float[Array, ""]):
+    - `R1` (scalar_num):
         Radius of curvature of the first surface (positive for convex)
-    - `R2` (Float[Array, ""]):
+    - `R2` (scalar_num):
         Radius of curvature of the second surface (positive for convex)
 
     Returns
     -------
-    - `f` (Float[Array, ""]):
+    - `f` (scalar_float):
         Focal length of the lens
 
     Flow

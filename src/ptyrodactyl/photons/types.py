@@ -1,6 +1,11 @@
-from beartype.typing import NamedTuple
-from jaxtyping import Array, Float
+from beartype.typing import NamedTuple, Union, TypeAlias
+from jaxtyping import Array, Float, Integer, Num
 from jax.tree_util import register_pytree_node_class
+
+scalar_float: TypeAlias = Union[float, Float[Array, ""]]
+scalar_int: TypeAlias = Union[int, Integer[Array, ""]]
+scalar_num: TypeAlias = Union[int, float, Num[Array, ""]]
+non_jax_number: TypeAlias = Union[int, float]
 
 @register_pytree_node_class
 class LensParams(NamedTuple):

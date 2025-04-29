@@ -75,8 +75,9 @@ class GridParams(NamedTuple):
 
     Notes
     -----
-    This class is registered as a PyTree node, making it compatible with JAX transformations
-    like jit, grad, and vmap. The auxiliary data in tree_flatten is None as all relevant
+    This class is registered as a PyTree node, making it 
+    compatible with JAX transformations like jit, grad, and vmap. 
+    The auxiliary data in tree_flatten is None as all relevant
     data is stored in JAX arrays.
     """
 

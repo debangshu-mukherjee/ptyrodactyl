@@ -2,8 +2,7 @@ import jax
 import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Tuple
-from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
-from ptyrodactyl.photons.types import *
+from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 

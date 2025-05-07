@@ -81,13 +81,13 @@ def zoom_wavefront(
     -------
     - `zoomed_wavefront` (OpticalWavefront):
         Zoomed optical wavefront of the same spatial dimensions.
-        
+
     Flow
     ----
     - Calculate the new dimensions of the zoomed wavefront.
     - Resize the wavefront field using Lanczos interpolation.
     - Crop the resized field to match the original dimensions.
-    - Return the new optical wavefront with the updated field, wavelength, 
+    - Return the new optical wavefront with the updated field, wavelength,
     and pixel size.
     """
     H: int

@@ -1,11 +1,12 @@
-from beartype.typing import NamedTuple, Union, TypeAlias
-from jaxtyping import Array, Float, Integer, Num
+from beartype.typing import NamedTuple, TypeAlias, Union
 from jax.tree_util import register_pytree_node_class
+from jaxtyping import Array, Complex, Float, Integer, Num
 
 scalar_float: TypeAlias = Union[float, Float[Array, ""]]
 scalar_int: TypeAlias = Union[int, Integer[Array, ""]]
 scalar_num: TypeAlias = Union[int, float, Num[Array, ""]]
 non_jax_number: TypeAlias = Union[int, float]
+
 
 @register_pytree_node_class
 class LensParams(NamedTuple):
@@ -59,7 +60,8 @@ class LensParams(NamedTuple):
     @classmethod
     def tree_unflatten(cls, aux_data, children):
         return cls(*children)
-    
+
+
 @register_pytree_node_class
 class GridParams(NamedTuple):
     """
@@ -80,8 +82,8 @@ class GridParams(NamedTuple):
 
     Notes
     -----
-    This class is registered as a PyTree node, making it 
-    compatible with JAX transformations like jit, grad, and vmap. 
+    This class is registered as a PyTree node, making it
+    compatible with JAX transformations like jit, grad, and vmap.
     The auxiliary data in tree_flatten is None as all relevant
     data is stored in JAX arrays.
     """
@@ -98,6 +100,46 @@ class GridParams(NamedTuple):
                 self.Y,
                 self.phase_profile,
                 self.transmission,
+            ),
+            None,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
+
+
+@register_pytree_node_class
+class OpticalWavefront(NamedTuple):
+    """
+    Description
+    -----------
+    PyTree structure for representing an optical wavefront.
+
+    Attributes
+    ----------
+    - `field` (Complex[Array, "H W"]):
+        Complex amplitude of the optical field.
+    - `wavelength` (Float[Array, ""]):
+        Wavelength of the optical wavefront in meters.
+    - `dx` (Float[Array, ""]):
+        Spatial sampling interval (grid spacing) in meters.
+    - `z_position` (Float[Array, ""]):
+        Axial position of the wavefront along the propagation direction in meters.
+    """
+
+    field: Complex[Array, "H W"]
+    wavelength: scalar_float
+    dx: scalar_float
+    z_position: scalar_float
+
+    def tree_flatten(self):
+        return (
+            (
+                self.field,
+                self.wavelength,
+                self.dx,
+                self.z_position,
             ),
             None,
         )

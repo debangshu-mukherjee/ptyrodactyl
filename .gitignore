@@ -16,6 +16,7 @@ notebooks/__pycache__/
 /data/electrons/
 /envs/__pycache__/
 *.py[cod]
+.qodo/
 
 # test data
 /data/*.npy

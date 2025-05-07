@@ -6,6 +6,7 @@ from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 
+
 @jaxtyped(typechecker=beartype)
 def create_spatial_grid(
     diameter: Num[Array, ""], num_points: Int[Array, ""]
@@ -40,6 +41,7 @@ def create_spatial_grid(
     xx, yy = jnp.meshgrid(x, y)
     return (xx, yy)
 
+
 @jaxtyped(typechecker=beartype)
 def normalize_field(field: Complex[Array, "H W"]) -> Complex[Array, "H W"]:
     """
@@ -66,6 +68,7 @@ def normalize_field(field: Complex[Array, "H W"]) -> Complex[Array, "H W"]:
     power: Float[Array, ""] = jnp.sum(jnp.abs(field) ** 2)
     normalized_field: Complex[Array, "H W"] = field / jnp.sqrt(power)
     return normalized_field
+
 
 @jaxtyped(typechecker=beartype)
 def add_phase_screen(

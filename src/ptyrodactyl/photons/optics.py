@@ -3,6 +3,7 @@ import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
+
 from .helper import add_phase_screen
 
 jax.config.update("jax_enable_x64", True)
@@ -58,7 +59,9 @@ def angular_spectrum_prop(
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
     FSQ: Float[Array, "H W"] = (FX**2) + (FY**2)
-    H: Complex[Array, ""] = jnp.exp(1j * wavenumber * z * jnp.sqrt(1 - (wavelength**2) * FSQ))
+    H: Complex[Array, ""] = jnp.exp(
+        1j * wavenumber * z * jnp.sqrt(1 - (wavelength**2) * FSQ)
+    )
     evanescent_mask: Bool[Array, "H W"] = FSQ <= (1 / wavelength) ** 2
     H_mask: Complex[Array, "H W"] = H * evanescent_mask
     field_ft: Complex[Array, "H W"] = jnp.fft.fft2(field)
@@ -128,9 +131,7 @@ def fresnel_prop(
     quadratic_phase: Float[Array, "H W"] = k / (2 * z) * (X**2 + Y**2)
 
     # Apply quadratic phase to the input field
-    field_with_phase: Complex[Array, "H W"] = add_phase_screen(
-        field, quadratic_phase
-    )
+    field_with_phase: Complex[Array, "H W"] = add_phase_screen(field, quadratic_phase)
 
     # Compute Fourier transform of the input field
     field_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
@@ -150,9 +151,7 @@ def fresnel_prop(
     )
 
     # Apply the transfer function in the Fourier domain
-    propagated_ft: Complex[Array, "H W"] = add_phase_screen(
-        field_ft, transfer_phase
-    )
+    propagated_ft: Complex[Array, "H W"] = add_phase_screen(field_ft, transfer_phase)
 
     # Inverse Fourier transform to get the propagated field
     propagated_field: Complex[Array, "H W"] = jnp.fft.fftshift(

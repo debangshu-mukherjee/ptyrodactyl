@@ -24,7 +24,7 @@ dependencies = [
     "matplotlib >= 2.2.0",
     "matplotlib-scalebar >= 0.5.0",
     "tqdm >= 4.66.0",
-    "jax",
+    "jax[cuda12]",
     "jaxtyping>=0.2.21",
     "chex >= 0.1.85",
     "optax >= 0.1.8",
@@ -50,7 +50,7 @@ dev-dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://code.ornl.gov/intersect-em/pterodactyl"
+Homepage = "https://github.com/debangshu-mukherjee/ptyrodactyl"
 
 [project.optional-dependencies]
 docs = [

@@ -3,8 +3,9 @@ import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
-from .types import LensParams, scalar_float, scalar_num
+
 from .helper import add_phase_screen
+from .types import LensParams, scalar_float, scalar_num
 
 jax.config.update("jax_enable_x64", True)
 

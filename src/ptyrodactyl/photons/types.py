@@ -120,11 +120,11 @@ class OpticalWavefront(NamedTuple):
     ----------
     - `field` (Complex[Array, "H W"]):
         Complex amplitude of the optical field.
-    - `wavelength` (Float[Array, ""]):
+    - `wavelength` (scalar_float):
         Wavelength of the optical wavefront in meters.
-    - `dx` (Float[Array, ""]):
+    - `dx` (scalar_float):
         Spatial sampling interval (grid spacing) in meters.
-    - `z_position` (Float[Array, ""]):
+    - `z_position` (scalar_float]):
         Axial position of the wavefront along the propagation direction in meters.
     """
 

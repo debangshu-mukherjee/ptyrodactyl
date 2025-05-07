@@ -1,12 +1,11 @@
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional, Tuple
-from jaxtyping import Array, Bool, Complex, Float, jaxtyped
+from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
 from .lenses import create_lens_phase
-from .types import LensParams, OpticalWavefront, scalar_float, scalar_num
+from .types import LensParams, OpticalWavefront, scalar_num
 
 jax.config.update("jax_enable_x64", True)
 
@@ -62,6 +61,7 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
     )
 
 
+@jaxtyped(typechecker=beartype)
 def zoom_wavefront(
     wavefront: OpticalWavefront, zoom_factor: scalar_num
 ) -> OpticalWavefront:

@@ -6,7 +6,7 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons.types import GridParams, LensParams, OpticalWavefront
+from ptyrodactyl.photons.photon_types import GridParams, LensParams, OpticalWavefront
 
 # Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)

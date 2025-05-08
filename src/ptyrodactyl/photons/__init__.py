@@ -17,7 +17,7 @@ Submodules
     Forward propagation of light through optical elements
 - `helper`: 
     Utility functions for creating grids, phase manipulation, and field calculations
-- `types`: 
+- `photon_types`: 
     Data structures and type definitions for optical propagation
 - `engine`: 
     Framework for building complete optical simulation pipelines
@@ -30,4 +30,4 @@ from .forward import *
 from .helper import *
 from .lenses import *
 from .optics import *
-from .types import *
+from .photon_types import *

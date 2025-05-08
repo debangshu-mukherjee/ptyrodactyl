@@ -16,7 +16,8 @@ from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
 from .lenses import create_lens_phase
-from .types import LensParams, OpticalWavefront, scalar_num
+from .photon_types import (LensParams, OpticalWavefront, make_lens_params, 
+                        make_optical_wavefront, scalar_num)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -38,7 +39,7 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
 
     Returns
     -------
-    - `OpticalWavefront`:
+    - `outgoing` (OpticalWavefront):
         The propagated optical wavefront after passing through the lens
 
     Flow
@@ -63,10 +64,10 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
     transmitted_field: Complex[Array, "H W"] = add_phase_screen(
         incoming.field * transmission, phase_profile
     )
-
-    return OpticalWavefront(
+    outgoing: OpticalWavefront = make_optical_wavefront(
         field=transmitted_field,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
         z_position=incoming.z_position,
     )
+    return outgoing

@@ -4,15 +4,20 @@ import jax.numpy as jnp
 import pytest
 from absl.testing import parameterized
 from beartype.typing import Tuple
-from jaxtyping import Array, Complex, Float, jaxtyped
+from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons import add_phase_screen
+from ptyrodactyl.photons.helper import (
+    add_phase_screen,
+    create_spatial_grid,
+    field_intensity,
+    normalize_field
+)
 
 # Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)
 
 
-class test_add_phase_screen(chex.TestCase):
+class TestAddPhaseScreen(chex.TestCase):
     @chex.all_variants()
     @parameterized.parameters(
         {"shape": (40, 40), "offset": 0.0},
@@ -95,6 +100,96 @@ class test_add_phase_screen(chex.TestCase):
 
         # If phase is zero, result should be identical to field
         chex.assert_trees_all_close(result, field, atol=1e-6, rtol=1e-6)
+
+
+class TestCreateSpatialGrid(chex.TestCase):
+    @chex.all_variants()
+    @parameterized.parameters(
+        {"diameter": 0.001, "num_points": 32},
+        {"diameter": 0.01, "num_points": 64},
+        {"diameter": 0.1, "num_points": 128},
+    )
+    def test_grid_shape(self, diameter: float, num_points: int):
+        """Test that create_spatial_grid returns correct shape."""
+        var_create_spatial_grid = self.variant(create_spatial_grid)
+        xx, yy = var_create_spatial_grid(
+            diameter=jnp.array(diameter),
+            num_points=jnp.array(num_points),
+        )
+        
+        expected_shape = (num_points, num_points)
+        chex.assert_shape(xx, expected_shape)
+        chex.assert_shape(yy, expected_shape)
+    
+    @chex.all_variants()
+    def test_grid_values(self):
+        """Test that the grid has correct values."""
+        diameter = 0.001  # 1mm
+        num_points = 32
+        
+        var_create_spatial_grid = self.variant(create_spatial_grid)
+        xx, yy = var_create_spatial_grid(
+            diameter=jnp.array(diameter),
+            num_points=jnp.array(num_points),
+        )
+        
+        # Check that the grid spans from -diameter/2 to diameter/2
+        assert jnp.isclose(jnp.min(xx), -diameter/2)
+        assert jnp.isclose(jnp.max(xx), diameter/2)
+        assert jnp.isclose(jnp.min(yy), -diameter/2)
+        assert jnp.isclose(jnp.max(yy), diameter/2)
+
+
+class TestNormalizeField(chex.TestCase):
+    @chex.all_variants()
+    @parameterized.parameters(
+        {"shape": (32, 32)},
+        {"shape": (64, 64)},
+        {"shape": (128, 128)},
+    )
+    def test_normalization(self, shape: Tuple[int, int]):
+        """Test that normalized field has unit power."""
+        key = jax.random.PRNGKey(42)
+        key1, key2 = jax.random.split(key)
+        field_real = jax.random.normal(key1, shape, dtype=jnp.float64)
+        field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
+        field = field_real + 1j * field_imag
+        
+        var_normalize_field = self.variant(normalize_field)
+        normalized = var_normalize_field(field)
+        
+        # Check that power is 1.0
+        power = jnp.sum(jnp.abs(normalized) ** 2)
+        assert jnp.isclose(power, 1.0, atol=1e-6)
+        
+        # Check shape
+        chex.assert_shape(normalized, shape)
+
+
+class TestFieldIntensity(chex.TestCase):
+    @chex.all_variants()
+    @parameterized.parameters(
+        {"shape": (32, 32)},
+        {"shape": (64, 64)},
+        {"shape": (128, 128)},
+    )
+    def test_intensity_calculation(self, shape: Tuple[int, int]):
+        """Test that field_intensity returns |field|^2."""
+        key = jax.random.PRNGKey(42)
+        key1, key2 = jax.random.split(key)
+        field_real = jax.random.normal(key1, shape, dtype=jnp.float64)
+        field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
+        field = field_real + 1j * field_imag
+        
+        var_field_intensity = self.variant(field_intensity)
+        intensity = var_field_intensity(field)
+        
+        # Check that intensity is |field|^2
+        expected = jnp.abs(field) ** 2
+        chex.assert_trees_all_close(intensity, expected, atol=1e-6)
+        
+        # Check shape
+        chex.assert_shape(intensity, shape)
 
 
 if __name__ == "__main__":

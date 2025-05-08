@@ -1,7 +1,8 @@
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
+from beartype.typing import Optional
+from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
 from .types import OpticalWavefront, scalar_int, scalar_num
@@ -11,7 +12,9 @@ jax.config.update("jax_enable_x64", True)
 
 @jaxtyped(typechecker=beartype)
 def angular_spectrum_prop(
-    incoming: OpticalWavefront, z_move: scalar_num
+    incoming: OpticalWavefront,
+    z_move: scalar_num,
+    refractive_index: Optional[scalar_num] = 1.0,
 ) -> OpticalWavefront:
     """
     Description
@@ -32,6 +35,10 @@ def angular_spectrum_prop(
             Wave front position in meters
     - `z_move` (scalar_num):
         Propagation distance in meters
+        This is in free space.
+    - `refractive_index` (Optional[scalar_num]):
+        Index of refraction of the medium. Default is 1.0 (vacuum).
+
 
     Returns
     -------
@@ -42,7 +49,8 @@ def angular_spectrum_prop(
     ----
     - Get the shape of the input field
     - Calculate the wavenumber
-    - Spatial frequency coordinates
+    - Compute the path length
+    - Create spatial frequency coordinates
     - Compute the squared spatial frequencies
     - Angular spectrum transfer function
     - Ensure evanescent waves are properly handled
@@ -54,6 +62,7 @@ def angular_spectrum_prop(
     ny: scalar_int = incoming.field.shape[0]
     nx: scalar_int = incoming.field.shape[1]
     wavenumber: Float[Array, ""] = 2 * jnp.pi / incoming.wavelength
+    path_length = refractive_index * z_move
     fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
     fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
@@ -61,7 +70,7 @@ def angular_spectrum_prop(
     FX, FY = jnp.meshgrid(fx, fy)
     FSQ: Float[Array, "H W"] = (FX**2) + (FY**2)
     H: Complex[Array, ""] = jnp.exp(
-        1j * wavenumber * z_move * jnp.sqrt(1 - (incoming.wavelength**2) * FSQ)
+        1j * wavenumber * path_length * jnp.sqrt(1 - (incoming.wavelength**2) * FSQ)
     )
     evanescent_mask: Bool[Array, "H W"] = FSQ <= (1 / incoming.wavelength) ** 2
     H_mask: Complex[Array, "H W"] = H * evanescent_mask
@@ -72,13 +81,17 @@ def angular_spectrum_prop(
         field=propagated_field,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
-        z_position=incoming.z_position + z_move,
+        z_position=incoming.z_position + path_length,
     )
     return propagated
 
 
 @jaxtyped(typechecker=beartype)
-def fresnel_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWavefront:
+def fresnel_prop(
+    incoming: OpticalWavefront,
+    z_move: scalar_num,
+    refractive_index: Optional[scalar_num] = 1.0,
+) -> OpticalWavefront:
     """
     Description
     -----------
@@ -98,6 +111,9 @@ def fresnel_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWavef
             Wave front position in meters
     - `z_move` (scalar_num):
         Propagation distance in meters
+        This is in free space.
+    - `refractive_index` (Optional[scalar_num]):
+        Index of refraction of the medium. Default is 1.0 (vacuum).
 
     Returns
     -------
@@ -127,7 +143,8 @@ def fresnel_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWavef
     X: Float[Array, "H W"]
     Y: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
-    quadratic_phase: Float[Array, "H W"] = k / (2 * z_move) * (X**2 + Y**2)
+    path_length = refractive_index * z_move
+    quadratic_phase: Float[Array, "H W"] = k / (2 * path_length) * (X**2 + Y**2)
     field_with_phase: Complex[Array, "H W"] = add_phase_screen(
         incoming.field, quadratic_phase
     )
@@ -140,13 +157,13 @@ def fresnel_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWavef
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
     transfer_phase: Float[Array, "H W"] = (
-        (-1) * jnp.pi * incoming.wavelength * z_move * (FX**2 + FY**2)
+        (-1) * jnp.pi * incoming.wavelength * path_length * (FX**2 + FY**2)
     )
     propagated_ft: Complex[Array, "H W"] = add_phase_screen(field_ft, transfer_phase)
     propagated_field: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.ifft2(jnp.fft.ifftshift(propagated_ft))
     )
-    final_quadratic_phase: Float[Array, "H W"] = k / (2 * z_move) * (X**2 + Y**2)
+    final_quadratic_phase: Float[Array, "H W"] = k / (2 * path_length) * (X**2 + Y**2)
     final_propagated_field: Complex[Array, "H W"] = add_phase_screen(
         propagated_field, final_quadratic_phase
     )
@@ -154,13 +171,17 @@ def fresnel_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWavef
         field=final_propagated_field,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
-        z_position=incoming.z_position + z_move,
+        z_position=incoming.z_position + path_length,
     )
     return propagated
 
 
 @jaxtyped(typechecker=beartype)
-def fraunhofer_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWavefront:
+def fraunhofer_prop(
+    incoming: OpticalWavefront,
+    z_move: scalar_num,
+    refractive_index: Optional[scalar_num] = 1.0,
+) -> OpticalWavefront:
     """
     Description
     -----------
@@ -179,7 +200,10 @@ def fraunhofer_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWa
         - `z_position` (Float[Array, ""]):
             Wave front position in meters
     - `z_move` (scalar_num):
-        Propagation distance in meters
+        Propagation distance in meters.
+        This is in free space.
+    - `refractive_index` (Optional[scalar_num]):
+        Index of refraction of the medium. Default is 1.0 (vacuum).
 
     Returns
     -------
@@ -199,15 +223,15 @@ def fraunhofer_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWa
     """
     ny: scalar_int = incoming.field.shape[0]
     nx: scalar_int = incoming.field.shape[1]
-    k = 2 * jnp.pi / incoming.wavelength
     fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
     fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
+    path_length = refractive_index * z_move
     H: Complex[Array, "H W"] = jnp.exp(
-        -1j * jnp.pi * incoming.wavelength * z_move * (FX**2 + FY**2)
-    ) / (1j * incoming.wavelength * z_move)
+        -1j * jnp.pi * incoming.wavelength * path_length * (FX**2 + FY**2)
+    ) / (1j * incoming.wavelength * path_length)
     field_ft: Complex[Array, "H W"] = jnp.fft.fft2(incoming.field)
     propagated_ft: Complex[Array, "H W"] = field_ft * H
     propagated_field: Complex[Array, "H W"] = jnp.fft.ifft2(propagated_ft)
@@ -215,6 +239,6 @@ def fraunhofer_prop(incoming: OpticalWavefront, z_move: scalar_num) -> OpticalWa
         field=propagated_field,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
-        z_position=incoming.z_position + z_move,
+        z_position=incoming.z_position + path_length,
     )
     return propagated

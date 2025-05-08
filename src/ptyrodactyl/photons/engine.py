@@ -1,4 +1,5 @@
-"""Module: photons.engine
+"""
+Module: photons.engine
 ---------------------------
 Engine framework for optical simulations and ptychography.
 

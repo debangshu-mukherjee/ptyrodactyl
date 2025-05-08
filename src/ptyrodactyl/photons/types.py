@@ -1,4 +1,5 @@
-"""Module: photons.types
+"""
+Module: photons.types
 ---------------------------
 Data structures and type definitions for optical propagation.
 

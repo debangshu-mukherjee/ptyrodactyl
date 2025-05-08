@@ -1,4 +1,5 @@
-"""Module: photons.helper
+"""
+Module: photons.helper
 ---------------------------
 Utility functions for optical propagation.
 

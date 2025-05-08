@@ -1,18 +1,27 @@
-"""
+"""Module: ptyrodactyl.photons
 ==================================================
+JAX-based optical simulation toolkit for light microscopes and ptychography.
 
-JAX ptychography - for light microscopes
+This package implements various optical components and propagation models
+with JAX for automatic differentiation and acceleration. All functions
+are fully differentiable and JIT-compilable.
 
-==================================================
+Submodules
+----------
+- `optics`: 
+    Optical propagation functions including angular spectrum, Fresnel, and Fraunhofer methods
+- `lenses`: 
+    Models for various lens types and their optical properties
+- `forward`: 
+    Forward propagation of light through optical elements
+- `helper`: 
+    Utility functions for creating grids, phase manipulation, and field calculations
+- `types`: 
+    Data structures and type definitions for optical propagation
+- `engine`: 
+    Framework for building complete optical simulation pipelines
 
-.. currentmodule:: ptyrodactyl.light
-
-This package contains the modules for dealing with
-optical microscopes. The helper_functions module conservationist
-functions that are used to simulate individual optical effectiveness
-and small calculations, while lenses module contains simulations
-of various lenses.
-
+.. currentmodule:: ptyrodactyl.photons
 """
 
 from .engine import *

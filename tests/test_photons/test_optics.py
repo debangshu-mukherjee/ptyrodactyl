@@ -13,7 +13,7 @@ from ptyrodactyl.photons.optics import (
     circular_aperture,
     zoom_wavefront,
 )
-from ptyrodactyl.photons.types import OpticalWavefront
+from ptyrodactyl.photons.photon_types import OpticalWavefront
 
 # Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)

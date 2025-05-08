@@ -16,7 +16,7 @@ Functions
 - `zoom_wavefront`:
     Zooms an optical wavefront by a specified factor
 """
-        
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -24,7 +24,8 @@ from beartype.typing import Optional
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .types import OpticalWavefront, scalar_float, scalar_int, scalar_num
+from .photon_types import (OpticalWavefront, make_optical_wavefront, scalar_float,
+                   scalar_int, scalar_num)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -96,7 +97,7 @@ def angular_spectrum_prop(
     field_ft: Complex[Array, "H W"] = jnp.fft.fft2(incoming.field)
     propagated_ft: Complex[Array, "H W"] = field_ft * H_mask
     propagated_field: Complex[Array, "H W"] = jnp.fft.ifft2(propagated_ft)
-    propagated = OpticalWavefront(
+    propagated: OpticalWavefront = make_optical_wavefront(
         field=propagated_field,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
@@ -183,10 +184,10 @@ def fresnel_prop(
         jnp.fft.ifft2(jnp.fft.ifftshift(propagated_ft))
     )
     final_quadratic_phase: Float[Array, "H W"] = k / (2 * path_length) * (X**2 + Y**2)
-    final_propagated_field: Complex[Array, "H W"] = jnp.fft.ifftshift(add_phase_screen(
-        propagated_field, final_quadratic_phase
-    ))
-    propagated = OpticalWavefront(
+    final_propagated_field: Complex[Array, "H W"] = jnp.fft.ifftshift(
+        add_phase_screen(propagated_field, final_quadratic_phase)
+    )
+    propagated: OpticalWavefront = make_optical_wavefront(
         field=final_propagated_field,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
@@ -254,7 +255,7 @@ def fraunhofer_prop(
     field_ft: Complex[Array, "H W"] = jnp.fft.fft2(incoming.field)
     propagated_ft: Complex[Array, "H W"] = field_ft * H
     propagated_field: Complex[Array, "H W"] = jnp.fft.ifft2(propagated_ft)
-    propagated = OpticalWavefront(
+    propagated: OpticalWavefront = make_optical_wavefront(
         field=propagated_field,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
@@ -330,7 +331,7 @@ def circular_aperture(
         jnp.ones_like(aperture_mask, dtype=float) * transmittivity
     )
     float_aperture = aperture_mask.astype(float) * transmission
-    apertured: OpticalWavefront = OpticalWavefront(
+    apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * float_aperture,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
@@ -381,9 +382,10 @@ def zoom_wavefront(
     zoomed_field: Complex[Array, "H W"] = jax.image.resize(
         image=cut_field, shape=(H, W), method="trilinear"
     )
-    return OpticalWavefront(
+    zoomed_wavefront: OpticalWavefront = make_optical_wavefront(
         field=zoomed_field,
         wavelength=wavefront.wavelength,
         dx=wavefront.dx / zoom_factor,
         z_position=wavefront.z_position,
     )
+    return zoomed_wavefront

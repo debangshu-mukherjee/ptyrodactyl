@@ -32,7 +32,7 @@ from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .types import LensParams, scalar_float, scalar_num
+from .photon_types import LensParams, make_lens_params, scalar_float, scalar_num
 
 jax.config.update("jax_enable_x64", True)
 
@@ -75,20 +75,15 @@ def lens_thickness_profile(
     - Apply aperture mask
     - Return thickness profile
     """
-    # Calculate surface sags
     sag1: Float[Array, "H W"] = jnp.where(
         r <= diameter / 2, R1 - jnp.sqrt(jnp.maximum(R1**2 - r**2, 0.0)), 0.0
     )
-
     sag2: Float[Array, "H W"] = jnp.where(
         r <= diameter / 2, R2 - jnp.sqrt(jnp.maximum(R2**2 - r**2, 0.0)), 0.0
     )
-
-    # Calculate total thickness profile
     thickness: Float[Array, "H W"] = jnp.where(
         r <= diameter / 2, center_thickness + sag1 - sag2, 0.0
     )
-
     return thickness
 
 
@@ -131,7 +126,7 @@ def create_lens_phase(
     X: Float[Array, "H W"],
     Y: Float[Array, "H W"],
     params: LensParams,
-    wavelength: Float[Array, ""],
+    wavelength: scalar_float,
 ) -> Tuple[Float[Array, "H W"], Float[Array, "H W"]]:
     """
     Description
@@ -146,7 +141,7 @@ def create_lens_phase(
         Y coordinates grid
     - `params` (LensParams):
         Lens parameters
-    - `wavelength` (Float[Array, ""]):
+    - `wavelength` (scalar_float):
         Wavelength of light
 
     Returns
@@ -164,21 +159,13 @@ def create_lens_phase(
     - Create transmission mask
     - Return phase and transmission
     """
-    # Calculate radial coordinates
     r: Float[Array, "H W"] = jnp.sqrt(X**2 + Y**2)
-
-    # Calculate thickness profile
     thickness: Float[Array, "H W"] = lens_thickness_profile(
         r, params.R1, params.R2, params.center_thickness, params.diameter
     )
-
-    # Calculate phase profile
     k: Float[Array, ""] = 2 * jnp.pi / wavelength
     phase_profile: Float[Array, "H W"] = k * (params.n - 1) * thickness
-
-    # Create transmission mask
     transmission: Float[Array, "H W"] = (r <= params.diameter / 2).astype(float)
-
     return (phase_profile, transmission)
 
 
@@ -257,11 +244,9 @@ def double_convex_lens(
     - Calculate R2 using R_ratio
     - Create and return LensParams
     """
-    # For a double convex lens, both R1 and R2 are positive
     R1: Float[Array, ""] = focal_length * (n - 1) * (1 + R_ratio) / 2
     R2: Float[Array, ""] = R1 * R_ratio
-
-    return LensParams(
+    params: LensParams = make_lens_params(
         focal_length=focal_length,
         diameter=diameter,
         n=n,
@@ -269,6 +254,7 @@ def double_convex_lens(
         R1=R1,
         R2=R2,
     )
+    return params
 
 
 def double_concave_lens(
@@ -308,18 +294,17 @@ def double_concave_lens(
     - Calculate R2 using R_ratio
     - Create and return LensParams
     """
-    # For a double concave lens, both R1 and R2 are negative
     R1: Float[Array, ""] = focal_length * (n - 1) * (1 + R_ratio) / 2
     R2: Float[Array, ""] = R1 * R_ratio
-
-    return LensParams(
+    params: LensParams = make_lens_params(
         focal_length=focal_length,
         diameter=diameter,
         n=n,
         center_thickness=center_thickness,
-        R1=-abs(R1),  # Ensure negative
-        R2=-abs(R2),  # Ensure negative
+        R1=-abs(R1),
+        R2=-abs(R2),
     )
+    return params
 
 
 @jaxtyped(typechecker=beartype)
@@ -364,12 +349,9 @@ def plano_convex_lens(
     - Create and return LensParams
     """
     R: Float[Array, ""] = focal_length * (n - 1)
-
-    # Assign R to first or second surface based on convex_first
     R1: Float[Array, ""] = jnp.where(convex_first, R, jnp.inf)
     R2: Float[Array, ""] = jnp.where(convex_first, jnp.inf, R)
-
-    return LensParams(
+    params: LensParams = make_lens_params(
         focal_length=focal_length,
         diameter=diameter,
         n=n,
@@ -377,6 +359,7 @@ def plano_convex_lens(
         R1=R1,
         R2=R2,
     )
+    return params
 
 
 @jaxtyped(typechecker=beartype)
@@ -420,12 +403,9 @@ def plano_concave_lens(
     - Create and return LensParams
     """
     R: Float[Array, ""] = -abs(focal_length * (n - 1))
-
-    # Assign R to first or second surface based on concave_first
     R1: Float[Array, ""] = jnp.where(concave_first, R, jnp.inf)
     R2: Float[Array, ""] = jnp.where(concave_first, jnp.inf, R)
-
-    return LensParams(
+    params: LensParams = make_lens_params(
         focal_length=focal_length,
         diameter=diameter,
         n=n,
@@ -433,6 +413,7 @@ def plano_concave_lens(
         R1=R1,
         R2=R2,
     )
+    return params
 
 
 @jaxtyped(typechecker=beartype)
@@ -478,27 +459,21 @@ def meniscus_lens(
     - Assign correct signs based on convex_first
     - Create and return LensParams
     """
-    # Calculate absolute values of radii
-    # Using lensmaker's equation: 1/f = (n-1)(1/R1 - 1/R2)
     R1_mag: Float[Array, ""] = (
         focal_length * (n - 1) * (1 - R_ratio) / (1 if convex_first else -1)
     )
     R2_mag: Float[Array, ""] = abs(R1_mag * R_ratio)
-
-    # Assign signs based on which surface is convex
     R1: Float[Array, ""] = jnp.where(
         convex_first,
-        abs(R1_mag),  # Convex first surface (positive)
-        -abs(R1_mag),  # Concave first surface (negative)
+        abs(R1_mag),
+        -abs(R1_mag),
     )
-
     R2: Float[Array, ""] = jnp.where(
         convex_first,
-        -abs(R2_mag),  # Concave second surface (negative)
-        abs(R2_mag),  # Convex second surface (positive)
+        -abs(R2_mag),
+        abs(R2_mag),
     )
-
-    return LensParams(
+    params: LensParams = make_lens_params(
         focal_length=focal_length,
         diameter=diameter,
         n=n,
@@ -506,3 +481,4 @@ def meniscus_lens(
         R1=R1,
         R2=R2,
     )
+    return params

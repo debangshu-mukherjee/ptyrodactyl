@@ -1,3 +1,29 @@
+"""Module: photons.lenses
+---------------------------
+Optics model for simulation of optical lenses.
+
+Functions
+---------
+- `lens_thickness_profile`:
+    Calculates the thickness profile of a lens
+- `lens_focal_length`:
+    Calculates the focal length of a lens using the lensmaker's equation
+- `create_lens_phase`:
+    Creates the phase profile and transmission mask for a lens
+- `propagate_through_lens`:
+    Propagates a field through a lens
+- `double_convex_lens`:
+    Creates parameters for a double convex lens
+- `double_concave_lens`:
+    Creates parameters for a double concave lens
+- `plano_convex_lens`:
+    Creates parameters for a plano-convex lens
+- `plano_concave_lens`:
+    Creates parameters for a plano-concave lens
+- `meniscus_lens`:
+    Creates parameters for a meniscus (concavo-convex) lens
+"""
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype

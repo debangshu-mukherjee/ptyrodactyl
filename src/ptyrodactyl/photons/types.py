@@ -1,3 +1,21 @@
+"""Module: photons.types
+---------------------------
+Data structures and type definitions for optical propagation.
+
+Type Aliases
+------------
+- `scalar_float`: Type alias for float or Float array
+- `scalar_int`: Type alias for int or Integer array
+- `scalar_num`: Type alias for numeric types (int, float or Num array)
+- `non_jax_number`: Type alias for non-JAX numeric types (int, float)
+
+Classes
+-------
+- `LensParams`: A named tuple for lens parameters
+- `GridParams`: A named tuple for computational grid parameters
+- `OpticalWavefront`: A named tuple for representing an optical wavefront
+"""
+
 from beartype.typing import NamedTuple, TypeAlias, Union
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Complex, Float, Integer, Num

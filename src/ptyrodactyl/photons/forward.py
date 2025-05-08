@@ -1,3 +1,13 @@
+"""Module: photons.forward
+---------------------------
+Codes for optical propagation through lenses and optical elements.
+
+Functions
+---------
+- `lens_propagation`:
+    Propagates an optical wavefront through a lens
+"""
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype

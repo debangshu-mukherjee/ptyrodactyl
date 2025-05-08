@@ -1,3 +1,22 @@
+"""
+Module: photons.optics
+---------------------------
+Codes for optical propgation steps.
+
+Functions
+---------
+- `angular_spectrum_prop`:
+    Propagates a complex optical field using the angular spectrum method
+- `fresnel_prop`:
+    Propagates a complex optical field using the Fresnel approximation
+- `fraunhofer_prop`:
+    Propagates a complex optical field using the Fraunhofer approximation
+- `circular_aperture`:
+    Applies a circular aperture to an incoming wavefront
+- `zoom_wavefront`:
+    Zooms an optical wavefront by a specified factor
+"""
+        
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -69,11 +88,11 @@ def angular_spectrum_prop(
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
     FSQ: Float[Array, "H W"] = (FX**2) + (FY**2)
-    H: Complex[Array, ""] = jnp.exp(
+    asp_transfer: Complex[Array, ""] = jnp.exp(
         1j * wavenumber * path_length * jnp.sqrt(1 - (incoming.wavelength**2) * FSQ)
     )
     evanescent_mask: Bool[Array, "H W"] = FSQ <= (1 / incoming.wavelength) ** 2
-    H_mask: Complex[Array, "H W"] = H * evanescent_mask
+    H_mask: Complex[Array, "H W"] = asp_transfer * evanescent_mask
     field_ft: Complex[Array, "H W"] = jnp.fft.fft2(incoming.field)
     propagated_ft: Complex[Array, "H W"] = field_ft * H_mask
     propagated_field: Complex[Array, "H W"] = jnp.fft.ifft2(propagated_ft)

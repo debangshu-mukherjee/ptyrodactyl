@@ -295,6 +295,8 @@ def circular_aperture(
     """
     if center is None:
         center = jnp.array([0.0, 0.0])
+    center_pixels: Float[Array, "2"] = center / incoming.dx
+    diameter_pixels: scalar_float = diameter / incoming.dx
     ny: scalar_int = incoming.field.shape[0]
     nx: scalar_int = incoming.field.shape[1]
     x: Float[Array, "W"] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
@@ -303,8 +305,8 @@ def circular_aperture(
     X: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
     aperture_mask: Bool[Array, "H W"] = (
-        ((X - center[0]) ** 2 + (Y - center[1]) ** 2)
-    ) <= ((diameter / 2) ** 2)
+        ((X - center_pixels[0]) ** 2 + (Y - center_pixels[1]) ** 2)
+    ) <= ((diameter_pixels / 2) ** 2)
     transmission: Float[Array, "H W"] = (
         jnp.ones_like(aperture_mask, dtype=float) * transmittivity
     )
@@ -316,3 +318,53 @@ def circular_aperture(
         z_position=incoming.z_position,
     )
     return apertured
+
+
+@jaxtyped(typechecker=beartype)
+def zoom_wavefront(
+    wavefront: OpticalWavefront, zoom_factor: scalar_num
+) -> OpticalWavefront:
+    """
+    Zoom an optical wavefront by a specified factor.
+    Key is this returns the same sized array as the
+    original wavefront.
+
+    Parameters
+    ----------
+    - `wavefront` (OpticalWavefront):
+        Incoming optical wavefront.
+    - `zoom_factor` (scalar_num):
+        Zoom factor (greater than 1 to zoom in, less than 1 to zoom out).
+
+    Returns
+    -------
+    - `zoomed_wavefront` (OpticalWavefront):
+        Zoomed optical wavefront of the same spatial dimensions.
+
+    Flow
+    ----
+    - Calculate the new dimensions of the zoomed wavefront.
+    - Resize the wavefront field using Lanczos interpolation.
+    - Crop the resized field to match the original dimensions.
+    - Return the new optical wavefront with the updated field, wavelength,
+    and pixel size.
+    """
+    H: int
+    W: int
+    H, W = wavefront.field.shape
+    H_zoom: int = int(H * zoom_factor)
+    W_zoom: int = int(W * zoom_factor)
+    zoomed_field: Complex[Array, "H_zoom W_zoom"] = jax.image.resize(
+        image=wavefront.field, shape=(H_zoom, W_zoom), method="lanczos5"
+    )
+    start_H: int = (H_zoom - H) // 2
+    start_W: int = (W_zoom - W) // 2
+    zoom_cropped: Complex[Array, "H W"] = jax.lax.dynamic_slice(
+        zoomed_field, (start_H, start_W), (H, W)
+    )
+    return OpticalWavefront(
+        field=zoom_cropped,
+        wavelength=wavefront.wavelength,
+        dx=wavefront.dx / zoom_factor,
+        z_position=wavefront.z_position,
+    )

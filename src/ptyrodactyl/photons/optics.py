@@ -164,9 +164,9 @@ def fresnel_prop(
         jnp.fft.ifft2(jnp.fft.ifftshift(propagated_ft))
     )
     final_quadratic_phase: Float[Array, "H W"] = k / (2 * path_length) * (X**2 + Y**2)
-    final_propagated_field: Complex[Array, "H W"] = add_phase_screen(
+    final_propagated_field: Complex[Array, "H W"] = jnp.fft.ifftshift(add_phase_screen(
         propagated_field, final_quadratic_phase
-    )
+    ))
     propagated = OpticalWavefront(
         field=final_propagated_field,
         wavelength=incoming.wavelength,
@@ -299,8 +299,8 @@ def circular_aperture(
     diameter_pixels: scalar_float = diameter / incoming.dx
     ny: scalar_int = incoming.field.shape[0]
     nx: scalar_int = incoming.field.shape[1]
-    x: Float[Array, "W"] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
-    y: Float[Array, "H"] = jnp.arange(-ny // 2, ny // 2) * incoming.dx
+    x: Float[Array, "W"] = jnp.arange(-nx // 2, nx // 2)
+    y: Float[Array, "H"] = jnp.arange(-ny // 2, ny // 2)
     Y: Float[Array, "H W"]
     X: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
@@ -344,7 +344,7 @@ def zoom_wavefront(
     Flow
     ----
     - Calculate the new dimensions of the zoomed wavefront.
-    - Resize the wavefront field using Lanczos interpolation.
+    - Resize the wavefront field using cubic interpolation.
     - Crop the resized field to match the original dimensions.
     - Return the new optical wavefront with the updated field, wavelength,
     and pixel size.
@@ -352,18 +352,18 @@ def zoom_wavefront(
     H: int
     W: int
     H, W = wavefront.field.shape
-    H_zoom: int = int(H * zoom_factor)
-    W_zoom: int = int(W * zoom_factor)
-    zoomed_field: Complex[Array, "H_zoom W_zoom"] = jax.image.resize(
-        image=wavefront.field, shape=(H_zoom, W_zoom), method="lanczos5"
+    H_cut: int = int(H / zoom_factor)
+    W_cut: int = int(W / zoom_factor)
+    start_H: int = (H - H_cut) // 2
+    start_W: int = (W - W_cut) // 2
+    cut_field: Complex[Array, "H_cut W_cut"] = jax.lax.dynamic_slice(
+        wavefront.field, (start_H, start_W), (H_cut, W_cut)
     )
-    start_H: int = (H_zoom - H) // 2
-    start_W: int = (W_zoom - W) // 2
-    zoom_cropped: Complex[Array, "H W"] = jax.lax.dynamic_slice(
-        zoomed_field, (start_H, start_W), (H, W)
+    zoomed_field: Complex[Array, "H W"] = jax.image.resize(
+        image=cut_field, shape=(H, W), method="trilinear"
     )
     return OpticalWavefront(
-        field=zoom_cropped,
+        field=zoomed_field,
         wavelength=wavefront.wavelength,
         dx=wavefront.dx / zoom_factor,
         z_position=wavefront.z_position,

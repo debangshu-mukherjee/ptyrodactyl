@@ -1,3 +1,19 @@
+"""Module: photons.helper
+---------------------------
+Utility functions for optical propagation.
+
+Functions
+---------
+- `create_spatial_grid`:
+    Creates a 2D spatial grid for optical propagation
+- `normalize_field`:
+    Normalizes a complex field to unit power
+- `add_phase_screen`:
+    Adds a phase screen to a complex field
+- `field_intensity`:
+    Calculates intensity from a complex field
+"""
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype

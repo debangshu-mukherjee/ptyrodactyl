@@ -5,7 +5,7 @@ from beartype.typing import Optional
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .types import OpticalWavefront, scalar_int, scalar_num
+from .types import OpticalWavefront, scalar_float, scalar_int, scalar_num
 
 jax.config.update("jax_enable_x64", True)
 
@@ -179,8 +179,8 @@ def fresnel_prop(
 @jaxtyped(typechecker=beartype)
 def fraunhofer_prop(
     incoming: OpticalWavefront,
-    z_move: scalar_num,
-    refractive_index: Optional[scalar_num] = 1.0,
+    z_move: scalar_float,
+    refractive_index: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
     Description
@@ -199,10 +199,10 @@ def fraunhofer_prop(
             Grid spacing in meters
         - `z_position` (Float[Array, ""]):
             Wave front position in meters
-    - `z_move` (scalar_num):
+    - `z_move` (scalar_float):
         Propagation distance in meters.
         This is in free space.
-    - `refractive_index` (Optional[scalar_num]):
+    - `refractive_index` (scalar_float, optional):
         Index of refraction of the medium. Default is 1.0 (vacuum).
 
     Returns
@@ -242,3 +242,77 @@ def fraunhofer_prop(
         z_position=incoming.z_position + path_length,
     )
     return propagated
+
+
+@jaxtyped(typechecker=beartype)
+def circular_aperture(
+    incoming: OpticalWavefront,
+    diameter: scalar_float,
+    center: Optional[Float[Array, "2"]] = None,
+    transmittivity: Optional[scalar_float] = 1.0,
+) -> OpticalWavefront:
+    """
+    Description
+    -----------
+    Apply a circular aperture to the incoming wave front.
+    The aperture is defined by its diameter and center position.
+
+    Parameters
+    ----------
+    - `incoming` (OpticalWavefront):
+        PyTree with the following parameters:
+        - `field` (Complex[Array, "H W"]):
+            Input complex field
+        - `wavelength` (Float[Array, ""]):
+            Wavelength of light in meters
+        - `dx` (Float[Array, ""]):
+            Grid spacing in meters
+        - `z_position` (Float[Array, ""]):
+            Wave front position in meters
+    - `diameter` (scalar_float):
+        Diameter of the circular aperture in meters
+    - `center` (Optional[Float[Array, "2"]]):
+        Center position of the circular aperture in meters.
+        Default is the center of the input field.
+    - `transmittivity` (Optional[scalar_float]):
+        How much light is transmitted through the aperture.
+        Default is 1.0 (100% transmittivity).
+
+    Returns
+    -------
+    - `apertured` (OpticalWavefront):
+        Wave front after applying the circular aperture.
+
+    Flow
+    ----
+    - Get the shape of the input field
+    - Create spatial coordinates
+    - Create a meshgrid of spatial coordinates
+    - Create the circular aperture mask
+    - Create the transmission mask
+    - Apply the aperture and transmission masks to the input field
+    - Return the apertured wave front
+    """
+    if center is None:
+        center = jnp.array([0.0, 0.0])
+    ny: scalar_int = incoming.field.shape[0]
+    nx: scalar_int = incoming.field.shape[1]
+    x: Float[Array, "W"] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
+    y: Float[Array, "H"] = jnp.arange(-ny // 2, ny // 2) * incoming.dx
+    Y: Float[Array, "H W"]
+    X: Float[Array, "H W"]
+    X, Y = jnp.meshgrid(x, y)
+    aperture_mask: Bool[Array, "H W"] = (
+        ((X - center[0]) ** 2 + (Y - center[1]) ** 2)
+    ) <= ((diameter / 2) ** 2)
+    transmission: Float[Array, "H W"] = (
+        jnp.ones_like(aperture_mask, dtype=float) * transmittivity
+    )
+    float_aperture = aperture_mask.astype(float) * transmission
+    apertured: OpticalWavefront = OpticalWavefront(
+        field=incoming.field * float_aperture,
+        wavelength=incoming.wavelength,
+        dx=incoming.dx,
+        z_position=incoming.z_position,
+    )
+    return apertured

@@ -6,7 +6,7 @@ from jax import lax
 from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
                        PRNGKeyArray, PyTree, jaxtyped)
 
-import ptyrodactyl.electrons as pte
+from .types import CalibratedArray, PotentialSlices, ProbeModes
 
 jax.config.update("jax_enable_x64", True)
 
@@ -62,7 +62,7 @@ def transmission_func(
     c: Float[Array, ""] = jnp.asarray(299792458.0)
 
     eV: Float[Array, ""] = jnp.multiply(e_e, voltage)
-    lambda_angstrom: Float[Array, ""] = pte.wavelength_ang(voltage_kV)
+    lambda_angstrom: Float[Array, ""] = wavelength_ang(voltage_kV)
     einstein_energy: Float[Array, ""] = jnp.multiply(m_e, jnp.square(c))
     sigma: Float[Array, ""] = (
         (2 * jnp.pi / (lambda_angstrom * voltage)) * (einstein_energy + eV)
@@ -118,7 +118,7 @@ def propagation_func(
     Lxa: Num[Array, "H W"]
     Lya, Lxa = jnp.meshgrid(qy, qx, indexing="ij")
     L_sq: Num[Array, "H W"] = jnp.square(Lxa) + jnp.square(Lya)
-    lambda_angstrom: Float[Array, ""] = pte.wavelength_ang(voltage_kV)
+    lambda_angstrom: Float[Array, ""] = wavelength_ang(voltage_kV)
     prop: Complex[Array, "H W"] = jnp.exp(
         (-1j) * jnp.pi * lambda_angstrom * thickness_ang * L_sq
     )
@@ -128,7 +128,7 @@ def propagation_func(
 @jaxtyped(typechecker=typechecker)
 def fourier_coords(
     calibration: scalar_float | Float[Array, "2"], image_size: Int[Array, "2"]
-) -> pte.CalibratedArray:
+) -> CalibratedArray:
     """
     Description
     -----------
@@ -184,7 +184,7 @@ def fourier_coords(
     calib_inverse_y: Float[Array, ""] = inverse_arr_y[1] - inverse_arr_y[0]
     calib_inverse_x: Float[Array, ""] = inverse_arr_x[1] - inverse_arr_x[0]
     inverse_space: Bool[Array, ""] = False
-    calibrated_inverse_array = pte.CalibratedArray(
+    calibrated_inverse_array = CalibratedArray(
         inverse_array, calib_inverse_y, calib_inverse_x, inverse_space
     )
     return calibrated_inverse_array
@@ -282,7 +282,7 @@ def make_probe(
     - Calculate the probe in real space
     """
     aperture: Float[Array, ""] = jnp.asarray(aperture / 1000.0)
-    wavelength: Float[Array, ""] = pte.wavelength_ang(voltage)
+    wavelength: Float[Array, ""] = wavelength_ang(voltage)
     LMax = aperture / wavelength
     image_y, image_x = image_size
     x_FOV = image_x * 0.01 * calibration_pm
@@ -297,7 +297,7 @@ def make_probe(
     L2 = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
     inverse_real_matrix = L2**0.5
     Adist = jnp.asarray(inverse_real_matrix <= LMax, dtype=jnp.complex128)
-    chi_probe = pte.aberration(inverse_real_matrix, wavelength, defocus, c3, c5)
+    chi_probe = aberration(inverse_real_matrix, wavelength, defocus, c3, c5)
     Adist *= jnp.exp(-1j * chi_probe)
     probe_real_space = jnp.fft.ifftshift(jnp.fft.ifft2(Adist))
     return probe_real_space
@@ -401,8 +401,8 @@ def wavelength_ang(voltage_kV: scalar_numeric) -> Float[Array, ""]:
 
 @jaxtyped(typechecker=typechecker)
 def cbed(
-    pot_slices: pte.PotentialSlices,
-    beam: pte.ProbeModes,
+    pot_slices: PotentialSlices,
+    beam: ProbeModes,
     voltage_kV: scalar_numeric,
 ) -> Float[Array, "H W"]:
     """
@@ -483,7 +483,7 @@ def cbed(
     cbed_pattern = jnp.sum(intensity_per_mode, axis=-1)
     real_space_fov = jnp.multiply(beam.shape[0], calib_ang)
     inverse_space_calib = 1 / real_space_fov
-    cbed_pytree: PyTree = pte.CalibratedArray(
+    cbed_pytree: PyTree = CalibratedArray(
         cbed_pattern, inverse_space_calib, inverse_space_calib, False
     )
     return cbed_pytree
@@ -623,10 +623,10 @@ def stem_4D(
 
 @jaxtyped(typechecker=typechecker)
 def decompose_beam_to_modes(
-    beam: pte.CalibratedArray,
+    beam: CalibratedArray,
     num_modes: scalar_int,
     first_mode_weight: Optional[scalar_float] = 0.6,
-) -> pte.ProbeModes:
+) -> ProbeModes:
     """
     Description
     -----------
@@ -635,7 +635,7 @@ def decompose_beam_to_modes(
 
     Parameters
     ----------
-    - `beam` (pte.CalibratedArray):
+    - `beam` (CalibratedArray):
     - `num_modes` (scalar_int):
         The number of modes to decompose into.
     - `first_mode_weight` (Optional[scalar_float]):
@@ -688,5 +688,5 @@ def decompose_beam_to_modes(
     sqrt_intensity: Float[Array, "TP 1"] = jnp.sqrt(original_intensity).reshape(-1, 1)
     weighted_modes: Complex[Array, "TP M"] = Q * sqrt_intensity * sqrt_weights
     multimodal_beam: Complex[Array, "H W M"] = weighted_modes.reshape(H, W, num_modes)
-    probe_modes: PyTree = pte.ProbeModes(modes=multimodal_beam, weights=weights)
+    probe_modes: PyTree = ProbeModes(modes=multimodal_beam, weights=weights)
     return probe_modes

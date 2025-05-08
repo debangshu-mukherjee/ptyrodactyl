@@ -1,4 +1,5 @@
-"""Module: ptyrodactyl.photons
+"""
+Module: ptyrodactyl.photons
 ==================================================
 JAX-based optical simulation toolkit for light microscopes and ptychography.
 

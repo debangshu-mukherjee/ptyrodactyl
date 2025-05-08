@@ -1,4 +1,5 @@
-"""Module: photons.lenses
+"""
+Module: photons.lenses
 ---------------------------
 Optics model for simulation of optical lenses.
 

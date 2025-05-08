@@ -1,4 +1,5 @@
-"""Module: photons.forward
+"""
+Module: photons.forward
 ---------------------------
 Codes for optical propagation through lenses and optical elements.
 

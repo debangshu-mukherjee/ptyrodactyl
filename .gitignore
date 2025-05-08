@@ -130,3 +130,5 @@ target/
 /.mypy_cache/
 /.pytest_cache/
 .qodo
+
+**/CLAUDE.local.md

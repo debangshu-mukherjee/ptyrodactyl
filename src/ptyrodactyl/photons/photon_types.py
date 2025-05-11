@@ -23,6 +23,10 @@ Classes
     A named tuple for computational grid parameters
 - `OpticalWavefront`: 
     A named tuple for representing an optical wavefront
+- `MicroscopeData`:
+    A named tuple for storing 3D or 4D microscope image data
+- `Diffractogram`:
+    A named tuple for storing a single diffraction pattern
 
 Factory Functions
 ----------------
@@ -32,6 +36,10 @@ Factory Functions
     Creates a GridParams instance with runtime type checking
 - `make_optical_wavefront`: 
     Creates an OpticalWavefront instance with runtime type checking
+- `make_microscope_data`:
+    Creates a MicroscopeData instance with runtime type checking
+- `make_diffractogram`:
+    Creates a Diffractogram instance with runtime type checking
 
     Note: Always use these factory functions instead of directly instantiating the 
     NamedTuple classes to ensure proper runtime type checking of the contents.

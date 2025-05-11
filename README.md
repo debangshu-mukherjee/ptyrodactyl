@@ -4,6 +4,8 @@
 [![Documentation Status](https://readthedocs.org/projects/ptyrodactyl/badge/?version=latest)](https://ptyrodactyl.readthedocs.io/en/latest/?badge=latest)
 [![DOI](https://zenodo.org/badge/905915185.svg)](https://doi.org/10.5281/zenodo.14861992)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![codecov](https://codecov.io/gh/debangshu-mukherjee/ptyrodactyl/branch/main/graph/badge.svg)](https://codecov.io/gh/debangshu-mukherjee/ptyrodactyl)
+[![Tests](https://github.com/debangshu-mukherjee/ptyrodactyl/workflows/Tests/badge.svg)](https://github.com/debangshu-mukherjee/ptyrodactyl/actions)
 
 # Ptychography through Differentiable Programming
 

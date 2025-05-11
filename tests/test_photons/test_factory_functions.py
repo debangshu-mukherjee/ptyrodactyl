@@ -11,9 +11,13 @@ from ptyrodactyl.photons.photon_types import (
     LensParams, 
     GridParams, 
     OpticalWavefront,
+    MicroscopeData,
+    Diffractogram,
     make_lens_params,
     make_grid_params,
-    make_optical_wavefront
+    make_optical_wavefront,
+    make_microscope_data,
+    make_diffractogram
 )
 
 # Enable 64-bit precision
@@ -217,6 +221,175 @@ class TestMakeOpticalWavefront(chex.TestCase):
                 wavelength=wavelength,
                 dx=dx,
                 z_position=0.0  # Should be jnp.array
+            )
+
+
+class TestMakeMicroscopeData(chex.TestCase):
+    """Test the make_microscope_data factory function."""
+    
+    def test_make_microscope_data_3d_with_valid_types(self):
+        """Test that make_microscope_data works with valid 3D types."""
+        # Set up test values for 3D data (P H W)
+        shape_3d = (5, 32, 32)
+        image_data_3d = jnp.ones(shape_3d, dtype=jnp.float64)
+        wavelength = jnp.array(500e-9)
+        dx = jnp.array(1e-6)
+        
+        # Create a valid MicroscopeData instance with 3D data
+        microscope_data = make_microscope_data(
+            image_data=image_data_3d,
+            wavelength=wavelength,
+            dx=dx
+        )
+        
+        # Check that the returned value is a MicroscopeData instance
+        assert isinstance(microscope_data, MicroscopeData)
+        
+        # Check that all attributes are set correctly
+        chex.assert_trees_all_close(microscope_data.image_data, image_data_3d)
+        assert microscope_data.wavelength == wavelength
+        assert microscope_data.dx == dx
+        
+        # Check shapes and dtypes
+        chex.assert_shape(microscope_data.image_data, shape_3d)
+        assert microscope_data.image_data.dtype == jnp.float64
+    
+    def test_make_microscope_data_4d_with_valid_types(self):
+        """Test that make_microscope_data works with valid 4D types."""
+        # Set up test values for 4D data (X Y H W)
+        shape_4d = (3, 3, 32, 32)
+        image_data_4d = jnp.ones(shape_4d, dtype=jnp.float64)
+        wavelength = jnp.array(500e-9)
+        dx = jnp.array(1e-6)
+        
+        # Create a valid MicroscopeData instance with 4D data
+        microscope_data = make_microscope_data(
+            image_data=image_data_4d,
+            wavelength=wavelength,
+            dx=dx
+        )
+        
+        # Check that the returned value is a MicroscopeData instance
+        assert isinstance(microscope_data, MicroscopeData)
+        
+        # Check that all attributes are set correctly
+        chex.assert_trees_all_close(microscope_data.image_data, image_data_4d)
+        assert microscope_data.wavelength == wavelength
+        assert microscope_data.dx == dx
+        
+        # Check shapes and dtypes
+        chex.assert_shape(microscope_data.image_data, shape_4d)
+        assert microscope_data.image_data.dtype == jnp.float64
+    
+    def test_make_microscope_data_with_invalid_types(self):
+        """Test that make_microscope_data raises an error with invalid types."""
+        # Set up test values
+        shape_3d = (5, 32, 32)
+        image_data_3d = jnp.ones(shape_3d, dtype=jnp.float64)
+        wavelength = jnp.array(500e-9)
+        dx = jnp.array(1e-6)
+        
+        # Try with non-float image_data
+        with pytest.raises(Exception):
+            make_microscope_data(
+                image_data=jnp.ones(shape_3d, dtype=jnp.complex128),  # Should be float array
+                wavelength=wavelength,
+                dx=dx
+            )
+        
+        # Try with invalid shape for image_data (not 3D or 4D)
+        with pytest.raises(Exception):
+            make_microscope_data(
+                image_data=jnp.ones((32, 32), dtype=jnp.float64),  # Should be 3D or 4D
+                wavelength=wavelength,
+                dx=dx
+            )
+        
+        # Try with non-array wavelength
+        with pytest.raises(Exception):
+            make_microscope_data(
+                image_data=image_data_3d,
+                wavelength=500e-9,  # Should be jnp.array
+                dx=dx
+            )
+        
+        # Try with non-array dx
+        with pytest.raises(Exception):
+            make_microscope_data(
+                image_data=image_data_3d,
+                wavelength=wavelength,
+                dx=1e-6  # Should be jnp.array
+            )
+
+
+class TestMakeDiffractogram(chex.TestCase):
+    """Test the make_diffractogram factory function."""
+    
+    def test_make_diffractogram_with_valid_types(self):
+        """Test that make_diffractogram works with valid types."""
+        # Set up test values
+        shape = (32, 32)
+        image = jnp.ones(shape, dtype=jnp.float64)
+        wavelength = jnp.array(500e-9)
+        dx = jnp.array(1e-6)
+        
+        # Create a valid Diffractogram instance
+        diffractogram = make_diffractogram(
+            image=image,
+            wavelength=wavelength,
+            dx=dx
+        )
+        
+        # Check that the returned value is a Diffractogram instance
+        assert isinstance(diffractogram, Diffractogram)
+        
+        # Check that all attributes are set correctly
+        chex.assert_trees_all_close(diffractogram.image, image)
+        assert diffractogram.wavelength == wavelength
+        assert diffractogram.dx == dx
+        
+        # Check shapes and dtypes
+        chex.assert_shape(diffractogram.image, shape)
+        assert diffractogram.image.dtype == jnp.float64
+    
+    def test_make_diffractogram_with_invalid_types(self):
+        """Test that make_diffractogram raises an error with invalid types."""
+        # Set up test values
+        shape = (32, 32)
+        image = jnp.ones(shape, dtype=jnp.float64)
+        wavelength = jnp.array(500e-9)
+        dx = jnp.array(1e-6)
+        
+        # Try with non-float image
+        with pytest.raises(Exception):
+            make_diffractogram(
+                image=jnp.ones(shape, dtype=jnp.complex128),  # Should be float array
+                wavelength=wavelength,
+                dx=dx
+            )
+        
+        # Try with wrong shape for image
+        with pytest.raises(Exception):
+            make_diffractogram(
+                image=jnp.ones((3, 32, 32), dtype=jnp.float64),  # Should be 2D
+                wavelength=wavelength,
+                dx=dx
+            )
+        
+        # Try with non-array wavelength
+        with pytest.raises(Exception):
+            make_diffractogram(
+                image=image,
+                wavelength=500e-9,  # Should be jnp.array
+                dx=dx
+            )
+        
+        # Try with non-array dx
+        with pytest.raises(Exception):
+            make_diffractogram(
+                image=image,
+                wavelength=wavelength,
+                dx=1e-6  # Should be jnp.array
             )
 
 

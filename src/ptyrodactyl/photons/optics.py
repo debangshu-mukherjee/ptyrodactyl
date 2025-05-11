@@ -26,8 +26,8 @@ from beartype.typing import Optional
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (OpticalWavefront, make_optical_wavefront, scalar_float,
-                   scalar_int, scalar_num)
+from .photon_types import (OpticalWavefront, make_optical_wavefront,
+                           scalar_float, scalar_int, scalar_num)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -391,6 +391,7 @@ def digital_zoom(
         z_position=wavefront.z_position,
     )
     return zoomed_wavefront
+
 
 @jaxtyped(typechecker=beartype)
 def optical_zoom(

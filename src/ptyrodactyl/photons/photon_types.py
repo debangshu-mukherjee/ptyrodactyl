@@ -189,6 +189,78 @@ class OpticalWavefront(NamedTuple):
         return cls(*children)
 
 
+@register_pytree_node_class
+class MicroscopeData(NamedTuple):
+    """
+    Description
+    -----------
+    PyTree structure for representing an 3D or 4D microscope image.
+
+    Attributes
+    ----------
+    - `image_data` (Float[Array, "P H W"] | Float[Array, "X Y H W"]):
+        3D or 4D image data representing the optical field.
+    - `wavelength` (scalar_float):
+        Wavelength of the optical wavefront in meters.
+    - `dx` (scalar_float):
+        Spatial sampling interval (grid spacing) in meters.
+    """
+
+    image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
+    wavelength: scalar_float
+    dx: scalar_float
+
+    def tree_flatten(self):
+        return (
+            (
+                self.image_data,
+                self.wavelength,
+                self.dx,
+            ),
+            None,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
+
+
+@register_pytree_node_class
+class Diffractogram(NamedTuple):
+    """
+    Description
+    -----------
+    PyTree structure for representing a single diffractogram.
+
+    Attributes
+    ----------
+    - `image` (Float[Array, "H W"]):
+        Image data.
+    - `wavelength` (scalar_float):
+        Wavelength of the optical wavefront in meters.
+    - `dx` (scalar_float):
+        Spatial sampling interval (grid spacing) in meters.
+    """
+
+    image: Float[Array, "H W"]
+    wavelength: scalar_float
+    dx: scalar_float
+
+    def tree_flatten(self):
+        return (
+            (
+                self.image,
+                self.wavelength,
+                self.dx,
+            ),
+            None,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
+
+
 @jaxtyped(typechecker=beartype)
 def make_lens_params(
     focal_length: Float[Array, ""],
@@ -272,3 +344,45 @@ def make_optical_wavefront(
     return OpticalWavefront(
         field=field, wavelength=wavelength, dx=dx, z_position=z_position
     )
+
+@jaxtyped(typechecker=beartype)
+def make_microscope_data(
+    image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]],
+    wavelength: Float[Array, ""],
+    dx: Float[Array, ""],
+) -> MicroscopeData:
+    """
+    Factory function for MicroscopeData with runtime type-checking.
+
+    Parameters
+    ----------
+    - `image_data` : Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
+    - `wavelength` : Float[Array, ""]
+    - `dx` : Float[Array, ""]
+
+    Returns
+    -------
+    - `MicroscopeData` instance
+    """
+    return MicroscopeData(image_data=image_data, wavelength=wavelength, dx=dx)
+
+@jaxtyped(typechecker=beartype)
+def make_diffractogram(
+    image: Float[Array, "H W"],
+    wavelength: Float[Array, ""],
+    dx: Float[Array, ""],
+) -> Diffractogram:
+    """
+    Factory function for Diffractogram with runtime type-checking.
+
+    Parameters
+    ----------
+    - `image` : Float[Array, "H W"]
+    - `wavelength` : Float[Array, ""]
+    - `dx` : Float[Array, ""]
+
+    Returns
+    -------
+    - `Diffractogram` instance
+    """
+    return Diffractogram(image=image, wavelength=wavelength, dx=dx)

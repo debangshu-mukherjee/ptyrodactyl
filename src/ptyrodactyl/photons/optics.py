@@ -13,8 +13,10 @@ Functions
     Propagates a complex optical field using the Fraunhofer approximation
 - `circular_aperture`:
     Applies a circular aperture to an incoming wavefront
-- `zoom_wavefront`:
+- `digital_zoom`:
     Zooms an optical wavefront by a specified factor
+- `optical_zoom`:
+    Modifies the calibration of an optical wavefront without changing its field
 """
 
 import jax
@@ -341,7 +343,7 @@ def circular_aperture(
 
 
 @jaxtyped(typechecker=beartype)
-def zoom_wavefront(
+def digital_zoom(
     wavefront: OpticalWavefront, zoom_factor: scalar_num
 ) -> OpticalWavefront:
     """
@@ -386,6 +388,37 @@ def zoom_wavefront(
         field=zoomed_field,
         wavelength=wavefront.wavelength,
         dx=wavefront.dx / zoom_factor,
+        z_position=wavefront.z_position,
+    )
+    return zoomed_wavefront
+
+@jaxtyped(typechecker=beartype)
+def optical_zoom(
+    wavefront: OpticalWavefront,
+    zoom_factor: scalar_num,
+) -> OpticalWavefront:
+    """
+    This is the optical zoom function that only
+    modifies the calibration and leaves everything
+    else the same.
+
+    Parameters
+    ----------
+    - `wavefront` (OpticalWavefront):
+        Incoming optical wavefront.
+    - `zoom_factor` (scalar_num):
+        Zoom factor (greater than 1 to zoom in, less than 1 to zoom out).
+
+    Returns
+    -------
+    - `zoomed_wavefront` (OpticalWavefront):
+        Zoomed optical wavefront of the same spatial dimensions.
+    """
+    new_dx = wavefront.dx * zoom_factor
+    zoomed_wavefront: OpticalWavefront = make_optical_wavefront(
+        field=wavefront.field,
+        wavelength=wavefront.wavelength,
+        dx=new_dx,
         z_position=wavefront.z_position,
     )
     return zoomed_wavefront

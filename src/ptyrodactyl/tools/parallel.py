@@ -1,7 +1,6 @@
 from typing import Sequence, Union
 
 import jax
-import jax.numpy as jnp
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from jaxtyping import Array
 

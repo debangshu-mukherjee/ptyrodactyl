@@ -16,8 +16,11 @@ from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
 from .lenses import create_lens_phase
-from .photon_types import (LensParams, OpticalWavefront, make_lens_params,
-                           make_optical_wavefront, scalar_num)
+from .photon_types import (
+    LensParams,
+    OpticalWavefront,
+    make_optical_wavefront,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -52,8 +55,8 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
     H: int
     W: int
     H, W = incoming.field.shape
-    x: Float[Array, "W"] = jnp.linspace(-W // 2, W // 2 - 1, W) * incoming.dx
-    y: Float[Array, "H"] = jnp.linspace(-H // 2, H // 2 - 1, H) * incoming.dx
+    x: Float[Array, W] = jnp.linspace(-W // 2, W // 2 - 1, W) * incoming.dx
+    y: Float[Array, H] = jnp.linspace(-H // 2, H // 2 - 1, H) * incoming.dx
     X: Float[Array, "H W"]
     Y: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
@@ -62,7 +65,7 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
     transmission: Float[Array, "H W"]
     phase_profile, transmission = create_lens_phase(X, Y, lens, incoming.wavelength)
     transmitted_field: Complex[Array, "H W"] = add_phase_screen(
-        incoming.field * transmission, phase_profile
+        incoming.field * transmission, phase_profile,
     )
     outgoing: OpticalWavefront = make_optical_wavefront(
         field=transmitted_field,

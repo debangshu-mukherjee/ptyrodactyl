@@ -16,8 +16,8 @@ from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
 from .lenses import create_lens_phase
-from .photon_types import (LensParams, OpticalWavefront, make_lens_params, 
-                        make_optical_wavefront, scalar_num)
+from .photon_types import (LensParams, OpticalWavefront, make_lens_params,
+                           make_optical_wavefront, scalar_num)
 
 jax.config.update("jax_enable_x64", True)
 

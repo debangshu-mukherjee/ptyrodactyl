@@ -65,17 +65,17 @@ class LensParams(NamedTuple):
 
     Attributes
     ----------
-    - `focal_length` (Float[Array, ""]):
+    - `focal_length` (scalar_float):
         Focal length of the lens in meters
-    - `diameter` (Float[Array, ""]):
+    - `diameter` (scalar_float):
         Diameter of the lens in meters
-    - `n` (Float[Array, ""]):
+    - `n` (scalar_float):
         Refractive index of the lens material
-    - `center_thickness` (Float[Array, ""]):
+    - `center_thickness` (scalar_float):
         Thickness at the center of the lens in meters
-    - `R1` (Float[Array, ""]):
+    - `R1` (scalar_float):
         Radius of curvature of the first surface in meters (positive for convex)
-    - `R2` (Float[Array, ""]):
+    - `R2` (scalar_float):
         Radius of curvature of the second surface in meters (positive for convex)
 
     Notes
@@ -85,12 +85,12 @@ class LensParams(NamedTuple):
     data is stored in JAX arrays.
     """
 
-    focal_length: Float[Array, ""]
-    diameter: Float[Array, ""]
-    n: Float[Array, ""]
-    center_thickness: Float[Array, ""]
-    R1: Float[Array, ""]
-    R2: Float[Array, ""]
+    focal_length: scalar_float
+    diameter: scalar_float
+    n: scalar_float
+    center_thickness: scalar_float
+    R1: scalar_float
+    R2: scalar_float
 
     def tree_flatten(self):
         return (
@@ -172,7 +172,7 @@ class OpticalWavefront(NamedTuple):
         Wavelength of the optical wavefront in meters.
     - `dx` (scalar_float):
         Spatial sampling interval (grid spacing) in meters.
-    - `z_position` (scalar_float]):
+    - `z_position` (scalar_float):
         Axial position of the wavefront along the propagation direction in meters.
     """
 
@@ -271,24 +271,32 @@ class Diffractogram(NamedTuple):
 
 @jaxtyped(typechecker=beartype)
 def make_lens_params(
-    focal_length: Float[Array, ""],
-    diameter: Float[Array, ""],
-    n: Float[Array, ""],
-    center_thickness: Float[Array, ""],
-    R1: Float[Array, ""],
-    R2: Float[Array, ""],
+    focal_length: scalar_float,
+    diameter: scalar_float,
+    n: scalar_float,
+    center_thickness: scalar_float,
+    R1: scalar_float,
+    R2: scalar_float,
 ) -> LensParams:
     """
+    Description
+    -----------
     Factory function for LensParams with runtime type-checking.
 
     Parameters
     ----------
-    - `focal_length` : Float[Array, ""]
-    - `diameter` : Float[Array, ""]
-    - `n` : Float[Array, ""]
-    - `center_thickness` : Float[Array, ""]
-    - `R1` : Float[Array, ""]
-    - `R2` : Float[Array, ""]
+    - `focal_length` (Float[Array, ""]):
+        Focal length of the lens in meters
+    - `diameter` (Float[Array, ""]):
+        Diameter of the lens in meters
+    - `n` (Float[Array, ""]):
+        Refractive index of the lens material
+    - `center_thickness` (Float[Array, ""]):
+        Thickness at the center of the lens in meters
+    - `R1` (Float[Array, ""]):
+        Radius of curvature of the first surface in meters (positive for convex)
+    - `R2` (Float[Array, ""]):
+        Radius of curvature of the second surface in meters (positive for convex)
 
     Returns
     -------
@@ -312,14 +320,20 @@ def make_grid_params(
     transmission: Float[Array, "H W"],
 ) -> GridParams:
     """
+    Description
+    -----------
     Factory function for GridParams with runtime type-checking.
 
     Parameters
     ----------
-    - `X` : Float[Array, "H W"]
-    - `Y` : Float[Array, "H W"]
-    - `phase_profile` : Float[Array, "H W"]
-    - `transmission` : Float[Array, "H W"]
+    - `X` (Float[Array, "H W"]):
+        Spatial grid in the x-direction
+    - `Y` (Float[Array, "H W"]):
+        Spatial grid in the y-direction
+    - `phase_profile` (Float[Array, "H W"]):
+        Phase profile of the optical field
+    - `transmission` (Float[Array, "H W"]):
+        Transmission profile of the optical field
 
     Returns
     -------
@@ -331,19 +345,25 @@ def make_grid_params(
 @jaxtyped(typechecker=beartype)
 def make_optical_wavefront(
     field: Complex[Array, "H W"],
-    wavelength: Float[Array, ""],
-    dx: Float[Array, ""],
-    z_position: Float[Array, ""],
+    wavelength: scalar_float,
+    dx: scalar_float,
+    z_position: scalar_float,
 ) -> OpticalWavefront:
     """
+    Description
+    -----------
     Factory function for OpticalWavefront with runtime type-checking.
 
     Parameters
     ----------
-    - `field` : Complex[Array, "H W"]
-    - `wavelength` : Float[Array, ""]
-    - `dx` : Float[Array, ""]
-    - `z_position` : Float[Array, ""]
+    - `field` (Complex[Array, "H W"]):
+        Complex amplitude of the optical field.
+    - `wavelength` (scalar_float):
+        Wavelength of the optical wavefront in meters.
+    - `dx` (scalar_float):
+        Spatial sampling interval (grid spacing) in meters.
+    - `z_position` (scalar_float):
+        Axial position of the wavefront along the propagation direction in meters.
 
     Returns
     -------
@@ -353,20 +373,26 @@ def make_optical_wavefront(
         field=field, wavelength=wavelength, dx=dx, z_position=z_position
     )
 
+
 @jaxtyped(typechecker=beartype)
 def make_microscope_data(
     image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]],
-    wavelength: Float[Array, ""],
-    dx: Float[Array, ""],
+    wavelength: scalar_float,
+    dx: scalar_float,
 ) -> MicroscopeData:
     """
+    Description
+    -----------
     Factory function for MicroscopeData with runtime type-checking.
 
     Parameters
     ----------
-    - `image_data` : Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
-    - `wavelength` : Float[Array, ""]
-    - `dx` : Float[Array, ""]
+    - `image_data` (Union[Float[Array, "P H W"], Float[Array, "X Y H W"]])
+        3D or 4D image data representing the optical field.
+    - `wavelength` (scalar_float):
+        Wavelength of the optical wavefront in meters.
+    - `dx` (scalar_float):
+        Spatial sampling interval (grid spacing) in meters.
 
     Returns
     -------
@@ -374,20 +400,26 @@ def make_microscope_data(
     """
     return MicroscopeData(image_data=image_data, wavelength=wavelength, dx=dx)
 
+
 @jaxtyped(typechecker=beartype)
 def make_diffractogram(
     image: Float[Array, "H W"],
-    wavelength: Float[Array, ""],
-    dx: Float[Array, ""],
+    wavelength: scalar_float,
+    dx: scalar_float,
 ) -> Diffractogram:
     """
+    Description
+    -----------
     Factory function for Diffractogram with runtime type-checking.
 
     Parameters
     ----------
-    - `image` : Float[Array, "H W"]
-    - `wavelength` : Float[Array, ""]
-    - `dx` : Float[Array, ""]
+    - `image` (Float[Array, "H W"):
+        Image data.
+    - `wavelength` (scalar_float):
+        Wavelength of the optical wavefront in meters.
+    - `dx` (scalar_float):
+        Spatial sampling interval (grid spacing) in meters.
 
     Returns
     -------

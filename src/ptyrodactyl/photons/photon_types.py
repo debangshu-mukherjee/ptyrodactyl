@@ -73,9 +73,9 @@ class LensParams(NamedTuple):
         Refractive index of the lens material
     - `center_thickness` (scalar_float):
         Thickness at the center of the lens in meters
-    - `R1` (scalar_float):
+    - `r1` (scalar_float):
         Radius of curvature of the first surface in meters (positive for convex)
-    - `R2` (scalar_float):
+    - `r2` (scalar_float):
         Radius of curvature of the second surface in meters (positive for convex)
 
     Notes
@@ -89,8 +89,8 @@ class LensParams(NamedTuple):
     diameter: scalar_float
     n: scalar_float
     center_thickness: scalar_float
-    R1: scalar_float
-    R2: scalar_float
+    r1: scalar_float
+    r2: scalar_float
 
     def tree_flatten(self):
         return (
@@ -99,8 +99,8 @@ class LensParams(NamedTuple):
                 self.diameter,
                 self.n,
                 self.center_thickness,
-                self.R1,
-                self.R2,
+                self.r1,
+                self.r2,
             ),
             None,
         )
@@ -119,9 +119,9 @@ class GridParams(NamedTuple):
 
     Attributes
     ----------
-    - `X` (Float[Array, "H W"]):
+    - `xx` (Float[Array, "H W"]):
         Spatial grid in the x-direction
-    - `Y` (Float[Array, "H W"]):
+    - `yy` (Float[Array, "H W"]):
         Spatial grid in the y-direction
     - `phase_profile` (Float[Array, "H W"]):
         Phase profile of the optical field
@@ -136,16 +136,16 @@ class GridParams(NamedTuple):
     data is stored in JAX arrays.
     """
 
-    X: Float[Array, "H W"]
-    Y: Float[Array, "H W"]
+    xx: Float[Array, "H W"]
+    yy: Float[Array, "H W"]
     phase_profile: Float[Array, "H W"]
     transmission: Float[Array, "H W"]
 
     def tree_flatten(self):
         return (
             (
-                self.X,
-                self.Y,
+                self.xx,
+                self.yy,
                 self.phase_profile,
                 self.transmission,
             ),
@@ -275,8 +275,8 @@ def make_lens_params(
     diameter: scalar_float,
     n: scalar_float,
     center_thickness: scalar_float,
-    R1: scalar_float,
-    R2: scalar_float,
+    r1: scalar_float,
+    r2: scalar_float,
 ) -> LensParams:
     """
     Description
@@ -307,15 +307,15 @@ def make_lens_params(
         diameter=diameter,
         n=n,
         center_thickness=center_thickness,
-        R1=R1,
-        R2=R2,
+        r1=r1,
+        r2=r2,
     )
 
 
 @jaxtyped(typechecker=beartype)
 def make_grid_params(
-    X: Float[Array, "H W"],
-    Y: Float[Array, "H W"],
+    xx: Float[Array, "H W"],
+    yy: Float[Array, "H W"],
     phase_profile: Float[Array, "H W"],
     transmission: Float[Array, "H W"],
 ) -> GridParams:
@@ -326,9 +326,9 @@ def make_grid_params(
 
     Parameters
     ----------
-    - `X` (Float[Array, "H W"]):
+    - `xx` (Float[Array, "H W"]):
         Spatial grid in the x-direction
-    - `Y` (Float[Array, "H W"]):
+    - `yy` (Float[Array, "H W"]):
         Spatial grid in the y-direction
     - `phase_profile` (Float[Array, "H W"]):
         Phase profile of the optical field
@@ -339,7 +339,7 @@ def make_grid_params(
     -------
     - `GridParams` instance
     """
-    return GridParams(X=X, Y=Y, phase_profile=phase_profile, transmission=transmission)
+    return GridParams(X=xx, Y=yy, phase_profile=phase_profile, transmission=transmission)
 
 
 @jaxtyped(typechecker=beartype)
@@ -370,7 +370,7 @@ def make_optical_wavefront(
     - `OpticalWavefront` instance
     """
     return OpticalWavefront(
-        field=field, wavelength=wavelength, dx=dx, z_position=z_position
+        field=field, wavelength=wavelength, dx=dx, z_position=z_position,
     )
 
 

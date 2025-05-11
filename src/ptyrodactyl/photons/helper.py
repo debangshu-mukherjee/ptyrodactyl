@@ -26,7 +26,7 @@ jax.config.update("jax_enable_x64", True)
 
 @jaxtyped(typechecker=beartype)
 def create_spatial_grid(
-    diameter: Num[Array, ""], num_points: Int[Array, ""]
+    diameter: Num[Array, ""], num_points: Int[Array, ""],
 ) -> Tuple[Float[Array, "N N"], Float[Array, "N N"]]:
     """
     Description
@@ -51,8 +51,8 @@ def create_spatial_grid(
     - Create a meshgrid of spatial coordinates
     - Return the meshgrid
     """
-    x: Float[Array, "N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
-    y: Float[Array, "N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
+    x: Float[Array, N] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
+    y: Float[Array, N] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
     xx: Float[Array, "N N"]
     yy: Float[Array, "N N"]
     xx, yy = jnp.meshgrid(x, y)

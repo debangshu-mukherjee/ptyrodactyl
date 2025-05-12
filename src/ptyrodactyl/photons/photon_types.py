@@ -212,6 +212,8 @@ class MicroscopeData(NamedTuple):
     ----------
     - `image_data` (Float[Array, "P H W"] | Float[Array, "X Y H W"]):
         3D or 4D image data representing the optical field.
+    - `positions` (Num[Array, "P 2"]):
+        Positions of the images during collection.
     - `wavelength` (scalar_float):
         Wavelength of the optical wavefront in meters.
     - `dx` (scalar_float):
@@ -219,6 +221,7 @@ class MicroscopeData(NamedTuple):
     """
 
     image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
+    positions: Num[Array, "P 2"]
     wavelength: scalar_float
     dx: scalar_float
 
@@ -226,6 +229,7 @@ class MicroscopeData(NamedTuple):
         return (
             (
                 self.image_data,
+                self.positions,
                 self.wavelength,
                 self.dx,
             ),
@@ -418,6 +422,7 @@ def make_optical_wavefront(
 @jaxtyped(typechecker=beartype)
 def make_microscope_data(
     image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]],
+    positions: Num[Array, "P 2"],
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> MicroscopeData:
@@ -430,6 +435,8 @@ def make_microscope_data(
     ----------
     - `image_data` (Union[Float[Array, "P H W"], Float[Array, "X Y H W"]])
         3D or 4D image data representing the optical field.
+    - `positions` (Num[Array, "P 2"]):
+        Positions of the images during collection.
     - `wavelength` (scalar_float):
         Wavelength of the optical wavefront in meters.
     - `dx` (scalar_float):
@@ -439,7 +446,9 @@ def make_microscope_data(
     -------
     - `MicroscopeData` instance
     """
-    return MicroscopeData(image_data=image_data, wavelength=wavelength, dx=dx)
+    return MicroscopeData(
+        image_data=image_data, positions=positions, wavelength=wavelength, dx=dx
+    )
 
 
 @jaxtyped(typechecker=beartype)

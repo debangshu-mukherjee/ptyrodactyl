@@ -13,7 +13,7 @@ Submodules
     Optical propagation functions including angular spectrum, Fresnel, and Fraunhofer methods
 - `lenses`: 
     Models for various lens types and their optical properties
-- `forward`: 
+- `microscope`: 
     Forward propagation of light through optical elements
 - `helper`: 
     Utility functions for creating grids, phase manipulation, and field calculations
@@ -26,8 +26,8 @@ Submodules
 """
 
 from .engine import *
-from .forward import *
 from .helper import *
 from .lenses import *
+from .microscope import *
 from .optics import *
 from .photon_types import *

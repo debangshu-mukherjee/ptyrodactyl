@@ -6,7 +6,7 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons.forward import lens_propagation
+from ptyrodactyl.photons.microscope import lens_propagation
 from ptyrodactyl.photons.lenses import double_convex_lens
 from ptyrodactyl.photons.photon_types import (LensParams, OpticalWavefront,
                                            make_optical_wavefront)

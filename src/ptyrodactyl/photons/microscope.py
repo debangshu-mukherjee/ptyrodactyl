@@ -1,6 +1,6 @@
 """
-Module: photons.forward
----------------------------
+Module: photons.microscope
+--------------------------
 Codes for optical propagation through lenses and optical elements.
 
 Functions
@@ -11,20 +11,27 @@ Functions
     Propagates an optical wavefront through a sample using linear interaction
 - `simple_diffractogram`:
     Calculates the diffractogram of a sample using a simple model
+- `simple_microscope`:
+    Calculates the 3D diffractograms of the entire imaging done at
+    every pixel positions. This cuts the sample, and then generates
+    a diffractogram with the desired camera pixel size - all done
+    in parallel.
 """
 
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional
-from jaxtyping import Array, Complex, Float, jaxtyped
+from beartype.typing import Optional, Tuple
+from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 from .helper import add_phase_screen, field_intensity, scale_pixel
 from .lenses import create_lens_phase
 from .optics import circular_aperture, fraunhofer_prop, optical_zoom
-from .photon_types import (Diffractogram, LensParams, OpticalWavefront,
-                           SampleFunction, make_diffractogram,
-                           make_optical_wavefront, scalar_float)
+from .photon_types import (Diffractogram, LensParams, MicroscopeData,
+                           OpticalWavefront, SampleFunction,
+                           make_diffractogram, make_microscope_data,
+                           make_optical_wavefront, make_sample_function,
+                           scalar_float, scalar_num)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -187,3 +194,102 @@ def simple_diffractogram(
         dx=at_camera_scaled.dx,
     )
     return diffractogram
+
+
+@jaxtyped(typechecker=beartype)
+def simple_microscope(
+    sample: SampleFunction,
+    positions: Num[Array, "n 2"],
+    lightwave: OpticalWavefront,
+    zoom_factor: scalar_float,
+    aperture_diameter: scalar_float,
+    travel_distance: scalar_float,
+    camera_pixel_size: scalar_float,
+    aperture_center: Optional[Float[Array, "2"]] = None,
+):
+    """
+    Description
+    -----------
+    Calculate the 3D diffractograms of the entire imaging done at
+    every pixel positions. This cuts the sample, and then generates
+    a diffractogram with the desired camera pixel size - all done
+    in parallel.
+
+    Parameters
+    ----------
+    - `sample` (SampleFunction):
+        The sample function representing the optical properties of the sample
+    - `positions` (Num[Array, "n 2"]):
+        The positions in the sample plane where the diffractograms are calculated
+    - `lightwave` (OpticalWavefront):
+        The incoming optical wavefront
+    - `zoom_factor` (scalar_float):
+        The zoom factor for the optical system
+    - `aperture_diameter` (scalar_float):
+        The diameter of the aperture in meters
+    - `travel_distance` (scalar_float):
+        The distance traveled by the light in meters
+    - `camera_pixel_size` (scalar_float):
+        The pixel size of the camera in meters
+    - `aperture_center` (Optional[Float[Array, "2"]]):
+        The center of the aperture in pixels
+
+    Returns
+    -------
+    - `combined_data` (MicroscopeData):
+        The calculated diffractograms of the sample at the specified positions
+
+    Flow
+    ----
+    - Get the size of the lightwave field
+    - Calculate the pixel positions in the sample plane
+    - For each position, cut out the sample and calculate the diffractogram
+    - Combine the diffractograms into a single MicroscopeData object
+    - Return the MicroscopeData object
+    """
+    interaction_size: Tuple[int, int] = lightwave.field.shape
+    pixel_positions: Float[Array, "n 2"] = positions / lightwave.dx
+
+    def diffractogram_at_position(
+        sample: SampleFunction, this_position: Num[Array, "2"]
+    ):
+        x: scalar_num
+        y: scalar_num
+        x, y = this_position
+        start_cut_x: Int[Array, ""] = jnp.floor(x - (0.5 * interaction_size[1])).astype(
+            int
+        )
+        start_cut_y: Int[Array, ""] = jnp.floor(y - (0.5 * interaction_size[0])).astype(
+            int
+        )
+        cutout_sample: Complex[Array, "H W"] = jax.lax.dynamic_slice(
+            sample.sample,
+            (start_cut_y, start_cut_x),
+            (interaction_size[0], interaction_size[1]),
+        )
+        cutout_sample = make_sample_function(
+            cutout_sample,
+            dx=sample.dx,
+        )
+        this_diffractogram: Diffractogram = simple_diffractogram(
+            sample_cut=cutout_sample,
+            lightwave=lightwave,
+            zoom_factor=zoom_factor,
+            aperture_diameter=aperture_diameter,
+            travel_distance=travel_distance,
+            camera_pixel_size=camera_pixel_size,
+            aperture_center=aperture_center,
+        )
+        return this_diffractogram.image
+
+    diffraction_images: Float[Array, "n H W"] = jax.vmap(diffractogram_at_position)(
+        sample,
+        pixel_positions,
+    )
+    combined_data: MicroscopeData = make_microscope_data(
+        images=diffraction_images,
+        positions=positions,
+        wavelength=lightwave.wavelength,
+        dx=lightwave.dx,
+    )
+    return combined_data

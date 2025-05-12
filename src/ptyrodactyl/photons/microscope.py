@@ -206,7 +206,7 @@ def simple_microscope(
     travel_distance: scalar_float,
     camera_pixel_size: scalar_float,
     aperture_center: Optional[Float[Array, "2"]] = None,
-):
+) -> MicroscopeData:
     """
     Description
     -----------

@@ -9,24 +9,27 @@ are fully differentiable and JIT-compilable.
 
 Submodules
 ----------
-- `optics`: 
-    Optical propagation functions including angular spectrum, Fresnel, and Fraunhofer methods
+- `engine`: 
+    Framework for building complete optical simulation pipelines
+- `helper`: 
+    Utility functions for creating grids, phase manipulation, and field calculations
+- `invertor`:
+    Inversion algorithms for phase retrieval and ptychography.
 - `lenses`: 
     Models for various lens types and their optical properties
 - `microscope`: 
     Forward propagation of light through optical elements
-- `helper`: 
-    Utility functions for creating grids, phase manipulation, and field calculations
+- `optics`: 
+    Optical propagation functions including angular spectrum, Fresnel, and Fraunhofer methods
 - `photon_types`: 
     Data structures and type definitions for optical propagation
-- `engine`: 
-    Framework for building complete optical simulation pipelines
 
 .. currentmodule:: ptyrodactyl.photons
 """
 
 from .engine import *
 from .helper import *
+from .invertor import *
 from .lenses import *
 from .microscope import *
 from .optics import *

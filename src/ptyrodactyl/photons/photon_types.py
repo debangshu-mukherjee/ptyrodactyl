@@ -5,43 +5,47 @@ Data structures and type definitions for optical ptychography.
 
 Type Aliases
 ------------
-- `scalar_float`: 
+- `scalar_float`:
     Type alias for float or Float array of 0 dimensions
-- `scalar_int`: 
+- `scalar_int`:
     Type alias for int or Integer array of 0 dimensions
-- `scalar_num`: 
+- `scalar_num`:
     Type alias for numeric types (int, float or Num array)
     Num Array has 0 dimensions
-- `non_jax_number`: 
+- `non_jax_number`:
     Type alias for non-JAX numeric types (int, float)
 
 Classes
 -------
-- `LensParams`: 
+- `LensParams`:
     A named tuple for lens parameters
-- `GridParams`: 
+- `GridParams`:
     A named tuple for computational grid parameters
-- `OpticalWavefront`: 
+- `OpticalWavefront`:
     A named tuple for representing an optical wavefront
 - `MicroscopeData`:
     A named tuple for storing 3D or 4D microscope image data
+- `SampleFunction`:
+    A named tuple for representing a sample function
 - `Diffractogram`:
     A named tuple for storing a single diffraction pattern
 
 Factory Functions
 ----------------
-- `make_lens_params`: 
+- `make_lens_params`:
     Creates a LensParams instance with runtime type checking
-- `make_grid_params`: 
+- `make_grid_params`:
     Creates a GridParams instance with runtime type checking
-- `make_optical_wavefront`: 
+- `make_optical_wavefront`:
     Creates an OpticalWavefront instance with runtime type checking
 - `make_microscope_data`:
     Creates a MicroscopeData instance with runtime type checking
 - `make_diffractogram`:
     Creates a Diffractogram instance with runtime type checking
+- `make_sample_function`:
+    Creates a SampleFunction instance with runtime type checking
 
-    Note: Always use these factory functions instead of directly instantiating the 
+    Note: Always use these factory functions instead of directly instantiating the
     NamedTuple classes to ensure proper runtime type checking of the contents.
 """
 
@@ -223,6 +227,38 @@ class MicroscopeData(NamedTuple):
             (
                 self.image_data,
                 self.wavelength,
+                self.dx,
+            ),
+            None,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
+
+
+@register_pytree_node_class
+class SampleFunction(NamedTuple):
+    """
+    Description
+    -----------
+    PyTree structure for representing an 3D or 4D microscope image.
+
+    Attributes
+    ----------
+    - `sample` (Complex[Array, "H W"]):
+        The sample function.
+    - `dx` (scalar_float):
+        Spatial sampling interval (grid spacing) in meters.
+    """
+
+    sample: Complex[Array, "H W"]
+    dx: scalar_float
+
+    def tree_flatten(self):
+        return (
+            (
+                self.sample,
                 self.dx,
             ),
             None,
@@ -431,3 +467,27 @@ def make_diffractogram(
     - `Diffractogram` instance
     """
     return Diffractogram(image=image, wavelength=wavelength, dx=dx)
+
+
+@jaxtyped(typechecker=beartype)
+def make_sample_function(
+    sample: Complex[Array, "H W"],
+    dx: scalar_float,
+) -> SampleFunction:
+    """
+    Description
+    -----------
+    Factory function for SampleFunction with runtime type-checking.
+
+    Parameters
+    ----------
+    - `sample` (Complex[Array, "H W"]):
+        The sample function.
+    - `dx` (scalar_float):
+        Spatial sampling interval (grid spacing) in meters.
+
+    Returns
+    -------
+    - `SampleFunction` instance
+    """
+    return SampleFunction(sample=sample, dx=dx)

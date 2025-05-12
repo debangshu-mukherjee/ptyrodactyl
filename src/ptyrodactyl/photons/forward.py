@@ -7,6 +7,8 @@ Functions
 ---------
 - `lens_propagation`:
     Propagates an optical wavefront through a lens
+- `linear_interaction`:
+    Propagates an optical wavefront through a sample using linear interaction
 """
 
 import jax
@@ -16,7 +18,8 @@ from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
 from .lenses import create_lens_phase
-from .photon_types import LensParams, OpticalWavefront, make_optical_wavefront
+from .photon_types import (LensParams, OpticalWavefront, SampleFunction,
+                           make_optical_wavefront)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -71,3 +74,37 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
         z_position=incoming.z_position,
     )
     return outgoing
+
+
+@jaxtyped(typechecker=beartype)
+def linear_interaction(
+    sample: SampleFunction,
+    light: OpticalWavefront,
+) -> OpticalWavefront:
+    """
+    Description
+    -----------
+    Propagate an optical wavefront through a sample using linear interaction.
+    The sample is modeled as a complex function that modifies the incoming wavefront.
+
+    Parameters
+    ----------
+    - `sample` (SampleFunction):
+        The sample function representing the optical properties of the sample
+    - `light` (OpticalWavefront):
+        The incoming optical wavefront
+
+    Returns
+    -------
+    - `interacted` (OpticalWavefront):
+        The propagated optical wavefront after passing through the sample
+
+    """
+    new_field: Complex[Array, "H W"] = sample.sample * light.field
+    interacted: OpticalWavefront = make_optical_wavefront(
+        field=new_field,
+        wavelength=light.wavelength,
+        dx=light.dx,
+        z_position=light.z_position,
+    )
+    return interacted

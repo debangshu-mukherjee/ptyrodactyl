@@ -267,12 +267,12 @@ def simple_microscope(
             (start_cut_y, start_cut_x),
             (interaction_size[0], interaction_size[1]),
         )
-        cutout_sample = make_sample_function(
+        this_sample = make_sample_function(
             cutout_sample,
             dx=sample.dx,
         )
         this_diffractogram: Diffractogram = simple_diffractogram(
-            sample_cut=cutout_sample,
+            sample_cut=this_sample,
             lightwave=lightwave,
             zoom_factor=zoom_factor,
             aperture_diameter=aperture_diameter,

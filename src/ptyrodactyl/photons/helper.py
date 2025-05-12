@@ -57,8 +57,8 @@ def create_spatial_grid(
     - Create a meshgrid of spatial coordinates
     - Return the meshgrid
     """
-    x: Float[Array, N] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
-    y: Float[Array, N] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
+    x: Float[Array, "N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
+    y: Float[Array, "N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
     xx: Float[Array, "N N"]
     yy: Float[Array, "N N"]
     xx, yy = jnp.meshgrid(x, y)

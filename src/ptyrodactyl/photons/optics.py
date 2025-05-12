@@ -85,8 +85,8 @@ def angular_spectrum_prop(
     nx: scalar_int = incoming.field.shape[1]
     wavenumber: Float[Array, ""] = 2 * jnp.pi / incoming.wavelength
     path_length = refractive_index * z_move
-    fx: Float[Array, H] = jnp.fft.fftfreq(nx, d=incoming.dx)
-    fy: Float[Array, W] = jnp.fft.fftfreq(ny, d=incoming.dx)
+    fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
+    fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
@@ -160,8 +160,8 @@ def fresnel_prop(
     ny: scalar_int = incoming.field.shape[0]
     nx: scalar_int = incoming.field.shape[1]
     k: Float[Array, ""] = (2 * jnp.pi) / incoming.wavelength
-    x: Float[Array, H] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
-    y: Float[Array, W] = jnp.arange(-ny // 2, ny // 2) * incoming.dx
+    x: Float[Array, "H"] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
+    y: Float[Array, "W"] = jnp.arange(-ny // 2, ny // 2) * incoming.dx
     X: Float[Array, "H W"]
     Y: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
@@ -174,8 +174,8 @@ def fresnel_prop(
     field_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(jnp.fft.ifftshift(field_with_phase)),
     )
-    fx: Float[Array, H] = jnp.fft.fftfreq(nx, d=incoming.dx)
-    fy: Float[Array, W] = jnp.fft.fftfreq(ny, d=incoming.dx)
+    fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
+    fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
@@ -246,8 +246,8 @@ def fraunhofer_prop(
     """
     ny: scalar_int = incoming.field.shape[0]
     nx: scalar_int = incoming.field.shape[1]
-    fx: Float[Array, H] = jnp.fft.fftfreq(nx, d=incoming.dx)
-    fy: Float[Array, W] = jnp.fft.fftfreq(ny, d=incoming.dx)
+    fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
+    fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
@@ -322,8 +322,8 @@ def circular_aperture(
     diameter_pixels: scalar_float = diameter / incoming.dx
     ny: scalar_int = incoming.field.shape[0]
     nx: scalar_int = incoming.field.shape[1]
-    x: Float[Array, W] = jnp.arange(-nx // 2, nx // 2)
-    y: Float[Array, H] = jnp.arange(-ny // 2, ny // 2)
+    x: Float[Array, "W"] = jnp.arange(-nx // 2, nx // 2)
+    y: Float[Array, "H"] = jnp.arange(-ny // 2, ny // 2)
     Y: Float[Array, "H W"]
     X: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)

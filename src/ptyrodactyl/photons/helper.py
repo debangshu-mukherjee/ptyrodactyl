@@ -13,6 +13,8 @@ Functions
     Adds a phase screen to a complex field
 - `field_intensity`:
     Calculates intensity from a complex field
+- `scale_pixel`:
+    Rescales OpticalWavefront pixel size while keeping array shape fixed
 """
 
 import jax

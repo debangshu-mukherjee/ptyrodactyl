@@ -349,6 +349,8 @@ def digital_zoom(
     zoom_factor: scalar_num,
 ) -> OpticalWavefront:
     """
+    Description
+    -----------
     Zoom an optical wavefront by a specified factor.
     Key is this returns the same sized array as the
     original wavefront.
@@ -405,6 +407,8 @@ def optical_zoom(
     zoom_factor: scalar_num,
 ) -> OpticalWavefront:
     """
+    Description
+    -----------
     This is the optical zoom function that only
     modifies the calibration and leaves everything
     else the same.

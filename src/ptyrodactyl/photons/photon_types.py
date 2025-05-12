@@ -339,7 +339,9 @@ def make_grid_params(
     -------
     - `GridParams` instance
     """
-    return GridParams(X=xx, Y=yy, phase_profile=phase_profile, transmission=transmission)
+    return GridParams(
+        X=xx, Y=yy, phase_profile=phase_profile, transmission=transmission
+    )
 
 
 @jaxtyped(typechecker=beartype)
@@ -370,7 +372,10 @@ def make_optical_wavefront(
     - `OpticalWavefront` instance
     """
     return OpticalWavefront(
-        field=field, wavelength=wavelength, dx=dx, z_position=z_position,
+        field=field,
+        wavelength=wavelength,
+        dx=dx,
+        z_position=z_position,
     )
 
 

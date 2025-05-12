@@ -32,7 +32,8 @@ from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import LensParams, make_lens_params, scalar_float, scalar_num
+from .photon_types import (LensParams, make_lens_params, scalar_float,
+                           scalar_num)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -76,13 +77,19 @@ def lens_thickness_profile(
     - Return thickness profile
     """
     sag1: Float[Array, "H W"] = jnp.where(
-        r <= diameter / 2, r1 - jnp.sqrt(jnp.maximum(r1**2 - r**2, 0.0)), 0.0,
+        r <= diameter / 2,
+        r1 - jnp.sqrt(jnp.maximum(r1**2 - r**2, 0.0)),
+        0.0,
     )
     sag2: Float[Array, "H W"] = jnp.where(
-        r <= diameter / 2, r2 - jnp.sqrt(jnp.maximum(r2**2 - r**2, 0.0)), 0.0,
+        r <= diameter / 2,
+        r2 - jnp.sqrt(jnp.maximum(r2**2 - r**2, 0.0)),
+        0.0,
     )
     thickness: Float[Array, "H W"] = jnp.where(
-        r <= diameter / 2, center_thickness + sag1 - sag2, 0.0,
+        r <= diameter / 2,
+        center_thickness + sag1 - sag2,
+        0.0,
     )
     return thickness
 
@@ -167,7 +174,11 @@ def create_lens_phase(
     """
     r: Float[Array, "H W"] = jnp.sqrt(xx**2 + yy**2)
     thickness: Float[Array, "H W"] = lens_thickness_profile(
-        r, params.R1, params.R2, params.center_thickness, params.diameter,
+        r,
+        params.R1,
+        params.R2,
+        params.center_thickness,
+        params.diameter,
     )
     k: Float[Array, ""] = jnp.asarray(2 * jnp.pi / wavelength)
     phase_profile: Float[Array, "H W"] = k * (params.n - 1) * thickness
@@ -207,7 +218,8 @@ def propagate_through_lens(
     - Return modified field
     """
     output_field: Complex[Array, "H W"] = add_phase_screen(
-        field * transmission, phase_profile,
+        field * transmission,
+        phase_profile,
     )
     return output_field
 

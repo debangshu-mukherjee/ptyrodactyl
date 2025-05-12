@@ -26,13 +26,8 @@ from beartype.typing import Optional
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (
-    OpticalWavefront,
-    make_optical_wavefront,
-    scalar_float,
-    scalar_int,
-    scalar_num,
-)
+from .photon_types import (OpticalWavefront, make_optical_wavefront,
+                           scalar_float, scalar_int, scalar_num)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -173,7 +168,8 @@ def fresnel_prop(
     path_length = refractive_index * z_move
     quadratic_phase: Float[Array, "H W"] = k / (2 * path_length) * (X**2 + Y**2)
     field_with_phase: Complex[Array, "H W"] = add_phase_screen(
-        incoming.field, quadratic_phase,
+        incoming.field,
+        quadratic_phase,
     )
     field_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(jnp.fft.ifftshift(field_with_phase)),
@@ -349,7 +345,8 @@ def circular_aperture(
 
 @jaxtyped(typechecker=beartype)
 def digital_zoom(
-    wavefront: OpticalWavefront, zoom_factor: scalar_num,
+    wavefront: OpticalWavefront,
+    zoom_factor: scalar_num,
 ) -> OpticalWavefront:
     """
     Zoom an optical wavefront by a specified factor.
@@ -384,10 +381,14 @@ def digital_zoom(
     start_H: int = (H - H_cut) // 2
     start_W: int = (W - W_cut) // 2
     cut_field: Complex[Array, "H_cut W_cut"] = jax.lax.dynamic_slice(
-        wavefront.field, (start_H, start_W), (H_cut, W_cut),
+        wavefront.field,
+        (start_H, start_W),
+        (H_cut, W_cut),
     )
     zoomed_field: Complex[Array, "H W"] = jax.image.resize(
-        image=cut_field, shape=(H, W), method="trilinear",
+        image=cut_field,
+        shape=(H, W),
+        method="trilinear",
     )
     zoomed_wavefront: OpticalWavefront = make_optical_wavefront(
         field=zoomed_field,

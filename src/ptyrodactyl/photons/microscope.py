@@ -268,7 +268,7 @@ def simple_microscope(
             (interaction_size[0], interaction_size[1]),
         )
         this_sample = make_sample_function(
-            cutout_sample,
+            sample=cutout_sample,
             dx=sample.dx,
         )
         this_diffractogram: Diffractogram = simple_diffractogram(
@@ -282,12 +282,11 @@ def simple_microscope(
         )
         return this_diffractogram.image
 
-    diffraction_images: Float[Array, "n H W"] = jax.vmap(diffractogram_at_position)(
-        sample,
-        pixel_positions,
-    )
+    diffraction_images: Float[Array, "n H W"] = jax.vmap(
+        diffractogram_at_position, in_axes=(None, 0)
+    )(sample, pixel_positions)
     combined_data: MicroscopeData = make_microscope_data(
-        images=diffraction_images,
+        image_data=diffraction_images,
         positions=positions,
         wavelength=lightwave.wavelength,
         dx=lightwave.dx,

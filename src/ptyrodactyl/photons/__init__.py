@@ -15,12 +15,12 @@ Submodules
     Utility functions for creating grids, phase manipulation, and field calculations
 - `invertor`:
     Inversion algorithms for phase retrieval and ptychography.
+- `lens_optics`: 
+    Optical propagation functions including angular spectrum, Fresnel, and Fraunhofer methods
 - `lenses`: 
     Models for various lens types and their optical properties
 - `microscope`: 
     Forward propagation of light through optical elements
-- `optics`: 
-    Optical propagation functions including angular spectrum, Fresnel, and Fraunhofer methods
 - `photon_types`: 
     Data structures and type definitions for optical propagation
 
@@ -30,7 +30,7 @@ Submodules
 from .engine import *
 from .helper import *
 from .invertor import *
+from .lens_optics import *
 from .lenses import *
 from .microscope import *
-from .optics import *
 from .photon_types import *

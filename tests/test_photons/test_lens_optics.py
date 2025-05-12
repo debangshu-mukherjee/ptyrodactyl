@@ -6,7 +6,7 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons.optics import (
+from ptyrodactyl.photons.lens_optics import (
     angular_spectrum_prop,
     fresnel_prop,
     fraunhofer_prop,

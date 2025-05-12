@@ -25,8 +25,8 @@ from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 from .helper import add_phase_screen, field_intensity, scale_pixel
+from .lens_optics import circular_aperture, fraunhofer_prop, optical_zoom
 from .lenses import create_lens_phase
-from .optics import circular_aperture, fraunhofer_prop, optical_zoom
 from .photon_types import (Diffractogram, LensParams, MicroscopeData,
                            OpticalWavefront, SampleFunction,
                            make_diffractogram, make_microscope_data,

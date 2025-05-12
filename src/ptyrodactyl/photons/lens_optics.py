@@ -1,5 +1,5 @@
 """
-Module: photons.optics
+Module: photons.lens_optics
 ---------------------------
 Codes for optical propgation steps.
 

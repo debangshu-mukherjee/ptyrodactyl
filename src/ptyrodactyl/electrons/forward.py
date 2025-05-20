@@ -230,9 +230,9 @@ def make_probe(
     voltage: scalar_numeric,
     image_size: Int[Array, "2"],
     calibration_pm: scalar_float,
-    defocus: Optional[scalar_numeric] = 0,
-    c3: Optional[scalar_numeric] = 0,
-    c5: Optional[scalar_numeric] = 0,
+    defocus: Optional[scalar_numeric] = 0.0,
+    c3: Optional[scalar_numeric] = 0.0,
+    c5: Optional[scalar_numeric] = 0.0,
 ) -> Complex[Array, "H W"]:
     """
     Description
@@ -607,7 +607,7 @@ def stem_4D(
             shifted_beams, pos_idx, axis=0
         )
         cbed_pattern: Float[Array, "H W"] = cbed(
-            pot_slice=pot_slice,
+            pot_slices=pot_slice,
             beam=current_beam,
             slice_thickness=slice_thickness,
             voltage_kV=voltage_kV,

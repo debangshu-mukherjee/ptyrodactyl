@@ -404,7 +404,7 @@ def cbed(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
     voltage_kV: scalar_numeric,
-) -> Float[Array, "H W"]:
+) -> CalibratedArray:
     """
     Description
     -----------
@@ -450,10 +450,10 @@ def cbed(
     - Compute the intensity for each mode
     - Sum the intensities across all modes.
     """
-    calib_ang = jnp.amin([pot_slices.calib, beam.calib])
-    dtype = beam.dtype
-    pot_slice = jnp.atleast_3d(pot_slice)
-    beam = jnp.atleast_3d(beam)
+    calib_ang = jnp.amin(jnp.array([pot_slices.calib, beam.calib]))
+    dtype = beam.modes.dtype
+    pot_slice = jnp.atleast_3d(pot_slices.slices)
+    beam = jnp.atleast_3d(beam.modes)
     num_slices = pot_slice.shape[-1]
     slice_transmission = propagation_func(
         beam.shape[0], beam.shape[1], pot_slices.slice_thickness, voltage_kV, calib_ang

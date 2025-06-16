@@ -46,11 +46,12 @@ def lens_thickness_profile(
     center_thickness: scalar_float,
     diameter: scalar_float,
 ) -> Float[Array, "H W"]:
-    """
+    """"
     Description
     -----------
     Calculate the thickness profile of a lens.
-
+ 
+ 
     Parameters
     ----------
     - `r` (Float[Array, "H W"]):
@@ -63,35 +64,43 @@ def lens_thickness_profile(
         Thickness at the center of the lens
     - `diameter` (scalar_float):
         Diameter of the lens
-
+ 
+ 
     Returns
     -------
     - `thickness` (Float[Array, "H W"]):
         Thickness profile of the lens
-
+ 
+ 
     Flow
     ----
-    - Calculate surface sag for both surfaces
+    - Calculate surface sag for both surfaces only where aperture mask & r is finite
     - Combine sags with center thickness
-    - Apply aperture mask
     - Return thickness profile
     """
+    in_ap = r <= diameter / 2
+
+    finite_r1 = jnp.isfinite(r1)
     sag1: Float[Array, "H W"] = jnp.where(
-        r <= diameter / 2,
+        in_ap & finite_r1,
         r1 - jnp.sqrt(jnp.maximum(r1**2 - r**2, 0.0)),
         0.0,
     )
+
+    finite_r2 = jnp.isfinite(r2)
     sag2: Float[Array, "H W"] = jnp.where(
-        r <= diameter / 2,
+        in_ap & finite_r2,
         r2 - jnp.sqrt(jnp.maximum(r2**2 - r**2, 0.0)),
         0.0,
     )
+
     thickness: Float[Array, "H W"] = jnp.where(
-        r <= diameter / 2,
+        in_ap,
         center_thickness + sag1 - sag2,
         0.0,
     )
     return thickness
+
 
 
 @jaxtyped(typechecker=beartype)
@@ -175,8 +184,8 @@ def create_lens_phase(
     r: Float[Array, "H W"] = jnp.sqrt(xx**2 + yy**2)
     thickness: Float[Array, "H W"] = lens_thickness_profile(
         r,
-        params.R1,
-        params.R2,
+        params.r1,
+        params.r2,
         params.center_thickness,
         params.diameter,
     )

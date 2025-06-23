@@ -46,12 +46,12 @@ def lens_thickness_profile(
     center_thickness: scalar_float,
     diameter: scalar_float,
 ) -> Float[Array, "H W"]:
-    """"
+    """ "
     Description
     -----------
     Calculate the thickness profile of a lens.
- 
- 
+
+
     Parameters
     ----------
     - `r` (Float[Array, "H W"]):
@@ -64,14 +64,14 @@ def lens_thickness_profile(
         Thickness at the center of the lens
     - `diameter` (scalar_float):
         Diameter of the lens
- 
- 
+
+
     Returns
     -------
     - `thickness` (Float[Array, "H W"]):
         Thickness profile of the lens
- 
- 
+
+
     Flow
     ----
     - Calculate surface sag for both surfaces only where aperture mask & r is finite
@@ -100,7 +100,6 @@ def lens_thickness_profile(
         0.0,
     )
     return thickness
-
 
 
 @jaxtyped(typechecker=beartype)

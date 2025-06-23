@@ -1,23 +1,55 @@
+"""
+Module: electrons.inverse
+-------------------------
+Inverse reconstruction algorithms for electron ptychography.
+
+This module contains functions for reconstructing sample potentials from
+experimental ptychography data using various optimization algorithms.
+All functions support both single-slice and multi-slice reconstructions,
+with options for position correction and multi-modal probe handling.
+
+Functions
+---------
+- `get_optimizer`:
+    Returns an optimizer instance for the specified optimization algorithm
+- `single_slice_ptychography`:
+    Performs single-slice ptychography reconstruction
+- `single_slice_poscorrected`:
+    Performs single-slice reconstruction with position correction
+- `single_slice_multi_modal`:
+    Performs single-slice reconstruction with multi-modal probe
+- `multi_slice_multi_modal`:
+    Performs multi-slice reconstruction with multi-modal probe
+
+Notes
+-----
+All reconstruction functions use JAX-compatible optimizers and support
+automatic differentiation. The functions are designed to work with
+experimental data and can handle various noise levels and experimental
+conditions. Input data should be properly preprocessed and validated
+using the factory functions from electron_types module.
+"""
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
-from beartype.typing import Dict, Optional, Tuple, TypeAlias, Union
-from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
+from beartype.typing import Dict, Optional, Tuple, Union
+from jaxtyping import Array, Complex, Float, jaxtyped
 
-import ptyrodactyl.electrons as pte
 import ptyrodactyl.tools as ptt
 
 jax.config.update("jax_enable_x64", True)
-
-scalar_numeric: TypeAlias = Union[int, float, Num[Array, ""]]
-scalar_float: TypeAlias = Union[float, Float[Array, ""]]
-scalar_int: TypeAlias = Union[int, Int[Array, ""]]
 
 OPTIMIZERS: Dict[str, ptt.Optimizer] = {
     "adam": ptt.Optimizer(ptt.init_adam, ptt.adam_update),
     "adagrad": ptt.Optimizer(ptt.init_adagrad, ptt.adagrad_update),
     "rmsprop": ptt.Optimizer(ptt.init_rmsprop, ptt.rmsprop_update),
 }
+
+from .electron_types import (CalibratedArray, ProbeModes,
+                             make_calibrated_array, scalar_float, scalar_int,
+                             scalar_numeric)
+from .forward import stem_4D
 
 
 def get_optimizer(optimizer_name: str) -> ptt.Optimizer:
@@ -29,8 +61,8 @@ def get_optimizer(optimizer_name: str) -> ptt.Optimizer:
 @jaxtyped(typechecker=typechecker)
 def single_slice_ptychography(
     experimental_4dstem: Float[Array, "P H W"],
-    initial_potential: pte.CalibratedArray,
-    initial_beam: pte.CalibratedArray,
+    initial_potential: CalibratedArray,
+    initial_beam: CalibratedArray,
     pos_list: Float[Array, "P 2"],
     slice_thickness: scalar_numeric,
     voltage_kV: scalar_numeric,
@@ -41,8 +73,8 @@ def single_slice_ptychography(
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[
-    pte.CalibratedArray,
-    pte.CalibratedArray,
+    CalibratedArray,
+    CalibratedArray,
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
 ]:
@@ -97,7 +129,7 @@ def single_slice_ptychography(
     """
 
     def forward_fn(pot_slice, beam):
-        return pte.stem_4D(
+        return stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -165,13 +197,13 @@ def single_slice_ptychography(
             intermediate_potslice.at[:, :, saver].set(pot_slice)
             intermediate_beam.at[:, :, saver].set(beam)
 
-    final_potential = pte.CalibratedArray(
+    final_potential: CalibratedArray = make_calibrated_array(
         data_array=pot_slice,
         calib_y=initial_potential.calib_y,
         calib_x=initial_potential.calib_x,
         real_space=True,
     )
-    final_beam = pte.CalibratedArray(
+    final_beam: CalibratedArray = make_calibrated_array(
         data_array=beam,
         calib_y=initial_beam.calib_y,
         calib_x=initial_beam.calib_x,
@@ -184,8 +216,8 @@ def single_slice_ptychography(
 @jaxtyped(typechecker=typechecker)
 def single_slice_poscorrected(
     experimental_4dstem: Float[Array, "P H W"],
-    initial_potential: pte.CalibratedArray,
-    initial_beam: pte.CalibratedArray,
+    initial_potential: CalibratedArray,
+    initial_beam: CalibratedArray,
     initial_pos_list: Float[Array, "P 2"],
     slice_thickness: scalar_numeric,
     voltage_kV: scalar_numeric,
@@ -196,8 +228,8 @@ def single_slice_poscorrected(
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[
-    pte.CalibratedArray,
-    pte.CalibratedArray,
+    CalibratedArray,
+    CalibratedArray,
     Float[Array, "P 2"],
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
@@ -261,7 +293,7 @@ def single_slice_poscorrected(
     """
 
     def forward_fn(pot_slice, beam, pos_list):
-        return pte.stem_4D(
+        return stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -356,13 +388,13 @@ def single_slice_poscorrected(
             intermediate_beams.at[:, :, saver].set(beam_guess)
             intermediate_positions.at[:, :, saver].set(pos_guess)
 
-    final_potential = pte.CalibratedArray(
+    final_potential: CalibratedArray = make_calibrated_array(
         data_array=pot_guess,
         calib_y=initial_potential.calib_y,
         calib_x=initial_potential.calib_x,
         real_space=True,
     )
-    final_beam = pte.CalibratedArray(
+    final_beam: CalibratedArray = make_calibrated_array(
         data_array=beam_guess,
         calib_y=initial_beam.calib_y,
         calib_x=initial_beam.calib_x,
@@ -382,7 +414,7 @@ def single_slice_poscorrected(
 def single_slice_multi_modal(
     experimental_4dstem: Float[Array, "H W"],
     initial_pot_slice: Complex[Array, "H W"],
-    initial_beam: pte.ProbeModes,
+    initial_beam: ProbeModes,
     initial_pos_list: Float[Array, "P 2"],
     slice_thickness: scalar_numeric,
     voltage_kV: scalar_numeric,
@@ -394,7 +426,7 @@ def single_slice_multi_modal(
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[
     Complex[Array, "H W"],
-    pte.ProbeModes,
+    ProbeModes,
     Float[Array, "P 2"],
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
@@ -455,7 +487,7 @@ def single_slice_multi_modal(
     """
 
     def forward_fn(pot_slice, beam, pos_list):
-        return pte.stem_4D(
+        return stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -610,7 +642,7 @@ def multi_slice_multi_modal(
     """
 
     def forward_fn(pot_slice, beam, pos_list):
-        return pte.stem_4D(
+        return stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,

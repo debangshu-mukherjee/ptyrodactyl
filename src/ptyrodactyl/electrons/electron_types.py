@@ -1,3 +1,42 @@
+"""
+Module: electrons.electron_types
+-------------------------------
+Data structures and type definitions for electron microscopy and ptychography.
+
+Type Aliases
+------------
+- `scalar_numeric`:
+    Type alias for numeric types (int, float or Num array)
+    Num Array has 0 dimensions
+- `scalar_float`:
+    Type alias for float or Float array of 0 dimensions
+- `scalar_int`:
+    Type alias for int or Integer array of 0 dimensions
+- `non_jax_number`:
+    Type alias for non-JAX numeric types (int, float)
+
+Classes
+-------
+- `CalibratedArray`:
+    A named tuple for calibrated array data with spatial calibration
+- `ProbeModes`:
+    A named tuple for multimodal electron probe state
+- `PotentialSlices`:
+    A named tuple for potential slices in multi-slice simulations
+
+Factory Functions
+----------------
+- `make_calibrated_array`:
+    Creates a CalibratedArray instance with runtime type checking
+- `make_probe_modes`:
+    Creates a ProbeModes instance with runtime type checking
+- `make_potential_slices`:
+    Creates a PotentialSlices instance with runtime type checking
+
+    Note: Always use these factory functions instead of directly instantiating the
+    NamedTuple classes to ensure proper runtime type checking of the contents.
+"""
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype

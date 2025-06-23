@@ -24,8 +24,8 @@ Submodules
 
 from .electron_types import (CalibratedArray, PotentialSlices, ProbeModes,
                              make_calibrated_array, make_potential_slices,
-                             make_probe_modes, non_jax_number, scalar_float, scalar_int,
-                             scalar_numeric)
+                             make_probe_modes, non_jax_number, scalar_float,
+                             scalar_int, scalar_numeric)
 from .forward import (aberration, cbed, decompose_beam_to_modes, fourier_calib,
                       fourier_coords, make_probe, propagation_func,
                       shift_beam_fourier, stem_4D, transmission_func,

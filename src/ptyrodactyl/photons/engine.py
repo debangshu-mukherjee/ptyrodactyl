@@ -3,7 +3,7 @@ Module: photons.engine
 ---------------------------
 Engine framework for optical simulations and ptychography.
 
-This module is a placeholder for building a simulation engine 
+This module is a placeholder for building a simulation engine
 that will orchestrate the various optical components.
 """
 

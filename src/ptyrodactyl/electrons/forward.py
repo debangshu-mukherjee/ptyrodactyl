@@ -1,19 +1,16 @@
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
-from beartype.typing import Optional, TypeAlias, Union
+from beartype.typing import Optional, Union
 from jax import lax
 from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
-                       PRNGKeyArray, PyTree, jaxtyped)
+                       PRNGKeyArray, jaxtyped)
 
-from .types import CalibratedArray, PotentialSlices, ProbeModes
+from .electron_types import (CalibratedArray, PotentialSlices, ProbeModes,
+                             make_calibrated_array, make_probe_modes,
+                             scalar_float, scalar_int, scalar_numeric)
 
 jax.config.update("jax_enable_x64", True)
-
-
-scalar_numeric: TypeAlias = Union[int, float, Num[Array, ""]]
-scalar_float: TypeAlias = Union[float, Float[Array, ""]]
-scalar_int: TypeAlias = Union[int, Int[Array, ""]]
 
 
 @jaxtyped(typechecker=typechecker)
@@ -143,15 +140,13 @@ def fourier_coords(
 
     Returns
     -------
-    - PyTree with the following fields:
-        - `data_array` (Num[Array, "H W"]):
+    - `calibrated_inverse_array` (CalibratedArray):
+        The calibrated inverse array.
+        It has the following attributes:
+        - `data_array` (Float[Array, "H W"]):
             The inverse array data
         - `calib_y` (Float[Array, ""]):
             Invsere calibration in y direction
-        - `calib_x` (Float[Array, ""]):
-            Invserse calibration in x direction
-        - `real_space` (Bool[Array, ""]):
-            False. The array is in Fourier space
 
     Flow
     ----
@@ -184,7 +179,7 @@ def fourier_coords(
     calib_inverse_y: Float[Array, ""] = inverse_arr_y[1] - inverse_arr_y[0]
     calib_inverse_x: Float[Array, ""] = inverse_arr_x[1] - inverse_arr_x[0]
     inverse_space: Bool[Array, ""] = False
-    calibrated_inverse_array = CalibratedArray(
+    calibrated_inverse_array: CalibratedArray = make_calibrated_array(
         inverse_array, calib_inverse_y, calib_inverse_x, inverse_space
     )
     return calibrated_inverse_array
@@ -437,8 +432,13 @@ def cbed(
 
     Returns
     -------
-    -  `cbed_pattern` (Float[Array, "H W"]):
+    - `cbed_pytree` (CalibratedArray):
         The calculated CBED pattern.
+        It has the following attributes:
+        - `data_array` (Float[Array, "H W"]):
+            The calculated CBED pattern.
+        - `calib_y` (scalar_float):
+            The calibration in y direction.
 
     Flow
     ----
@@ -483,7 +483,7 @@ def cbed(
     cbed_pattern = jnp.sum(intensity_per_mode, axis=-1)
     real_space_fov = jnp.multiply(beam.shape[0], calib_ang)
     inverse_space_calib = 1 / real_space_fov
-    cbed_pytree: PyTree = CalibratedArray(
+    cbed_pytree: CalibratedArray = make_calibrated_array(
         cbed_pattern, inverse_space_calib, inverse_space_calib, False
     )
     return cbed_pytree
@@ -645,7 +645,9 @@ def decompose_beam_to_modes(
 
     Returns
     -------
-    - A PyTree with the following fields:
+    - `probe_modes` (ProbeModes):
+        The decomposed probe modes.
+        It has the following attributes:
         - `modes` (Complex[Array, "H W M"]):
             The orthogonal modes.
         - `weights` (Float[Array, "M"]):
@@ -688,5 +690,7 @@ def decompose_beam_to_modes(
     sqrt_intensity: Float[Array, "TP 1"] = jnp.sqrt(original_intensity).reshape(-1, 1)
     weighted_modes: Complex[Array, "TP M"] = Q * sqrt_intensity * sqrt_weights
     multimodal_beam: Complex[Array, "H W M"] = weighted_modes.reshape(H, W, num_modes)
-    probe_modes: PyTree = ProbeModes(modes=multimodal_beam, weights=weights)
+    probe_modes: ProbeModes = make_probe_modes(
+        modes=multimodal_beam, weights=weights, calib=beam.calib
+    )
     return probe_modes

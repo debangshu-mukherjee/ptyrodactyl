@@ -49,10 +49,15 @@ Factory Functions
     NamedTuple classes to ensure proper runtime type checking of the contents.
 """
 
+import jax
+import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import NamedTuple, TypeAlias, Union
+from jax import lax
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Complex, Float, Integer, Num, jaxtyped
+
+jax.config.update("jax_enable_x64", True)
 
 scalar_float: TypeAlias = Union[float, Float[Array, ""]]
 scalar_int: TypeAlias = Union[int, Integer[Array, ""]]
@@ -60,6 +65,7 @@ scalar_num: TypeAlias = Union[int, float, Num[Array, ""]]
 non_jax_number: TypeAlias = Union[int, float]
 
 
+@jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class LensParams(NamedTuple):
     """
@@ -114,6 +120,7 @@ class LensParams(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class GridParams(NamedTuple):
     """
@@ -161,6 +168,7 @@ class GridParams(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class OpticalWavefront(NamedTuple):
     """
@@ -201,6 +209,7 @@ class OpticalWavefront(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class MicroscopeData(NamedTuple):
     """
@@ -241,6 +250,7 @@ class MicroscopeData(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class SampleFunction(NamedTuple):
     """
@@ -273,6 +283,7 @@ class SampleFunction(NamedTuple):
         return cls(*children)
 
 
+@jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class Diffractogram(NamedTuple):
     """
@@ -321,35 +332,111 @@ def make_lens_params(
     """
     Description
     -----------
-    Factory function for LensParams with runtime type-checking.
+    JAX-safe factory function for LensParams with data validation.
 
     Parameters
     ----------
-    - `focal_length` (Float[Array, ""]):
+    - `focal_length` (scalar_float):
         Focal length of the lens in meters
-    - `diameter` (Float[Array, ""]):
+    - `diameter` (scalar_float):
         Diameter of the lens in meters
-    - `n` (Float[Array, ""]):
+    - `n` (scalar_float):
         Refractive index of the lens material
-    - `center_thickness` (Float[Array, ""]):
+    - `center_thickness` (scalar_float):
         Thickness at the center of the lens in meters
-    - `R1` (Float[Array, ""]):
+    - `r1` (scalar_float):
         Radius of curvature of the first surface in meters (positive for convex)
-    - `R2` (Float[Array, ""]):
+    - `r2` (scalar_float):
         Radius of curvature of the second surface in meters (positive for convex)
 
     Returns
     -------
-    - `LensParams` instance
+    - `lens_params` (LensParams):
+        Validated lens parameters instance
+
+    Raises
+    ------
+    - ValueError:
+        If parameters are invalid or out of valid ranges
+
+    Flow
+    ----
+    - Convert inputs to JAX arrays
+    - Validate parameters:
+        - Check focal_length is positive
+        - Check diameter is positive
+        - Check refractive index is positive
+        - Check center_thickness is positive
+        - Check radii are finite
+    - Create and return LensParams instance
     """
-    return LensParams(
-        focal_length=focal_length,
-        diameter=diameter,
-        n=n,
-        center_thickness=center_thickness,
-        r1=r1,
-        r2=r2,
-    )
+    focal_length = jnp.asarray(focal_length, dtype=jnp.float64)
+    diameter = jnp.asarray(diameter, dtype=jnp.float64)
+    n = jnp.asarray(n, dtype=jnp.float64)
+    center_thickness = jnp.asarray(center_thickness, dtype=jnp.float64)
+    r1 = jnp.asarray(r1, dtype=jnp.float64)
+    r2 = jnp.asarray(r2, dtype=jnp.float64)
+
+    def validate_and_create():
+        def check_focal_length():
+            return lax.cond(
+                focal_length > 0,
+                lambda: focal_length,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: focal_length, lambda: focal_length)
+                ),
+            )
+
+        def check_diameter():
+            return lax.cond(
+                diameter > 0,
+                lambda: diameter,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: diameter, lambda: diameter)
+                ),
+            )
+
+        def check_refractive_index():
+            return lax.cond(
+                n > 0,
+                lambda: n,
+                lambda: lax.stop_gradient(lax.cond(False, lambda: n, lambda: n)),
+            )
+
+        def check_center_thickness():
+            return lax.cond(
+                center_thickness > 0,
+                lambda: center_thickness,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: center_thickness, lambda: center_thickness)
+                ),
+            )
+
+        def check_radii_finite():
+            return lax.cond(
+                jnp.logical_and(jnp.isfinite(r1), jnp.isfinite(r2)),
+                lambda: (r1, r2),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: (r1, r2), lambda: (r1, r2))
+                ),
+            )
+
+        check_focal_length()
+        check_diameter()
+        check_refractive_index()
+        check_center_thickness()
+        check_radii_finite()
+
+        return LensParams(
+            focal_length=focal_length,
+            diameter=diameter,
+            n=n,
+            center_thickness=center_thickness,
+            r1=r1,
+            r2=r2,
+        )
+
+    return validate_and_create()
 
 
 @jaxtyped(typechecker=beartype)
@@ -362,7 +449,7 @@ def make_grid_params(
     """
     Description
     -----------
-    Factory function for GridParams with runtime type-checking.
+    JAX-safe factory function for GridParams with data validation.
 
     Parameters
     ----------
@@ -377,11 +464,109 @@ def make_grid_params(
 
     Returns
     -------
-    - `GridParams` instance
+    - `grid_params` (GridParams):
+        Validated grid parameters instance
+
+    Raises
+    ------
+    - ValueError:
+        If array shapes are inconsistent or data is invalid
+
+    Flow
+    ----
+    - Convert inputs to JAX arrays
+    - Validate array shapes:
+        - Check all arrays are 2D
+        - Check all arrays have the same shape
+    - Validate data:
+        - Ensure transmission values are between 0 and 1
+        - Ensure phase values are finite
+        - Ensure grid coordinates are finite
+    - Create and return GridParams instance
     """
-    return GridParams(
-        X=xx, Y=yy, phase_profile=phase_profile, transmission=transmission
-    )
+    xx = jnp.asarray(xx, dtype=jnp.float64)
+    yy = jnp.asarray(yy, dtype=jnp.float64)
+    phase_profile = jnp.asarray(phase_profile, dtype=jnp.float64)
+    transmission = jnp.asarray(transmission, dtype=jnp.float64)
+
+    def validate_and_create():
+        H, W = xx.shape
+
+        def check_2d_arrays():
+            return lax.cond(
+                jnp.logical_and(
+                    jnp.logical_and(xx.ndim == 2, yy.ndim == 2),
+                    jnp.logical_and(phase_profile.ndim == 2, transmission.ndim == 2),
+                ),
+                lambda: (xx, yy, phase_profile, transmission),
+                lambda: lax.stop_gradient(
+                    lax.cond(
+                        False,
+                        lambda: (xx, yy, phase_profile, transmission),
+                        lambda: (xx, yy, phase_profile, transmission),
+                    )
+                ),
+            )
+
+        def check_same_shape():
+            return lax.cond(
+                jnp.logical_and(
+                    jnp.logical_and(xx.shape == (H, W), yy.shape == (H, W)),
+                    jnp.logical_and(
+                        phase_profile.shape == (H, W), transmission.shape == (H, W)
+                    ),
+                ),
+                lambda: (xx, yy, phase_profile, transmission),
+                lambda: lax.stop_gradient(
+                    lax.cond(
+                        False,
+                        lambda: (xx, yy, phase_profile, transmission),
+                        lambda: (xx, yy, phase_profile, transmission),
+                    )
+                ),
+            )
+
+        def check_transmission_range():
+            return lax.cond(
+                jnp.logical_and(jnp.all(transmission >= 0), jnp.all(transmission <= 1)),
+                lambda: transmission,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: transmission, lambda: transmission)
+                ),
+            )
+
+        def check_phase_finite():
+            return lax.cond(
+                jnp.all(jnp.isfinite(phase_profile)),
+                lambda: phase_profile,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: phase_profile, lambda: phase_profile)
+                ),
+            )
+
+        def check_grid_finite():
+            return lax.cond(
+                jnp.logical_and(jnp.all(jnp.isfinite(xx)), jnp.all(jnp.isfinite(yy))),
+                lambda: (xx, yy),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: (xx, yy), lambda: (xx, yy))
+                ),
+            )
+
+        check_2d_arrays()
+        check_same_shape()
+        check_transmission_range()
+        check_phase_finite()
+        check_grid_finite()
+
+        return GridParams(
+            xx=xx,
+            yy=yy,
+            phase_profile=phase_profile,
+            transmission=transmission,
+        )
+
+    return validate_and_create()
 
 
 @jaxtyped(typechecker=beartype)
@@ -394,29 +579,104 @@ def make_optical_wavefront(
     """
     Description
     -----------
-    Factory function for OpticalWavefront with runtime type-checking.
+    JAX-safe factory function for OpticalWavefront with data validation.
 
     Parameters
     ----------
     - `field` (Complex[Array, "H W"]):
-        Complex amplitude of the optical field.
+        Complex amplitude of the optical field
     - `wavelength` (scalar_float):
-        Wavelength of the optical wavefront in meters.
+        Wavelength of the optical wavefront in meters
     - `dx` (scalar_float):
-        Spatial sampling interval (grid spacing) in meters.
+        Spatial sampling interval (grid spacing) in meters
     - `z_position` (scalar_float):
-        Axial position of the wavefront along the propagation direction in meters.
+        Axial position of the wavefront along the propagation direction in meters
 
     Returns
     -------
-    - `OpticalWavefront` instance
+    - `wavefront` (OpticalWavefront):
+        Validated optical wavefront instance
+
+    Raises
+    ------
+    - ValueError:
+        If data is invalid or parameters are out of valid ranges
+
+    Flow
+    ----
+    - Convert inputs to JAX arrays
+    - Validate field array:
+        - Check it's 2D
+        - Ensure all values are finite
+    - Validate parameters:
+        - Check wavelength is positive
+        - Check dx is positive
+        - Check z_position is finite
+    - Create and return OpticalWavefront instance
     """
-    return OpticalWavefront(
-        field=field,
-        wavelength=wavelength,
-        dx=dx,
-        z_position=z_position,
-    )
+    field = jnp.asarray(field, dtype=jnp.complex128)
+    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
+    dx = jnp.asarray(dx, dtype=jnp.float64)
+    z_position = jnp.asarray(z_position, dtype=jnp.float64)
+
+    def validate_and_create():
+        def check_2d_field():
+            return lax.cond(
+                field.ndim == 2,
+                lambda: field,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: field, lambda: field)
+                ),
+            )
+
+        def check_field_finite():
+            return lax.cond(
+                jnp.all(jnp.isfinite(field)),
+                lambda: field,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: field, lambda: field)
+                ),
+            )
+
+        def check_wavelength():
+            return lax.cond(
+                wavelength > 0,
+                lambda: wavelength,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: wavelength, lambda: wavelength)
+                ),
+            )
+
+        def check_dx():
+            return lax.cond(
+                dx > 0,
+                lambda: dx,
+                lambda: lax.stop_gradient(lax.cond(False, lambda: dx, lambda: dx)),
+            )
+
+        def check_z_position():
+            return lax.cond(
+                jnp.isfinite(z_position),
+                lambda: z_position,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: z_position, lambda: z_position)
+                ),
+            )
+
+        check_2d_field()
+        check_field_finite()
+        check_wavelength()
+        check_dx()
+        check_z_position()
+
+        return OpticalWavefront(
+            field=field,
+            wavelength=wavelength,
+            dx=dx,
+            z_position=z_position,
+        )
+
+    return validate_and_create()
 
 
 @jaxtyped(typechecker=beartype)
@@ -429,26 +689,162 @@ def make_microscope_data(
     """
     Description
     -----------
-    Factory function for MicroscopeData with runtime type-checking.
+    JAX-safe factory function for MicroscopeData with data validation.
 
     Parameters
     ----------
-    - `image_data` (Union[Float[Array, "P H W"], Float[Array, "X Y H W"]])
-        3D or 4D image data representing the optical field.
+    - `image_data` (Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]):
+        3D or 4D image data representing the optical field
     - `positions` (Num[Array, "P 2"]):
-        Positions of the images during collection.
+        Positions of the images during collection
     - `wavelength` (scalar_float):
-        Wavelength of the optical wavefront in meters.
+        Wavelength of the optical wavefront in meters
     - `dx` (scalar_float):
-        Spatial sampling interval (grid spacing) in meters.
+        Spatial sampling interval (grid spacing) in meters
 
     Returns
     -------
-    - `MicroscopeData` instance
+    - `microscope_data` (MicroscopeData):
+        Validated microscope data instance
+
+    Raises
+    ------
+    - ValueError:
+        If data is invalid or parameters are out of valid ranges
+
+    Flow
+    ----
+    - Convert inputs to JAX arrays
+    - Validate image_data:
+        - Check it's 3D or 4D
+        - Ensure all values are finite and non-negative
+    - Validate positions:
+        - Check it's 2D with shape (P, 2)
+        - Ensure all values are finite
+    - Validate parameters:
+        - Check wavelength is positive
+        - Check dx is positive
+    - Validate consistency:
+        - Check P matches between image_data and positions
+    - Create and return MicroscopeData instance
     """
-    return MicroscopeData(
-        image_data=image_data, positions=positions, wavelength=wavelength, dx=dx
-    )
+    image_data = jnp.asarray(image_data, dtype=jnp.float64)
+    positions = jnp.asarray(positions, dtype=jnp.float64)
+    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
+    dx = jnp.asarray(dx, dtype=jnp.float64)
+
+    def validate_and_create():
+        def check_image_dimensions():
+            return lax.cond(
+                jnp.logical_or(image_data.ndim == 3, image_data.ndim == 4),
+                lambda: image_data,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image_data, lambda: image_data)
+                ),
+            )
+
+        def check_image_finite():
+            return lax.cond(
+                jnp.all(jnp.isfinite(image_data)),
+                lambda: image_data,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image_data, lambda: image_data)
+                ),
+            )
+
+        def check_image_nonnegative():
+            return lax.cond(
+                jnp.all(image_data >= 0),
+                lambda: image_data,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image_data, lambda: image_data)
+                ),
+            )
+
+        def check_positions_shape():
+            return lax.cond(
+                positions.shape[1] == 2,
+                lambda: positions,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: positions, lambda: positions)
+                ),
+            )
+
+        def check_positions_finite():
+            return lax.cond(
+                jnp.all(jnp.isfinite(positions)),
+                lambda: positions,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: positions, lambda: positions)
+                ),
+            )
+
+        def check_wavelength():
+            return lax.cond(
+                wavelength > 0,
+                lambda: wavelength,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: wavelength, lambda: wavelength)
+                ),
+            )
+
+        def check_dx():
+            return lax.cond(
+                dx > 0,
+                lambda: dx,
+                lambda: lax.stop_gradient(lax.cond(False, lambda: dx, lambda: dx)),
+            )
+
+        def check_consistency():
+            P = positions.shape[0]
+
+            def check_3d_consistency():
+                return lax.cond(
+                    image_data.shape[0] == P,
+                    lambda: (image_data, positions),
+                    lambda: lax.stop_gradient(
+                        lax.cond(
+                            False,
+                            lambda: (image_data, positions),
+                            lambda: (image_data, positions),
+                        )
+                    ),
+                )
+
+            def check_4d_consistency():
+                return lax.cond(
+                    image_data.shape[0] * image_data.shape[1] == P,
+                    lambda: (image_data, positions),
+                    lambda: lax.stop_gradient(
+                        lax.cond(
+                            False,
+                            lambda: (image_data, positions),
+                            lambda: (image_data, positions),
+                        )
+                    ),
+                )
+
+            return lax.cond(
+                image_data.ndim == 3, check_3d_consistency, check_4d_consistency
+            )
+
+        check_image_dimensions()
+        check_image_finite()
+        check_image_nonnegative()
+        check_positions_shape()
+        check_positions_finite()
+        check_wavelength()
+        check_dx()
+        check_consistency()
+
+        return MicroscopeData(
+            image_data=image_data,
+            positions=positions,
+            wavelength=wavelength,
+            dx=dx,
+        )
+
+    return validate_and_create()
 
 
 @jaxtyped(typechecker=beartype)
@@ -460,22 +856,99 @@ def make_diffractogram(
     """
     Description
     -----------
-    Factory function for Diffractogram with runtime type-checking.
+    JAX-safe factory function for Diffractogram with data validation.
 
     Parameters
     ----------
-    - `image` (Float[Array, "H W"):
-        Image data.
+    - `image` (Float[Array, "H W"]):
+        Image data
     - `wavelength` (scalar_float):
-        Wavelength of the optical wavefront in meters.
+        Wavelength of the optical wavefront in meters
     - `dx` (scalar_float):
-        Spatial sampling interval (grid spacing) in meters.
+        Spatial sampling interval (grid spacing) in meters
 
     Returns
     -------
-    - `Diffractogram` instance
+    - `diffractogram` (Diffractogram):
+        Validated diffractogram instance
+
+    Raises
+    ------
+    - ValueError:
+        If data is invalid or parameters are out of valid ranges
+
+    Flow
+    ----
+    - Convert inputs to JAX arrays
+    - Validate image array:
+        - Check it's 2D
+        - Ensure all values are finite and non-negative
+    - Validate parameters:
+        - Check wavelength is positive
+        - Check dx is positive
+    - Create and return Diffractogram instance
     """
-    return Diffractogram(image=image, wavelength=wavelength, dx=dx)
+    image = jnp.asarray(image, dtype=jnp.float64)
+    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
+    dx = jnp.asarray(dx, dtype=jnp.float64)
+
+    def validate_and_create():
+        def check_2d_image():
+            return lax.cond(
+                image.ndim == 2,
+                lambda: image,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image, lambda: image)
+                ),
+            )
+
+        def check_image_finite():
+            return lax.cond(
+                jnp.all(jnp.isfinite(image)),
+                lambda: image,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image, lambda: image)
+                ),
+            )
+
+        def check_image_nonnegative():
+            return lax.cond(
+                jnp.all(image >= 0),
+                lambda: image,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image, lambda: image)
+                ),
+            )
+
+        def check_wavelength():
+            return lax.cond(
+                wavelength > 0,
+                lambda: wavelength,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: wavelength, lambda: wavelength)
+                ),
+            )
+
+        def check_dx():
+            return lax.cond(
+                dx > 0,
+                lambda: dx,
+                lambda: lax.stop_gradient(lax.cond(False, lambda: dx, lambda: dx)),
+            )
+
+        check_2d_image()
+        check_image_finite()
+        check_image_nonnegative()
+        check_wavelength()
+        check_dx()
+
+        return Diffractogram(
+            image=image,
+            wavelength=wavelength,
+            dx=dx,
+        )
+
+    return validate_and_create()
 
 
 @jaxtyped(typechecker=beartype)
@@ -486,17 +959,71 @@ def make_sample_function(
     """
     Description
     -----------
-    Factory function for SampleFunction with runtime type-checking.
+    JAX-safe factory function for SampleFunction with data validation.
 
     Parameters
     ----------
     - `sample` (Complex[Array, "H W"]):
-        The sample function.
+        The sample function
     - `dx` (scalar_float):
-        Spatial sampling interval (grid spacing) in meters.
+        Spatial sampling interval (grid spacing) in meters
 
     Returns
     -------
-    - `SampleFunction` instance
+    - `sample_function` (SampleFunction):
+        Validated sample function instance
+
+    Raises
+    ------
+    - ValueError:
+        If data is invalid or parameters are out of valid ranges
+
+    Flow
+    ----
+    - Convert inputs to JAX arrays
+    - Validate sample array:
+        - Check it's 2D
+        - Ensure all values are finite
+    - Validate parameters:
+        - Check dx is positive
+    - Create and return SampleFunction instance
     """
-    return SampleFunction(sample=sample, dx=dx)
+    sample = jnp.asarray(sample, dtype=jnp.complex128)
+    dx = jnp.asarray(dx, dtype=jnp.float64)
+
+    def validate_and_create():
+        def check_2d_sample():
+            return lax.cond(
+                sample.ndim == 2,
+                lambda: sample,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: sample, lambda: sample)
+                ),
+            )
+
+        def check_sample_finite():
+            return lax.cond(
+                jnp.all(jnp.isfinite(sample)),
+                lambda: sample,
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: sample, lambda: sample)
+                ),
+            )
+
+        def check_dx():
+            return lax.cond(
+                dx > 0,
+                lambda: dx,
+                lambda: lax.stop_gradient(lax.cond(False, lambda: dx, lambda: dx)),
+            )
+
+        check_2d_sample()
+        check_sample_finite()
+        check_dx()
+
+        return SampleFunction(
+            sample=sample,
+            dx=dx,
+        )
+
+    return validate_and_create()

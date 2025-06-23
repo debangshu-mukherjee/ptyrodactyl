@@ -20,7 +20,7 @@ Functions
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Tuple, Union
+from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 from .photon_types import (OpticalWavefront, make_optical_wavefront,

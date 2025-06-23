@@ -1,4 +1,4 @@
-kimport jax.numpy as jnp
+import jax.numpy as jnp
 from ptyrodactyl.electrons.forward import make_probe, make_sample, stem_4D
 
 image_size = (64, 64)

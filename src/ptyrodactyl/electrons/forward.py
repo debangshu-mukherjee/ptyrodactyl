@@ -1,3 +1,45 @@
+"""
+Module: electrons.forward
+-------------------------
+Forward simulation functions for electron microscopy and ptychography.
+
+This module contains functions for simulating electron beam propagation,
+creating probes, calculating aberrations, and generating CBED patterns
+and 4D-STEM data. All functions are JAX-compatible and support automatic
+differentiation.
+
+Functions
+---------
+- `transmission_func`:
+    Calculates transmission function for a given potential
+- `propagation_func`:
+    Propagates electron wave through free space
+- `fourier_coords`:
+    Generates Fourier space coordinates for diffraction calculations
+- `fourier_calib`:
+    Calculates Fourier space calibration from real space parameters
+- `make_probe`:
+    Creates electron probe with specified parameters and aberrations
+- `aberration`:
+    Applies aberration phase to electron wave
+- `wavelength_ang`:
+    Calculates electron wavelength from accelerating voltage
+- `cbed`:
+    Simulates convergent beam electron diffraction patterns
+- `shift_beam_fourier`:
+    Shifts electron beam in Fourier space for scanning
+- `stem_4D`:
+    Generates 4D-STEM data with multiple probe positions
+- `decompose_beam_to_modes`:
+    Decomposes electron beam into orthogonal modes
+
+Notes
+-----
+All functions are designed to work with JAX transformations including
+jit, grad, and vmap. Input arrays should be properly typed and validated
+using the factory functions from electron_types module.
+"""
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker

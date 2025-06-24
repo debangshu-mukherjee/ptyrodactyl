@@ -25,7 +25,8 @@ Submodules
     Data structures and type definitions for optical propagation
 """
 
-from .engine import extended_pie_optical_ptychography, single_pie_iteration, single_pie_vmap, single_pie_sequential
+from .engine import (extended_pie_optical_ptychography, single_pie_iteration,
+                     single_pie_sequential, single_pie_vmap)
 from .helper import (add_phase_screen, create_spatial_grid, field_intensity,
                      normalize_field, scale_pixel)
 from .invertor import get_optimizer, simple_microscope_ptychography

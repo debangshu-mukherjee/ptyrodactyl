@@ -10,7 +10,7 @@ are fully differentiable and JIT-compilable.
 Submodules
 ----------
 - `engine`:
-    Framework for building complete optical simulation pipelines
+   Ptychographic Iterative Engine (PIE) based codes.
 - `helper`:
     Utility functions for creating grids, phase manipulation, and field calculations
 - `invertor`:
@@ -25,6 +25,7 @@ Submodules
     Data structures and type definitions for optical propagation
 """
 
+from .engine import extended_pie_optical_ptychography, single_pie_iteration
 from .helper import (add_phase_screen, create_spatial_grid, field_intensity,
                      normalize_field, scale_pixel)
 from .invertor import get_optimizer, simple_microscope_ptychography
@@ -46,6 +47,8 @@ from .photon_types import (Diffractogram, GridParams, LensParams,
                            scalar_num)
 
 __all__ = [
+    "extended_pie_optical_ptychography",
+    "single_pie_iteration",
     "add_phase_screen",
     "create_spatial_grid",
     "field_intensity",

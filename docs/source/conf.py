@@ -6,7 +6,6 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath("../../src"))
 sys.path.insert(0, os.path.abspath("./_ext"))
 
-# Load project metadata from pyproject.toml
 pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
 with open(pyproject_path, "rb") as f:
     pyproject_data = tomllib.load(f)
@@ -23,6 +22,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
+    "sphinx.ext.autosummary",
     "sphinx_rtd_theme",
     "nbsphinx",
     "param_parser",
@@ -67,9 +67,11 @@ html_css_files = [
 ]
 
 autodoc_default_options = {
-    "exclude-members": "Float, Array, Int, Num, beartype, jaxtyped",
-    "ignore-module-all": True,
+    "exclude-members": "Float, Array, Int, Num, beartype, jaxtyped, typechecker, TypeAlias, Union, Optional",
+    "ignore-module-all": False,
 }
+
+autosummary_generate = True
 
 nitpicky = False
 

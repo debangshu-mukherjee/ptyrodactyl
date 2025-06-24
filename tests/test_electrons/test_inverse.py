@@ -2,15 +2,15 @@ import jax.numpy as jnp
 from ptyrodactyl.electrons.forward import make_probe, make_sample, stem_4D
 
 image_size = (64, 64)
-voltage = 200 
-aperture = 0.2 
-calib = 0.01  
+voltage = 200
+aperture = 0.2
+calib = 0.01
 
 probe = make_probe(
     voltage=voltage,
     aperture=aperture,
     image_size=image_size,
-    calibration_pm=calib * 1000  
+    calibration_pm=calib * 1000,
 )
 
 sample_shape = (64, 64, 1)
@@ -26,8 +26,7 @@ output = stem_4D(
     positions=scan_positions,
     slice_thickness=5.0,
     voltage_kV=voltage,
-    calib_ang=calib
+    calib_ang=calib,
 )
 
 print("4D-STEM output shape:", output.shape)
-

@@ -6,10 +6,16 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
-from ptyrodactyl.photons.lenses import (LensParams, double_concave_lens,
-                                       double_convex_lens, lens_focal_length,
-                                       lens_thickness_profile, meniscus_lens,
-                                       plano_concave_lens, plano_convex_lens)
+from ptyrodactyl.photons.lenses import (
+    LensParams,
+    double_concave_lens,
+    double_convex_lens,
+    lens_focal_length,
+    lens_thickness_profile,
+    meniscus_lens,
+    plano_concave_lens,
+    plano_convex_lens,
+)
 
 # Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)

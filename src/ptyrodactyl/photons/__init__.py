@@ -25,27 +25,63 @@ Submodules
     Data structures and type definitions for optical propagation
 """
 
-from .engine import (epie_optical, single_pie_iteration, single_pie_sequential,
-                     single_pie_vmap)
-from .helper import (add_phase_screen, create_spatial_grid, field_intensity,
-                     normalize_field, scale_pixel)
+from .engine import (
+    epie_optical,
+    single_pie_iteration,
+    single_pie_sequential,
+    single_pie_vmap,
+)
+from .helper import (
+    add_phase_screen,
+    create_spatial_grid,
+    field_intensity,
+    normalize_field,
+    scale_pixel,
+)
 from .invertor import get_optimizer, simple_microscope_ptychography
-from .lens_optics import (angular_spectrum_prop, circular_aperture,
-                          digital_zoom, fraunhofer_prop, fresnel_prop,
-                          optical_zoom)
-from .lenses import (create_lens_phase, double_concave_lens,
-                     double_convex_lens, lens_focal_length,
-                     lens_thickness_profile, meniscus_lens, plano_concave_lens,
-                     plano_convex_lens, propagate_through_lens)
-from .microscope import (lens_propagation, linear_interaction,
-                         simple_diffractogram, simple_microscope)
-from .photon_types import (Diffractogram, GridParams, LensParams,
-                           MicroscopeData, OpticalWavefront, SampleFunction,
-                           make_diffractogram, make_grid_params,
-                           make_lens_params, make_microscope_data,
-                           make_optical_wavefront, make_sample_function,
-                           non_jax_number, scalar_float, scalar_int,
-                           scalar_num)
+from .lens_optics import (
+    angular_spectrum_prop,
+    circular_aperture,
+    digital_zoom,
+    fraunhofer_prop,
+    fresnel_prop,
+    optical_zoom,
+)
+from .lenses import (
+    create_lens_phase,
+    double_concave_lens,
+    double_convex_lens,
+    lens_focal_length,
+    lens_thickness_profile,
+    meniscus_lens,
+    plano_concave_lens,
+    plano_convex_lens,
+    propagate_through_lens,
+)
+from .microscope import (
+    lens_propagation,
+    linear_interaction,
+    simple_diffractogram,
+    simple_microscope,
+)
+from .photon_types import (
+    Diffractogram,
+    GridParams,
+    LensParams,
+    MicroscopeData,
+    OpticalWavefront,
+    SampleFunction,
+    make_diffractogram,
+    make_grid_params,
+    make_lens_params,
+    make_microscope_data,
+    make_optical_wavefront,
+    make_sample_function,
+    non_jax_number,
+    scalar_float,
+    scalar_int,
+    scalar_num,
+)
 
 __all__ = [
     "epie_optical",

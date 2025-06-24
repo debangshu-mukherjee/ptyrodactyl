@@ -12,7 +12,7 @@ class TestEngineModule(chex.TestCase):
     def test_imports(self):
         """Test that the engine module can be imported."""
         import ptyrodactyl.photons.engine
-        
+
         # The engine module is currently a placeholder
         # This test just verifies it can be imported without errors
 

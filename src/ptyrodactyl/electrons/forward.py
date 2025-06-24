@@ -45,12 +45,28 @@ import jax.numpy as jnp
 from beartype import beartype as typechecker
 from beartype.typing import Optional, Union
 from jax import lax
-from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
-                       PRNGKeyArray, jaxtyped)
+from jaxtyping import (
+    Array,
+    Bool,
+    Complex,
+    Complex128,
+    Float,
+    Int,
+    Num,
+    PRNGKeyArray,
+    jaxtyped,
+)
 
-from .electron_types import (CalibratedArray, PotentialSlices, ProbeModes,
-                             make_calibrated_array, make_probe_modes,
-                             scalar_float, scalar_int, scalar_numeric)
+from .electron_types import (
+    CalibratedArray,
+    PotentialSlices,
+    ProbeModes,
+    make_calibrated_array,
+    make_probe_modes,
+    scalar_float,
+    scalar_int,
+    scalar_numeric,
+)
 
 jax.config.update("jax_enable_x64", True)
 

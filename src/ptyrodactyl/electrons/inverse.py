@@ -46,9 +46,14 @@ OPTIMIZERS: Dict[str, ptt.Optimizer] = {
     "rmsprop": ptt.Optimizer(ptt.init_rmsprop, ptt.rmsprop_update),
 }
 
-from .electron_types import (CalibratedArray, ProbeModes,
-                             make_calibrated_array, scalar_float, scalar_int,
-                             scalar_numeric)
+from .electron_types import (
+    CalibratedArray,
+    ProbeModes,
+    make_calibrated_array,
+    scalar_float,
+    scalar_int,
+    scalar_numeric,
+)
 from .forward import stem_4D
 
 

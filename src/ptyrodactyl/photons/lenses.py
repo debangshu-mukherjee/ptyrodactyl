@@ -32,8 +32,7 @@ from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (LensParams, make_lens_params, scalar_float,
-                           scalar_num)
+from .photon_types import LensParams, make_lens_params, scalar_float, scalar_num
 
 jax.config.update("jax_enable_x64", True)
 

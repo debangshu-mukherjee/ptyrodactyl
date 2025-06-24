@@ -56,7 +56,7 @@ def extended_pie_optical_ptychography(
     alpha_surface: scalar_float = 0.1,
     gamma_surface: scalar_float = 0.5,
     num_loops: scalar_int = 10,
-) -> Tuple[OpticalWavefront, SampleFunction]:
+) -> tuple[OpticalWavefront, SampleFunction]:
     """
     Description
     -----------
@@ -127,16 +127,16 @@ def extended_pie_optical_ptychography(
     surface_pattern: Complex[Array, "H W"] = initial_surface.sample
 
     def loop_body(
-        loop_idx: scalar_int, state: Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
-    ) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
+        _, state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
+    ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
         object_prop_ft: Complex[Array, "H W"]
         surface_pattern_current: Complex[Array, "H W"]
         object_prop_ft, surface_pattern_current = state
 
         def position_body(
             pos_idx: scalar_int,
-            inner_state: Tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
-        ) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
+            inner_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
+        ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
             return single_pie_iteration(
                 inner_state[0],
                 inner_state[1],
@@ -155,7 +155,7 @@ def extended_pie_optical_ptychography(
                 initial_object.dx,
             )
 
-        updated_state: Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
+        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
         updated_state = jax.lax.fori_loop(
             0, num_positions, position_body, (object_prop_ft, surface_pattern_current)
         )
@@ -422,22 +422,28 @@ def _update_surface_pattern(
     -------
     - `updated_surface` (Complex[Array, "H W"]):
         Updated surface pattern
+
+    Flow
+    ----
+    - Compute object conjugate
+    - Compute difference between current and updated surface plane
+    - Compute object absolute squared
+    - Compute object maximum squared
+    - Compute denominator
+    - Compute update term
+    - Compute updated surface pattern
     """
     object_conj: Complex[Array, "H W"] = jnp.conj(object_shift)
     difference: Complex[Array, "H W"] = surface_plane_new - surface_plane
     object_abs_squared: Float[Array, "H W"] = jnp.abs(object_shift) ** 2
     object_max_squared: Float[Array, ""] = jnp.max(object_abs_squared)
-
     denominator: Float[Array, "H W"] = (
         alpha_surface * object_max_squared + (1 - alpha_surface) * object_abs_squared
     )
-
     update_term: Complex[Array, "H W"] = (
         gamma_surface * object_conj * difference / (denominator + 1e-10)
     )
-
     updated_surface: Complex[Array, "H W"] = surface_pattern + update_term
-
     return updated_surface
 
 

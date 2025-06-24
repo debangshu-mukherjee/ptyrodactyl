@@ -32,7 +32,8 @@ from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import LensParams, make_lens_params, scalar_float, scalar_num
+from .photon_types import (LensParams, make_lens_params, scalar_float,
+                           scalar_numeric)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -104,8 +105,8 @@ def lens_thickness_profile(
 @jaxtyped(typechecker=beartype)
 def lens_focal_length(
     n: scalar_float,
-    r1: scalar_num,
-    r2: scalar_num,
+    r1: scalar_numeric,
+    r2: scalar_numeric,
 ) -> scalar_float:
     """
     Description
@@ -116,9 +117,9 @@ def lens_focal_length(
     ----------
     - `n` (scalar_float):
         Refractive index of the lens material
-    - `r1` (scalar_num):
+    - `r1` (scalar_numeric):
         Radius of curvature of the first surface (positive for convex)
-    - `r2` (scalar_num):
+    - `r2` (scalar_numeric):
         Radius of curvature of the second surface (positive for convex)
 
     Returns

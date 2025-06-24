@@ -23,7 +23,8 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
-from .photon_types import OpticalWavefront, make_optical_wavefront, scalar_float
+from .photon_types import (OpticalWavefront, make_optical_wavefront,
+                           scalar_float)
 
 jax.config.update("jax_enable_x64", True)
 

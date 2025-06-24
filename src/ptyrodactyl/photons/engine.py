@@ -38,15 +38,9 @@ from beartype.typing import Callable, Optional, Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .lens_optics import angular_spectrum_prop
-from .photon_types import (
-    MicroscopeData,
-    OpticalWavefront,
-    SampleFunction,
-    make_optical_wavefront,
-    make_sample_function,
-    scalar_float,
-    scalar_int,
-)
+from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
+                           make_optical_wavefront, make_sample_function,
+                           scalar_float, scalar_integer)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -60,13 +54,13 @@ def epie_optical(
     pixel_mask: Float[Array, "H W"],
     propagation_distance_1: scalar_float,
     propagation_distance_2: scalar_float,
-    magnification: scalar_int,
-    vmap_iterations: Optional[scalar_int] = 0,
+    magnification: scalar_integer,
+    vmap_iterations: Optional[scalar_integer] = 0,
     alpha_object: Optional[scalar_float] = 0.1,
     gamma_object: Optional[scalar_float] = 0.5,
     alpha_surface: Optional[scalar_float] = 0.1,
     gamma_surface: Optional[scalar_float] = 0.5,
-    num_loops: Optional[scalar_int] = 10,
+    num_loops: Optional[scalar_integer] = 10,
 ) -> tuple[OpticalWavefront, SampleFunction]:
     """
     Description
@@ -87,9 +81,9 @@ def epie_optical(
         Distance from object to diffuser plane in meters
     - `propagation_distance_2` (scalar_float):
         Distance from diffuser to sensor plane in meters
-    - `magnification` (scalar_int):
+    - `magnification` (scalar_integer):
         Magnification factor for downsampling
-    - `vmap_iterations` (scalar_int):
+    - `vmap_iterations` (scalar_integer):
         Number of initial iterations to run in vmap mode for rapid convergence
         If 0, use sequential mode for all iterations
         If > 0, use vmap for first N iterations, then switch to sequential
@@ -101,7 +95,7 @@ def epie_optical(
         Surface update mixing parameter
     - `gamma_surface` (scalar_float):
         Surface update step size
-    - `num_loops` (scalar_int):
+    - `num_loops` (scalar_integer):
         Number of iteration loops
 
     Returns
@@ -139,7 +133,8 @@ def epie_optical(
     surface_pattern: Complex[Array, "H W"] = initial_surface.sample
 
     def loop_body(
-        loop_idx: scalar_int, state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
+        loop_idx: scalar_integer,
+        state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
     ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
         object_prop_ft: Complex[Array, "H W"]
         surface_pattern_current: Complex[Array, "H W"]
@@ -205,7 +200,7 @@ def single_pie_iteration(
     frequency_y_grid: Float[Array, "H W"],
     pixel_mask: Float[Array, "H W"],
     propagation_distance_2: scalar_float,
-    magnification: scalar_int,
+    magnification: scalar_integer,
     alpha_object: scalar_float,
     gamma_object: scalar_float,
     alpha_surface: scalar_float,
@@ -236,7 +231,7 @@ def single_pie_iteration(
         Pixel response mask for sensor modeling
     - `propagation_distance_2` (scalar_float):
         Distance from diffuser to sensor
-    - `magnification` (scalar_int):
+    - `magnification` (scalar_integer):
         Downsampling magnification factor
     - `alpha_object` (scalar_float):
         Object update mixing parameter
@@ -353,7 +348,7 @@ def single_pie_sequential(
     frequency_y_grid: Float[Array, "H W"],
     pixel_mask: Float[Array, "H W"],
     propagation_distance_2: scalar_float,
-    magnification: scalar_int,
+    magnification: scalar_integer,
     alpha_object: scalar_float,
     gamma_object: scalar_float,
     alpha_surface: scalar_float,
@@ -384,7 +379,7 @@ def single_pie_sequential(
         Pixel response mask for sensor modeling
     - `propagation_distance_2` (scalar_float):
         Distance from diffuser to sensor
-    - `magnification` (scalar_int):
+    - `magnification` (scalar_integer):
         Downsampling magnification factor
     - `alpha_object` (scalar_float):
         Object update mixing parameter
@@ -411,10 +406,10 @@ def single_pie_sequential(
     - Apply fori_loop over positions
     - Return updated state
     """
-    num_positions: scalar_int = image_data.shape[0]
+    num_positions: scalar_integer = image_data.shape[0]
 
     def position_body(
-        pos_idx: scalar_int,
+        pos_idx: scalar_integer,
         state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
     ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
         return single_pie_iteration(
@@ -453,7 +448,7 @@ def single_pie_vmap(
     frequency_y_grid: Float[Array, "H W"],
     pixel_mask: Float[Array, "H W"],
     propagation_distance_2: scalar_float,
-    magnification: scalar_int,
+    magnification: scalar_integer,
     alpha_object: scalar_float,
     gamma_object: scalar_float,
     alpha_surface: scalar_float,
@@ -725,7 +720,7 @@ def _apply_position_shift(
     - Compute position-shifted field in real space
     - Return position-shifted field
     """
-    image_size: scalar_int = field_ft.shape[0]
+    image_size: scalar_integer = field_ft.shape[0]
     phase_factor: Complex[Array, "H W"] = jnp.exp(
         -1j
         * 2
@@ -803,7 +798,7 @@ def _get_propagation_kernel(
 def _compute_sensor_intensity(
     sensor_field: Complex[Array, "H W"],
     pixel_mask: Float[Array, "H W"],
-    magnification: scalar_int,
+    magnification: scalar_integer,
 ) -> Float[Array, "H W"]:
     """
     Description
@@ -817,7 +812,7 @@ def _compute_sensor_intensity(
         Complex field at sensor plane
     - `pixel_mask` (Float[Array, "H W"]):
         Pixel response mask modeling sensor characteristics
-    - `magnification` (scalar_int):
+    - `magnification` (scalar_integer):
         Downsampling magnification factor
 
     Returns
@@ -876,8 +871,8 @@ def _create_frequency_grids(
     - Compute frequency grid in x and y directions
     - Return frequency grids
     """
-    height: scalar_int = field.shape[0]
-    width: scalar_int = field.shape[1]
+    height: scalar_integer = field.shape[0]
+    width: scalar_integer = field.shape[1]
     frequency_x: Float[Array, "W"] = jnp.fft.fftfreq(width, dx)
     frequency_y: Float[Array, "H"] = jnp.fft.fftfreq(height, dx)
     frequency_x_grid: Float[Array, "H W"]

@@ -25,10 +25,9 @@ jit, grad, and vmap. The create_loss_function factory returns a JIT-compiled
 function that can be used with various optimization algorithms.
 """
 
-from typing import Any, Callable
-
 import jax
 import jax.numpy as jnp
+from beartype.typing import Any, Callable
 from jaxtyping import Array, Float, PyTree
 
 

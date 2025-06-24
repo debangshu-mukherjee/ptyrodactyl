@@ -20,15 +20,9 @@ from jaxtyping import Array, Complex, Float, jaxtyped
 import ptyrodactyl.tools as ptt
 
 from .microscope import simple_microscope
-from .photon_types import (
-    MicroscopeData,
-    OpticalWavefront,
-    SampleFunction,
-    make_optical_wavefront,
-    make_sample_function,
-    scalar_float,
-    scalar_int,
-)
+from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
+                           make_optical_wavefront, make_sample_function,
+                           scalar_float, scalar_integer)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -56,8 +50,8 @@ def simple_microscope_ptychography(
     camera_pixel_size: scalar_float,
     aperture_center: Optional[Float[Array, "2"]] = None,
     learning_rate: Optional[scalar_float] = 0.01,
-    num_iterations: Optional[scalar_int] = 1000,
-    save_every: Optional[scalar_int] = 10,
+    num_iterations: Optional[scalar_integer] = 1000,
+    save_every: Optional[scalar_integer] = 10,
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
     zoom_factor_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
@@ -111,9 +105,9 @@ def simple_microscope_ptychography(
         Initial guess for the center of the aperture
     - `learning_rate` (Optional[scalar_float]):
         Learning rate for optimization (default: 0.01)
-    - `num_iterations` (Optional[scalar_int]):
+    - `num_iterations` (Optional[scalar_integer]):
         Number of optimization iterations (default: 1000)
-    - `save_every` (Optional[scalar_int]):
+    - `save_every` (Optional[scalar_integer]):
         Save intermediate results every n iterations (default: 10)
     - `loss_type` (Optional[str]):
         Type of loss function to use (default: "mse")

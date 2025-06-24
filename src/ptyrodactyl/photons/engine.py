@@ -34,7 +34,7 @@ Local Functions
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional, Tuple
+from beartype.typing import Callable, Optional, Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .lens_optics import angular_spectrum_prop
@@ -45,6 +45,8 @@ from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
 jax.config.update("jax_enable_x64", True)
 
 
+@jax.jit
+@jaxtyped(typechecker=beartype)
 def extended_pie_optical_ptychography(
     microscope_data: MicroscopeData,
     initial_object: OpticalWavefront,
@@ -114,7 +116,7 @@ def extended_pie_optical_ptychography(
     """
     image_data: Float[Array, "P H W"] = microscope_data.image_data
     positions: Float[Array, "P 2"] = microscope_data.positions
-    num_positions: scalar_int = image_data.shape[0]
+
     frequency_x_grid: Float[Array, "H W"]
     frequency_y_grid: Float[Array, "H W"]
     frequency_x_grid, frequency_y_grid = _create_frequency_grids(
@@ -126,21 +128,21 @@ def extended_pie_optical_ptychography(
     surface_pattern: Complex[Array, "H W"] = initial_surface.sample
 
     def loop_body(
-        _, state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
+        loop_idx: scalar_int, state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
     ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
         object_prop_ft: Complex[Array, "H W"]
         surface_pattern_current: Complex[Array, "H W"]
         object_prop_ft, surface_pattern_current = state
-
-        def position_body(
-            pos_idx: scalar_int,
-            inner_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
-        ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
-            return single_pie_iteration(
-                inner_state[0],
-                inner_state[1],
-                image_data[pos_idx],
-                positions[pos_idx],
+        use_vmap: bool = loop_idx < vmap_iterations
+        position_processor: Callable = jax.lax.cond(
+            use_vmap, lambda: single_pie_vmap, lambda: single_pie_sequential
+        )
+        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
+            position_processor(
+                object_prop_ft,
+                surface_pattern_current,
+                image_data,
+                positions,
                 frequency_x_grid,
                 frequency_y_grid,
                 pixel_mask,
@@ -153,12 +155,7 @@ def extended_pie_optical_ptychography(
                 initial_object.wavelength,
                 initial_object.dx,
             )
-
-        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
-        updated_state = jax.lax.fori_loop(
-            0, num_positions, position_body, (object_prop_ft, surface_pattern_current)
         )
-
         return updated_state
 
     final_object_ft: Complex[Array, "H W"]
@@ -166,7 +163,6 @@ def extended_pie_optical_ptychography(
     final_object_ft, final_surface = jax.lax.fori_loop(
         0, num_loops, loop_body, (object_recovery_prop_ft, surface_pattern)
     )
-
     final_object_field: Complex[Array, "H W"] = angular_spectrum_prop(
         make_optical_wavefront(
             final_object_ft,
@@ -176,18 +172,15 @@ def extended_pie_optical_ptychography(
         ),
         -propagation_distance_1,
     ).field
-
     recovered_object: OpticalWavefront = make_optical_wavefront(
         final_object_field,
         initial_object.wavelength,
         initial_object.dx,
         initial_object.z_position,
     )
-
     recovered_surface: SampleFunction = make_sample_function(
         final_surface, initial_surface.dx
     )
-
     return recovered_object, recovered_surface
 
 

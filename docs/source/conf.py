@@ -1,14 +1,21 @@
 import os
 import sys
+import tomllib
+from pathlib import Path
 
 sys.path.insert(0, os.path.abspath("../../src"))
 sys.path.insert(0, os.path.abspath("./_ext"))
 
-project = "ptyrodactyl"
-copyright = "2025"
-author = "Debangshu Mukherjee"
+# Load project metadata from pyproject.toml
+pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
+with open(pyproject_path, "rb") as f:
+    pyproject_data = tomllib.load(f)
 
-release = "2025.05.10"
+project_info = pyproject_data["project"]
+project = project_info["name"]
+author = project_info["authors"][0]["name"]
+copyright = "2025"
+release = project_info["version"]
 
 extensions = [
     "sphinx.ext.autodoc",

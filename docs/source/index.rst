@@ -1,5 +1,5 @@
-Welcome to rheedium's documentation!
-==================================
+Welcome to ptyrodactyl's documentation!
+=========================================
 
 .. toctree::
    :maxdepth: 2
@@ -8,3 +8,10 @@ Welcome to rheedium's documentation!
    installation
    api
    tutorials/index
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`

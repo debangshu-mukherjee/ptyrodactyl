@@ -1,9 +1,9 @@
 API Reference
-============
+=============
 
 Electrons Module
----------
-.. automodule:: ptyrodactyl.electrons.classes
+----------------
+.. automodule:: ptyrodactyl.electrons.electron_types
    :members:
    :undoc-members:
    :show-inheritance:
@@ -21,29 +21,58 @@ Electrons Module
    :show-inheritance:
    :imported-members:
 
-Light Microscopy Module
----------------
-.. automodule:: ptyrodactyl.optics.epie
+.. automodule:: ptyrodactyl.electrons.preprocessing
    :members:
    :undoc-members:
    :show-inheritance:
    :imported-members:
 
-.. automodule:: ptyrodactyl.optics.helper_function
+Photons Module
+--------------
+.. automodule:: ptyrodactyl.photons.engine
    :members:
    :undoc-members:
    :show-inheritance:
    :imported-members:
 
-.. automodule:: ptyrodactyl.optics.lenses
+.. automodule:: ptyrodactyl.photons.helper
    :members:
    :undoc-members:
    :show-inheritance:
    :imported-members:
 
+.. automodule:: ptyrodactyl.photons.invertor
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :imported-members:
+
+.. automodule:: ptyrodactyl.photons.lens_optics
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :imported-members:
+
+.. automodule:: ptyrodactyl.photons.lenses
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :imported-members:
+
+.. automodule:: ptyrodactyl.photons.microscope
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :imported-members:
+
+.. automodule:: ptyrodactyl.photons.photon_types
+   :members:
+   :undoc-members:
+   :show-inheritance:
+   :imported-members:
 
 Tools Module
---------------
+------------
 .. automodule:: ptyrodactyl.tools.loss_functions
    :members:
    :undoc-members:

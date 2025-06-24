@@ -14,10 +14,14 @@ keywords = [
     "differentiable programming",
 ]
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
-    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Typing :: Typed",
+    "Topic :: Scientific/Engineering :: Image Processing",
 ]
 dependencies = [
     "numpy>=1.13.0",
@@ -48,14 +52,6 @@ where = ["src"]
 [tool.uv]
 dev-dependencies = [
     "ipykernel>=6.29.5",
-]
-
-[project.urls]
-Homepage = "https://github.com/debangshu-mukherjee/ptyrodactyl"
-
-[project.optional-dependencies]
-docs = [
-    "ipykernel>=6.29.5",
     "myst-parser>=4.0.1",
     "nbsphinx>=0.9.6",
     "pydata-sphinx-theme>=0.16.1",
@@ -63,6 +59,9 @@ docs = [
     "sphinx-rtd-theme>=3.0.2",
     "sphinxcontrib-napoleon>=0.7",
 ]
+
+[project.urls]
+Homepage = "https://github.com/debangshu-mukherjee/ptyrodactyl"
 
 
 [build-system]

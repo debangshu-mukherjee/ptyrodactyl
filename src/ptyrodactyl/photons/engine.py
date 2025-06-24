@@ -10,6 +10,10 @@ Functions
     Main ePIE reconstruction algorithm for optical ptychography
 - `single_pie_iteration`:
     Single iteration of the ePIE algorithm
+- `single_pie_vmap`:
+    Parallel processing over positions using vmap for faster but approximate PIE.
+- `single_pie_sequential`:
+    Sequential processing over positions for refinement.
 
 Local Functions
 ---------------
@@ -41,8 +45,6 @@ from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
 jax.config.update("jax_enable_x64", True)
 
 
-@jax.jit
-@jaxtyped(typechecker=beartype)
 def extended_pie_optical_ptychography(
     microscope_data: MicroscopeData,
     initial_object: OpticalWavefront,
@@ -56,12 +58,13 @@ def extended_pie_optical_ptychography(
     alpha_surface: scalar_float = 0.1,
     gamma_surface: scalar_float = 0.5,
     num_loops: scalar_int = 10,
+    use_vmap: bool = False,
 ) -> tuple[OpticalWavefront, SampleFunction]:
     """
     Description
     -----------
     Extended Ptychographic Iterative Engine for optical ptychography reconstruction.
-
+    
     Parameters
     ----------
     - `microscope_data` (MicroscopeData):
@@ -78,68 +81,65 @@ def extended_pie_optical_ptychography(
         Distance from diffuser to sensor plane in meters
     - `magnification` (scalar_int):
         Magnification factor for downsampling
+    - `vmap_iterations` (scalar_int):
+        Number of initial iterations to run in vmap mode for rapid convergence
+        If 0, use sequential mode for all iterations
+        If > 0, use vmap for first N iterations, then switch to sequential
     - `alpha_object` (scalar_float):
         Object update mixing parameter
     - `gamma_object` (scalar_float):
         Object update step size
     - `alpha_surface` (scalar_float):
-        Surface update mixing parameter
+        Surface update mixing parameter  
     - `gamma_surface` (scalar_float):
         Surface update step size
     - `num_loops` (scalar_int):
         Number of iteration loops
-
+        
     Returns
     -------
     - `recovered_object` (OpticalWavefront):
         Reconstructed object wavefront
     - `recovered_surface` (SampleFunction):
         Reconstructed surface pattern
-
+        
     Flow
     ----
     1. Initialize frequency grids and propagation kernels
     2. Propagate object to diffuser plane using angular spectrum
-    3. Loop over iterations and positions:
-       a. Apply position shift
-       b. Multiply with surface pattern
-       c. Propagate to sensor plane
-       d. Apply coherent transfer function
-       e. Compute intensity and apply measurement constraint
-       f. Back-propagate and update surface pattern
-       g. Update object wavefront using rPIE
+    3. Hybrid loop strategy:
+       a. Run first vmap_iterations using parallel processing for rapid convergence
+       b. Switch to sequential processing for remaining iterations for refinement
     4. Final back-propagation to object plane
     """
     image_data: Float[Array, "P H W"] = microscope_data.image_data
     positions: Float[Array, "P 2"] = microscope_data.positions
     num_positions: scalar_int = image_data.shape[0]
-
     frequency_x_grid: Float[Array, "H W"]
     frequency_y_grid: Float[Array, "H W"]
     frequency_x_grid, frequency_y_grid = _create_frequency_grids(
         initial_object.field, initial_object.dx
     )
-
     object_recovery_prop_ft: Complex[Array, "H W"] = angular_spectrum_prop(
         initial_object, propagation_distance_1
     ).field
-
     surface_pattern: Complex[Array, "H W"] = initial_surface.sample
-
+    
     def loop_body(
-        _, state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
+        _, 
+        state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
     ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
         object_prop_ft: Complex[Array, "H W"]
         surface_pattern_current: Complex[Array, "H W"]
         object_prop_ft, surface_pattern_current = state
-
+        
         def position_body(
             pos_idx: scalar_int,
-            inner_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
+            inner_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
         ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
             return single_pie_iteration(
                 inner_state[0],
-                inner_state[1],
+                inner_state[1], 
                 image_data[pos_idx],
                 positions[pos_idx],
                 frequency_x_grid,
@@ -154,20 +154,20 @@ def extended_pie_optical_ptychography(
                 initial_object.wavelength,
                 initial_object.dx,
             )
-
+        
         updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]]
         updated_state = jax.lax.fori_loop(
             0, num_positions, position_body, (object_prop_ft, surface_pattern_current)
         )
-
+        
         return updated_state
-
+    
     final_object_ft: Complex[Array, "H W"]
     final_surface: Complex[Array, "H W"]
     final_object_ft, final_surface = jax.lax.fori_loop(
         0, num_loops, loop_body, (object_recovery_prop_ft, surface_pattern)
     )
-
+    
     final_object_field: Complex[Array, "H W"] = angular_spectrum_prop(
         make_optical_wavefront(
             final_object_ft,
@@ -177,18 +177,18 @@ def extended_pie_optical_ptychography(
         ),
         -propagation_distance_1,
     ).field
-
+    
     recovered_object: OpticalWavefront = make_optical_wavefront(
         final_object_field,
         initial_object.wavelength,
         initial_object.dx,
         initial_object.z_position,
     )
-
+    
     recovered_surface: SampleFunction = make_sample_function(
         final_surface, initial_surface.dx
     )
-
+    
     return recovered_object, recovered_surface
 
 
@@ -209,12 +209,12 @@ def single_pie_iteration(
     gamma_surface: scalar_float,
     wavelength: scalar_float,
     dx: scalar_float,
-) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
+) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
     """
     Description
     -----------
     Single iteration of the extended PIE algorithm.
-
+    
     Parameters
     ----------
     - `object_prop_ft` (Complex[Array, "H W"]):
@@ -243,7 +243,7 @@ def single_pie_iteration(
         Surface update mixing parameter
     - `gamma_surface` (scalar_float):
         Surface update step size
-
+        
     Returns
     -------
     - `updated_object_ft` (Complex[Array, "H W"]):
@@ -254,57 +254,49 @@ def single_pie_iteration(
     object_shifted: Complex[Array, "H W"] = _apply_position_shift(
         object_prop_ft, position, frequency_x_grid, frequency_y_grid
     )
-
     surface_plane: Complex[Array, "H W"] = object_shifted * surface_pattern
-
     surface_prop_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(surface_plane)
     ) * _get_propagation_kernel(
-        surface_plane.shape, propagation_distance_2, wavelength, dx
+        surface_plane.shape, 
+        propagation_distance_2, 
+        wavelength, 
+        dx
     )
-
     sensor_plane_ft: Complex[Array, "H W"] = _apply_coherent_transfer_function(
         surface_prop_ft
     )
-
     sensor_plane: Complex[Array, "H W"] = jnp.fft.ifft2(
         jnp.fft.ifftshift(sensor_plane_ft)
     )
-
     sensor_intensity: Float[Array, "H W"] = _compute_sensor_intensity(
         sensor_plane, pixel_mask, magnification
     )
-
     ratio_map: Float[Array, "H W"] = jnp.sqrt(measurement) / (
         jnp.sqrt(sensor_intensity) + 1e-10
     )
-
     ratio_map_upsampled: Float[Array, "H W"] = jnp.repeat(
         jnp.repeat(ratio_map, magnification, axis=0), magnification, axis=1
     )
-
     sensor_plane_new: Complex[Array, "H W"] = ratio_map_upsampled * sensor_plane
-
     sensor_plane_new_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(sensor_plane_new)
     )
-
     ctf_conj: Complex[Array, "H W"] = jnp.conj(_get_ctf())
     ctf_max_squared: Float[Array, ""] = jnp.max(jnp.abs(_get_ctf()) ** 2)
-
     surface_prop_ft_updated: Complex[Array, "H W"] = surface_prop_ft + (
         ctf_conj * (sensor_plane_new_ft - sensor_plane_ft) / ctf_max_squared
     )
-
     surface_plane_new: Complex[Array, "H W"] = jnp.fft.ifft2(
         jnp.fft.ifftshift(
-            surface_prop_ft_updated
-            * _get_propagation_kernel(
-                surface_prop_ft_updated.shape, -propagation_distance_2, wavelength, dx
+            surface_prop_ft_updated * _get_propagation_kernel(
+                surface_prop_ft_updated.shape,
+                -propagation_distance_2,
+                wavelength,
+                dx
             )
         )
     )
-
     updated_surface: Complex[Array, "H W"] = _update_surface_pattern(
         surface_pattern,
         object_shifted,
@@ -313,7 +305,6 @@ def single_pie_iteration(
         alpha_surface,
         gamma_surface,
     )
-
     object_shifted_updated: Complex[Array, "H W"] = _update_object_wavefront(
         object_shifted,
         surface_pattern,
@@ -322,16 +313,162 @@ def single_pie_iteration(
         alpha_object,
         gamma_object,
     )
-
     updated_object_ft: Complex[Array, "H W"] = _apply_position_shift(
         jnp.fft.fftshift(jnp.fft.fft2(object_shifted_updated)),
         -position,
         frequency_x_grid,
         frequency_y_grid,
     )
-
     return updated_object_ft, updated_surface
 
+
+@jaxtyped(typechecker=beartype)
+def single_pie_sequential(
+    object_prop_ft: Complex[Array, "H W"],
+    surface_pattern: Complex[Array, "H W"],
+    image_data: Float[Array, "P H W"],
+    positions: Float[Array, "P 2"],
+    frequency_x_grid: Float[Array, "H W"],
+    frequency_y_grid: Float[Array, "H W"],
+    pixel_mask: Float[Array, "H W"],
+    propagation_distance_2: scalar_float,
+    magnification: scalar_int,
+    alpha_object: scalar_float,
+    gamma_object: scalar_float,
+    alpha_surface: scalar_float,
+    gamma_surface: scalar_float,
+    wavelength: scalar_float,
+    dx: scalar_float,
+) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
+    """
+    Description
+    -----------
+    Sequential processing over positions using fori_loop for proper PIE convergence.
+    
+    Parameters
+    ----------
+    - `object_prop_ft` (Complex[Array, "H W"]):
+        Current object wavefront in Fourier domain
+    - `surface_pattern` (Complex[Array, "H W"]):
+        Current surface pattern
+    - `image_data` (Float[Array, "P H W"]):
+        Measurement data for all positions
+    - `positions` (Float[Array, "P 2"]):
+        Position coordinates for all measurements
+    - Additional parameters for PIE algorithm
+        
+    Returns
+    -------
+    - `updated_state` (tuple[Complex[Array, "H W"], Complex[Array, "H W"]]):
+        Updated object and surface state after sequential processing
+    """
+    num_positions: scalar_int = image_data.shape[0]
+    
+    def position_body(
+        pos_idx: scalar_int,
+        state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
+    ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
+        return single_pie_iteration(
+            state[0],
+            state[1], 
+            image_data[pos_idx],
+            positions[pos_idx],
+            frequency_x_grid,
+            frequency_y_grid,
+            pixel_mask,
+            propagation_distance_2,
+            magnification,
+            alpha_object,
+            gamma_object,
+            alpha_surface,
+            gamma_surface,
+            wavelength,
+            dx,
+        )
+
+    updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = jax.lax.fori_loop(
+        0, num_positions, position_body, (object_prop_ft, surface_pattern)
+    )
+    return updated_state
+
+
+@jaxtyped(typechecker=beartype)
+def single_pie_vmap(
+    object_prop_ft: Complex[Array, "H W"],
+    surface_pattern: Complex[Array, "H W"],
+    image_data: Float[Array, "P H W"],
+    positions: Float[Array, "P 2"],
+    frequency_x_grid: Float[Array, "H W"],
+    frequency_y_grid: Float[Array, "H W"],
+    pixel_mask: Float[Array, "H W"],
+    propagation_distance_2: scalar_float,
+    magnification: scalar_int,
+    alpha_object: scalar_float,
+    gamma_object: scalar_float,
+    alpha_surface: scalar_float,
+    gamma_surface: scalar_float,
+    wavelength: scalar_float,
+    dx: scalar_float,
+) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
+    """
+    Description
+    -----------
+    Parallel processing over positions using vmap for faster but approximate PIE.
+    All positions use the same initial state, then updates are averaged.
+    
+    Parameters
+    ----------
+    - `object_prop_ft` (Complex[Array, "H W"]):
+        Current object wavefront in Fourier domain
+    - `surface_pattern` (Complex[Array, "H W"]):
+        Current surface pattern
+    - `image_data` (Float[Array, "P H W"]):
+        Measurement data for all positions
+    - `positions` (Float[Array, "P 2"]):
+        Position coordinates for all measurements
+    - Additional parameters for PIE algorithm
+        
+    Returns
+    -------
+    - `updated_state` (tuple[Complex[Array, "H W"], Complex[Array, "H W"]]):
+        Updated object and surface state after parallel processing and averaging
+        
+    Flow
+    ----
+    1. Apply vmap over all positions using same initial state
+    2. Compute average of all object updates
+    3. Compute average of all surface updates
+    4. Return averaged states
+    """
+    vmapped_iteration = jax.vmap(
+        single_pie_iteration,
+        in_axes=(None, None, 0, 0, None, None, None, None, None, None, None, None, None, None, None),
+        out_axes=0
+    )
+    
+    batch_object_updates: Complex[Array, "P H W"]
+    batch_surface_updates: Complex[Array, "P H W"]
+    batch_object_updates, batch_surface_updates = vmapped_iteration(
+        object_prop_ft,
+        surface_pattern,
+        image_data,
+        positions,
+        frequency_x_grid,
+        frequency_y_grid,
+        pixel_mask,
+        propagation_distance_2,
+        magnification,
+        alpha_object,
+        gamma_object,
+        alpha_surface,
+        gamma_surface,
+        wavelength,
+        dx,
+    )
+    
+    averaged_object: Complex[Array, "H W"] = jnp.mean(batch_object_updates, axis=0)
+    averaged_surface: Complex[Array, "H W"] = jnp.mean(batch_surface_updates, axis=0)
+    return averaged_object, averaged_surface
 
 @jaxtyped(typechecker=beartype)
 def _update_object_wavefront(

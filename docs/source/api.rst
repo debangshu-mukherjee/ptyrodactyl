@@ -3,36 +3,21 @@ API Reference
 
 Electrons Module
 ----------------
-
 .. automodule:: ptyrodactyl.electrons
-   :no-members:
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   ptyrodactyl.electrons
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Photons Module
 --------------
-
 .. automodule:: ptyrodactyl.photons
-   :no-members:
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   ptyrodactyl.photons
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Tools Module
 ------------
-
 .. automodule:: ptyrodactyl.tools
-   :no-members:
-
-.. autosummary::
-   :toctree: _autosummary
-   :recursive:
-
-   ptyrodactyl.tools
+   :members:
+   :undoc-members:
+   :show-inheritance:

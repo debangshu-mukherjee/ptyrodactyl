@@ -1552,17 +1552,6 @@ dependencies = [
     { name = "twine" },
 ]
 
-[package.optional-dependencies]
-docs = [
-    { name = "ipykernel" },
-    { name = "myst-parser" },
-    { name = "nbsphinx" },
-    { name = "pydata-sphinx-theme" },
-    { name = "sphinx" },
-    { name = "sphinx-rtd-theme" },
-    { name = "sphinxcontrib-napoleon" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "ipykernel" },
@@ -1572,6 +1561,7 @@ dev = [
     { name = "sphinx" },
     { name = "sphinx-rtd-theme" },
     { name = "sphinxcontrib-napoleon" },
+    { name = "twine" },
 ]
 
 [package.metadata]
@@ -1580,26 +1570,18 @@ requires-dist = [
     { name = "black", extras = ["jupyter"], specifier = ">=25.1.0" },
     { name = "chex", specifier = ">=0.1.85" },
     { name = "ipykernel", specifier = ">=6.29.5" },
-    { name = "ipykernel", marker = "extra == 'docs'", specifier = ">=6.29.5" },
     { name = "jax", marker = "sys_platform == 'win64'", specifier = ">=0.4.30" },
     { name = "jax", extras = ["cuda12"], marker = "sys_platform == 'linux'", specifier = ">=0.4.30" },
     { name = "jaxtyping", specifier = ">=0.2.21" },
     { name = "matplotlib", specifier = ">=2.2.0" },
     { name = "matplotlib-scalebar", specifier = ">=0.5.0" },
-    { name = "myst-parser", marker = "extra == 'docs'", specifier = ">=4.0.1" },
-    { name = "nbsphinx", marker = "extra == 'docs'", specifier = ">=0.9.6" },
     { name = "numpy", specifier = ">=1.13.0" },
     { name = "optax", specifier = ">=0.1.8" },
-    { name = "pydata-sphinx-theme", marker = "extra == 'docs'", specifier = ">=0.16.1" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "scipy", specifier = ">=1.0.0" },
-    { name = "sphinx", marker = "extra == 'docs'", specifier = ">=8.1.3" },
-    { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = ">=3.0.2" },
-    { name = "sphinxcontrib-napoleon", marker = "extra == 'docs'", specifier = ">=0.7" },
     { name = "tqdm", specifier = ">=4.66.0" },
     { name = "twine", specifier = ">=6.1.0" },
 ]
-provides-extras = ["docs"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1610,6 +1592,7 @@ dev = [
     { name = "sphinx", specifier = ">=8.1.3" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.2" },
     { name = "sphinxcontrib-napoleon", specifier = ">=0.7" },
+    { name = "twine", specifier = ">=6.1.0" },
 ]
 
 [[package]]

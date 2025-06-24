@@ -6,7 +6,7 @@ Local functions are prefixed with an underscore, and are not exported.
 
 Functions
 ---------
-- `extended_pie_optical_ptychography`:
+- `epie_optical`:
     Main ePIE reconstruction algorithm for optical ptychography
 - `single_pie_iteration`:
     Single iteration of the ePIE algorithm
@@ -47,7 +47,7 @@ jax.config.update("jax_enable_x64", True)
 
 @jax.jit
 @jaxtyped(typechecker=beartype)
-def extended_pie_optical_ptychography(
+def epie_optical(
     microscope_data: MicroscopeData,
     initial_object: OpticalWavefront,
     initial_surface: SampleFunction,

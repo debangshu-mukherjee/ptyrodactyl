@@ -6,7 +6,7 @@ authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 license = {file = "LICENSE"}
 maintainers = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 keywords = [
-    "elecron microscopy", 
+    "electron microscopy", 
     "optical microscopy",
     "4D-STEM",
     "JAX",

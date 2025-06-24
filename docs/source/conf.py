@@ -68,7 +68,7 @@ html_css_files = [
 
 autodoc_default_options = {
     "exclude-members": "Float, Array, Int, Num, beartype, jaxtyped, typechecker, TypeAlias, Union, Optional",
-    "ignore-module-all": False,
+    "ignore-module-all": True,  # Back to True since we want imported members
 }
 
 # Mock imports for ReadTheDocs (no GPU)

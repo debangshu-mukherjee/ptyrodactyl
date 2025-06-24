@@ -7,6 +7,7 @@ Electrons Module
    :members:
    :undoc-members:
    :show-inheritance:
+   :imported-members:
 
 Photons Module
 --------------
@@ -14,6 +15,7 @@ Photons Module
    :members:
    :undoc-members:
    :show-inheritance:
+   :imported-members:
 
 Tools Module
 ------------
@@ -21,3 +23,4 @@ Tools Module
    :members:
    :undoc-members:
    :show-inheritance:
+   :imported-members:

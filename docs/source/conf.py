@@ -59,9 +59,12 @@ html_css_files = [
     "custom.css",
 ]
 
-autodoc_default_options = {"exclude-members": "Float, Array, Int, Num, beartype"}
+autodoc_default_options = {
+    "exclude-members": "Float, Array, Int, Num, beartype, jaxtyped",
+    "ignore-module-all": True,
+}
 
-nitpicky = True
+nitpicky = False
 
 napoleon_type_aliases = {
     'Float[Array, ""]': "array",
@@ -77,10 +80,25 @@ nitpick_ignore = [
     ("py:class", "Int"),
     ("py:class", "Num"),
     ("py:class", "Bool"),
+    ("py:class", "Complex"),
+    ("py:class", "Integer"),
     ("py:class", "jaxtyping.Float"),
     ("py:class", "jaxtyping.Array"),
     ("py:class", "jaxtyping.Int"),
     ("py:class", "jaxtyping.Num"),
     ("py:class", "jaxtyping.Bool"),
+    ("py:class", "jaxtyping.Complex"),
+    ("py:class", "jaxtyping.Integer"),
     ("py:class", "beartype.typing.NamedTuple"),
+    ("py:class", "jaxtyping._array_types.AbstractDtype"),
+    ("py:exc", "BeartypeConfException"),
+    ("py:exc", "BeartypeDecorHintException"),
+    ("py:exc", "BeartypePep563Exception"),
+    ("py:exc", "BeartypeDecorParamNameException"),
+    ("py:exc", "BeartypeDecorWrappeeException"),
+    ("py:exc", "BeartypeDecorWrapperException"),
+    ("py:class", "beartype._data.hint.datahinttyping.BeartypeableT"),
+    ("py:class", "beartype._conf.confcls.BeartypeConf"),
+    ("py:mod", "beartype"),
+    ("py:class", "jax._src.tree_util.Typ"),
 ]

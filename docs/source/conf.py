@@ -6,6 +6,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath("../../src"))
 sys.path.insert(0, os.path.abspath("./_ext"))
 
+# Load project metadata from pyproject.toml
 pyproject_path = Path(__file__).parent.parent.parent / "pyproject.toml"
 with open(pyproject_path, "rb") as f:
     pyproject_data = tomllib.load(f)
@@ -22,7 +23,6 @@ extensions = [
     "sphinx.ext.viewcode",
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
-    "sphinx.ext.autosummary",
     "sphinx_rtd_theme",
     "nbsphinx",
     "param_parser",
@@ -71,7 +71,8 @@ autodoc_default_options = {
     "ignore-module-all": False,
 }
 
-autosummary_generate = True
+# Mock imports for ReadTheDocs (no GPU)
+autodoc_mock_imports = ["jax.scipy", "jax.numpy"]
 
 nitpicky = False
 

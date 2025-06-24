@@ -26,13 +26,8 @@ from beartype.typing import Optional
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (
-    OpticalWavefront,
-    make_optical_wavefront,
-    scalar_float,
-    scalar_int,
-    scalar_num,
-)
+from .photon_types import (OpticalWavefront, make_optical_wavefront,
+                           scalar_float, scalar_integer, scalar_numeric)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -40,8 +35,8 @@ jax.config.update("jax_enable_x64", True)
 @jaxtyped(typechecker=beartype)
 def angular_spectrum_prop(
     incoming: OpticalWavefront,
-    z_move: scalar_num,
-    refractive_index: Optional[scalar_num] = 1.0,
+    z_move: scalar_numeric,
+    refractive_index: Optional[scalar_numeric] = 1.0,
 ) -> OpticalWavefront:
     """
     Description
@@ -60,10 +55,10 @@ def angular_spectrum_prop(
             Grid spacing in meters
         - `z_position` (Float[Array, ""]):
             Wave front position in meters
-    - `z_move` (scalar_num):
+    - `z_move` (scalar_numeric):
         Propagation distance in meters
         This is in free space.
-    - `refractive_index` (Optional[scalar_num]):
+    - `refractive_index` (Optional[scalar_numeric]):
         Index of refraction of the medium. Default is 1.0 (vacuum).
 
 
@@ -86,8 +81,8 @@ def angular_spectrum_prop(
     - Inverse Fourier transform to get the propagated field
     - Return the propagated field
     """
-    ny: scalar_int = incoming.field.shape[0]
-    nx: scalar_int = incoming.field.shape[1]
+    ny: scalar_integer = incoming.field.shape[0]
+    nx: scalar_integer = incoming.field.shape[1]
     wavenumber: Float[Array, ""] = 2 * jnp.pi / incoming.wavelength
     path_length = refractive_index * z_move
     fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
@@ -116,8 +111,8 @@ def angular_spectrum_prop(
 @jaxtyped(typechecker=beartype)
 def fresnel_prop(
     incoming: OpticalWavefront,
-    z_move: scalar_num,
-    refractive_index: Optional[scalar_num] = 1.0,
+    z_move: scalar_numeric,
+    refractive_index: Optional[scalar_numeric] = 1.0,
 ) -> OpticalWavefront:
     """
     Description
@@ -136,10 +131,10 @@ def fresnel_prop(
             Grid spacing in meters
         - `z_position` (Float[Array, ""]):
             Wave front position in meters
-    - `z_move` (scalar_num):
+    - `z_move` (scalar_numeric):
         Propagation distance in meters
         This is in free space.
-    - `refractive_index` (Optional[scalar_num]):
+    - `refractive_index` (Optional[scalar_numeric]):
         Index of refraction of the medium. Default is 1.0 (vacuum).
 
     Returns
@@ -162,8 +157,8 @@ def fresnel_prop(
     - Apply final quadratic phase factor
     - Return the propagated field
     """
-    ny: scalar_int = incoming.field.shape[0]
-    nx: scalar_int = incoming.field.shape[1]
+    ny: scalar_integer = incoming.field.shape[0]
+    nx: scalar_integer = incoming.field.shape[1]
     k: Float[Array, ""] = (2 * jnp.pi) / incoming.wavelength
     x: Float[Array, "H"] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
     y: Float[Array, "W"] = jnp.arange(-ny // 2, ny // 2) * incoming.dx
@@ -249,8 +244,8 @@ def fraunhofer_prop(
     - Inverse Fourier transform to get the propagated field
     - Return the propagated field
     """
-    ny: scalar_int = incoming.field.shape[0]
-    nx: scalar_int = incoming.field.shape[1]
+    ny: scalar_integer = incoming.field.shape[0]
+    nx: scalar_integer = incoming.field.shape[1]
     fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
     fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
@@ -325,8 +320,8 @@ def circular_aperture(
         center = jnp.array([0.0, 0.0])
     center_pixels: Float[Array, 2] = center / incoming.dx
     diameter_pixels: scalar_float = diameter / incoming.dx
-    ny: scalar_int = incoming.field.shape[0]
-    nx: scalar_int = incoming.field.shape[1]
+    ny: scalar_integer = incoming.field.shape[0]
+    nx: scalar_integer = incoming.field.shape[1]
     x: Float[Array, "W"] = jnp.arange(-nx // 2, nx // 2)
     y: Float[Array, "H"] = jnp.arange(-ny // 2, ny // 2)
     Y: Float[Array, "H W"]
@@ -351,7 +346,7 @@ def circular_aperture(
 @jaxtyped(typechecker=beartype)
 def digital_zoom(
     wavefront: OpticalWavefront,
-    zoom_factor: scalar_num,
+    zoom_factor: scalar_numeric,
 ) -> OpticalWavefront:
     """
     Description
@@ -364,7 +359,7 @@ def digital_zoom(
     ----------
     - `wavefront` (OpticalWavefront):
         Incoming optical wavefront.
-    - `zoom_factor` (scalar_num):
+    - `zoom_factor` (scalar_numeric):
         Zoom factor (greater than 1 to zoom in, less than 1 to zoom out).
 
     Returns
@@ -409,7 +404,7 @@ def digital_zoom(
 @jaxtyped(typechecker=beartype)
 def optical_zoom(
     wavefront: OpticalWavefront,
-    zoom_factor: scalar_num,
+    zoom_factor: scalar_numeric,
 ) -> OpticalWavefront:
     """
     Description
@@ -422,7 +417,7 @@ def optical_zoom(
     ----------
     - `wavefront` (OpticalWavefront):
         Incoming optical wavefront.
-    - `zoom_factor` (scalar_num):
+    - `zoom_factor` (scalar_numeric):
         Zoom factor (greater than 1 to zoom in, less than 1 to zoom out).
 
     Returns

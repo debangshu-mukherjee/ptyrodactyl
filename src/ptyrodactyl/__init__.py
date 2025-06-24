@@ -55,7 +55,7 @@ and consider using the provided factory functions for data validation.
 
 from . import electrons, photons, tools
 
-__all__ = [
+__all__: list[str] = [
     "electrons",
     "photons",
     "tools",

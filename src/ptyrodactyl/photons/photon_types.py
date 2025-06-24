@@ -6,14 +6,15 @@ Data structures and type definitions for optical ptychography.
 Type Aliases
 ------------
 - `scalar_float`:
-    Type alias for float or Float array of 0 dimensions
-- `scalar_int`:
-    Type alias for int or Integer array of 0 dimensions
-- `scalar_num`:
-    Type alias for numeric types (int, float or Num array)
-    Num Array has 0 dimensions
+    A type alias for float or Float[Array, ""]
+- `scalar_integer`:
+    A type alias for int or Int[Array, ""]
+- `scalar_complex`:
+    A type alias for complex or Complex[Array, ""]
+- `scalar_numeric`:
+    A type alias for int, float, complex or Num[Array, ""]
 - `non_jax_number`:
-    Type alias for non-JAX numeric types (int, float)
+    A type alias for int, float or complex
 
 Classes
 -------
@@ -55,14 +56,15 @@ from beartype import beartype
 from beartype.typing import NamedTuple, TypeAlias, Union
 from jax import lax
 from jax.tree_util import register_pytree_node_class
-from jaxtyping import Array, Complex, Float, Integer, Num, jaxtyped
+from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 
 scalar_float: TypeAlias = Union[float, Float[Array, ""]]
-scalar_int: TypeAlias = Union[int, Integer[Array, ""]]
-scalar_num: TypeAlias = Union[int, float, Num[Array, ""]]
-non_jax_number: TypeAlias = Union[int, float]
+scalar_integer: TypeAlias = Union[int, Int[Array, ""]]
+scalar_complex: TypeAlias = Union[complex, Complex[Array, ""]]
+scalar_numeric: TypeAlias = Union[int, float, complex, Num[Array, ""]]
+non_jax_number: TypeAlias = Union[int, float, complex]
 
 
 @jaxtyped(typechecker=beartype)

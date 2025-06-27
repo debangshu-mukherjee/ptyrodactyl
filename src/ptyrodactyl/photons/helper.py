@@ -104,9 +104,6 @@ def add_phase_screen(
     Add a phase screen to a complex field,
     as:
 
-    .. math::
-        $field \times \exp(i \cdot phase)$.
-
     Parameters
     ----------
     - `field` (Complex[Array, "H W"]):

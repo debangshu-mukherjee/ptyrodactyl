@@ -33,6 +33,7 @@ Local Functions
 
 import jax
 import jax.numpy as jnp
+from functools import partial
 from beartype import beartype
 from beartype.typing import Callable, Optional, Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
@@ -45,7 +46,7 @@ from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
 jax.config.update("jax_enable_x64", True)
 
 
-@jax.jit
+@partial(jax.jit, static_argnums=(6, 7))
 @jaxtyped(typechecker=beartype)
 def epie_optical(
     microscope_data: MicroscopeData,
@@ -132,37 +133,51 @@ def epie_optical(
     ).field
     surface_pattern: Complex[Array, "H W"] = initial_surface.sample
 
+    @jax.jit
+
     def loop_body(
         loop_idx: scalar_integer,
         state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]],
     ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
-        object_prop_ft: Complex[Array, "H W"]
-        surface_pattern_current: Complex[Array, "H W"]
         object_prop_ft, surface_pattern_current = state
-        use_vmap: bool = loop_idx < vmap_iterations
-        position_processor: Callable = jax.lax.cond(
-            use_vmap, lambda: single_pie_vmap, lambda: single_pie_sequential
-        )
-        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
-            position_processor(
-                object_prop_ft,
-                surface_pattern_current,
-                image_data,
-                positions,
-                frequency_x_grid,
-                frequency_y_grid,
-                pixel_mask,
-                propagation_distance_2,
+        use_vmap = loop_idx < vmap_iterations
+
+        def _vmap_branch(s):
+            return single_pie_vmap(
+                s[0], s[1],
+                image_data, positions,
+                frequency_x_grid, frequency_y_grid,
+                pixel_mask, propagation_distance_2,
                 magnification,
-                alpha_object,
-                gamma_object,
-                alpha_surface,
-                gamma_surface,
-                initial_object.wavelength,
-                initial_object.dx,
+                alpha_object, gamma_object,
+                alpha_surface, gamma_surface,
+                initial_object.wavelength, initial_object.dx,
             )
+
+        def _seq_branch(s):
+            return single_pie_sequential(
+                s[0], s[1],
+                image_data, positions,
+                frequency_x_grid, frequency_y_grid,
+                pixel_mask, propagation_distance_2,
+                magnification,
+                alpha_object, gamma_object,
+                alpha_surface, gamma_surface,
+                initial_object.wavelength, initial_object.dx,
+            )
+
+        return jax.lax.cond(
+            use_vmap,
+            _vmap_branch,
+            _seq_branch,
+            state,
         )
-        return updated_state
+
+    final_object_ft, final_surface = jax.lax.fori_loop(
+        0, num_loops, loop_body,
+        (object_recovery_prop_ft, surface_pattern)
+    )
+
 
     final_object_ft: Complex[Array, "H W"]
     final_surface: Complex[Array, "H W"]
@@ -300,8 +315,9 @@ def single_pie_iteration(
     sensor_plane_new_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(sensor_plane_new)
     )
-    ctf_conj: Complex[Array, "H W"] = jnp.conj(_get_ctf())
-    ctf_max_squared: Float[Array, ""] = jnp.max(jnp.abs(_get_ctf()) ** 2)
+    ctf = _get_ctf(surface_prop_ft.shape) 
+    ctf_conj = jnp.conj(ctf) 
+    ctf_max_squared = jnp.max(jnp.abs(ctf)**2) 
     surface_prop_ft_updated: Complex[Array, "H W"] = surface_prop_ft + (
         ctf_conj * (sensor_plane_new_ft - sensor_plane_ft) / ctf_max_squared
     )
@@ -678,9 +694,8 @@ def _apply_coherent_transfer_function(
     - Apply CTF to field
     - Return result
     """
-    ctf: Complex[Array, "H W"] = _get_ctf()
-    result: Complex[Array, "H W"] = ctf * field_ft
-    return result
+    ctf: Complex[Array, "H W"] = _get_ctf(field_ft.shape) 
+    return ctf * field_ft 
 
 
 @jaxtyped(typechecker=beartype)

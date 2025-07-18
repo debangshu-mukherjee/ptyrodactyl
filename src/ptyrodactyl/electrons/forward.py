@@ -576,7 +576,7 @@ def shift_beam_fourier(
     qya, qxa = jnp.meshgrid(qy, qx, indexing="ij")
     beam_k: Complex128[Array, "H W #M"] = jnp.fft.fft2(our_beam, axes=(0, 1))
 
-    def apply_shift(position_idx: int) -> Complex128[Array, "H W #M"]:
+    def apply_shift(position_idx) -> Complex128[Array, "H W #M"]:
         y_shift: scalar_numeric
         x_shift: scalar_numeric
         y_shift, x_shift = pos[position_idx, 0], pos[position_idx, 1]
@@ -597,13 +597,12 @@ def shift_beam_fourier(
 
 @jaxtyped(typechecker=typechecker)
 def stem_4D(
-    pot_slice: Complex[Array, "H W #S"],
-    beam: Complex[Array, "H W #M"],
+    pot_slice: PotentialSlices,
+    beam: ProbeModes,
     positions: Num[Array, "#P 2"],
-    slice_thickness: scalar_float,
     voltage_kV: scalar_numeric,
     calib_ang: scalar_float,
-) -> Float[Array, "#P H W"]:
+) -> CalibratedArray:
     """
     Description
     -----------
@@ -613,12 +612,10 @@ def stem_4D(
 
     Parameters
     ----------
-    - `pot_slice` (Complex[Array, "H W #S"]):
-        The potential slice(s). H and W are height and width,
-        S is the number of slices (optional).
-    - `beam` (Complex[Array, "H W #M"]):
+    - `pot_slice` (PotentialSlices):
+        The potential slice(s). 
+    - `beam` (ProbeModes):
         The electron beam mode(s).
-        M is the number of modes (optional).
     - `positions` (Float[Array, "P 2"]):
         The (y, x) positions to shift the beam to.
         With P being the number of positions.
@@ -641,23 +638,26 @@ def stem_4D(
     - Return array of all CBED patterns
     """
     shifted_beams: Complex[Array, "P H W #M"] = shift_beam_fourier(
-        beam, positions, calib_ang
+        beam.modes, positions, calib_ang
     )
 
-    def process_single_position(pos_idx: int) -> Float[Array, "H W"]:
+    def process_single_position(pos_idx) -> CalibratedArray:
         current_beam: Complex[Array, "H W #M"] = jnp.take(
             shifted_beams, pos_idx, axis=0
         )
-        cbed_pattern: Float[Array, "H W"] = cbed(
+        current_ProbeModes = ProbeModes(
+            modes=current_beam,
+            weights=beam.weights,
+            calib=beam.calib,
+        )
+        cbed_pattern = cbed(
             pot_slices=pot_slice,
-            beam=current_beam,
-            slice_thickness=slice_thickness,
-            voltage_kV=voltage_kV,
-            calib_ang=calib_ang,
+            beam=current_ProbeModes,
+            voltage_kV=voltage_kV
         )
         return cbed_pattern
 
-    cbed_patterns: Float[Array, "P H W"] = jax.vmap(process_single_position)(
+    cbed_patterns: CalibratedArray = jax.vmap(process_single_position)(
         jnp.arange(positions.shape[0])
     )
     return cbed_patterns

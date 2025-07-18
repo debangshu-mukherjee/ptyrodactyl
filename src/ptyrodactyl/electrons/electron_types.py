@@ -175,7 +175,7 @@ def make_calibrated_array(
     data_array: Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]],
     calib_y: scalar_float,
     calib_x: scalar_float,
-    real_space: Bool[Array, ""],
+    real_space: Union[bool, Bool[Array, ""]],
 ) -> CalibratedArray:
     """
     Description

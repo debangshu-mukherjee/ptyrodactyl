@@ -26,8 +26,13 @@ from beartype.typing import Optional
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (OpticalWavefront, make_optical_wavefront,
-                           scalar_float, scalar_integer, scalar_numeric)
+from .photon_types import (
+    OpticalWavefront,
+    make_optical_wavefront,
+    scalar_float,
+    scalar_integer,
+    scalar_numeric,
+)
 
 jax.config.update("jax_enable_x64", True)
 

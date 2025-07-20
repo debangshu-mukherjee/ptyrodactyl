@@ -38,9 +38,15 @@ from beartype.typing import Callable, Optional, Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .lens_optics import angular_spectrum_prop
-from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
-                           make_optical_wavefront, make_sample_function,
-                           scalar_float, scalar_integer)
+from .photon_types import (
+    MicroscopeData,
+    OpticalWavefront,
+    SampleFunction,
+    make_optical_wavefront,
+    make_sample_function,
+    scalar_float,
+    scalar_integer,
+)
 
 jax.config.update("jax_enable_x64", True)
 

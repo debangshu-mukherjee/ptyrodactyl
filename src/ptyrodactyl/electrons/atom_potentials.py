@@ -6,9 +6,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from beartype import beartype
 from beartype.typing import List, Dict, Tuple, Optional, Union, Any
-from skimage import exposure
-import re
-import cv2
 import scipy.special as s2
 
 from .simulations import stem_4D, cbed, make_probe

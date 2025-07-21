@@ -1,6 +1,6 @@
 """
 Module: photons.helper
----------------------------
+----------------------
 Utility functions for optical propagation.
 
 Functions

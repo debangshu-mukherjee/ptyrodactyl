@@ -1,3 +1,5 @@
+
+from pathlib import Path
 import jax
 import jax.numpy as jnp
 import time
@@ -15,7 +17,9 @@ from .electron_types import (
     make_potential_slices,
     make_probe_modes,
     scalar_float,
+    scalar_int,
 )
+from .preprocessing import atomic_symbol, kirkland_potentials
 
 @jaxtyped(typechecker=beartype)
 def contrast_stretch(
@@ -73,92 +77,217 @@ def contrast_stretch(
     return final_result
 
 
-def atomic_potential(
-    atom_no,
-    pixel_size,
-    sampling=16,
-    potential_extent=4,
-    datafile="C:/users/zwx/Downloads/Kirkland_Potentials.npy",
-):
+@jaxtyped(typechecker=beartype)
+def bessel_k0(x: Float[Array, "..."]) -> Float[Array, "..."]:
     """
-    Calculate the projected potential of a single atom
+    Compute the modified Bessel function of the second kind of order 0.
 
     Parameters
     ----------
-    atom_no:          int
-                      Atomic number of the atom whose potential is being calculated.
-    pixel_size:       float
-                      Real space pixel size
-    datafile:         string
-                      Load the location of the npy file of the Kirkland scattering factors
-    sampling:         int, float
-                      Supersampling factor for increased accuracy. Matters more with big
-                      pixel sizes. The default value is 16.
-    potential_extent: float
-                      Distance in angstroms from atom center to which the projected
-                      potential is calculated. The default value is 4 angstroms.
+    x : Float[Array, "..."]
+        Input array of real values
 
     Returns
     -------
-    potential: ndarray
-               Projected potential matrix
+    Float[Array, "..."]
+        Values of K0(x)
 
-    Notes
-    -----
-    We calculate the projected screened potential of an
-    atom using the Kirkland formula. Keep in mind however
-    that this potential is for independent atoms only!
-    No charge distribution between atoms occure here.
-
-    References
-    ----------
-    Kirkland EJ. Advanced computing in electron microscopy.
-    Springer Science & Business Media; 2010 Aug 12.
-
-    :Authors:
-    Debangshu Mukherjee <mukherjeed@ornl.gov>
-
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from rheedium.ucell.bessel import bessel_k0
+    >>> x = jnp.array([0.1, 1.0, 10.0])
+    >>> k0_values = bessel_k0(x)
+    >>> print(k0_values)
+    [2.42706902 0.42102444 0.00001754]
     """
-    a0 = 0.5292
-    ek = 14.4
-    term1 = 4 * (np.pi**2) * a0 * ek
-    term2 = 2 * (np.pi**2) * a0 * ek
-    kirkland = np.load(datafile)
-    xsub = np.arange(-potential_extent, potential_extent, (pixel_size / sampling))
-    ysub = np.arange(-potential_extent, potential_extent, (pixel_size / sampling))
-    kirk_fun = kirkland[atom_no - 1, :]
-    ya, xa = np.meshgrid(ysub, xsub)
-    r2 = np.power(xa, 2) + np.power(ya, 2)
-    r = np.power(r2, 0.5)
-    part1 = np.zeros_like(r)
-    part2 = np.zeros_like(r)
-    sspot = np.zeros_like(r)
-    part1 = term1 * (
-        np.multiply(
-            kirk_fun[0],
-            s2.kv(0, (np.multiply((2 * np.pi * np.power(kirk_fun[1], 0.5)), r))),
+    return jax.scipy.special.k0(x)
+
+
+@jaxtyped(typechecker=beartype)
+def bessel_k1(x: Float[Array, "..."]) -> Float[Array, "..."]:
+    """
+    Compute the modified Bessel function of the second kind of order 1.
+
+    Parameters
+    ----------
+    x : Float[Array, "..."]
+        Input array of real values
+
+    Returns
+    -------
+    Float[Array, "..."]
+        Values of K1(x)
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from rheedium.ucell.bessel import bessel_k1
+    >>> x = jnp.array([0.1, 1.0, 10.0])
+    >>> k1_values = bessel_k1(x)
+    >>> print(k1_values)
+    [9.85384478 0.60190723 0.00001847]
+    """
+    return jax.scipy.special.k1(x)
+
+
+@jaxtyped(typechecker=beartype)
+def bessel_kv(v: Float[Array, "..."], x: Float[Array, "..."]) -> Float[Array, "..."]:
+    """
+    Compute the modified Bessel function of the second kind of order v.
+
+    Parameters
+    ----------
+    v : Float[Array, "..."]
+        Order of the Bessel function
+    x : Float[Array, "..."]
+        Input array of real values
+
+    Returns
+    -------
+    Float[Array, "..."]
+        Values of Kv(x)
+
+    Examples
+    --------
+    >>> import jax.numpy as jnp
+    >>> from rheedium.ucell.bessel import bessel_kv
+    >>> v = jnp.array([0.5, 1.5, 2.5])
+    >>> x = jnp.array([1.0, 2.0, 3.0])
+    >>> kv_values = bessel_kv(v, x)
+    >>> print(kv_values)
+    [0.70710678 0.27738780 0.08323903]
+    """
+    return jax.scipy.special.kv(v, x)
+
+
+@jaxtyped(typechecker=beartype)
+def atomic_potential(
+    atom_no: scalar_int,
+    pixel_size: scalar_float,
+    grid_shape: Optional[Tuple[scalar_int, scalar_int]] = None,
+    center_coords: Optional[Float[Array, "2"]] = None,
+    sampling: Optional[scalar_int] = 16,
+    potential_extent: Optional[scalar_float] = 4.0,
+) -> Float[Array, "h w"]:
+    """
+    Description
+    -----------
+    Calculate the projected potential of a single atom using Kirkland scattering factors.
+    The potential can be centered at arbitrary coordinates within a custom grid.
+
+    Parameters
+    ----------
+    - `atom_no` (scalar_int):
+        Atomic number of the atom whose potential is being calculated
+    - `pixel_size` (scalar_float):
+        Real space pixel size in Ångstroms
+    - `grid_shape` (Tuple[scalar_int, scalar_int], optional):
+        Shape of the output grid (height, width). If None, calculated from potential_extent
+    - `center_coords` (Float[Array, "2"], optional):
+        (x, y) coordinates in Ångstroms where atom should be centered.
+        If None, centers at grid center
+    - `sampling` (scalar_int, optional):
+        Supersampling factor for increased accuracy. Default is 16
+    - `potential_extent` (scalar_float, optional):
+        Distance in Ångstroms from atom center to calculate potential. Default is 4.0 Å
+    - `datafile` (str, optional):
+        Path to CSV file containing Kirkland scattering factors
+
+    Returns
+    -------
+    - `potential` (Float[Array, "h w"]):
+        Projected potential matrix with atom centered at specified coordinates
+
+    Flow
+    ----
+    - Define physical constants and load Kirkland parameters
+    - Determine grid size and center coordinates
+    - Calculate step size for supersampling
+    - Create coordinate grid with atom centered at specified position
+    - Calculate radial distances from atom center
+    - Compute Bessel and Gaussian terms using Kirkland parameters
+    - Combine terms to get total potential
+    - Downsample to target resolution using average pooling
+    - Return final potential matrix
+    """
+    a0: Float[Array, ""] = jnp.asarray(0.5292)
+    ek: Float[Array, ""] = jnp.asarray(14.4)
+    term1: Float[Array, ""] = 4.0 * (jnp.pi**2) * a0 * ek
+    term2: Float[Array, ""] = 2.0 * (jnp.pi**2) * a0 * ek
+    kirkland_array: Float[Array, "103 12"] = kirkland_potentials()
+    kirk_params: Float[Array, "12"] = kirkland_array[atom_no - 1, :]
+    step_size: Float[Array, ""] = pixel_size / sampling
+    if grid_shape is None:
+        grid_extent: Float[Array, ""] = potential_extent
+        n_points: Int[Array, ""] = jnp.ceil(2.0 * grid_extent / step_size).astype(
+            jnp.int32
         )
-        + np.multiply(
-            kirk_fun[2],
-            s2.kv(0, (np.multiply((2 * np.pi * np.power(kirk_fun[3], 0.5)), r))),
+        grid_height: Int[Array, ""] = n_points
+        grid_width: Int[Array, ""] = n_points
+    else:
+        grid_height: Int[Array, ""] = jnp.asarray(
+            grid_shape[0] * sampling, dtype=jnp.int32
         )
-        + np.multiply(
-            kirk_fun[4],
-            s2.kv(0, (np.multiply((2 * np.pi * np.power(kirk_fun[5], 0.5)), r))),
+        grid_width: Int[Array, ""] = jnp.asarray(
+            grid_shape[1] * sampling, dtype=jnp.int32
         )
+    if center_coords is None:
+        center_x: Float[Array, ""] = 0.0
+        center_y: Float[Array, ""] = 0.0
+    else:
+        center_x: Float[Array, ""] = center_coords[0]
+        center_y: Float[Array, ""] = center_coords[1]
+    y_coords: Float[Array, "h"] = (
+        jnp.arange(grid_height) - grid_height // 2
+    ) * step_size + center_y
+    x_coords: Float[Array, "w"] = (
+        jnp.arange(grid_width) - grid_width // 2
+    ) * step_size + center_x
+    ya: Float[Array, "h w"]
+    xa: Float[Array, "h w"]
+    ya, xa = jnp.meshgrid(y_coords, x_coords, indexing="ij")
+    r: Float[Array, "h w"] = jnp.sqrt((xa - center_x) ** 2 + (ya - center_y) ** 2)
+    bessel_term1: Float[Array, "h w"] = kirk_params[0] * bessel_kv(
+        0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[1]) * r
     )
-    part2 = term2 * (
-        (kirk_fun[6] / kirk_fun[7]) * np.exp(-((np.pi**2) / kirk_fun[7]) * r2)
-        + (kirk_fun[8] / kirk_fun[9]) * np.exp(-((np.pi**2) / kirk_fun[9]) * r2)
-        + (kirk_fun[10] / kirk_fun[11]) * np.exp(-((np.pi**2) / kirk_fun[11]) * r2)
+    bessel_term2: Float[Array, "h w"] = kirk_params[2] * bessel_kv(
+        0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[3]) * r
     )
-    sspot = part1 + part2
-    finalsize = (np.asarray(sspot.shape) / sampling).astype(int)
-    print("finalsize", finalsize)
-    print("sspot.shape", sspot.shape)
-    # sspot_im = PIL.Image.fromarray(sspot)
-    potential = cv2.resize(sspot, finalsize)
-    return potential
+    bessel_term3: Float[Array, "h w"] = kirk_params[4] * bessel_kv(
+        0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[5]) * r
+    )
+    part1: Float[Array, "h w"] = term1 * (bessel_term1 + bessel_term2 + bessel_term3)
+    gauss_term1: Float[Array, "h w"] = (kirk_params[6] / kirk_params[7]) * jnp.exp(
+        -(jnp.pi**2 / kirk_params[7]) * r**2
+    )
+    gauss_term2: Float[Array, "h w"] = (kirk_params[8] / kirk_params[9]) * jnp.exp(
+        -(jnp.pi**2 / kirk_params[9]) * r**2
+    )
+    gauss_term3: Float[Array, "h w"] = (kirk_params[10] / kirk_params[11]) * jnp.exp(
+        -(jnp.pi**2 / kirk_params[11]) * r**2
+    )
+    part2: Float[Array, "h w"] = term2 * (gauss_term1 + gauss_term2 + gauss_term3)
+    supersampled_potential: Float[Array, "h w"] = part1 + part2
+    if grid_shape is None:
+        target_height: Int[Array, ""] = grid_height // sampling
+        target_width: Int[Array, ""] = grid_width // sampling
+    else:
+        target_height: Int[Array, ""] = jnp.asarray(grid_shape[0], dtype=jnp.int32)
+        target_width: Int[Array, ""] = jnp.asarray(grid_shape[1], dtype=jnp.int32)
+    height: Int[Array, ""] = supersampled_potential.shape[0]
+    width: Int[Array, ""] = supersampled_potential.shape[1]
+    new_height: Int[Array, ""] = (height // sampling) * sampling
+    new_width: Int[Array, ""] = (width // sampling) * sampling
+    cropped: Float[Array, "h_crop w_crop"] = supersampled_potential[
+        :new_height, :new_width
+    ]
+    reshaped: Float[Array, "h_new sampling w_new sampling"] = cropped.reshape(
+        new_height // sampling, sampling, new_width // sampling, sampling
+    )
+    potential: Float[Array, "h_new w_new"] = jnp.mean(reshaped, axis=(1, 3))
+    potential_resized: Float[Array, "h w"] = potential[:target_height, :target_width]
+    return potential_resized
 
 
 def rotation_matrix_from_vectors(v1, v2):

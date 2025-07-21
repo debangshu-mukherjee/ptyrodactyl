@@ -1,25 +1,21 @@
-
+import time
 from pathlib import Path
+
 import jax
 import jax.numpy as jnp
-import time
-from jaxtyping import Array, Float, Shaped, Int, Complex, jaxtyped
 import matplotlib.pyplot as plt
 import numpy as np
-from beartype import beartype
-from beartype.typing import List, Dict, Tuple, Optional, Union, Any
 import scipy.special as s2
+from beartype import beartype
+from beartype.typing import Any, Dict, List, Optional, Tuple, Union
+from jaxtyping import Array, Complex, Float, Int, Shaped, jaxtyped
 
-from .simulations import stem_4D, cbed, make_probe
-from .electron_types import (
-    PotentialSlices,
-    ProbeModes,
-    make_potential_slices,
-    make_probe_modes,
-    scalar_float,
-    scalar_int,
-)
+from .electron_types import (PotentialSlices, ProbeModes,
+                             make_potential_slices, make_probe_modes,
+                             scalar_float, scalar_int)
 from .preprocessing import atomic_symbol, kirkland_potentials
+from .simulations import cbed, make_probe, stem_4D
+
 
 @jaxtyped(typechecker=beartype)
 def contrast_stretch(
@@ -58,7 +54,7 @@ def contrast_stretch(
     series_reshaped: Float[Array, "N H W"] = jnp.where(
         len(original_shape) == 2, series[jnp.newaxis, :, :], series
     )
-    
+
     def rescale_single_image(image: Float[Array, "H W"]) -> Float[Array, "H W"]:
         flattened: Float[Array, "HW"] = image.flatten()
         lower_bound: scalar_float = jnp.percentile(flattened, p1)

@@ -24,57 +24,26 @@ Submodules
     position-corrected, and multi-modal reconstruction methods
 """
 
-from .atom_potentials import (
-    contrast_stretch,
-    bessel_k0,
-    bessel_k1,
-    bessel_kv,
-    atomic_potential,
-    rotation_matrix_from_vectors,
-    rotation_matrix_about_axis,
-    rotate_structure,
-)
-
-from .electron_types import (
-    CalibratedArray,
-    PotentialSlices,
-    ProbeModes,
-    make_calibrated_array,
-    make_potential_slices,
-    make_probe_modes,
-    non_jax_number,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
-)
-
-from .preprocessing import (
-    atomic_symbol,
-    kirkland_potentials,
-    parse_xyz,
-    parse_xyz_metadata,
-)
-
-from .simulations import (
-    aberration,
-    cbed,
-    decompose_beam_to_modes,
-    fourier_calib,
-    fourier_coords,
-    make_probe,
-    propagation_func,
-    shift_beam_fourier,
-    stem_4D,
-    transmission_func,
-    wavelength_ang,
-)
-from .reconstruction import (
-    get_optimizer,
-    multi_slice_multi_modal,
-    single_slice_multi_modal,
-    single_slice_poscorrected,
-    single_slice_ptychography,
-)
+from .atom_potentials import (atomic_potential, bessel_k0, bessel_k1,
+                              bessel_kv, contrast_stretch, rotate_structure,
+                              rotation_matrix_about_axis,
+                              rotation_matrix_from_vectors)
+from .electron_types import (CalibratedArray, CrystalStructure,
+                             PotentialSlices, ProbeModes, XYZData,
+                             make_calibrated_array, make_crystal_structure,
+                             make_potential_slices, make_probe_modes,
+                             make_xyz_data, non_jax_number, scalar_float,
+                             scalar_int, scalar_numeric)
+from .preprocessing import (atomic_symbol, kirkland_potentials, parse_xyz,
+                            parse_xyz_metadata)
+from .reconstruction import (get_optimizer, multi_slice_multi_modal,
+                             single_slice_multi_modal,
+                             single_slice_poscorrected,
+                             single_slice_ptychography)
+from .simulations import (aberration, cbed, decompose_beam_to_modes,
+                          fourier_calib, fourier_coords, make_probe,
+                          propagation_func, shift_beam_fourier, stem_4D,
+                          transmission_func, wavelength_ang)
 
 __all__: list[str] = [
     "aberration",
@@ -108,9 +77,13 @@ __all__: list[str] = [
     "CalibratedArray",
     "PotentialSlices",
     "ProbeModes",
+    "CrystalStructure",
+    "XYZData",
     "make_calibrated_array",
     "make_potential_slices",
     "make_probe_modes",
+    "make_crystal_structure",
+    "make_xyz_data",
     "non_jax_number",
     "scalar_float",
     "scalar_int",

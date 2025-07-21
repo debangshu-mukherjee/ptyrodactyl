@@ -24,9 +24,8 @@ Submodules
     position-corrected, and multi-modal reconstruction methods
 """
 
-from .atom_potentials import (atomic_potential, bessel_k0, bessel_k1,
-                              bessel_kv, contrast_stretch, rotate_structure,
-                              rotation_matrix_about_axis,
+from .atom_potentials import (atomic_potential, contrast_stretch,
+                              rotate_structure, rotation_matrix_about_axis,
                               rotation_matrix_from_vectors)
 from .electron_types import (CalibratedArray, CrystalStructure,
                              PotentialSlices, ProbeModes, XYZData,
@@ -50,9 +49,6 @@ __all__: list[str] = [
     "kirkland_potentials",
     "parse_xyz",
     "contrast_stretch",
-    "bessel_k0",
-    "bessel_k1",
-    "bessel_kv",
     "atomic_potential",
     "rotation_matrix_from_vectors",
     "rotation_matrix_about_axis",

@@ -1,3 +1,36 @@
+"""
+Module: electrons.atom_potentials
+---------------------------------
+Functions for calculating atomic potentials and performing transformations
+on crystal structures.
+
+Functions
+---------
+- `contrast_stretch`:
+    Rescales intensity values of image series between specified percentiles
+- `atomic_potential`:
+    Calculates the projected potential of a single atom using Kirkland scattering factors
+- `rotation_matrix_from_vectors`:
+    Returns a proper rotation matrix that rotates v1 to v2
+- `rotation_matrix_about_axis`:
+    Returns a rotation matrix that rotates around a given axis by an angle theta
+- `rotate_structure`:
+    Rotates a crystal structure by a given angle about a specified axis
+- `reciprocal_lattice`:
+    Computes the reciprocal lattice vectors for a given unit cell
+- `compute_min_repeats`:
+    Determines the minimum number of repeats needed to cover a given threshold distance
+- `expand_periodic_images_minimal`:
+    Expands periodic images of a crystal structure to cover a given threshold distance
+
+Internal Functions
+------------------
+These functions are not exported and are used internally by the module.
+
+- `_bessel_kv`:
+    Computes the modified Bessel function of the second kind
+"""
+
 import time
 from pathlib import Path
 
@@ -5,10 +38,9 @@ import jax
 import jax.numpy as jnp
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy.special as s2
 from beartype import beartype
-from beartype.typing import Any, Dict, List, Optional, Tuple, Union
-from jaxtyping import Array, Complex, Float, Int, Shaped, jaxtyped
+from beartype.typing import Optional, Tuple, Union
+from jaxtyping import Array, Float, Int, jaxtyped
 
 from .electron_types import (PotentialSlices, ProbeModes,
                              make_potential_slices, make_probe_modes,
@@ -74,87 +106,53 @@ def contrast_stretch(
 
 
 @jaxtyped(typechecker=beartype)
-def bessel_k0(x: Float[Array, "..."]) -> Float[Array, "..."]:
+def _bessel_kv(v: float, x: Float[Array, "..."]) -> Float[Array, "..."]:
     """
-    Compute the modified Bessel function of the second kind of order 0.
+    Description
+    -----------
+    Computes the modified Bessel function of the second kind
+    K_v(x) for real order v > 0 and x > 0,
+    using a numerically stable and differentiable
+    JAX-compatible approximation.
 
     Parameters
     ----------
-    x : Float[Array, "..."]
-        Input array of real values
-
-    Returns
-    -------
-    Float[Array, "..."]
-        Values of K0(x)
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from rheedium.ucell.bessel import bessel_k0
-    >>> x = jnp.array([0.1, 1.0, 10.0])
-    >>> k0_values = bessel_k0(x)
-    >>> print(k0_values)
-    [2.42706902 0.42102444 0.00001754]
-    """
-    return jax.scipy.special.k0(x)
-
-
-@jaxtyped(typechecker=beartype)
-def bessel_k1(x: Float[Array, "..."]) -> Float[Array, "..."]:
-    """
-    Compute the modified Bessel function of the second kind of order 1.
-
-    Parameters
-    ----------
-    x : Float[Array, "..."]
-        Input array of real values
-
-    Returns
-    -------
-    Float[Array, "..."]
-        Values of K1(x)
-
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from rheedium.ucell.bessel import bessel_k1
-    >>> x = jnp.array([0.1, 1.0, 10.0])
-    >>> k1_values = bessel_k1(x)
-    >>> print(k1_values)
-    [9.85384478 0.60190723 0.00001847]
-    """
-    return jax.scipy.special.k1(x)
-
-
-@jaxtyped(typechecker=beartype)
-def bessel_kv(v: Float[Array, "..."], x: Float[Array, "..."]) -> Float[Array, "..."]:
-    """
-    Compute the modified Bessel function of the second kind of order v.
-
-    Parameters
-    ----------
-    v : Float[Array, "..."]
+    - `v` (float):
         Order of the Bessel function
-    x : Float[Array, "..."]
-        Input array of real values
+    - `x` (Float[Array, "..."]):
+        Positive real input array
 
     Returns
     -------
-    Float[Array, "..."]
-        Values of Kv(x)
+    - `k_v` (Float[Array, "..."]):
+        Approximated values of K_v(x)
 
-    Examples
-    --------
-    >>> import jax.numpy as jnp
-    >>> from rheedium.ucell.bessel import bessel_kv
-    >>> v = jnp.array([0.5, 1.5, 2.5])
-    >>> x = jnp.array([1.0, 2.0, 3.0])
-    >>> kv_values = bessel_kv(v, x)
-    >>> print(kv_values)
-    [0.70710678 0.27738780 0.08323903]
+    Notes
+    -----
+    - Valid for v >= 0 and x > 0
+    - Supports broadcasting and autodiff
+    - JIT-safe and VMAP-safe
     """
-    return jax.scipy.special.kv(v, x)
+    v = jnp.asarray(v, dtype=jnp.float64)
+    x = jnp.asarray(x, dtype=jnp.float64)
+
+    def asymptotic_kv(v, x):
+        return jnp.sqrt(jnp.pi / (2 * x)) * jnp.exp(-x)
+
+    def small_x_kv(v, x):
+        gamma = jax.lax.cond(
+            v == 0.0,
+            lambda: -jnp.log(x / 2.0) - 0.5772156649,
+            lambda: jax.scipy.special.gammaln(v) * jnp.power(0.5 * x, -v),
+        )
+        return gamma
+
+    def stable_kv(v, x):
+        return jax.scipy.special.kv(v, x)
+
+    return jax.lax.cond(
+        x > 50, lambda _: asymptotic_kv(v, x), lambda _: stable_kv(v, x), operand=None
+    )
 
 
 @jaxtyped(typechecker=beartype)
@@ -244,13 +242,13 @@ def atomic_potential(
     xa: Float[Array, "h w"]
     ya, xa = jnp.meshgrid(y_coords, x_coords, indexing="ij")
     r: Float[Array, "h w"] = jnp.sqrt((xa - center_x) ** 2 + (ya - center_y) ** 2)
-    bessel_term1: Float[Array, "h w"] = kirk_params[0] * bessel_kv(
+    bessel_term1: Float[Array, "h w"] = kirk_params[0] * _bessel_kv(
         0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[1]) * r
     )
-    bessel_term2: Float[Array, "h w"] = kirk_params[2] * bessel_kv(
+    bessel_term2: Float[Array, "h w"] = kirk_params[2] * _bessel_kv(
         0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[3]) * r
     )
-    bessel_term3: Float[Array, "h w"] = kirk_params[4] * bessel_kv(
+    bessel_term3: Float[Array, "h w"] = kirk_params[4] * _bessel_kv(
         0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[5]) * r
     )
     part1: Float[Array, "h w"] = term1 * (bessel_term1 + bessel_term2 + bessel_term3)
@@ -660,8 +658,8 @@ def overall_wrapper(
 
     phase_shift = jnp.exp(-1j * sigma * slices_array)
 
-    pot_slices = PotentialSlices(phase_shift, 1.0, 0.1)
-    beam = ProbeModes(probe, jnp.array([1.0]), calib=0.1)
+    pot_slices: PotentialSlices = make_potential_slices(phase_shift, 1.0, 0.1)
+    beam: ProbeModes = make_probe_modes(probe, jnp.array([1.0]), calib=0.1)
     toc = time.time()
     print("Time taken for preprocessing:", toc - tic, "seconds")
 

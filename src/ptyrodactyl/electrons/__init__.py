@@ -41,6 +41,13 @@ from .electron_types import (
     scalar_numeric,
 )
 
+from .preprocessing import (
+    atomic_symbol,
+    kirkland_potentials,
+    parse_xyz,
+    parse_xyz_metadata,
+)
+
 from .simulations import (
     aberration,
     cbed,
@@ -63,8 +70,12 @@ from .reconstruction import (
 )
 
 __all__: list[str] = [
-    "contrast_stretch",
     "aberration",
+    "atomic_symbol",
+    "kirkland_potentials",
+    "parse_xyz",
+    "parse_xyz_metadata",
+    "contrast_stretch",
     "cbed",
     "decompose_beam_to_modes",
     "fourier_calib",

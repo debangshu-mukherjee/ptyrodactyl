@@ -193,16 +193,13 @@ class CrystalStructure(NamedTuple):
         Each row contains [x, y, z, atomic_number] where:
         - x, y, z: Fractional coordinates in the unit cell (range [0,1])
         - atomic_number: Integer atomic number (Z) of the element
-
     - `cart_positions` (Num[Array, "* 4"]):
         Array of shape (n_atoms, 4) containing atomic positions in Cartesian coordinates.
         Each row contains [x, y, z, atomic_number] where:
         - x, y, z: Cartesian coordinates in Ångstroms
         - atomic_number: Integer atomic number (Z) of the element
-
     - `cell_lengths` (Num[Array, "3"]):
         Unit cell lengths [a, b, c] in Ångstroms
-
     - `cell_angles` (Num[Array, "3"]):
         Unit cell angles [α, β, γ] in degrees.
         - α is the angle between b and c
@@ -248,22 +245,16 @@ class XYZData(NamedTuple):
     ----------
     - `positions` (Float[Array, "N 3"]):
         Cartesian positions in Ångstroms.
-
     - `atomic_numbers` (Int[Array, "N"]):
         Atomic numbers (Z) corresponding to each atom.
-
     - `lattice` (Optional[Float[Array, "3 3"]]):
         Lattice vectors in Ångstroms if present, otherwise None.
-
     - `stress` (Optional[Float[Array, "3 3"]]):
         Symmetric stress tensor if present.
-
     - `energy` (Optional[float]):
         Total energy in eV if present.
-
     - `properties` (Optional[List[Dict[str, Union[str, int]]]]):
         List of properties described in the metadata.
-
     - `comment` (Optional[str]):
         The raw comment line from the XYZ file.
 

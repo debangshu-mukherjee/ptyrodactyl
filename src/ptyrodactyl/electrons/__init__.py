@@ -34,8 +34,7 @@ from .electron_types import (CalibratedArray, CrystalStructure,
                              make_potential_slices, make_probe_modes,
                              make_xyz_data, non_jax_number, scalar_float,
                              scalar_int, scalar_numeric)
-from .preprocessing import (atomic_symbol, kirkland_potentials, parse_xyz,
-                            parse_xyz_metadata)
+from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
 from .reconstruction import (get_optimizer, multi_slice_multi_modal,
                              single_slice_multi_modal,
                              single_slice_poscorrected,
@@ -50,7 +49,6 @@ __all__: list[str] = [
     "atomic_symbol",
     "kirkland_potentials",
     "parse_xyz",
-    "parse_xyz_metadata",
     "contrast_stretch",
     "bessel_k0",
     "bessel_k1",

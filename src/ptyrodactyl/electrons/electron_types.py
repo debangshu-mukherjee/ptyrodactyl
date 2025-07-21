@@ -322,18 +322,13 @@ def make_calibrated_array(
     - ValueError:
         If data is invalid or parameters are out of valid ranges
 
-    Flow
-    ----
-    - Convert inputs to JAX arrays
-    - Validate data_array:
-        - Check it's 2D
-        - Ensure all values are finite
-    - Validate calibration parameters:
-        - Check calib_y is positive
-        - Check calib_x is positive
-    - Validate real_space:
-        - Ensure it's a boolean scalar
-    - Create and return CalibratedArray instance
+    Validations
+    ----------
+    - data_array is 2D
+    - data_array is finite
+    - calib_y is positive
+    - calib_x is positive
+    - real_space is a boolean scalar
     """
     # Convert data_array to appropriate dtype based on input type
     if jnp.issubdtype(data_array.dtype, jnp.integer):

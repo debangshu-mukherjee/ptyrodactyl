@@ -34,8 +34,7 @@ from .electron_types import (CalibratedArray, CrystalStructure,
                              make_xyz_data, non_jax_number, scalar_float,
                              scalar_int, scalar_numeric)
 from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
-from .reconstruction import (get_optimizer, multi_slice_multi_modal,
-                             single_slice_multi_modal,
+from .reconstruction import (multi_slice_multi_modal, single_slice_multi_modal,
                              single_slice_poscorrected,
                              single_slice_ptychography)
 from .simulations import (aberration, cbed, decompose_beam_to_modes,
@@ -63,7 +62,6 @@ __all__: list[str] = [
     "stem_4D",
     "transmission_func",
     "wavelength_ang",
-    "get_optimizer",
     "multi_slice_multi_modal",
     "single_slice_multi_modal",
     "single_slice_poscorrected",

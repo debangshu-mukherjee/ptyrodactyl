@@ -10,8 +10,6 @@ with options for position correction and multi-modal probe handling.
 
 Functions
 ---------
-- `get_optimizer`:
-    Returns an optimizer instance for the specified optimization algorithm
 - `single_slice_ptychography`:
     Performs single-slice ptychography reconstruction
 - `single_slice_poscorrected`:
@@ -20,6 +18,14 @@ Functions
     Performs single-slice reconstruction with multi-modal probe
 - `multi_slice_multi_modal`:
     Performs multi-slice reconstruction with multi-modal probe
+
+Internal Functions
+------------------
+These functions are not exported and are used internally by the module.
+
+- `_get_optimizer`:
+    Returns an optimizer instance for the specified optimization algorithm
+
 
 Notes
 -----
@@ -49,10 +55,10 @@ OPTIMIZERS: Dict[str, ptt.Optimizer] = {
 from .electron_types import (CalibratedArray, ProbeModes,
                              make_calibrated_array, scalar_float, scalar_int,
                              scalar_numeric)
-from .forward import stem_4D
+from .simulations import stem_4D
 
 
-def get_optimizer(optimizer_name: str) -> ptt.Optimizer:
+def _get_optimizer(optimizer_name: str) -> ptt.Optimizer:
     if optimizer_name not in OPTIMIZERS:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
     return OPTIMIZERS[optimizer_name]
@@ -147,7 +153,7 @@ def single_slice_ptychography(
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(pot_slice, beam)
         return loss, {"pot_slice": grads[0], "beam": grads[1]}
 
-    optimizer: ptt.Optimizer = get_optimizer(optimizer_name)
+    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
     pot_slice_state = optimizer.init(initial_potential.data_array.shape)
     beam_state = optimizer.init(initial_beam.data_array.shape)
 
@@ -315,7 +321,7 @@ def single_slice_poscorrected(
         )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
-    optimizer = get_optimizer(optimizer_name)
+    optimizer = _get_optimizer(optimizer_name)
     pot_slice_state = optimizer.init(initial_potential.data_array.shape)
     beam_state = optimizer.init(initial_beam.data_array.shape)
     pos_state = optimizer.init(initial_pos_list.shape)
@@ -509,7 +515,7 @@ def single_slice_multi_modal(
         )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
-    optimizer = get_optimizer(optimizer_name)
+    optimizer = _get_optimizer(optimizer_name)
     pot_slice_state = optimizer.init(initial_pot_slice.shape)
     beam_state = optimizer.init(initial_beam.shape)
     pos_state = optimizer.init(initial_pos_list.shape)
@@ -664,7 +670,7 @@ def multi_slice_multi_modal(
         )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
-    optimizer = get_optimizer(optimizer_name)
+    optimizer = _get_optimizer(optimizer_name)
     pot_slice_state = optimizer.init(initial_pot_slice.shape)
     beam_state = optimizer.init(initial_beam.shape)
     pos_state = optimizer.init(initial_pos_list.shape)

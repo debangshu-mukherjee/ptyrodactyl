@@ -26,6 +26,13 @@ Submodules
 
 from .atom_potentials import (
     contrast_stretch,
+    bessel_k0,
+    bessel_k1,
+    bessel_kv,
+    atomic_potential,
+    rotation_matrix_from_vectors,
+    rotation_matrix_about_axis,
+    rotate_structure,
 )
 
 from .electron_types import (
@@ -76,6 +83,13 @@ __all__: list[str] = [
     "parse_xyz",
     "parse_xyz_metadata",
     "contrast_stretch",
+    "bessel_k0",
+    "bessel_k1",
+    "bessel_kv",
+    "atomic_potential",
+    "rotation_matrix_from_vectors",
+    "rotation_matrix_about_axis",
+    "rotate_structure",
     "cbed",
     "decompose_beam_to_modes",
     "fourier_calib",

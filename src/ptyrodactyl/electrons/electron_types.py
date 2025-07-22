@@ -15,18 +15,18 @@ Type Aliases
 - `non_jax_number`:
     Type alias for non-JAX numeric types (int, float)
 
-Classes
+PyTrees
 -------
 - `CalibratedArray`:
-    A named tuple for calibrated array data with spatial calibration
+    A PyTree for calibrated array data with spatial calibration
 - `ProbeModes`:
-    A named tuple for multimodal electron probe state
+    A PyTree for multimodal electron probe state
 - `PotentialSlices`:
-    A named tuple for potential slices in multi-slice simulations
+    A PyTree for potential slices in multi-slice simulations
 - `CrystalStructure`:
-    A named tuple for crystal structure with fractional and Cartesian coordinates
+    A PyTree for crystal structure with fractional and Cartesian coordinates
 - `XYZData`:
-    A named tuple for XYZ file data with atomic positions, lattice vectors,
+    A PyTree for XYZ file data with atomic positions, lattice vectors,
     stress tensor, energy, properties, and comment
 
 Factory Functions
@@ -75,18 +75,18 @@ class CalibratedArray(NamedTuple):
     ----------
     - `data_array` (Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]):
         The actual array data
-    - `calib_y` (scalar_float):
-        Calibration in y direction
-    - `calib_x` (scalar_float):
-        Calibration in x direction
+    - `calib_y` (Float[Array, ""]):
+        Calibration in y direction (0-dimensional JAX array)
+    - `calib_x` (Float[Array, ""]):
+        Calibration in x direction (0-dimensional JAX array)
     - `real_space` (Bool[Array, ""]):
         Whether the array is in real space.
         If False, it is in reciprocal space.
     """
 
     data_array: Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]
-    calib_y: scalar_float
-    calib_x: scalar_float
+    calib_y: Float[Array, ""]
+    calib_x: Float[Array, ""]
     real_space: Bool[Array, ""]
 
     def tree_flatten(self):
@@ -118,13 +118,13 @@ class ProbeModes(NamedTuple):
         M is number of modes
     - `weights` (Float[Array, "M"]):
         Mode occupation numbers.
-    - `calib` (scalar_float):
-        Pixel Calibration
+    - `calib` (Float[Array, ""]):
+        Pixel Calibration (0-dimensional JAX array)
     """
 
     modes: Complex[Array, "H W M"]
     weights: Float[Array, "M"]
-    calib: scalar_float
+    calib: Float[Array, ""]
 
     def tree_flatten(self):
         return (
@@ -153,15 +153,15 @@ class PotentialSlices(NamedTuple):
     - `slices` (Complex[Array, "H W S"]):
         Individual potential slices.
         S is number of slices
-    - `slice_thickness` (scalar_numeric):
-        Mode occupation numbers
-    - `calib` (scalar_float):
-        Pixel Calibration
+    - `slice_thickness` (Num[Array, ""]):
+        Thickness of each slice (0-dimensional JAX array)
+    - `calib` (Float[Array, ""]):
+        Pixel Calibration (0-dimensional JAX array)
     """
 
     slices: Complex[Array, "H W S"]
-    slice_thickness: scalar_numeric
-    calib: scalar_float
+    slice_thickness: Num[Array, ""]
+    calib: Float[Array, ""]
 
     def tree_flatten(self):
         return (
@@ -251,7 +251,7 @@ class XYZData(NamedTuple):
         Lattice vectors in Ångstroms if present, otherwise None.
     - `stress` (Optional[Float[Array, "3 3"]]):
         Symmetric stress tensor if present.
-    - `energy` (Optional[float]):
+    - `energy` (Optional[scalar_float]):
         Total energy in eV if present.
     - `properties` (Optional[List[Dict[str, Union[str, int]]]]):
         List of properties described in the metadata.
@@ -268,25 +268,38 @@ class XYZData(NamedTuple):
     atomic_numbers: Int[Array, "N"]
     lattice: Optional[Float[Array, "3 3"]]
     stress: Optional[Float[Array, "3 3"]]
-    energy: Optional[float]
+    energy: Optional[Float[Array, ""]]
     properties: Optional[List[Dict[str, Union[str, int]]]]
     comment: Optional[str]
 
     def tree_flatten(self):
+        # JAX arrays (including energy as 0-dimensional array) as children
         children = (
             self.positions,
             self.atomic_numbers,
             self.lattice,
             self.stress,
             self.energy,
-            self.properties,
-            self.comment,
         )
-        return children, None
+        # Non-JAX data (properties and comment) as auxiliary data
+        aux_data = {
+            'properties': self.properties,
+            'comment': self.comment,
+        }
+        return children, aux_data
 
     @classmethod
     def tree_unflatten(cls, aux_data, children):
-        return cls(*children)
+        positions, atomic_numbers, lattice, stress, energy = children
+        return cls(
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            lattice=lattice,
+            stress=stress,
+            energy=energy,
+            properties=aux_data['properties'],
+            comment=aux_data['comment'],
+        )
 
 
 @jaxtyped(typechecker=beartype)
@@ -810,7 +823,7 @@ def make_xyz_data(
     atomic_numbers: Int[Array, "N"],
     lattice: Optional[Float[Array, "3 3"]] = None,
     stress: Optional[Float[Array, "3 3"]] = None,
-    energy: Optional[float] = None,
+    energy: Optional[scalar_float] = None,
     properties: Optional[List[Dict[str, Union[str, int]]]] = None,
     comment: Optional[str] = None,
 ) -> XYZData:
@@ -829,7 +842,7 @@ def make_xyz_data(
         Lattice vectors (if any)
     - `stress` (Optional[Float[Array, "3 3"]]):
         Stress tensor (if any)
-    - `energy` (Optional[float]):
+    - `energy` (Optional[scalar_float]):
         Total energy (if any)
     - `properties` (Optional[List[Dict[str, Union[str, int]]]]):
         Per-atom metadata
@@ -848,6 +861,7 @@ def make_xyz_data(
        - atomic_numbers: Convert to int32
        - lattice (if provided): Convert to float64
        - stress (if provided): Convert to float64
+       - energy (if provided): Convert to float64
     - Extract number of atoms (N) from positions array
     - Execute shape validation checks:
        - check_shape(): Verify positions has shape (N, 3) and atomic_numbers has shape (N,)
@@ -869,6 +883,9 @@ def make_xyz_data(
 
     if stress is not None:
         stress = jnp.asarray(stress, dtype=jnp.float64)
+
+    if energy is not None:
+        energy = jnp.asarray(energy, dtype=jnp.float64)
 
     def validate_and_create():
         N = positions.shape[0]

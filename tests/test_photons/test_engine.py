@@ -13,6 +13,5 @@ class TestEngineModule(chex.TestCase):
         import ptyrodactyl.photons.engine
 
 
-
 if __name__ == "__main__":
     pytest.main([__file__])

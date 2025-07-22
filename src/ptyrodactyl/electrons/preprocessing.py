@@ -43,9 +43,9 @@ from jaxtyping import Array, Float, Int, jaxtyped
 from .electron_types import XYZData, make_xyz_data, scalar_int
 
 _KIRKLAND_PATH: Path = (
-    Path(__file__).resolve().parent / "manifest" / "Kirkland_Potentials.csv"
+    Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
 )
-_ATOMS_PATH: Path = Path(__file__).resolve().parent / "manifest" / "atom_numbers.json"
+_ATOMS_PATH: Path = Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
 
 jax.config.update("jax_enable_x64", True)
 
@@ -168,11 +168,11 @@ def _load_kirkland_csv(
     return kirkland_data
 
 
-_KIRKLAND_POTENTIALS: Float[Array, "N 12"] = _load_kirkland_csv()
+_KIRKLAND_POTENTIALS: Float[Array, "103 12"] = _load_kirkland_csv()
 
 
 @jaxtyped(typechecker=beartype)
-def kirkland_potentials() -> Float[Array, "N 12"]:
+def kirkland_potentials() -> Float[Array, "103 12"]:
     """
     Description
     -----------

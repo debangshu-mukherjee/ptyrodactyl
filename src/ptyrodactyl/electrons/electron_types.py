@@ -281,8 +281,8 @@ class XYZData(NamedTuple):
             self.energy,
         )
         aux_data = {
-            'properties': self.properties,
-            'comment': self.comment,
+            "properties": self.properties,
+            "comment": self.comment,
         }
         return children, aux_data
 
@@ -295,8 +295,8 @@ class XYZData(NamedTuple):
             lattice=lattice,
             stress=stress,
             energy=energy,
-            properties=aux_data['properties'],
-            comment=aux_data['comment'],
+            properties=aux_data["properties"],
+            comment=aux_data["comment"],
         )
 
 
@@ -368,12 +368,12 @@ def make_calibrated_array(
 
     # For JAX compliance, we rely on jaxtyping for shape/type validation
     # and only do JAX-compatible runtime checks that don't break transformations
-    
+
     # Ensure calibrations are positive using JAX operations
     # This will naturally produce NaN/Inf if calibrations are invalid
     calib_y = jnp.abs(calib_y) + jnp.finfo(jnp.float64).eps
     calib_x = jnp.abs(calib_x) + jnp.finfo(jnp.float64).eps
-    
+
     return CalibratedArray(
         data_array=data_array,
         calib_y=calib_y,
@@ -435,7 +435,7 @@ def make_probe_modes(
 
     # For JAX compliance, we rely on jaxtyping for shape/type validation
     # and only do JAX-compatible runtime adjustments
-    
+
     # Ensure weights are non-negative and normalized
     weights = jnp.abs(weights)
     weight_sum = jnp.sum(weights)
@@ -443,12 +443,12 @@ def make_probe_modes(
     weights = jnp.where(
         weight_sum > jnp.finfo(jnp.float64).eps,
         weights / weight_sum,
-        jnp.ones_like(weights) / weights.shape[0]
+        jnp.ones_like(weights) / weights.shape[0],
     )
-    
+
     # Ensure calibration is positive
     calib = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
-    
+
     return ProbeModes(
         modes=modes,
         weights=weights,
@@ -507,11 +507,11 @@ def make_potential_slices(
 
     # For JAX compliance, we rely on jaxtyping for shape/type validation
     # and only do JAX-compatible runtime adjustments
-    
+
     # Ensure slice_thickness and calibration are positive
     slice_thickness = jnp.abs(slice_thickness) + jnp.finfo(jnp.float64).eps
     calib = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
-    
+
     return PotentialSlices(
         slices=slices,
         slice_thickness=slice_thickness,
@@ -578,14 +578,14 @@ def make_crystal_structure(
 
     # For JAX compliance, we rely on beartype for shape/type validation
     # and only do JAX-compatible runtime adjustments
-    
+
     # Ensure cell lengths are positive
     cell_lengths = jnp.abs(cell_lengths) + jnp.finfo(jnp.float64).eps
-    
+
     # Ensure cell angles are in valid range (0, 180)
     # Clamp to valid range rather than failing
     cell_angles = jnp.clip(cell_angles, 0.1, 179.9)
-    
+
     return CrystalStructure(
         frac_positions=frac_positions,
         cart_positions=cart_positions,
@@ -661,10 +661,10 @@ def make_xyz_data(
     # This is another unavoidable case for Python if.
     if lattice is not None:
         lattice = jnp.asarray(lattice, dtype=jnp.float64)
-    
+
     if stress is not None:
         stress = jnp.asarray(stress, dtype=jnp.float64)
-    
+
     if energy is not None:
         energy = jnp.asarray(energy, dtype=jnp.float64)
 
@@ -690,7 +690,7 @@ def make_xyz_data(
                     raise ValueError("lattice must have shape (3, 3)")
                 if not jnp.all(jnp.isfinite(lattice)):
                     raise ValueError("lattice contains non-finite values")
-            
+
             if stress is not None:
                 if stress.shape != (3, 3):
                     raise ValueError("stress must have shape (3, 3)")

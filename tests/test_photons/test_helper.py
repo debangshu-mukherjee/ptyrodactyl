@@ -6,12 +6,8 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons.helper import (
-    add_phase_screen,
-    create_spatial_grid,
-    field_intensity,
-    normalize_field,
-)
+from ptyrodactyl.photons.helper import (add_phase_screen, create_spatial_grid,
+                                        field_intensity, normalize_field)
 
 jax.config.update("jax_enable_x64", True)
 

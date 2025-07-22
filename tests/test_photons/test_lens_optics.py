@@ -16,7 +16,6 @@ from ptyrodactyl.photons.lens_optics import (
 )
 from ptyrodactyl.photons.photon_types import OpticalWavefront, scalar_num
 
-# Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)
 
 
@@ -36,7 +35,7 @@ class TestAngularSpectrumProp(chex.TestCase):
         field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
         field = field_real + 1j * field_imag
 
-        dx = 5e-6  # 5 microns
+        dx = 5e-6
 
         incoming = OpticalWavefront(
             field=field,
@@ -50,10 +49,8 @@ class TestAngularSpectrumProp(chex.TestCase):
             incoming=incoming, z_move=jnp.array(z_move, dtype=jnp.float64)
         )
 
-        # Check shapes
         chex.assert_shape(propagated.field, shape)
 
-        # Check z_position updated
         chex.assert_trees_all_close(
             propagated.z_position, jnp.array(z_move, dtype=jnp.float64), atol=1e-10
         )
@@ -83,7 +80,6 @@ class TestAngularSpectrumProp(chex.TestCase):
             incoming=incoming, z_move=jnp.array(0.0, dtype=jnp.float64)
         )
 
-        # Field should remain almost identical
         chex.assert_trees_all_close(propagated.field, incoming.field, atol=1e-6)
 
 
@@ -103,7 +99,7 @@ class TestFresnelProp(chex.TestCase):
         field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
         field = field_real + 1j * field_imag
 
-        dx = 5e-6  # 5 microns
+        dx = 5e-6
 
         incoming = OpticalWavefront(
             field=field,
@@ -117,10 +113,8 @@ class TestFresnelProp(chex.TestCase):
             incoming=incoming, z_move=jnp.array(z_move, dtype=jnp.float64)
         )
 
-        # Check shapes
         chex.assert_shape(propagated.field, shape)
 
-        # Check z_position updated
         chex.assert_trees_all_close(
             propagated.z_position, jnp.array(z_move, dtype=jnp.float64), atol=1e-10
         )
@@ -142,7 +136,7 @@ class TestFraunhoferProp(chex.TestCase):
         field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
         field = field_real + 1j * field_imag
 
-        dx = 5e-6  # 5 microns
+        dx = 5e-6
 
         incoming = OpticalWavefront(
             field=field,
@@ -156,10 +150,8 @@ class TestFraunhoferProp(chex.TestCase):
             incoming=incoming, z_move=jnp.array(z_move, dtype=jnp.float64)
         )
 
-        # Check shapes
         chex.assert_shape(propagated.field, shape)
 
-        # Check z_position updated
         chex.assert_trees_all_close(
             propagated.z_position, jnp.array(z_move, dtype=jnp.float64), atol=1e-10
         )
@@ -179,7 +171,7 @@ class TestCircularAperture(chex.TestCase):
         field_imag = jax.random.normal(key2, shape, dtype=jnp.float64)
         field = field_real + 1j * field_imag
 
-        dx = 1e-6  # 1 micron
+        dx = 1e-6
 
         incoming = OpticalWavefront(
             field=field,
@@ -195,18 +187,14 @@ class TestCircularAperture(chex.TestCase):
             center=center,
         )
 
-        # Check shapes
         chex.assert_shape(apertured.field, shape)
 
-        # Check that z_position is preserved
         chex.assert_trees_all_close(
             apertured.z_position, incoming.z_position, atol=1e-10
         )
 
 
 class TestDigitalZoom(chex.TestCase):
-    # Skip the jit and pmap variants for digital_zoom since it uses dynamic_slice
-    # which can cause issues with abstract tracers
     @parameterized.parameters(
         {"shape": (64, 64), "zoom_factor": 2.0},
         {"shape": (128, 128), "zoom_factor": 0.5},
@@ -223,7 +211,7 @@ class TestDigitalZoom(chex.TestCase):
         )
         field: Complex[Array, "H W"] = field_real + 1j * field_imag
 
-        dx = 1e-6  # 1 micron
+        dx = 1e-6
 
         wavefront = OpticalWavefront(
             field=field,
@@ -232,20 +220,16 @@ class TestDigitalZoom(chex.TestCase):
             z_position=jnp.array(0.0, dtype=jnp.float64),
         )
 
-        # Safely handle zoom factor for shape calculation
         H_cut: int = int(shape[0] / zoom_factor)
         W_cut: int = int(shape[1] / zoom_factor)
 
-        # Skip the test if the zoom would cause slicing errors
         if H_cut <= 0 or W_cut <= 0 or H_cut > shape[0] or W_cut > shape[1]:
             pytest.skip("Zoom factor would cause invalid slice sizes for this shape")
 
         zoomed = digital_zoom(wavefront=wavefront, zoom_factor=zoom_factor)
 
-        # Check shapes
         chex.assert_shape(zoomed.field, shape)
 
-        # Check that dx is updated
         expected_dx: scalar_num = dx / zoom_factor
         chex.assert_trees_all_close(
             zoomed.dx, jnp.array(expected_dx, dtype=jnp.float64), atol=1e-10
@@ -253,7 +237,6 @@ class TestDigitalZoom(chex.TestCase):
 
 
 class TestOpticalZoom(chex.TestCase):
-    # Only use the with_jit variant which typically has fewer issues with typing
     @chex.variants(with_jit=True)
     @parameterized.parameters(
         {"shape": (64, 64), "zoom_factor": 2.0},
@@ -271,7 +254,7 @@ class TestOpticalZoom(chex.TestCase):
         )
         field: Complex[Array, "H W"] = field_real + 1j * field_imag
 
-        dx = 1e-6  # 1 micron
+        dx = 1e-6
 
         wavefront = OpticalWavefront(
             field=field,
@@ -283,19 +266,15 @@ class TestOpticalZoom(chex.TestCase):
         var_optical_zoom = self.variant(optical_zoom)
         zoomed = var_optical_zoom(wavefront=wavefront, zoom_factor=zoom_factor)
 
-        # Check shapes
         chex.assert_shape(zoomed.field, shape)
 
-        # Check that field remains identical
         chex.assert_trees_all_close(zoomed.field, wavefront.field, atol=1e-10)
 
-        # Check that dx is updated
         expected_dx: scalar_num = dx * zoom_factor
         chex.assert_trees_all_close(
             zoomed.dx, jnp.array(expected_dx, dtype=jnp.float64), atol=1e-10
         )
 
-        # Check that z_position is preserved
         chex.assert_trees_all_close(zoomed.z_position, wavefront.z_position, atol=1e-10)
 
 

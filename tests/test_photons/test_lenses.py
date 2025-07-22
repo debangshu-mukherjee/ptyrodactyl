@@ -17,7 +17,6 @@ from ptyrodactyl.photons.lenses import (
     plano_convex_lens,
 )
 
-# Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)
 
 
@@ -33,7 +32,6 @@ class TestLensParams(chex.TestCase):
             R2=jnp.array(0.2),
         )
 
-        # Check types
         assert isinstance(params.focal_length, jnp.ndarray)
         assert isinstance(params.diameter, jnp.ndarray)
         assert isinstance(params.n, jnp.ndarray)
@@ -54,8 +52,8 @@ class TestLensParams(chex.TestCase):
 
         children, aux_data = params.tree_flatten()
 
-        assert len(children) == 6  # All parameters should be present
-        assert aux_data is None  # No auxiliary data
+        assert len(children) == 6
+        assert aux_data is None
 
 
 class TestLensThicknessProfile(chex.TestCase):
@@ -102,7 +100,6 @@ class TestLensThicknessProfile(chex.TestCase):
             diameter=jnp.asarray(0.1),
         )
 
-        # Check center point
         center_idx = (shape[0] // 2, shape[1] // 2)
         chex.assert_trees_all_close(thickness[center_idx], center_thickness, atol=1e-6)
 
@@ -137,11 +134,9 @@ class TestLensCreation(chex.TestCase):
             center_thickness=jnp.array(0.01),
         )
 
-        # Check that both radii are positive
         assert jnp.all(params.R1 > 0)
         assert jnp.all(params.R2 > 0)
 
-        # Check focal length calculation matches input
         calculated_f = lens_focal_length(params.n, params.R1, params.R2)
         chex.assert_trees_all_close(calculated_f, params.focal_length, atol=1e-6)
 
@@ -155,11 +150,9 @@ class TestLensCreation(chex.TestCase):
             center_thickness=jnp.array(0.01),
         )
 
-        # Check that both radii are negative
         assert jnp.all(params.R1 < 0)
         assert jnp.all(params.R2 < 0)
 
-        # Check focal length calculation matches input
         calculated_f = lens_focal_length(params.n, params.R1, params.R2)
         chex.assert_trees_all_close(calculated_f, params.focal_length, atol=1e-6)
 
@@ -198,11 +191,9 @@ class TestLensCreation(chex.TestCase):
             convex_first=jnp.array(True),
         )
 
-        # Check that R1 is positive (convex) and R2 is negative (concave)
         assert jnp.all(params.R1 > 0)
         assert jnp.all(params.R2 < 0)
 
-        # Check focal length calculation matches input
         calculated_f = lens_focal_length(params.n, params.R1, params.R2)
         chex.assert_trees_all_close(calculated_f, params.focal_length, atol=1e-6)
 

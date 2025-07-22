@@ -13,7 +13,6 @@ from ptyrodactyl.photons.helper import (
     normalize_field,
 )
 
-# Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)
 
 
@@ -26,7 +25,6 @@ class TestAddPhaseScreen(chex.TestCase):
     )
     def test_add_phase_screen_values(self, shape: Tuple[int, int], offset: float):
         """Check that add_phase_screen produces expected values."""
-        # Create a random complex field
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
         field_real = jax.random.normal(key1, shape, dtype=jnp.float64)
@@ -35,20 +33,15 @@ class TestAddPhaseScreen(chex.TestCase):
             jnp.complex128
         )
 
-        # Create a phase screen with a constant offset (for reproducibility)
         phase: Float[Array, "H W"] = jnp.ones(shape, dtype=jnp.float64) * offset
 
-        # Apply the function (variant_fn will jit, vmap, or pmap if needed)
         var_add_phase_screen = self.variant(add_phase_screen)
         result = var_add_phase_screen(field, phase)
 
-        # Compute expected result: field * exp(i * phase)
         expected = field * jnp.exp(1j * phase)
 
-        # Check shapes
         chex.assert_shape(result, shape)
 
-        # Check numerical correctness
         chex.assert_trees_all_close(result, expected, atol=1e-6, rtol=1e-6)
 
     @chex.all_variants()
@@ -74,7 +67,6 @@ class TestAddPhaseScreen(chex.TestCase):
 
         var_add_phase_screen = self.variant(add_phase_screen)
         with pytest.raises(ValueError):
-            # We expect the function (or its internal checks) to fail
             _ = var_add_phase_screen(field, phase)
 
     @chex.all_variants()
@@ -98,7 +90,6 @@ class TestAddPhaseScreen(chex.TestCase):
         var_add_phase_screen = self.variant(add_phase_screen)
         result = var_add_phase_screen(field, phase)
 
-        # If phase is zero, result should be identical to field
         chex.assert_trees_all_close(result, field, atol=1e-6, rtol=1e-6)
 
 
@@ -133,7 +124,6 @@ class TestCreateSpatialGrid(chex.TestCase):
             num_points=jnp.array(num_points),
         )
 
-        # Check that the grid spans from -diameter/2 to diameter/2
         assert jnp.isclose(jnp.min(xx), -diameter / 2)
         assert jnp.isclose(jnp.max(xx), diameter / 2)
         assert jnp.isclose(jnp.min(yy), -diameter / 2)
@@ -158,11 +148,9 @@ class TestNormalizeField(chex.TestCase):
         var_normalize_field = self.variant(normalize_field)
         normalized = var_normalize_field(field)
 
-        # Check that power is 1.0
         power = jnp.sum(jnp.abs(normalized) ** 2)
         assert jnp.isclose(power, 1.0, atol=1e-6)
 
-        # Check shape
         chex.assert_shape(normalized, shape)
 
 
@@ -184,11 +172,9 @@ class TestFieldIntensity(chex.TestCase):
         var_field_intensity = self.variant(field_intensity)
         intensity = var_field_intensity(field)
 
-        # Check that intensity is |field|^2
         expected = jnp.abs(field) ** 2
         chex.assert_trees_all_close(intensity, expected, atol=1e-6)
 
-        # Check shape
         chex.assert_shape(intensity, shape)
 
 

@@ -4,7 +4,6 @@ import jax.numpy as jnp
 import pytest
 from absl.testing import parameterized
 
-# Enable 64-bit precision
 jax.config.update("jax_enable_x64", True)
 
 
@@ -13,8 +12,6 @@ class TestEngineModule(chex.TestCase):
         """Test that the engine module can be imported."""
         import ptyrodactyl.photons.engine
 
-        # The engine module is currently a placeholder
-        # This test just verifies it can be imported without errors
 
 
 if __name__ == "__main__":

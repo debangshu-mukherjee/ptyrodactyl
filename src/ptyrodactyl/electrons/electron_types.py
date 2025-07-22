@@ -329,6 +329,22 @@ def make_calibrated_array(
     - calib_y is positive
     - calib_x is positive
     - real_space is a boolean scalar
+
+    Validation Flow
+    ---------------
+    - Convert inputs to JAX arrays with appropriate dtypes:
+       - data_array: Convert to int32, float64, or complex128 based on input dtype
+       - calib_y: Convert to float64
+       - calib_x: Convert to float64
+       - real_space: Convert to bool
+    - Execute validation checks using JAX-compatible conditional logic:
+       - check_2d_array(): Verify data_array has exactly 2 dimensions
+       - check_array_finite(): Ensure all values in data_array are finite (no inf/nan)
+       - check_calib_y(): Confirm calib_y is strictly positive
+       - check_calib_x(): Confirm calib_x is strictly positive
+       - check_real_space(): Verify real_space is a scalar (0-dimensional)
+    - If all validations pass, create and return CalibratedArray instance
+    - If any validation fails, the JAX-compatible error handling will stop execution
     """
     # Convert data_array to appropriate dtype based on input type
     if jnp.issubdtype(data_array.dtype, jnp.integer):
@@ -436,19 +452,22 @@ def make_probe_modes(
     - ValueError:
         If data is invalid or parameters are out of valid ranges
 
-    Flow
-    ----
-    - Convert inputs to JAX arrays
-    - Validate modes array:
-        - Check it's 3D with shape (H, W, M)
-        - Ensure all values are finite
-    - Validate weights array:
-        - Check it's 1D with length M
-        - Ensure all values are non-negative
-        - Ensure sum is positive
-    - Validate calibration:
-        - Check calib is positive
-    - Create and return ProbeModes instance
+    Validation Flow
+    ---------------
+    - Convert inputs to JAX arrays with appropriate dtypes:
+       - modes: Convert to complex128
+       - weights: Convert to float64
+       - calib: Convert to float64
+    - Extract shape information (H, W, M) from modes array
+    - Execute validation checks using JAX-compatible conditional logic:
+       - check_3d_modes(): Verify modes array has exactly 3 dimensions
+       - check_modes_finite(): Ensure all values in modes are finite (no inf/nan)
+       - check_weights_shape(): Confirm weights has shape (M,) matching modes dimension
+       - check_weights_nonnegative(): Verify all weights are non-negative
+       - check_weights_sum(): Ensure sum of weights is strictly positive
+       - check_calib(): Confirm calibration value is strictly positive
+    - If all validations pass, create and return ProbeModes instance
+    - If any validation fails, the JAX-compatible error handling will stop execution
     """
     modes = jnp.asarray(modes, dtype=jnp.complex128)
     weights = jnp.asarray(weights, dtype=jnp.float64)
@@ -557,17 +576,20 @@ def make_potential_slices(
     - ValueError:
         If data is invalid or parameters are out of valid ranges
 
-    Flow
-    ----
-    - Convert inputs to JAX arrays
-    - Validate slices array:
-        - Check it's 3D with shape (H, W, S)
-        - Ensure all values are finite
-    - Validate slice_thickness:
-        - Check it's positive
-    - Validate calibration:
-        - Check calib is positive
-    - Create and return PotentialSlices instance
+    Validation Flow
+    ---------------
+    - Convert inputs to JAX arrays with appropriate dtypes:
+       - slices: Convert to complex128
+       - slice_thickness: Convert to float64
+       - calib: Convert to float64
+    - Extract shape information (H, W, S) from slices array
+    - Execute validation checks using JAX-compatible conditional logic:
+       - check_3d_slices(): Verify slices array has exactly 3 dimensions
+       - check_slices_finite(): Ensure all values in slices are finite (no inf/nan)
+       - check_slice_thickness(): Confirm slice_thickness is strictly positive
+       - check_calib(): Confirm calibration value is strictly positive
+    - If all validations pass, create and return PotentialSlices instance
+    - If any validation fails, the JAX-compatible error handling will stop execution
     """
     slices = jnp.asarray(slices, dtype=jnp.complex128)
     slice_thickness = jnp.asarray(slice_thickness, dtype=jnp.float64)
@@ -657,18 +679,26 @@ def make_crystal_structure(
     ValueError
         If the input arrays have incompatible shapes or invalid values.
 
-    Flow
-    ----
-    - Convert all inputs to JAX arrays using jnp.asarray
-    - Validate shape of frac_positions is (n_atoms, 4)
-    - Validate shape of cart_positions is (n_atoms, 4)
-    - Validate shape of cell_lengths is (3,)
-    - Validate shape of cell_angles is (3,)
-    - Verify number of atoms matches between frac and cart positions
-    - Verify atomic numbers match between frac and cart positions
-    - Ensure cell lengths are positive
-    - Ensure cell angles are between 0 and 180 degrees
-    - Create and return CrystalStructure instance with validated data
+    Validation Flow
+    ---------------
+    - Convert all inputs to JAX arrays:
+       - frac_positions: Convert to JAX array (maintains original dtype)
+       - cart_positions: Convert to JAX array (maintains original dtype)
+       - cell_lengths: Convert to JAX array (maintains original dtype)
+       - cell_angles: Convert to JAX array (maintains original dtype)
+    - Execute shape validation checks:
+       - check_frac_shape(): Verify frac_positions has 4 columns [x, y, z, atomic_number]
+       - check_cart_shape(): Verify cart_positions has 4 columns [x, y, z, atomic_number]
+       - check_cell_lengths_shape(): Confirm cell_lengths has shape (3,)
+       - check_cell_angles_shape(): Confirm cell_angles has shape (3,)
+    - Execute consistency validation checks:
+       - check_atom_count(): Ensure frac_positions and cart_positions have same number of atoms
+       - check_atomic_numbers(): Verify atomic numbers match between frac and cart positions
+    - Execute value validation checks:
+       - check_cell_lengths_positive(): Confirm all cell lengths are strictly positive
+       - check_cell_angles_valid(): Ensure all angles are in range (0, 180) degrees
+    - If all validations pass, create and return CrystalStructure instance
+    - If any validation fails, the JAX-compatible error handling will stop execution
     """
     frac_positions = jnp.asarray(frac_positions)
     cart_positions = jnp.asarray(cart_positions)
@@ -810,6 +840,25 @@ def make_xyz_data(
     -------
     - `XYZData`:
         Validated PyTree structure for XYZ file contents
+
+    Validation Flow
+    ---------------
+    - Convert required inputs to JAX arrays with appropriate dtypes:
+       - positions: Convert to float64
+       - atomic_numbers: Convert to int32
+       - lattice (if provided): Convert to float64
+       - stress (if provided): Convert to float64
+    - Extract number of atoms (N) from positions array
+    - Execute shape validation checks:
+       - check_shape(): Verify positions has shape (N, 3) and atomic_numbers has shape (N,)
+    - Execute value validation checks:
+       - check_finiteness(): Ensure all position values are finite and atomic numbers are non-negative
+    - Execute optional matrix validation checks (if provided):
+       - check_optional_matrices(): For lattice and stress tensors:
+         * Verify shape is (3, 3)
+         * Ensure all values are finite
+    - If all validations pass, create and return XYZData instance
+    - If any validation fails, raise ValueError with descriptive error message
     """
 
     positions = jnp.asarray(positions, dtype=jnp.float64)

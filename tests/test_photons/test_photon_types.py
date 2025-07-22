@@ -8,18 +8,14 @@ from beartype.roar import BeartypeCallHintParamViolation
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Integer, Num
 
-from ptyrodactyl.photons.photon_types import (
-    LensParams,
-    GridParams,
-    OpticalWavefront,
-    MicroscopeData,
-    Diffractogram,
-    make_lens_params,
-    make_grid_params,
-    make_optical_wavefront,
-    make_microscope_data,
-    make_diffractogram,
-)
+from ptyrodactyl.photons.photon_types import (Diffractogram, GridParams,
+                                              LensParams, MicroscopeData,
+                                              OpticalWavefront,
+                                              make_diffractogram,
+                                              make_grid_params,
+                                              make_lens_params,
+                                              make_microscope_data,
+                                              make_optical_wavefront)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -435,9 +431,7 @@ class TestMakeMicroscopeData(chex.TestCase):
 
         with pytest.raises(Exception):
             make_microscope_data(
-                image_data=jnp.ones(
-                    shape_3d, dtype=jnp.complex128
-                ),
+                image_data=jnp.ones(shape_3d, dtype=jnp.complex128),
                 wavelength=wavelength,
                 dx=dx,
             )
@@ -542,14 +536,10 @@ class TestMakeDiffractogram(chex.TestCase):
             )
 
         with pytest.raises(Exception):
-            make_diffractogram(
-                image=image, wavelength=500e-9, dx=dx
-            )
+            make_diffractogram(image=image, wavelength=500e-9, dx=dx)
 
         with pytest.raises(Exception):
-            make_diffractogram(
-                image=image, wavelength=wavelength, dx=1e-6
-            )
+            make_diffractogram(image=image, wavelength=wavelength, dx=1e-6)
 
 
 if __name__ == "__main__":

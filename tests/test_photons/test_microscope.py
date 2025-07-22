@@ -6,21 +6,16 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons.microscope import lens_propagation
 from ptyrodactyl.photons.lenses import double_convex_lens
-from ptyrodactyl.photons.photon_types import (
-    LensParams,
-    OpticalWavefront,
-    make_optical_wavefront,
-)
+from ptyrodactyl.photons.microscope import lens_propagation
+from ptyrodactyl.photons.photon_types import (LensParams, OpticalWavefront,
+                                              make_optical_wavefront)
 
 jax.config.update("jax_enable_x64", True)
 
 
 class TestLensPropagation(chex.TestCase):
-    @chex.all_variants(
-        without_device=False
-    )
+    @chex.all_variants(without_device=False)
     @parameterized.parameters(
         {"shape": (64, 64), "wavelength": 500e-9, "focal_length": 0.05},
         {"shape": (128, 128), "wavelength": 600e-9, "focal_length": 0.1},
@@ -60,9 +55,7 @@ class TestLensPropagation(chex.TestCase):
             propagated.z_position, incoming.z_position, atol=1e-10
         )
 
-    @chex.all_variants(
-        without_device=False
-    )
+    @chex.all_variants(without_device=False)
     def test_phase_modulation(self):
         """Test that the lens adds a phase modulation."""
         shape = (64, 64)

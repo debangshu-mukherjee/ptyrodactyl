@@ -136,7 +136,7 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
     # Convert to JAX arrays, preserving dtype
     v = jnp.asarray(v)
     x = jnp.asarray(x)
-    
+
     # Get the dtype to use throughout
     dtype = x.dtype
 
@@ -144,43 +144,57 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
         # For K_0(x) when x <= 1, use series expansion
         # Based on Numerical Recipes formulation
         i0 = jax.scipy.special.i0(x)
-        coeffs = jnp.array([
-            -0.57721566, 0.42278420, 0.23069756,
-            0.03488590, 0.00262698, 0.00010750,
-            0.00000740
-        ], dtype=dtype)
-        
+        coeffs = jnp.array(
+            [
+                -0.57721566,
+                0.42278420,
+                0.23069756,
+                0.03488590,
+                0.00262698,
+                0.00010750,
+                0.00000740,
+            ],
+            dtype=dtype,
+        )
+
         x2 = x * x / 4.0
         poly = coeffs[0]
         xn = 1.0
         for i, c in enumerate(coeffs[1:]):
             xn *= x2
             poly += c * xn
-            
+
         return -jnp.log(x / 2.0) * i0 + poly
 
     def k0_large(x):
         # For K_0(x) when x > 1, use asymptotic expansion
         # Based on Numerical Recipes formulation
-        coeffs = jnp.array([
-            1.25331414, -0.07832358, 0.02189568,
-            -0.01062446, 0.00587872, -0.00251540,
-            0.00053208
-        ], dtype=dtype)
-        
+        coeffs = jnp.array(
+            [
+                1.25331414,
+                -0.07832358,
+                0.02189568,
+                -0.01062446,
+                0.00587872,
+                -0.00251540,
+                0.00053208,
+            ],
+            dtype=dtype,
+        )
+
         z = 1.0 / x
         poly = coeffs[0]
         zn = 1.0
         for c in coeffs[1:]:
             zn *= z
             poly += c * zn
-            
+
         return jnp.exp(-x) * poly / jnp.sqrt(x)
 
     # For now, just handle v=0 case which is what's used in the code
     # Use jnp.where for vectorized conditional
     k0_result = jnp.where(x <= 1.0, k0_small(x), k0_large(x))
-    
+
     # Return k0_result if v == 0, otherwise zeros
     return jnp.where(v == 0.0, k0_result, jnp.zeros_like(x, dtype=dtype))
 

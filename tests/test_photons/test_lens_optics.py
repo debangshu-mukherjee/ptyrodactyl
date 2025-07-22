@@ -6,14 +6,10 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons.lens_optics import (
-    angular_spectrum_prop,
-    fresnel_prop,
-    fraunhofer_prop,
-    circular_aperture,
-    digital_zoom,
-    optical_zoom,
-)
+from ptyrodactyl.photons.lens_optics import (angular_spectrum_prop,
+                                             circular_aperture, digital_zoom,
+                                             fraunhofer_prop, fresnel_prop,
+                                             optical_zoom)
 from ptyrodactyl.photons.photon_types import OpticalWavefront, scalar_num
 
 jax.config.update("jax_enable_x64", True)

@@ -43,7 +43,7 @@ using the factory functions from electron_types module.
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
-from beartype.typing import Optional, Union
+from beartype.typing import Optional, Tuple, Union
 from jax import lax
 from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
                        PRNGKeyArray, jaxtyped)
@@ -320,23 +320,31 @@ def make_probe(
     """
     aperture: Float[Array, ""] = jnp.asarray(aperture / 1000.0)
     wavelength: Float[Array, ""] = wavelength_ang(voltage)
-    LMax = aperture / wavelength
+    LMax: Float[Array, ""] = aperture / wavelength
+    image_y: scalar_int
+    image_x: scalar_int
     image_y, image_x = image_size
-    x_FOV = image_x * 0.01 * calibration_pm
-    y_FOV = image_y * 0.01 * calibration_pm
-    qx = (jnp.arange((-image_x / 2), (image_x / 2), 1)) / x_FOV
-    x_shifter = image_x // 2
-    qy = (jnp.arange((-image_y / 2), (image_y / 2), 1)) / y_FOV
-    y_shifter = image_y // 2
-    Lx = jnp.roll(qx, x_shifter)
-    Ly = jnp.roll(qy, y_shifter)
+    x_FOV: Float[Array, ""] = image_x * 0.01 * calibration_pm
+    y_FOV: Float[Array, ""] = image_y * 0.01 * calibration_pm
+    qx: Float[Array, "W"] = (jnp.arange((-image_x / 2), (image_x / 2), 1)) / x_FOV
+    x_shifter: scalar_int = image_x // 2
+    qy: Float[Array, "H"] = (jnp.arange((-image_y / 2), (image_y / 2), 1)) / y_FOV
+    y_shifter: scalar_int = image_y // 2
+    Lx: Float[Array, "W"] = jnp.roll(qx, x_shifter)
+    Ly: Float[Array, "H"] = jnp.roll(qy, y_shifter)
+    Lya: Float[Array, "H W"]
+    Lxa: Float[Array, "H W"]
     Lya, Lxa = jnp.meshgrid(Lx, Ly)
-    L2 = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
-    inverse_real_matrix = L2**0.5
-    Adist = jnp.asarray(inverse_real_matrix <= LMax, dtype=jnp.complex128)
-    chi_probe = aberration(inverse_real_matrix, wavelength, defocus, c3, c5)
+    L2: Float[Array, "H W"] = jnp.multiply(Lxa, Lxa) + jnp.multiply(Lya, Lya)
+    inverse_real_matrix: Float[Array, "H W"] = L2**0.5
+    Adist: Complex[Array, "H W"] = jnp.asarray(
+        inverse_real_matrix <= LMax, dtype=jnp.complex128
+    )
+    chi_probe: Float[Array, "H W"] = aberration(
+        inverse_real_matrix, wavelength, defocus, c3, c5
+    )
     Adist *= jnp.exp(-1j * chi_probe)
-    probe_real_space = jnp.fft.ifftshift(jnp.fft.ifft2(Adist))
+    probe_real_space: Complex[Array, "H W"] = jnp.fft.ifftshift(jnp.fft.ifft2(Adist))
     return probe_real_space
 
 
@@ -492,39 +500,50 @@ def cbed(
     - Compute the intensity for each mode
     - Sum the intensities across all modes.
     """
-    calib_ang = jnp.amin(jnp.array([pot_slices.calib, beam.calib]))
-    dtype = beam.modes.dtype
-    pot_slice = jnp.atleast_3d(pot_slices.slices)
-    beam = jnp.atleast_3d(beam.modes)
-    num_slices = pot_slice.shape[-1]
-    slice_transmission = propagation_func(
-        beam.shape[0], beam.shape[1], pot_slices.slice_thickness, voltage_kV, calib_ang
+    calib_ang: scalar_float = jnp.amin(jnp.array([pot_slices.calib, beam.calib]))
+    dtype: jnp.dtype = beam.modes.dtype
+    pot_slice: Complex[Array, "H W S"] = jnp.atleast_3d(pot_slices.slices)
+    beam_modes: Complex[Array, "H W M"] = jnp.atleast_3d(beam.modes)
+    num_slices: int = pot_slice.shape[-1]
+    slice_transmission: Complex[Array, "H W"] = propagation_func(
+        beam_modes.shape[0],
+        beam_modes.shape[1],
+        pot_slices.slice_thickness,
+        voltage_kV,
+        calib_ang,
     ).astype(dtype)
-    init_wave = jnp.copy(beam)
+    init_wave: Complex[Array, "H W M"] = jnp.copy(beam_modes)
 
-    def scan_fn(carry, slice_idx):
-        wave = carry
-        trans_slice = lax.dynamic_slice_in_dim(pot_slice, slice_idx, 1, axis=2)
-        trans_slice = jnp.squeeze(trans_slice, axis=2)
+    def scan_fn(
+        carry: Complex[Array, "H W M"], slice_idx: scalar_int
+    ) -> Tuple[Complex[Array, "H W M"], None]:
+        wave: Complex[Array, "H W M"] = carry
+        trans_slice: Complex[Array, "H W 1"] = lax.dynamic_slice_in_dim(
+            pot_slice, slice_idx, 1, axis=2
+        )
+        trans_slice: Complex[Array, "H W"] = jnp.squeeze(trans_slice, axis=2)
         wave = wave * trans_slice[..., jnp.newaxis]
 
-        def propagate(w):
-            w_k = jnp.fft.fft2(w, axes=(0, 1))
+        def propagate(w: Complex[Array, "H W M"]) -> Complex[Array, "H W M"]:
+            w_k: Complex[Array, "H W M"] = jnp.fft.fft2(w, axes=(0, 1))
             w_k = w_k * slice_transmission[..., jnp.newaxis]
             return jnp.fft.ifft2(w_k, axes=(0, 1)).astype(dtype)
 
-        is_last_slice = slice_idx == num_slices - 1
+        is_last_slice: Bool[Array, ""] = slice_idx == num_slices - 1
         wave = lax.cond(is_last_slice, lambda w: w, propagate, wave)
         return wave, None
 
+    final_wave: Complex[Array, "H W M"]
     final_wave, _ = lax.scan(scan_fn, init_wave, jnp.arange(num_slices))
-    fourier_space_pattern = jnp.fft.fftshift(
+    fourier_space_pattern: Complex[Array, "H W M"] = jnp.fft.fftshift(
         jnp.fft.fft2(final_wave, axes=(0, 1)), axes=(0, 1)
     )
-    intensity_per_mode = jnp.square(jnp.abs(fourier_space_pattern))
-    cbed_pattern = jnp.sum(intensity_per_mode, axis=-1)
-    real_space_fov = jnp.multiply(beam.shape[0], calib_ang)
-    inverse_space_calib = 1 / real_space_fov
+    intensity_per_mode: Float[Array, "H W M"] = jnp.square(
+        jnp.abs(fourier_space_pattern)
+    )
+    cbed_pattern: Float[Array, "H W"] = jnp.sum(intensity_per_mode, axis=-1)
+    real_space_fov: Float[Array, ""] = jnp.multiply(beam_modes.shape[0], calib_ang)
+    inverse_space_calib: Float[Array, ""] = 1 / real_space_fov
     cbed_pytree: CalibratedArray = make_calibrated_array(
         cbed_pattern, inverse_space_calib, inverse_space_calib, False
     )
@@ -641,16 +660,16 @@ def stem_4D(
         beam.modes, positions, calib_ang
     )
 
-    def process_single_position(pos_idx) -> CalibratedArray:
+    def process_single_position(pos_idx: scalar_int) -> CalibratedArray:
         current_beam: Complex[Array, "H W #M"] = jnp.take(
             shifted_beams, pos_idx, axis=0
         )
-        current_ProbeModes = ProbeModes(
+        current_ProbeModes: ProbeModes = ProbeModes(
             modes=current_beam,
             weights=beam.weights,
             calib=beam.calib,
         )
-        cbed_pattern = cbed(
+        cbed_pattern: CalibratedArray = cbed(
             pot_slices=pot_slice, beam=current_ProbeModes, voltage_kV=voltage_kV
         )
         return cbed_pattern
@@ -705,9 +724,9 @@ def decompose_beam_to_modes(
     """
     H: int
     W: int
-    H, W = beam.shape
+    H, W = beam.data_array.shape
     TP: int = H * W
-    beam_flat: Complex[Array, "TP"] = beam.reshape(-1)
+    beam_flat: Complex[Array, "TP"] = beam.data_array.reshape(-1)
     key: PRNGKeyArray = jax.random.PRNGKey(0)
     key1: PRNGKeyArray
     key2: PRNGKeyArray

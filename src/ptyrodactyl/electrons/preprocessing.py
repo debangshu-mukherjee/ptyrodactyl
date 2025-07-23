@@ -37,7 +37,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
-from beartype.typing import Any, Dict, Optional, Union
+from beartype.typing import Any, Dict, List, Optional, Union
 from jaxtyping import Array, Float, Int, jaxtyped
 
 from .electron_types import XYZData, make_xyz_data, scalar_int
@@ -50,6 +50,7 @@ _ATOMS_PATH: Path = Path(__file__).resolve().parent / "luggage" / "atom_numbers.
 jax.config.update("jax_enable_x64", True)
 
 
+@beartype
 def _load_atomic_numbers(json_path: Optional[Path] = _ATOMS_PATH) -> Dict[str, int]:
     """
     Description
@@ -132,6 +133,7 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
     return atomic_number
 
 
+@jaxtyped(typechecker=beartype)
 def _load_kirkland_csv(
     file_path: Optional[Path] = _KIRKLAND_PATH,
 ) -> Float[Array, "103 12"]:
@@ -192,6 +194,7 @@ def kirkland_potentials() -> Float[Array, "103 12"]:
     return _KIRKLAND_POTENTIALS
 
 
+@beartype
 def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
     """
     Internal function to extract metadata from the XYZ comment line.
@@ -211,31 +214,33 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
     - ValueError:
         If lattice or stress tensor dimensions are incorrect
     """
-    metadata = {}
+    metadata: Dict[str, Any] = {}
 
-    lattice_match = re.search(r'Lattice="([^"]+)"', line)
+    lattice_match: Optional[re.Match[str]] = re.search(r'Lattice="([^"]+)"', line)
     if lattice_match:
-        values = list(map(float, lattice_match.group(1).split()))
+        values: list = list(map(float, lattice_match.group(1).split()))
         if len(values) != 9:
             raise ValueError("Lattice must contain 9 values")
         metadata["lattice"] = jnp.array(values, dtype=jnp.float64).reshape(3, 3)
 
-    stress_match = re.search(r'stress="([^"]+)"', line)
+    stress_match: Optional[re.Match[str]] = re.search(r'stress="([^"]+)"', line)
     if stress_match:
-        values = list(map(float, stress_match.group(1).split()))
+        values: list = list(map(float, stress_match.group(1).split()))
         if len(values) != 9:
             raise ValueError("Stress tensor must contain 9 values")
         metadata["stress"] = jnp.array(values, dtype=jnp.float64).reshape(3, 3)
 
-    energy_match = re.search(r"energy=([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)", line)
+    energy_match: Optional[re.Match[str]] = re.search(
+        r"energy=([-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?)", line
+    )
     if energy_match:
         metadata["energy"] = float(energy_match.group(1))
 
-    props_match = re.search(r"Properties=([^ ]+)", line)
+    props_match: Optional[re.Match[str]] = re.search(r"Properties=([^ ]+)", line)
     if props_match:
-        raw_props = props_match.group(1)
-        parts = raw_props.split(":")
-        props = []
+        raw_props: str = props_match.group(1)
+        parts: list = raw_props.split(":")
+        props: list = []
         for i in range(0, len(parts), 3):
             props.append(
                 {
@@ -265,34 +270,39 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
         Validated JAX-compatible structure with all contents from the XYZ file.
     """
     with open(file_path, "r") as f:
-        lines = f.readlines()
+        lines: list = f.readlines()
 
     if len(lines) < 2:
         raise ValueError("Invalid XYZ file: fewer than 2 lines.")
 
     try:
-        num_atoms = int(lines[0].strip())
+        num_atoms: int = int(lines[0].strip())
     except ValueError:
         raise ValueError("First line must be the number of atoms (int).")
 
-    comment = lines[1].strip()
-    metadata = _parse_xyz_metadata(comment)
+    comment: str = lines[1].strip()
+    metadata: Dict[str, Any] = _parse_xyz_metadata(comment)
 
     if len(lines) < 2 + num_atoms:
         raise ValueError(f"Expected {num_atoms} atoms, found only {len(lines) - 2}.")
 
-    positions = []
-    atomic_numbers = []
+    positions: list = []
+    atomic_numbers: list = []
 
     for i in range(2, 2 + num_atoms):
-        parts = lines[i].split()
+        parts: list = lines[i].split()
         if len(parts) not in {4, 5, 6, 7}:
             raise ValueError(f"Line {i + 1} has unexpected format: {lines[i].strip()}")
 
         if len(parts) == 4:
+            symbol: str
+            x: str
+            y: str
+            z: str
             symbol, x, y, z = parts
         elif len(parts) == 5:
-            _, symbol, x, y, z = parts
+            _: str
+            symbol, x, y, z = parts
         else:
             symbol, x, y, z = parts[:4]
 

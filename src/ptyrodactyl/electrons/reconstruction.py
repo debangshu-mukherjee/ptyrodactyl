@@ -39,7 +39,7 @@ using the factory functions from electron_types module.
 import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
-from beartype.typing import Dict, Optional, Tuple, Union
+from beartype.typing import Any, Dict, Optional, Tuple, Union
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 import ptyrodactyl.tools as ptt
@@ -58,6 +58,7 @@ from .electron_types import (CalibratedArray, ProbeModes,
 from .simulations import stem_4D
 
 
+@typechecker
 def _get_optimizer(optimizer_name: str) -> ptt.Optimizer:
     if optimizer_name not in OPTIMIZERS:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
@@ -134,7 +135,9 @@ def single_slice_ptychography(
         Intermediate electron beams.
     """
 
-    def forward_fn(pot_slice, beam):
+    def forward_fn(
+        pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
+    ) -> Float[Array, "P H W"]:
         return stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
@@ -154,8 +157,8 @@ def single_slice_ptychography(
         return loss, {"pot_slice": grads[0], "beam": grads[1]}
 
     optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state = optimizer.init(initial_potential.data_array.shape)
-    beam_state = optimizer.init(initial_beam.data_array.shape)
+    pot_slice_state: Any = optimizer.init(initial_potential.data_array.shape)
+    beam_state: Any = optimizer.init(initial_beam.data_array.shape)
 
     pot_slice: Complex[Array, "H W"] = initial_potential.data_array
     beam: Complex[Array, "H W"]
@@ -165,7 +168,16 @@ def single_slice_ptychography(
         beam = jnp.fft.ifft2(initial_beam.data_array)
 
     @jax.jit
-    def update_step(pot_slice, beam, pot_slice_state, beam_state):
+    def update_step(
+        pot_slice: Complex[Array, "H W"],
+        beam: Complex[Array, "H W"],
+        pot_slice_state: Any,
+        beam_state: Any,
+    ) -> Tuple[
+        Complex[Array, "H W"], Complex[Array, "H W"], Any, Any, Float[Array, ""]
+    ]:
+        loss: Float[Array, ""]
+        grads: Dict[str, Complex[Array, "H W"]]
         loss, grads = loss_and_grad(pot_slice, beam)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
@@ -175,7 +187,7 @@ def single_slice_ptychography(
         )
         return pot_slice, beam, pot_slice_state, beam_state, loss
 
-    intermediate_potslice = jnp.zeros(
+    intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             pot_slice.shape[0],
             pot_slice.shape[1],
@@ -183,7 +195,7 @@ def single_slice_ptychography(
         ),
         dtype=pot_slice.dtype,
     )
-    intermediate_beam = jnp.zeros(
+    intermediate_beam: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             beam.shape[0],
             beam.shape[1],
@@ -193,6 +205,7 @@ def single_slice_ptychography(
     )
 
     for ii in range(num_iterations):
+        loss: Float[Array, ""]
         pot_slice, beam, pot_slice_state, beam_state, loss = update_step(
             pot_slice, beam, pot_slice_state, beam_state
         )
@@ -200,8 +213,8 @@ def single_slice_ptychography(
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
             saver: scalar_int = jnp.floor(ii / save_every)
-            intermediate_potslice.at[:, :, saver].set(pot_slice)
-            intermediate_beam.at[:, :, saver].set(beam)
+            intermediate_potslice = intermediate_potslice.at[:, :, saver].set(pot_slice)
+            intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
 
     final_potential: CalibratedArray = make_calibrated_array(
         data_array=pot_slice,
@@ -298,7 +311,11 @@ def single_slice_poscorrected(
         Intermediate probe positions.
     """
 
-    def forward_fn(pot_slice, beam, pos_list):
+    def forward_fn(
+        pot_slice: Complex[Array, "H W"],
+        beam: Complex[Array, "H W"],
+        pos_list: Float[Array, "P 2"],
+    ) -> Float[Array, "P H W"]:
         return stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
@@ -321,18 +338,35 @@ def single_slice_poscorrected(
         )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
-    optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state = optimizer.init(initial_potential.data_array.shape)
-    beam_state = optimizer.init(initial_beam.data_array.shape)
-    pos_state = optimizer.init(initial_pos_list.shape)
+    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
+    pot_slice_state: Any = optimizer.init(initial_potential.data_array.shape)
+    beam_state: Any = optimizer.init(initial_beam.data_array.shape)
+    pos_state: Any = optimizer.init(initial_pos_list.shape)
 
-    learning_rate = jnp.array(learning_rate)
+    learning_rate: Float[Array, "..."] = jnp.array(learning_rate)
 
     if len(learning_rate) == 1:
         learning_rate = jnp.array([learning_rate, learning_rate])
 
     @jax.jit
-    def update_step(pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state):
+    def update_step(
+        pot_slice: Complex[Array, "H W"],
+        beam: Complex[Array, "H W"],
+        pos_list: Float[Array, "P 2"],
+        pot_slice_state: Any,
+        beam_state: Any,
+        pos_state: Any,
+    ) -> Tuple[
+        Complex[Array, "H W"],
+        Complex[Array, "H W"],
+        Float[Array, "P 2"],
+        Any,
+        Any,
+        Any,
+        Float[Array, ""],
+    ]:
+        loss: Float[Array, ""]
+        grads: Dict[str, Array]
         loss, grads = loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
@@ -345,11 +379,11 @@ def single_slice_poscorrected(
         )
         return pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss
 
-    pot_guess = initial_potential.data_array
-    beam_guess = initial_beam.data_array
-    pos_guess = initial_pos_list
+    pot_guess: Complex[Array, "H W"] = initial_potential.data_array
+    beam_guess: Complex[Array, "H W"] = initial_beam.data_array
+    pos_guess: Float[Array, "P 2"] = initial_pos_list
 
-    intermediate_potslices = jnp.zeros(
+    intermediate_potslices: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             pot_guess.shape[0],
             pot_guess.shape[1],
@@ -357,7 +391,7 @@ def single_slice_poscorrected(
         ),
         dtype=pot_guess.dtype,
     )
-    intermediate_beams = jnp.zeros(
+    intermediate_beams: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             beam_guess.shape[0],
             beam_guess.shape[1],
@@ -365,7 +399,7 @@ def single_slice_poscorrected(
         ),
         dtype=initial_beam.dtype,
     )
-    intermediate_positions = jnp.zeros(
+    intermediate_positions: Float[Array, "P 2 S"] = jnp.zeros(
         shape=(
             pos_guess.shape[0],
             pos_guess.shape[1],
@@ -390,9 +424,13 @@ def single_slice_poscorrected(
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
             saver: scalar_int = jnp.floor(ii / save_every)
-            intermediate_potslices.at[:, :, saver].set(pot_guess)
-            intermediate_beams.at[:, :, saver].set(beam_guess)
-            intermediate_positions.at[:, :, saver].set(pos_guess)
+            intermediate_potslices = intermediate_potslices.at[:, :, saver].set(
+                pot_guess
+            )
+            intermediate_beams = intermediate_beams.at[:, :, saver].set(beam_guess)
+            intermediate_positions = intermediate_positions.at[:, :, saver].set(
+                pos_guess
+            )
 
     final_potential: CalibratedArray = make_calibrated_array(
         data_array=pot_guess,
@@ -418,7 +456,7 @@ def single_slice_poscorrected(
 
 @jaxtyped(typechecker=typechecker)
 def single_slice_multi_modal(
-    experimental_4dstem: Float[Array, "H W"],
+    experimental_4dstem: Float[Array, "P H W"],
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: ProbeModes,
     initial_pos_list: Float[Array, "P 2"],
@@ -492,10 +530,14 @@ def single_slice_multi_modal(
         Intermediate electron beams.
     """
 
-    def forward_fn(pot_slice, beam, pos_list):
+    def forward_fn(
+        pot_slice: Complex[Array, "H W"],
+        beam: ProbeModes,
+        pos_list: Float[Array, "P 2"],
+    ) -> Float[Array, "P H W"]:
         return stem_4D(
             pot_slice[None, ...],
-            beam[None, ...],
+            beam,
             pos_list,
             slice_thickness,
             voltage_kV,
@@ -507,38 +549,61 @@ def single_slice_multi_modal(
     @jax.jit
     def loss_and_grad(
         pot_slice: Complex[Array, "H W"],
-        beam: Complex[Array, "H W"],
+        beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
-    ) -> Tuple[Float[Array, ""], Dict[str, Array]]:
+    ) -> Tuple[Float[Array, ""], Dict[str, Any]]:
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
-    optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state = optimizer.init(initial_pot_slice.shape)
-    beam_state = optimizer.init(initial_beam.shape)
-    pos_state = optimizer.init(initial_pos_list.shape)
+    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
+    pot_slice_state: Any = optimizer.init(initial_pot_slice.shape)
+    beam_state: Any = optimizer.init(initial_beam.modes.shape)
+    pos_state: Any = optimizer.init(initial_pos_list.shape)
+
+    learning_rate: Float[Array, "..."] = jnp.array(learning_rate)
+    if len(learning_rate.shape) == 0:
+        learning_rate = jnp.array([learning_rate, learning_rate])
 
     @jax.jit
-    def update_step(pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state):
+    def update_step(
+        pot_slice: Complex[Array, "H W"],
+        beam: ProbeModes,
+        pos_list: Float[Array, "P 2"],
+        pot_slice_state: Any,
+        beam_state: Any,
+        pos_state: Any,
+    ) -> Tuple[
+        Complex[Array, "H W"],
+        ProbeModes,
+        Float[Array, "P 2"],
+        Any,
+        Any,
+        Any,
+        Float[Array, ""],
+    ]:
+        loss: Float[Array, ""]
+        grads: Dict[str, Any]
         loss, grads = loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
-            pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
+            pot_slice, grads["pot_slice"], pot_slice_state, learning_rate[0]
         )
-        beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, learning_rate
+        beam_modes: Complex[Array, "H W M"]
+        beam_modes, beam_state = optimizer.update(
+            beam.modes, grads["beam"].modes, beam_state, learning_rate[0]
         )
+        beam = ProbeModes(modes=beam_modes, weights=beam.weights, calib=beam.calib)
         pos_list, pos_state = optimizer.update(
             pos_list, grads["pos_list"], pos_state, learning_rate[1]
         )
         return pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss
 
-    pot_slice = initial_pot_slice
-    beam = initial_beam
-    pos_list = initial_pos_list
+    pot_slice: Complex[Array, "H W"] = initial_pot_slice
+    beam: ProbeModes = initial_beam
+    pos_list: Float[Array, "P 2"] = initial_pos_list
 
-    intermediate_potslice = jnp.zeros(
+    intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             initial_pot_slice.shape[0],
             initial_pot_slice.shape[1],
@@ -546,16 +611,18 @@ def single_slice_multi_modal(
         ),
         dtype=initial_pot_slice.dtype,
     )
-    intermediate_beam = jnp.zeros(
+    intermediate_beam: Complex[Array, "H W M S"] = jnp.zeros(
         shape=(
-            initial_beam.shape[0],
-            initial_beam.shape[1],
+            initial_beam.modes.shape[0],
+            initial_beam.modes.shape[1],
+            initial_beam.modes.shape[2],
             jnp.floor(num_iterations / save_every),
         ),
-        dtype=initial_beam.dtype,
+        dtype=initial_beam.modes.dtype,
     )
 
     for ii in range(num_iterations):
+        loss: Float[Array, ""]
         pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = (
             update_step(
                 pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
@@ -565,8 +632,8 @@ def single_slice_multi_modal(
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
             saver: scalar_int = jnp.floor(ii / save_every)
-            intermediate_potslice.at[:, :, saver].set(pot_slice)
-            intermediate_beam.at[:, :, saver].set(beam)
+            intermediate_potslice = intermediate_potslice.at[:, :, saver].set(pot_slice)
+            intermediate_beam = intermediate_beam.at[:, :, :, saver].set(beam.modes)
 
     return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
 
@@ -647,7 +714,11 @@ def multi_slice_multi_modal(
         Intermediate electron beams.
     """
 
-    def forward_fn(pot_slice, beam, pos_list):
+    def forward_fn(
+        pot_slice: Complex[Array, "H W"],
+        beam: Complex[Array, "H W"],
+        pos_list: Float[Array, "P 2"],
+    ) -> Float[Array, "P H W"]:
         return stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
@@ -670,13 +741,30 @@ def multi_slice_multi_modal(
         )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
-    optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state = optimizer.init(initial_pot_slice.shape)
-    beam_state = optimizer.init(initial_beam.shape)
-    pos_state = optimizer.init(initial_pos_list.shape)
+    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
+    pot_slice_state: Any = optimizer.init(initial_pot_slice.shape)
+    beam_state: Any = optimizer.init(initial_beam.shape)
+    pos_state: Any = optimizer.init(initial_pos_list.shape)
 
     @jax.jit
-    def update_step(pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state):
+    def update_step(
+        pot_slice: Complex[Array, "H W"],
+        beam: Complex[Array, "H W"],
+        pos_list: Float[Array, "P 2"],
+        pot_slice_state: Any,
+        beam_state: Any,
+        pos_state: Any,
+    ) -> Tuple[
+        Complex[Array, "H W"],
+        Complex[Array, "H W"],
+        Float[Array, "P 2"],
+        Any,
+        Any,
+        Any,
+        Float[Array, ""],
+    ]:
+        loss: Float[Array, ""]
+        grads: Dict[str, Array]
         loss, grads = loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
@@ -689,11 +777,11 @@ def multi_slice_multi_modal(
         )
         return pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss
 
-    pot_slice = initial_pot_slice
-    beam = initial_beam
-    pos_list = initial_pos_list
+    pot_slice: Complex[Array, "H W"] = initial_pot_slice
+    beam: Complex[Array, "H W"] = initial_beam
+    pos_list: Float[Array, "P 2"] = initial_pos_list
 
-    intermediate_potslice = jnp.zeros(
+    intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             initial_pot_slice.shape[0],
             initial_pot_slice.shape[1],
@@ -701,7 +789,7 @@ def multi_slice_multi_modal(
         ),
         dtype=initial_pot_slice.dtype,
     )
-    intermediate_beam = jnp.zeros(
+    intermediate_beam: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             initial_beam.shape[0],
             initial_beam.shape[1],
@@ -711,6 +799,7 @@ def multi_slice_multi_modal(
     )
 
     for ii in range(num_iterations):
+        loss: Float[Array, ""]
         pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = (
             update_step(
                 pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
@@ -720,7 +809,7 @@ def multi_slice_multi_modal(
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
             saver: scalar_int = jnp.floor(ii / save_every)
-            intermediate_potslice.at[:, :, saver].set(pot_slice)
-            intermediate_beam.at[:, :, saver].set(beam)
+            intermediate_potslice = intermediate_potslice.at[:, :, saver].set(pot_slice)
+            intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
 
     return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam

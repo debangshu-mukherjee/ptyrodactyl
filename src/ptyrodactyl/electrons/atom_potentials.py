@@ -40,7 +40,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from beartype import beartype
 from beartype.typing import Optional, Tuple, Union
-from jaxtyping import Array, Float, Int, jaxtyped
+from jaxtyping import Array, Bool, Float, Int, jaxtyped
 
 from .electron_types import (PotentialSlices, ProbeModes,
                              make_potential_slices, make_probe_modes,
@@ -152,11 +152,8 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
             dtype=dtype,
         )
         x2 = x * x / 4.0
-
-        # Create powers of x2 using JAX operations
         powers = jnp.power(x2[..., jnp.newaxis], jnp.arange(7))
         poly = jnp.sum(coeffs * powers, axis=-1)
-
         return -jnp.log(x / 2.0) * i0 + poly
 
     def k0_large(x):
@@ -173,8 +170,6 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
             dtype=dtype,
         )
         z = 1.0 / x
-
-        # Create powers of z using JAX operations
         powers = jnp.power(z[..., jnp.newaxis], jnp.arange(7))
         poly = jnp.sum(coeffs * powers, axis=-1)
 
@@ -313,42 +308,45 @@ def atomic_potential(
     return potential_resized
 
 
-def rotation_matrix_from_vectors(v1, v2):
+@jaxtyped(typechecker=beartype)
+def rotation_matrix_from_vectors(
+    v1: Float[Array, "3"], v2: Float[Array, "3"]
+) -> Float[Array, "3 3"]:
     """
     Return a proper rotation matrix that rotates v1 to v2.
     Uses the classic Rodrigues rotation formula.
     """
-    v1 = v1 / jnp.linalg.norm(v1)
-    v2 = v2 / jnp.linalg.norm(v2)
+    v1: Float[Array, "3"] = v1 / jnp.linalg.norm(v1)
+    v2: Float[Array, "3"] = v2 / jnp.linalg.norm(v2)
 
-    cross = jnp.cross(v1, v2)
-    dot = jnp.dot(v1, v2)
-    sin_theta = jnp.linalg.norm(cross)
+    cross: Float[Array, "3"] = jnp.cross(v1, v2)
+    dot: scalar_float = jnp.dot(v1, v2)
+    sin_theta: scalar_float = jnp.linalg.norm(cross)
 
-    def fallback_parallel():
+    def fallback_parallel() -> Float[Array, "3 3"]:
         return jnp.eye(3)
 
-    def fallback_opposite():
+    def fallback_opposite() -> Float[Array, "3 3"]:
         # Pick any orthogonal axis to v1
-        ortho = jnp.where(
+        ortho: Float[Array, "3"] = jnp.where(
             jnp.abs(v1[0]) < 0.9, jnp.array([1.0, 0.0, 0.0]), jnp.array([0.0, 1.0, 0.0])
         )
-        axis = jnp.cross(v1, ortho)
-        axis = axis / jnp.linalg.norm(axis)
-        K = jnp.array(
+        axis: Float[Array, "3"] = jnp.cross(v1, ortho)
+        axis: Float[Array, "3"] = axis / jnp.linalg.norm(axis)
+        K: Float[Array, "3 3"] = jnp.array(
             [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
         )
         return jnp.eye(3) + 2 * K @ K  # 180° rotation
 
-    def compute():
-        axis = cross / sin_theta
-        K = jnp.array(
+    def compute() -> Float[Array, "3 3"]:
+        axis: Float[Array, "3"] = cross / sin_theta
+        K: Float[Array, "3 3"] = jnp.array(
             [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
         )
         return jnp.eye(3) + sin_theta * K + (1 - dot) * (K @ K)
 
-    is_parallel = sin_theta < 1e-8
-    is_opposite = dot < -0.9999
+    is_parallel: Bool[Array, ""] = sin_theta < 1e-8
+    is_opposite: Bool[Array, ""] = dot < -0.9999
 
     return jax.lax.cond(
         is_parallel,
@@ -357,14 +355,20 @@ def rotation_matrix_from_vectors(v1, v2):
     )
 
 
-def rotation_matrix_about_axis(axis, theta):
+@jaxtyped(typechecker=beartype)
+def rotation_matrix_about_axis(
+    axis: Float[Array, "3"], theta: scalar_float
+) -> Float[Array, "3 3"]:
     """
     Return a rotation matrix that rotates around a given axis by an angle theta.
     Uses the Rodrigues' rotation formula.
     """
-    axis = axis / jnp.linalg.norm(axis)
-    cos_theta = jnp.cos(theta)
-    sin_theta = jnp.sin(theta)
+    axis: Float[Array, "3"] = axis / jnp.linalg.norm(axis)
+    cos_theta: scalar_float = jnp.cos(theta)
+    sin_theta: scalar_float = jnp.sin(theta)
+    ux: scalar_float
+    uy: scalar_float
+    uz: scalar_float
     ux, uy, uz = axis
 
     return jnp.array(
@@ -388,7 +392,13 @@ def rotation_matrix_about_axis(axis, theta):
     )
 
 
-def rotate_structure(coords, cell, R, theta=0):
+@jaxtyped(typechecker=beartype)
+def rotate_structure(
+    coords: Float[Array, "N 4"],
+    cell: Float[Array, "3 3"],
+    R: Float[Array, "3 3"],
+    theta: scalar_float = 0,
+) -> Tuple[Float[Array, "N 4"], Float[Array, "3 3"]]:
     """
     Rotate atomic coordinates and unit cell.
     - coords: (N, 4)
@@ -396,32 +406,45 @@ def rotate_structure(coords, cell, R, theta=0):
     - R: (3, 3) rotation matrix
     - theta: rotation angle for in-plane rotation (not used in this function, but can be useful for future extensions)
     """
-    rotated_coords = coords[:, 1:4] @ R.T
-    rotated_coords = jnp.hstack(
+    rotated_coords: Float[Array, "N 3"] = coords[:, 1:4] @ R.T
+    rotated_coords: Float[Array, "N 4"] = jnp.hstack(
         (coords[:, 0:1], rotated_coords)
     )  # Keep the first column (atom IDs)
-    rotated_cell = cell @ R.T
+    rotated_cell: Float[Array, "3 3"] = cell @ R.T
     if theta != 0:
         # Apply in-plane rotation if needed
-        in_plane_rotation = rotation_matrix_about_axis(jnp.array([0, 0, 1]), theta)
-        rotated_coords_in_plane = rotated_coords[:, 1:4] @ in_plane_rotation.T
-        rotated_coords = jnp.hstack((rotated_coords[:, 0:1], rotated_coords_in_plane))
+        in_plane_rotation: Float[Array, "3 3"] = rotation_matrix_about_axis(
+            jnp.array([0, 0, 1]), theta
+        )
+        rotated_coords_in_plane: Float[Array, "N 3"] = (
+            rotated_coords[:, 1:4] @ in_plane_rotation.T
+        )
+        rotated_coords: Float[Array, "N 4"] = jnp.hstack(
+            (rotated_coords[:, 0:1], rotated_coords_in_plane)
+        )
     return rotated_coords, rotated_cell
 
 
-def reciprocal_lattice(cell):
+@jaxtyped(typechecker=beartype)
+def reciprocal_lattice(cell: Float[Array, "3 3"]) -> Float[Array, "3 3"]:
     """
     Compute reciprocal lattice vectors (rows) from real-space cell (3x3).
     """
+    a1: Float[Array, "3"]
+    a2: Float[Array, "3"]
+    a3: Float[Array, "3"]
     a1, a2, a3 = cell
-    V = jnp.dot(a1, jnp.cross(a2, a3))
-    b1 = 2 * jnp.pi * jnp.cross(a2, a3) / V
-    b2 = 2 * jnp.pi * jnp.cross(a3, a1) / V
-    b3 = 2 * jnp.pi * jnp.cross(a1, a2) / V
+    V: scalar_float = jnp.dot(a1, jnp.cross(a2, a3))
+    b1: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a2, a3) / V
+    b2: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a3, a1) / V
+    b3: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a1, a2) / V
     return jnp.stack([b1, b2, b3])
 
 
-def compute_min_repeats(cell, threshold_nm):
+@jaxtyped(typechecker=beartype)
+def compute_min_repeats(
+    cell: Float[Array, "3 3"], threshold_nm: scalar_float
+) -> Tuple[int, int, int]:
     """
     Compute the minimal number of repeats along each lattice vector
     so that the resulting supercell length exceeds `threshold_nm`.
@@ -434,12 +457,15 @@ def compute_min_repeats(cell, threshold_nm):
     - nx, ny, nz: integers
     """
     # Compute norms of lattice vectors
-    lengths = jnp.linalg.norm(cell, axis=1)  # shape (3,)
-    n_repeats = jnp.ceil(threshold_nm / lengths).astype(int)
+    lengths: Float[Array, "3"] = jnp.linalg.norm(cell, axis=1)  # shape (3,)
+    n_repeats: Int[Array, "3"] = jnp.ceil(threshold_nm / lengths).astype(int)
     return tuple(n_repeats)
 
 
-def expand_periodic_images_minimal(coords, cell, threshold_nm):
+@jaxtyped(typechecker=beartype)
+def expand_periodic_images_minimal(
+    coords: Float[Array, "N 4"], cell: Float[Array, "3 3"], threshold_nm: scalar_float
+) -> Tuple[Float[Array, "M 4"], Tuple[int, int, int]]:
     """
     Expand coordinates in all directions just enough to exceed (twice of) a minimum
     bounding box size along each axis.
@@ -450,27 +476,39 @@ def expand_periodic_images_minimal(coords, cell, threshold_nm):
     - threshold_nm: float
 
     Returns:
-    - expanded_coords: (M, 3)
+    - expanded_coords: (M, 4)
     - nx, ny, nz: number of repeats used in each direction
     """
+    nx: int
+    ny: int
+    nz: int
     nx, ny, nz = compute_min_repeats(cell, threshold_nm)
     nz = 0  # Set nz to 0 for 2D expansion
 
-    i = jnp.arange(-nx, nx + 1)
-    j = jnp.arange(-ny, ny + 1)
-    k = jnp.arange(-nz, nz + 1)
+    i: Int[Array, "2nx+1"] = jnp.arange(-nx, nx + 1)
+    j: Int[Array, "2ny+1"] = jnp.arange(-ny, ny + 1)
+    k: Int[Array, "2nz+1"] = jnp.arange(-nz, nz + 1)
 
+    ii: Int[Array, "2nx+1 2ny+1 2nz+1"]
+    jj: Int[Array, "2nx+1 2ny+1 2nz+1"]
+    kk: Int[Array, "2nx+1 2ny+1 2nz+1"]
     ii, jj, kk = jnp.meshgrid(i, j, k, indexing="ij")
-    shifts = jnp.stack([ii.ravel(), jj.ravel(), kk.ravel()], axis=-1)  # (M, 3)
+    shifts: Int[Array, "M 3"] = jnp.stack(
+        [ii.ravel(), jj.ravel(), kk.ravel()], axis=-1
+    )  # (M, 3)
     # print(shifts)
-    shift_vectors = shifts @ cell  # (M, 3)
+    shift_vectors: Float[Array, "M 3"] = shifts @ cell  # (M, 3)
 
-    def shift_all_atoms(shift_vec):
-        atom_numbers = coords[:, 0:1]
-        new_coords = jnp.hstack((atom_numbers, coords[:, 1:4] + shift_vec))
+    def shift_all_atoms(shift_vec: Float[Array, "3"]) -> Float[Array, "N 4"]:
+        atom_numbers: Float[Array, "N 1"] = coords[:, 0:1]
+        new_coords: Float[Array, "N 4"] = jnp.hstack(
+            (atom_numbers, coords[:, 1:4] + shift_vec)
+        )
         return new_coords
 
-    expanded_coords = jax.vmap(shift_all_atoms)(shift_vectors)  # (M, N, 3)
+    expanded_coords: Float[Array, "M N 4"] = jax.vmap(shift_all_atoms)(
+        shift_vectors
+    )  # (M, N, 4)
     # print("expanded_coords shape", expanded_coords.shape)
     return expanded_coords.reshape(-1, 4), (nx, ny, nz)
 
@@ -478,7 +516,10 @@ def expand_periodic_images_minimal(coords, cell, threshold_nm):
 import jax.numpy as jnp
 
 
-def slice_atoms(coords, slice_thickness):
+@jaxtyped(typechecker=beartype)
+def slice_atoms(
+    coords: Float[Array, "N 4"], slice_thickness: scalar_float
+) -> Tuple[Int[Array, "N"], Int[Array, "n_slices"], scalar_float, scalar_float]:
     """
     Assign atoms to slices and group them using sorted indices.
 
@@ -487,32 +528,41 @@ def slice_atoms(coords, slice_thickness):
     - slice_bounds: list of start indices for each slice in grouped_indices
     - z_min, z_max
     """
-    z_coords = coords[:, 3]
-    z_min = jnp.min(z_coords)
-    z_max = jnp.max(z_coords)
-    n_slices = jnp.ceil((z_max - z_min) / slice_thickness).astype(int)
+    z_coords: Float[Array, "N"] = coords[:, 3]
+    z_min: scalar_float = jnp.min(z_coords)
+    z_max: scalar_float = jnp.max(z_coords)
+    n_slices: scalar_int = jnp.ceil((z_max - z_min) / slice_thickness).astype(int)
 
     # Slice index for each atom
-    slice_indices = jnp.floor((z_coords - z_min) / slice_thickness).astype(int)
+    slice_indices: Int[Array, "N"] = jnp.floor(
+        (z_coords - z_min) / slice_thickness
+    ).astype(int)
 
     # Sort by slice index
-    sorted_order = jnp.argsort(slice_indices)
-    sorted_slice_indices = slice_indices[sorted_order]
+    sorted_order: Int[Array, "N"] = jnp.argsort(slice_indices)
+    sorted_slice_indices: Int[Array, "N"] = slice_indices[sorted_order]
 
     # Count how many atoms per slice
-    slice_counts = jnp.bincount(sorted_slice_indices, length=n_slices)
+    slice_counts: Int[Array, "n_slices"] = jnp.bincount(
+        sorted_slice_indices, length=n_slices
+    )
 
     # Compute slice start positions (cumulative sum)
-    slice_bounds = jnp.cumsum(
+    slice_bounds: Int[Array, "n_slices"] = jnp.cumsum(
         jnp.pad(slice_counts[:-1], (1, 0))
     )  # Start index of each slice
 
     return sorted_order, slice_bounds, z_min, z_max
 
 
+@jaxtyped(typechecker=beartype)
 def build_slice_potential(
-    coords, canvas_shape, minmaxes, pixel_size, atomic_potential_fn
-):
+    coords: Float[Array, "N 4"],
+    canvas_shape: Tuple[int, int],
+    minmaxes: Tuple[float, float, float, float],
+    pixel_size: scalar_float,
+    atomic_potential_fn: Union[Float[Array, "atom_types h w"], np.ndarray],
+) -> np.ndarray:
     """
     Sum 2D atomic potentials into a slice canvas, clipping contributions
     that fall outside the canvas bounds.
@@ -527,48 +577,58 @@ def build_slice_potential(
     Returns:
     - (H, W) 2D potential array
     """
+    H: int
+    W: int
     H, W = canvas_shape
-    canvas = np.zeros((H, W))
+    canvas: np.ndarray = np.zeros((H, W))
+    x_min: float
+    x_max: float
+    y_min: float
+    y_max: float
     x_min, x_max, y_min, y_max = minmaxes
 
-    def add_single_atom(canvas, line):
+    def add_single_atom(canvas: np.ndarray, line: np.ndarray) -> np.ndarray:
         # Compute center position in pixels
 
-        i_center = np.floor((line[1] - x_min) / pixel_size).astype(int)
-        j_center = np.floor((line[2] - y_min) / pixel_size).astype(int)
-        atom_pot = atomic_potential_fn[np.round(line[0]).astype(int)]  # (h, w)
+        i_center: int = np.floor((line[1] - x_min) / pixel_size).astype(int)
+        j_center: int = np.floor((line[2] - y_min) / pixel_size).astype(int)
+        atom_pot: np.ndarray = atomic_potential_fn[
+            np.round(line[0]).astype(int)
+        ]  # (h, w)
 
+        h: int
+        w: int
         h, w = atom_pot.shape
-        half_h = h // 2
-        half_w = w // 2
+        half_h: int = h // 2
+        half_w: int = w // 2
 
         # Bounds in canvas
-        i_start = i_center - half_h
-        i_end = i_center + half_h
-        j_start = j_center - half_w
-        j_end = j_center + half_w
+        i_start: int = i_center - half_h
+        i_end: int = i_center + half_h
+        j_start: int = j_center - half_w
+        j_end: int = j_center + half_w
 
         # Compute valid overlapping region between atom_pot and canvas
-        i_start_clip = np.maximum(i_start, 0)
-        i_end_clip = np.minimum(i_end, H)
-        j_start_clip = np.maximum(j_start, 0)
-        j_end_clip = np.minimum(j_end, W)
+        i_start_clip: int = np.maximum(i_start, 0)
+        i_end_clip: int = np.minimum(i_end, H)
+        j_start_clip: int = np.maximum(j_start, 0)
+        j_end_clip: int = np.minimum(j_end, W)
 
         # Corresponding indices in atom_pot
-        ai_start = i_start_clip - i_start
-        ai_end = ai_start + (i_end_clip - i_start_clip)
-        aj_start = j_start_clip - j_start
-        aj_end = aj_start + (j_end_clip - j_start_clip)
-        _h = ai_end - ai_start
-        _w = aj_end - aj_start
+        ai_start: int = i_start_clip - i_start
+        ai_end: int = ai_start + (i_end_clip - i_start_clip)
+        aj_start: int = j_start_clip - j_start
+        aj_end: int = aj_start + (j_end_clip - j_start_clip)
+        _h: int = ai_end - ai_start
+        _w: int = aj_end - aj_start
 
-        slice_shape = np.array([_h, _w])
-        pot_start = np.array([ai_start, aj_start])
-        clip_start = np.array([i_start_clip, j_start_clip])
+        slice_shape: np.ndarray = np.array([_h, _w])
+        pot_start: np.ndarray = np.array([ai_start, aj_start])
+        clip_start: np.ndarray = np.array([i_start_clip, j_start_clip])
 
         # Add clipped portion
         # clipped_atom_pot = jax.lax.dynamic_slice(atom_pot, pot_start, slice_shape)
-        clipped_atom_pot = atom_pot[
+        clipped_atom_pot: np.ndarray = atom_pot[
             pot_start[0] : pot_start[0] + slice_shape[0],
             pot_start[1] : pot_start[1] + slice_shape[1],
         ]
@@ -590,23 +650,30 @@ def build_slice_potential(
     return canvas
 
 
+@jaxtyped(typechecker=beartype)
 def build_slice_wrapper(
-    coords, sorted_order, slice_bounds, kirkland_jax, pixel_size=0.1
-):
-    x_max = jnp.max(coords[:, 1])
-    x_min = jnp.min(coords[:, 1])
-    y_max = jnp.max(coords[:, 2])
-    y_min = jnp.min(coords[:, 2])
-    H = jnp.ceil((x_max - x_min) / pixel_size).astype(int)
-    W = jnp.ceil((y_max - y_min) / pixel_size).astype(int)
+    coords: Float[Array, "N 4"],
+    sorted_order: Int[Array, "N"],
+    slice_bounds: Int[Array, "n_slices"],
+    kirkland_jax: Union[Float[Array, "atom_types h w"], np.ndarray],
+    pixel_size: scalar_float = 0.1,
+) -> list:
+    x_max: scalar_float = jnp.max(coords[:, 1])
+    x_min: scalar_float = jnp.min(coords[:, 1])
+    y_max: scalar_float = jnp.max(coords[:, 2])
+    y_min: scalar_float = jnp.min(coords[:, 2])
+    H: scalar_int = jnp.ceil((x_max - x_min) / pixel_size).astype(int)
+    W: scalar_int = jnp.ceil((y_max - y_min) / pixel_size).astype(int)
 
-    def build_slice_i(i):
+    def build_slice_i(i: int) -> Union[Float[Array, "H W"], np.ndarray]:
         i = int(i)
-        atoms_in_slice_i = sorted_order[slice_bounds[i] : slice_bounds[i + 1]]
+        atoms_in_slice_i: Int[Array, "n_atoms"] = sorted_order[
+            slice_bounds[i] : slice_bounds[i + 1]
+        ]
         if len(atoms_in_slice_i) == 0:
             return jnp.zeros((H, W))
-        coords_in_slice = coords[atoms_in_slice_i]
-        canvas = build_slice_potential(
+        coords_in_slice: Float[Array, "n_atoms 4"] = coords[atoms_in_slice_i]
+        canvas: np.ndarray = build_slice_potential(
             coords_in_slice,
             (H, W),
             (x_min, x_max, y_min, y_max),
@@ -618,12 +685,27 @@ def build_slice_wrapper(
     return [build_slice_i(i) for i in range(len(slice_bounds) - 1)]
 
 
+@jaxtyped(typechecker=beartype)
 def overall_wrapper(
-    atoms, metadata, zone_hkl, theta, pixel_size, kirkland_jax, poss=[[0, 0]]
-):
-    tic = time.time()
-    atoms_jnp = jnp.asarray(atoms, dtype=jnp.float32)
-    metadata_jnp = jnp.asarray(metadata["lattice"], dtype=jnp.float32)
+    atoms: Union[np.ndarray, Float[Array, "N 4"]],
+    metadata: dict,
+    zone_hkl: Union[np.ndarray, Float[Array, "3"]],
+    theta: scalar_float,
+    pixel_size: scalar_float,
+    kirkland_jax: Union[Float[Array, "atom_types h w"], np.ndarray],
+    poss: list = [[0, 0]],
+) -> Tuple[
+    Float[Array, "n_positions H W"], list, Float[Array, "M 4"], Float[Array, "3 3"]
+]:
+    tic: float = time.time()
+    atoms_jnp: Float[Array, "N 4"] = jnp.asarray(atoms, dtype=jnp.float32)
+    metadata_jnp: Float[Array, "3 3"] = jnp.asarray(
+        metadata["lattice"], dtype=jnp.float32
+    )
+    expanded_coords: Float[Array, "M 4"]
+    nx: int
+    ny: int
+    nz: int
     expanded_coords, (nx, ny, nz) = expand_periodic_images_minimal(
         atoms_jnp, metadata_jnp, 10
     )
@@ -633,22 +715,30 @@ def overall_wrapper(
             expanded_coords[:, 1:4] - jnp.mean(expanded_coords[:, 1:4], axis=0),
         )
     )  # Center the coordinates
-    recip = reciprocal_lattice(metadata["lattice"])
-    zone_vector = zone_hkl @ recip
-    rotation = rotation_matrix_from_vectors(zone_vector, jnp.array(zone_hkl))
+    recip: Float[Array, "3 3"] = reciprocal_lattice(metadata["lattice"])
+    zone_vector: Float[Array, "3"] = zone_hkl @ recip
+    rotation: Float[Array, "3 3"] = rotation_matrix_from_vectors(
+        zone_vector, jnp.array(zone_hkl)
+    )
+    rotated_coords: Float[Array, "M 4"]
+    rotated_cell: Float[Array, "3 3"]
     rotated_coords, rotated_cell = rotate_structure(
         expanded_coords, metadata_jnp, rotation, theta
     )
     # i-x-h, j-y-w
 
+    sorted_coords: Int[Array, "M"]
+    slice_bounds: Int[Array, "n_slices"]
+    z_min: scalar_float
+    z_max: scalar_float
     sorted_coords, slice_bounds, z_min, z_max = slice_atoms(
         rotated_coords, slice_thickness=1
     )  # in Angstrom
-    slices = build_slice_wrapper(
+    slices: list = build_slice_wrapper(
         rotated_coords, sorted_coords, slice_bounds, kirkland_jax, pixel_size
     )
 
-    slices_array = np.array(slices)
+    slices_array: np.ndarray = np.array(slices)
     # chop slices_array down to squares
     if slices_array.shape[2] > slices_array.shape[1]:
         slices_array = slices_array[
@@ -666,7 +756,7 @@ def overall_wrapper(
             + slices_array.shape[2] // 2,
             :,
         ]
-    probe = make_probe(
+    probe: Float[Array, "H W 1"] = make_probe(
         aperture=5,
         voltage=100,
         defocus=0.0,
@@ -681,25 +771,31 @@ def overall_wrapper(
     # Reorganize the slices so that the third dimension becomes the first dimension
     slices_array = np.moveaxis(slices_array, 0, -1)
 
-    slices_array = jnp.asarray(slices_array, dtype=jnp.complex64)
+    slices_array: Float[Array, "H W n_slices"] = jnp.asarray(
+        slices_array, dtype=jnp.complex64
+    )
 
-    sigma = 0.001  # /(V*Angstrom) at 100 kV
+    sigma: scalar_float = 0.001  # /(V*Angstrom) at 100 kV
 
-    phase_shift = jnp.exp(-1j * sigma * slices_array)
+    phase_shift: Float[Array, "H W n_slices"] = jnp.exp(-1j * sigma * slices_array)
 
     pot_slices: PotentialSlices = make_potential_slices(phase_shift, 1.0, 0.1)
     beam: ProbeModes = make_probe_modes(probe, jnp.array([1.0]), calib=0.1)
-    toc = time.time()
+    toc: float = time.time()
     print("Time taken for preprocessing:", toc - tic, "seconds")
 
     # cbed = cbed(slices_array, probe, jnp.asarray([[200.0, 200.0]]), jnp.asarray(bin_size, dtype= jnp.float16), jnp.asarray(100), 0.1)
-    poss = np.array(poss)
-    center_pixel = np.array([slices_array.shape[0] // 2, slices_array.shape[1] // 2])
-    pixel_shifts = poss / pixel_size
-    pixels = jnp.asarray(pixel_shifts + center_pixel, dtype=jnp.float32)
+    poss: np.ndarray = np.array(poss)
+    center_pixel: np.ndarray = np.array(
+        [slices_array.shape[0] // 2, slices_array.shape[1] // 2]
+    )
+    pixel_shifts: np.ndarray = poss / pixel_size
+    pixels: Float[Array, "n_positions 2"] = jnp.asarray(
+        pixel_shifts + center_pixel, dtype=jnp.float32
+    )
 
     # cbed_pattern = jax.jit(cbed)(pot_slices, beam, 100.0)
-    cbed_patterns = stem_4D(
+    cbed_patterns: Float[Array, "n_positions H W"] = stem_4D(
         pot_slice=pot_slices,
         beam=beam,
         positions=pixels,

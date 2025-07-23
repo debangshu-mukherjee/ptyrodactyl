@@ -12,6 +12,8 @@ Functions
     Calculates the projected potential of a single atom using Kirkland scattering factors
 - `expand_periodic_images_minimal`:
     Expands periodic images of a crystal structure to cover a given threshold distance
+- `XYZ_potentials`:
+    Converts XYZData structure to PotentialSlices using FFT-based atomic positioning
 
 Internal Functions
 ------------------
@@ -31,10 +33,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
-from beartype.typing import Optional, Tuple, Union
-from jaxtyping import Array, Float, Int, Real, jaxtyped
+from beartype.typing import Dict, Optional, Tuple, Union
+from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
-from .electron_types import (PotentialSlices, ProbeModes,
+from .electron_types import (PotentialSlices, ProbeModes, XYZData,
                              make_potential_slices, make_probe_modes,
                              scalar_float, scalar_int, scalar_numeric)
 from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
@@ -772,3 +774,137 @@ def overall_wrapper(
     print("time taken for cbed calculation:", time.time() - toc, "seconds")
 
     return cbed_patterns, slices, rotated_coords, rotated_cell
+
+
+@jaxtyped(typechecker=beartype)
+def kirkland_potentials_XYZ(
+    xyz_data: XYZData,
+    pixel_size: scalar_float,
+    slice_thickness: scalar_float = 1.0,
+    padding: scalar_float = 4.0,
+) -> PotentialSlices:
+    """
+    Description
+    -----------
+    Converts XYZData structure to PotentialSlices by calculating atomic potentials
+    and assembling them into slices using FFT shifts for precise positioning.
+
+    Parameters
+    ----------
+    - `xyz_data` (XYZData):
+        Input structure containing atomic positions and numbers
+    - `pixel_size` (scalar_float):
+        Size of each pixel in Angstroms (becomes calib in PotentialSlices)
+    - `slice_thickness` (scalar_float, optional):
+        Thickness of each slice in Angstroms. Default is 1.0
+    - `padding` (scalar_float, optional):
+        Padding in Angstroms added to all sides. Default is 4.0
+
+    Returns
+    -------
+    - `potential_slices` (PotentialSlices):
+        Sliced potentials with wraparound artifacts removed
+
+    Flow
+    ----
+    - Extract positions and atomic numbers from XYZData
+    - Use _slice_atoms to partition atoms by z-coordinate into slices
+    - Calculate extents with padding to determine uniform slice dimensions
+    - Pre-calculate single atom potentials for each unique atomic species
+    - For each slice:
+        - Create zeros array with padded dimensions
+        - For each atom in slice:
+            - Place appropriate atomic potential at center
+            - FFT shift to actual position
+            - Accumulate contributions
+    - Crop padding and return PotentialSlices
+    """
+    positions: Float[Array, "N 3"] = xyz_data.positions
+    atomic_numbers: Int[Array, "N"] = xyz_data.atomic_numbers
+    sliced_atoms: Float[Array, "N 4"] = _slice_atoms(
+        coords=positions,
+        atom_numbers=atomic_numbers,
+        slice_thickness=slice_thickness,
+    )
+    x_coords: Float[Array, "N"] = sliced_atoms[:, 0]
+    y_coords: Float[Array, "N"] = sliced_atoms[:, 1]
+    slice_indices: Int[Array, "N"] = sliced_atoms[:, 2].astype(jnp.int32)
+    atom_nums: Int[Array, "N"] = sliced_atoms[:, 3].astype(jnp.int32)
+    x_min: scalar_float = jnp.min(x_coords) - padding
+    x_max: scalar_float = jnp.max(x_coords) + padding
+    y_min: scalar_float = jnp.min(y_coords) - padding
+    y_max: scalar_float = jnp.max(y_coords) + padding
+    width: Int[Array, ""] = jnp.ceil((x_max - x_min) / pixel_size).astype(jnp.int32)
+    height: Int[Array, ""] = jnp.ceil((y_max - y_min) / pixel_size).astype(jnp.int32)
+    unique_atoms: Int[Array, "n_unique"] = jnp.unique(atom_nums)
+
+    def calc_single_potential(atom_no: scalar_int) -> Float[Array, "h w"]:
+        return single_atom_potential(
+            atom_no=atom_no,
+            pixel_size=pixel_size,
+            grid_shape=(height, width),
+            center_coords=jnp.array([0.0, 0.0]),  # Center at origin
+            supersampling=16,
+            potential_extent=4.0,
+        )
+
+    atomic_potentials: Float[Array, "n_unique h w"] = jax.vmap(calc_single_potential)(
+        unique_atoms
+    )
+    atom_to_idx: Dict[int, int] = {
+        int(atom): idx for idx, atom in enumerate(unique_atoms)
+    }
+    n_slices: int = int(jnp.max(slice_indices) + 1)
+    all_slices: Float[Array, "h w n_slices"] = jnp.zeros(
+        (height, width, n_slices), dtype=jnp.float32
+    )
+
+    def process_single_slice(slice_idx: int) -> Float[Array, "h w"]:
+        atoms_mask: Bool[Array, "N"] = slice_indices == slice_idx
+        slice_x: Float[Array, "n_atoms"] = x_coords[atoms_mask]
+        slice_y: Float[Array, "n_atoms"] = y_coords[atoms_mask]
+        slice_atoms: Int[Array, "n_atoms"] = atom_nums[atoms_mask]
+        slice_potential: Float[Array, "h w"] = jnp.zeros(
+            (height, width), dtype=jnp.float32
+        )
+        pixel_x: Float[Array, "n_atoms"] = (slice_x - x_min) / pixel_size
+        pixel_y: Float[Array, "n_atoms"] = (slice_y - y_min) / pixel_size
+        center_x: float = width / 2.0
+        center_y: float = height / 2.0
+        shift_x: Float[Array, "n_atoms"] = pixel_x - center_x
+        shift_y: Float[Array, "n_atoms"] = pixel_y - center_y
+
+        def add_atom_contribution(
+            carry: Float[Array, "h w"],
+            atom_data: Tuple[scalar_float, scalar_float, scalar_int],
+        ) -> Tuple[Float[Array, "h w"], None]:
+            slice_pot, sx, sy, atom_no = carry, *atom_data
+            atom_idx: int = atom_to_idx[int(atom_no)]
+            atom_pot: Float[Array, "h w"] = atomic_potentials[atom_idx]
+            ky: Float[Array, "h 1"] = jnp.fft.fftfreq(height, d=1.0).reshape(-1, 1)
+            kx: Float[Array, "1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
+            phase: Complex[Array, "h w"] = jnp.exp(2j * jnp.pi * (kx * sx + ky * sy))
+            atom_pot_fft: Complex[Array, "h w"] = jnp.fft.fft2(atom_pot)
+            shifted_fft: Complex[Array, "h w"] = atom_pot_fft * phase
+            shifted_pot: Float[Array, "h w"] = jnp.real(jnp.fft.ifft2(shifted_fft))
+            return slice_pot + shifted_pot, None
+
+        slice_potential, _ = jax.lax.scan(
+            add_atom_contribution,
+            slice_potential,
+            (shift_x, shift_y, slice_atoms),
+        )
+        return slice_potential
+
+    for slice_idx in range(n_slices):
+        all_slices = all_slices.at[:, :, slice_idx].set(process_single_slice(slice_idx))
+    crop_pixels: int = int(jnp.round(padding / pixel_size))
+    cropped_slices: Float[Array, "h_crop w_crop n_slices"] = all_slices[
+        crop_pixels:-crop_pixels, crop_pixels:-crop_pixels, :
+    ]
+    pot_slices: PotentialSlices = make_potential_slices(
+        slices=cropped_slices,
+        slice_thickness=slice_thickness,
+        calib=pixel_size,
+    )
+    return pot_slices

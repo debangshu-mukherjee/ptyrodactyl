@@ -146,7 +146,7 @@ class PotentialSlices(NamedTuple):
     """
     Description
     -----------
-    PyTree structure for multimodal electron probe state.
+    PyTree structure for multiple potential slices.
 
     Attributes
     ----------
@@ -159,7 +159,7 @@ class PotentialSlices(NamedTuple):
         Pixel Calibration (0-dimensional JAX array)
     """
 
-    slices: Complex[Array, "H W S"]
+    slices: Float[Array, "H W S"]
     slice_thickness: Num[Array, ""]
     calib: Float[Array, ""]
 
@@ -458,7 +458,7 @@ def make_probe_modes(
 
 @jaxtyped(typechecker=beartype)
 def make_potential_slices(
-    slices: Complex[Array, "H W S"],
+    slices: Float[Array, "H W S"],
     slice_thickness: scalar_numeric,
     calib: scalar_float,
 ) -> PotentialSlices:
@@ -469,7 +469,7 @@ def make_potential_slices(
 
     Parameters
     ----------
-    - `slices` (Complex[Array, "H W S"]):
+    - `slices` (Float[Array, "H W S"]):
         Individual potential slices, S is number of slices
     - `slice_thickness` (scalar_numeric):
         Thickness of each slice
@@ -501,17 +501,11 @@ def make_potential_slices(
     - If all validations pass, create and return PotentialSlices instance
     - If any validation fails, the JAX-compatible error handling will stop execution
     """
-    slices = jnp.asarray(slices, dtype=jnp.complex128)
+    slices = jnp.asarray(slices, dtype=jnp.float64)
     slice_thickness = jnp.asarray(slice_thickness, dtype=jnp.float64)
     calib = jnp.asarray(calib, dtype=jnp.float64)
-
-    # For JAX compliance, we rely on jaxtyping for shape/type validation
-    # and only do JAX-compatible runtime adjustments
-
-    # Ensure slice_thickness and calibration are positive
     slice_thickness = jnp.abs(slice_thickness) + jnp.finfo(jnp.float64).eps
     calib = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
-
     return PotentialSlices(
         slices=slices,
         slice_thickness=slice_thickness,

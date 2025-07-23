@@ -12,7 +12,7 @@ Functions
     Calculates the projected potential of a single atom using Kirkland scattering factors
 - `expand_periodic_images_minimal`:
     Expands periodic images of a crystal structure to cover a given threshold distance
-- `XYZ_potentials`:
+- `kirkland_potentials_XYZ`:
     Converts XYZData structure to PotentialSlices using FFT-based atomic positioning
 
 Internal Functions

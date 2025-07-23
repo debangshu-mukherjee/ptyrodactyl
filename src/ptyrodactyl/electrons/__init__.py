@@ -16,14 +16,14 @@ Submodules
 - `electron_types`:
     Data structures and type definitions for electron microscopy including
     CalibratedArray, ProbeModes, and PotentialSlices
+- `phase_recon`:
+    Inverse algorithms for ptychography reconstruction including single-slice,
+    position-corrected, and multi-modal reconstruction methods
 - `preprocessing`:
     Data preprocessing utilities and type definitions for electron microscopy data
 - `simulations`:
     Forward simulation functions for electron beam propagation, CBED patterns,
     and 4D-STEM data generation including aberration calculations and probe creation
-- `reconstruction`:
-    Inverse algorithms for ptychography reconstruction including single-slice,
-    position-corrected, and multi-modal reconstruction methods
 """
 
 from .atom_potentials import contrast_stretch, single_atom_potential
@@ -35,10 +35,9 @@ from .electron_types import (CalibratedArray, CrystalStructure,
                              scalar_int, scalar_numeric)
 from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
                        rotmatrix_vectors)
+from .phase_recon import (multi_slice_multi_modal, single_slice_multi_modal,
+                          single_slice_poscorrected, single_slice_ptychography)
 from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
-from .reconstruction import (multi_slice_multi_modal, single_slice_multi_modal,
-                             single_slice_poscorrected,
-                             single_slice_ptychography)
 from .simulations import (aberration, cbed, decompose_beam_to_modes,
                           fourier_calib, fourier_coords, make_probe,
                           propagation_func, shift_beam_fourier, stem_4D,

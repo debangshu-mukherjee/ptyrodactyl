@@ -84,7 +84,7 @@ _ATOMIC_NUMBERS: Dict[str, int] = _load_atomic_numbers()
 
 
 @jaxtyped(typechecker=beartype)
-def atomic_symbol(atomic_symbol: str) -> scalar_int:
+def atomic_symbol(symbol_string: str) -> scalar_int:
     """
     Description
     -----------
@@ -93,7 +93,7 @@ def atomic_symbol(atomic_symbol: str) -> scalar_int:
 
     Parameters
     ----------
-    - `atomic_symbol` (str):
+    - `symbol_string` (str):
         Chemical symbol for the element (e.g., "H", "He", "Li")
 
     Returns
@@ -115,7 +115,7 @@ def atomic_symbol(atomic_symbol: str) -> scalar_int:
     - Look up atomic number in preloaded mapping
     - Return atomic number as scalar integer
     """
-    cleaned_symbol: str = atomic_symbol.strip()
+    cleaned_symbol: str = symbol_string.strip()
 
     if not cleaned_symbol:
         raise ValueError("Atomic symbol cannot be empty")
@@ -124,7 +124,7 @@ def atomic_symbol(atomic_symbol: str) -> scalar_int:
     if normalized_symbol not in _ATOMIC_NUMBERS:
         available_symbols: str = ", ".join(sorted(_ATOMIC_NUMBERS.keys()))
         raise KeyError(
-            f"Atomic symbol '{atomic_symbol}' not found. "
+            f"Atomic symbol '{symbol_string}' not found. "
             f"Available symbols: {available_symbols}"
         )
 

@@ -11,6 +11,8 @@ Submodules
 ----------
 - `atom_potentials`:
     Functions for generating atomic potentials and slices from atomic coordinates
+- `geometry`:
+    Geometric transformations and operations for crystal structures
 - `electron_types`:
     Data structures and type definitions for electron microscopy including
     CalibratedArray, ProbeModes, and PotentialSlices
@@ -24,15 +26,15 @@ Submodules
     position-corrected, and multi-modal reconstruction methods
 """
 
-from .atom_potentials import (atomic_potential, contrast_stretch,
-                              rotate_structure, rotation_matrix_about_axis,
-                              rotation_matrix_from_vectors)
+from .atom_potentials import contrast_stretch, single_atom_potential
 from .electron_types import (CalibratedArray, CrystalStructure,
                              PotentialSlices, ProbeModes, XYZData,
                              make_calibrated_array, make_crystal_structure,
                              make_potential_slices, make_probe_modes,
                              make_xyz_data, non_jax_number, scalar_float,
                              scalar_int, scalar_numeric)
+from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
+                       rotmatrix_vectors)
 from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
 from .reconstruction import (multi_slice_multi_modal, single_slice_multi_modal,
                              single_slice_poscorrected,
@@ -48,10 +50,11 @@ __all__: list[str] = [
     "kirkland_potentials",
     "parse_xyz",
     "contrast_stretch",
-    "atomic_potential",
-    "rotation_matrix_from_vectors",
-    "rotation_matrix_about_axis",
+    "single_atom_potential",
+    "rotmatrix_vectors",
+    "rotmatrix_axis",
     "rotate_structure",
+    "reciprocal_lattice",
     "cbed",
     "decompose_beam_to_modes",
     "fourier_calib",

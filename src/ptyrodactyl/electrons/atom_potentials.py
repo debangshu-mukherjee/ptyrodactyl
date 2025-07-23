@@ -8,18 +8,8 @@ Functions
 ---------
 - `contrast_stretch`:
     Rescales intensity values of image series between specified percentiles
-- `atomic_potential`:
+- `single_atom_potential`:
     Calculates the projected potential of a single atom using Kirkland scattering factors
-- `rotation_matrix_from_vectors`:
-    Returns a proper rotation matrix that rotates v1 to v2
-- `rotation_matrix_about_axis`:
-    Returns a rotation matrix that rotates around a given axis by an angle theta
-- `rotate_structure`:
-    Rotates a crystal structure by a given angle about a specified axis
-- `reciprocal_lattice`:
-    Computes the reciprocal lattice vectors for a given unit cell
-- `compute_min_repeats`:
-    Determines the minimum number of repeats needed to cover a given threshold distance
 - `expand_periodic_images_minimal`:
     Expands periodic images of a crystal structure to cover a given threshold distance
 
@@ -29,22 +19,24 @@ These functions are not exported and are used internally by the module.
 
 - `_bessel_kv`:
     Computes the modified Bessel function of the second kind
+- `_compute_min_repeats`:
+    Determines the minimum number of repeats needed to cover a given threshold distance
 """
 
 import time
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-import matplotlib.pyplot as plt
 import numpy as np
 from beartype import beartype
 from beartype.typing import Optional, Tuple, Union
-from jaxtyping import Array, Bool, Float, Int, jaxtyped
+from jaxtyping import Array, Float, Int, jaxtyped
 
 from .electron_types import (PotentialSlices, ProbeModes,
                              make_potential_slices, make_probe_modes,
                              scalar_float, scalar_int)
+from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
+                       rotmatrix_vectors)
 from .preprocessing import kirkland_potentials
 from .simulations import make_probe, stem_4D
 
@@ -137,9 +129,9 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
     x: Float[Array, "..."] = jnp.asarray(x)
     dtype: jnp.dtype = x.dtype
 
-    def k0_small(x):
-        i0 = jax.scipy.special.i0(x)
-        coeffs = jnp.array(
+    def k0_small(x: Float[Array, "..."]) -> Float[Array, "..."]:
+        i0: Float[Array, "..."] = jax.scipy.special.i0(x)
+        coeffs: Float[Array, "7"] = jnp.array(
             [
                 -0.57721566,
                 0.42278420,
@@ -151,13 +143,13 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
             ],
             dtype=dtype,
         )
-        x2 = x * x / 4.0
-        powers = jnp.power(x2[..., jnp.newaxis], jnp.arange(7))
-        poly = jnp.sum(coeffs * powers, axis=-1)
+        x2: Float[Array, "..."] = (x * x) / 4.0
+        powers: Float[Array, "... 7"] = jnp.power(x2[..., jnp.newaxis], jnp.arange(7))
+        poly: Float[Array, "..."] = jnp.sum(coeffs * powers, axis=-1)
         return -jnp.log(x / 2.0) * i0 + poly
 
-    def k0_large(x):
-        coeffs = jnp.array(
+    def k0_large(x: Float[Array, "..."]) -> Float[Array, "..."]:
+        coeffs: Float[Array, "7"] = jnp.array(
             [
                 1.25331414,
                 -0.07832358,
@@ -169,23 +161,23 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
             ],
             dtype=dtype,
         )
-        z = 1.0 / x
-        powers = jnp.power(z[..., jnp.newaxis], jnp.arange(7))
-        poly = jnp.sum(coeffs * powers, axis=-1)
+        z: Float[Array, "..."] = 1.0 / x
+        powers: Float[Array, "... 7"] = jnp.power(z[..., jnp.newaxis], jnp.arange(7))
+        poly: Float[Array, "..."] = jnp.sum(coeffs * powers, axis=-1)
 
         return jnp.exp(-x) * poly / jnp.sqrt(x)
 
-    k0_result = jnp.where(x <= 1.0, k0_small(x), k0_large(x))
+    k0_result: Float[Array, "..."] = jnp.where(x <= 1.0, k0_small(x), k0_large(x))
     return jnp.where(v == 0.0, k0_result, jnp.zeros_like(x, dtype=dtype))
 
 
 @jaxtyped(typechecker=beartype)
-def atomic_potential(
+def single_atom_potential(
     atom_no: scalar_int,
     pixel_size: scalar_float,
     grid_shape: Optional[Tuple[scalar_int, scalar_int]] = None,
     center_coords: Optional[Float[Array, "2"]] = None,
-    sampling: Optional[scalar_int] = 16,
+    supersampling: Optional[scalar_int] = 16,
     potential_extent: Optional[scalar_float] = 4.0,
 ) -> Float[Array, "h w"]:
     """
@@ -205,12 +197,10 @@ def atomic_potential(
     - `center_coords` (Float[Array, "2"], optional):
         (x, y) coordinates in Ångstroms where atom should be centered.
         If None, centers at grid center
-    - `sampling` (scalar_int, optional):
+    - `supersampling` (scalar_int, optional):
         Supersampling factor for increased accuracy. Default is 16
     - `potential_extent` (scalar_float, optional):
         Distance in Ångstroms from atom center to calculate potential. Default is 4.0 Å
-    - `datafile` (str, optional):
-        Path to CSV file containing Kirkland scattering factors
 
     Returns
     -------
@@ -219,23 +209,55 @@ def atomic_potential(
 
     Flow
     ----
-    - Define physical constants and load Kirkland parameters
-    - Determine grid size and center coordinates
-    - Calculate step size for supersampling
-    - Create coordinate grid with atom centered at specified position
-    - Calculate radial distances from atom center
-    - Compute Bessel and Gaussian terms using Kirkland parameters
-    - Combine terms to get total potential
-    - Downsample to target resolution using average pooling
-    - Return final potential matrix
+    - Initialize physical constants:
+        - a0 = 0.5292 Å (Bohr radius)
+        - ek = 14.4 eV·Å (electron charge squared divided by 4πε₀)
+        - Calculate prefactors for Bessel (term1) and Gaussian (term2) contributions
+    - Load Kirkland scattering parameters:
+        - Extract 12 parameters for the specified atom from preloaded Kirkland data
+        - Parameters alternate between amplitudes and reciprocal space widths
+    - Determine grid dimensions:
+        - If grid_shape provided: use it directly, multiplied by supersampling
+        - If grid_shape is None: calculate from potential_extent to ensure full coverage
+        - Calculate step size as pixel_size divided by supersampling factor
+    - Set atom center position:
+        - If center_coords provided: use (x, y) coordinates directly
+        - If center_coords is None: place atom at origin (0, 0)
+
+    - Generate coordinate grids:
+        - Create x and y coordinate arrays centered around the atom position
+        - Account for supersampling in coordinate spacing
+        - Use meshgrid to create 2D coordinate arrays
+    - Calculate radial distances:
+        - Compute distance from each grid point to the atom center
+        - r = sqrt((x - center_x)² + (y - center_y)²)
+    - Evaluate Bessel function contributions:
+        - Calculate three Bessel K₀ terms using the first 6 Kirkland parameters
+        - Each term: amplitude * K₀(2π * sqrt(width) * r)
+        - Sum all three terms and multiply by term1 prefactor
+    - Evaluate Gaussian contributions:
+        - Calculate three Gaussian terms using the last 6 Kirkland parameters
+        - Each term: (amplitude/width) * exp(-π²/width * r²)
+        - Sum all three terms and multiply by term2 prefactor
+    - Combine contributions:
+        - Total potential = Bessel contributions + Gaussian contributions
+        - Result is supersampled potential on fine grid
+
+    - Downsample to target resolution:
+        - Reshape array to group supersampling pixels together
+        - Average over supersampling dimensions
+        - Crop to exact target dimensions if necessary
+    - Return the final potential array at the requested resolution
     """
     a0: Float[Array, ""] = jnp.asarray(0.5292)
     ek: Float[Array, ""] = jnp.asarray(14.4)
     term1: Float[Array, ""] = 4.0 * (jnp.pi**2) * a0 * ek
     term2: Float[Array, ""] = 2.0 * (jnp.pi**2) * a0 * ek
     kirkland_array: Float[Array, "103 12"] = kirkland_potentials()
-    kirk_params: Float[Array, "12"] = kirkland_array[atom_no - 1, :]
-    step_size: Float[Array, ""] = pixel_size / sampling
+    kirk_params: Float[Array, "12"] = jax.lax.dynamic_slice(
+        kirkland_array, (atom_no - 1, 0), (1, 12)
+    )[0]
+    step_size: Float[Array, ""] = pixel_size / supersampling
     if grid_shape is None:
         grid_extent: Float[Array, ""] = potential_extent
         n_points: Int[Array, ""] = jnp.ceil(2.0 * grid_extent / step_size).astype(
@@ -245,10 +267,10 @@ def atomic_potential(
         grid_width: Int[Array, ""] = n_points
     else:
         grid_height: Int[Array, ""] = jnp.asarray(
-            grid_shape[0] * sampling, dtype=jnp.int32
+            grid_shape[0] * supersampling, dtype=jnp.int32
         )
         grid_width: Int[Array, ""] = jnp.asarray(
-            grid_shape[1] * sampling, dtype=jnp.int32
+            grid_shape[1] * supersampling, dtype=jnp.int32
         )
     if center_coords is None:
         center_x: Float[Array, ""] = 0.0
@@ -288,173 +310,74 @@ def atomic_potential(
     part2: Float[Array, "h w"] = term2 * (gauss_term1 + gauss_term2 + gauss_term3)
     supersampled_potential: Float[Array, "h w"] = part1 + part2
     if grid_shape is None:
-        target_height: Int[Array, ""] = grid_height // sampling
-        target_width: Int[Array, ""] = grid_width // sampling
+        target_height: Int[Array, ""] = grid_height // supersampling
+        target_width: Int[Array, ""] = grid_width // supersampling
     else:
         target_height: Int[Array, ""] = jnp.asarray(grid_shape[0], dtype=jnp.int32)
         target_width: Int[Array, ""] = jnp.asarray(grid_shape[1], dtype=jnp.int32)
-    height: Int[Array, ""] = supersampled_potential.shape[0]
-    width: Int[Array, ""] = supersampled_potential.shape[1]
-    new_height: Int[Array, ""] = (height // sampling) * sampling
-    new_width: Int[Array, ""] = (width // sampling) * sampling
-    cropped: Float[Array, "h_crop w_crop"] = supersampled_potential[
-        :new_height, :new_width
-    ]
-    reshaped: Float[Array, "h_new sampling w_new sampling"] = cropped.reshape(
-        new_height // sampling, sampling, new_width // sampling, sampling
+    height: Int[Array, ""] = jnp.asarray(
+        supersampled_potential.shape[0], dtype=jnp.int32
+    )
+    width: Int[Array, ""] = jnp.asarray(
+        supersampled_potential.shape[1], dtype=jnp.int32
+    )
+    new_height: Int[Array, ""] = (height // supersampling) * supersampling
+    new_width: Int[Array, ""] = (width // supersampling) * supersampling
+    cropped: Float[Array, "h_crop w_crop"] = jax.lax.dynamic_slice(
+        supersampled_potential, (0, 0), (new_height, new_width)
+    )
+    reshaped: Float[Array, "h_new supersampling w_new supersampling"] = cropped.reshape(
+        new_height // supersampling,
+        supersampling,
+        new_width // supersampling,
+        supersampling,
     )
     potential: Float[Array, "h_new w_new"] = jnp.mean(reshaped, axis=(1, 3))
-    potential_resized: Float[Array, "h w"] = potential[:target_height, :target_width]
+    potential_resized: Float[Array, "h w"] = jax.lax.dynamic_slice(
+        potential, (0, 0), (target_height, target_width)
+    )
     return potential_resized
 
 
 @jaxtyped(typechecker=beartype)
-def rotation_matrix_from_vectors(
-    v1: Float[Array, "3"], v2: Float[Array, "3"]
-) -> Float[Array, "3 3"]:
-    """
-    Return a proper rotation matrix that rotates v1 to v2.
-    Uses the classic Rodrigues rotation formula.
-    """
-    v1: Float[Array, "3"] = v1 / jnp.linalg.norm(v1)
-    v2: Float[Array, "3"] = v2 / jnp.linalg.norm(v2)
-
-    cross: Float[Array, "3"] = jnp.cross(v1, v2)
-    dot: scalar_float = jnp.dot(v1, v2)
-    sin_theta: scalar_float = jnp.linalg.norm(cross)
-
-    def fallback_parallel() -> Float[Array, "3 3"]:
-        return jnp.eye(3)
-
-    def fallback_opposite() -> Float[Array, "3 3"]:
-        # Pick any orthogonal axis to v1
-        ortho: Float[Array, "3"] = jnp.where(
-            jnp.abs(v1[0]) < 0.9, jnp.array([1.0, 0.0, 0.0]), jnp.array([0.0, 1.0, 0.0])
-        )
-        axis: Float[Array, "3"] = jnp.cross(v1, ortho)
-        axis: Float[Array, "3"] = axis / jnp.linalg.norm(axis)
-        K: Float[Array, "3 3"] = jnp.array(
-            [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
-        )
-        return jnp.eye(3) + 2 * K @ K  # 180° rotation
-
-    def compute() -> Float[Array, "3 3"]:
-        axis: Float[Array, "3"] = cross / sin_theta
-        K: Float[Array, "3 3"] = jnp.array(
-            [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
-        )
-        return jnp.eye(3) + sin_theta * K + (1 - dot) * (K @ K)
-
-    is_parallel: Bool[Array, ""] = sin_theta < 1e-8
-    is_opposite: Bool[Array, ""] = dot < -0.9999
-
-    return jax.lax.cond(
-        is_parallel,
-        lambda: jax.lax.cond(is_opposite, fallback_opposite, fallback_parallel),
-        compute,
-    )
-
-
-@jaxtyped(typechecker=beartype)
-def rotation_matrix_about_axis(
-    axis: Float[Array, "3"], theta: scalar_float
-) -> Float[Array, "3 3"]:
-    """
-    Return a rotation matrix that rotates around a given axis by an angle theta.
-    Uses the Rodrigues' rotation formula.
-    """
-    axis: Float[Array, "3"] = axis / jnp.linalg.norm(axis)
-    cos_theta: scalar_float = jnp.cos(theta)
-    sin_theta: scalar_float = jnp.sin(theta)
-    ux: scalar_float
-    uy: scalar_float
-    uz: scalar_float
-    ux, uy, uz = axis
-
-    return jnp.array(
-        [
-            [
-                cos_theta + ux**2 * (1 - cos_theta),
-                ux * uy * (1 - cos_theta) - uz * sin_theta,
-                ux * uz * (1 - cos_theta) + uy * sin_theta,
-            ],
-            [
-                uy * ux * (1 - cos_theta) + uz * sin_theta,
-                cos_theta + uy**2 * (1 - cos_theta),
-                uy * uz * (1 - cos_theta) - ux * sin_theta,
-            ],
-            [
-                uz * ux * (1 - cos_theta) - uy * sin_theta,
-                uz * uy * (1 - cos_theta) + ux * sin_theta,
-                cos_theta + uz**2 * (1 - cos_theta),
-            ],
-        ]
-    )
-
-
-@jaxtyped(typechecker=beartype)
-def rotate_structure(
-    coords: Float[Array, "N 4"],
-    cell: Float[Array, "3 3"],
-    R: Float[Array, "3 3"],
-    theta: scalar_float = 0,
-) -> Tuple[Float[Array, "N 4"], Float[Array, "3 3"]]:
-    """
-    Rotate atomic coordinates and unit cell.
-    - coords: (N, 4)
-    - cell: (3, 3)
-    - R: (3, 3) rotation matrix
-    - theta: rotation angle for in-plane rotation (not used in this function, but can be useful for future extensions)
-    """
-    rotated_coords: Float[Array, "N 3"] = coords[:, 1:4] @ R.T
-    rotated_coords: Float[Array, "N 4"] = jnp.hstack(
-        (coords[:, 0:1], rotated_coords)
-    )  # Keep the first column (atom IDs)
-    rotated_cell: Float[Array, "3 3"] = cell @ R.T
-    if theta != 0:
-        # Apply in-plane rotation if needed
-        in_plane_rotation: Float[Array, "3 3"] = rotation_matrix_about_axis(
-            jnp.array([0, 0, 1]), theta
-        )
-        rotated_coords_in_plane: Float[Array, "N 3"] = (
-            rotated_coords[:, 1:4] @ in_plane_rotation.T
-        )
-        rotated_coords: Float[Array, "N 4"] = jnp.hstack(
-            (rotated_coords[:, 0:1], rotated_coords_in_plane)
-        )
-    return rotated_coords, rotated_cell
-
-
-@jaxtyped(typechecker=beartype)
-def reciprocal_lattice(cell: Float[Array, "3 3"]) -> Float[Array, "3 3"]:
-    """
-    Compute reciprocal lattice vectors (rows) from real-space cell (3x3).
-    """
-    a1: Float[Array, "3"]
-    a2: Float[Array, "3"]
-    a3: Float[Array, "3"]
-    a1, a2, a3 = cell
-    V: scalar_float = jnp.dot(a1, jnp.cross(a2, a3))
-    b1: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a2, a3) / V
-    b2: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a3, a1) / V
-    b3: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a1, a2) / V
-    return jnp.stack([b1, b2, b3])
-
-
-@jaxtyped(typechecker=beartype)
-def compute_min_repeats(
+def _compute_min_repeats(
     cell: Float[Array, "3 3"], threshold_nm: scalar_float
 ) -> Tuple[int, int, int]:
     """
-    Compute the minimal number of repeats along each lattice vector
-    so that the resulting supercell length exceeds `threshold_nm`.
+    Description
+    -----------
+    Internal function to compute the minimal number of unit cell repeats along each
+    lattice vector direction such that the resulting supercell dimensions exceed a
+    specified threshold distance. This is used to ensure periodic images are included
+    for accurate potential calculations.
 
-    Parameters:
-    - cell: (3, 3) real-space lattice (rows = a1, a2, a3)
-    - threshold_nm: float, length threshold in nm
+    Parameters
+    ----------
+    - `cell` (Float[Array, "3 3"]):
+        Real-space unit cell matrix where rows represent lattice vectors a1, a2, a3
+    - `threshold_nm` (scalar_float):
+        Minimum required length in nanometers for the supercell along each direction
 
-    Returns:
-    - nx, ny, nz: integers
+    Returns
+    -------
+    - `n_repeats` (Tuple[int, int, int]):
+        Number of repeats (nx, ny, nz) needed along each lattice vector direction
+
+    Flow
+    ----
+    - Calculate lattice vector lengths:
+        - Compute the norm of each row in the cell matrix
+        - This gives the physical length of each lattice vector in nm
+
+    - Determine minimal repeats:
+        - For each direction, divide threshold by lattice vector length
+        - Use ceiling function to ensure we exceed the threshold
+        - Convert to integers for use as repeat counts
+
+    - Return repeat counts:
+        - Package the three repeat values as a tuple
+        - These values will be used to construct supercells that include
+          sufficient periodic images for accurate calculations
     """
     # Compute norms of lattice vectors
     lengths: Float[Array, "3"] = jnp.linalg.norm(cell, axis=1)  # shape (3,)
@@ -482,7 +405,7 @@ def expand_periodic_images_minimal(
     nx: int
     ny: int
     nz: int
-    nx, ny, nz = compute_min_repeats(cell, threshold_nm)
+    nx, ny, nz = _compute_min_repeats(cell, threshold_nm)
     nz = 0  # Set nz to 0 for 2D expansion
 
     i: Int[Array, "2nx+1"] = jnp.arange(-nx, nx + 1)
@@ -717,9 +640,7 @@ def overall_wrapper(
     )  # Center the coordinates
     recip: Float[Array, "3 3"] = reciprocal_lattice(metadata["lattice"])
     zone_vector: Float[Array, "3"] = zone_hkl @ recip
-    rotation: Float[Array, "3 3"] = rotation_matrix_from_vectors(
-        zone_vector, jnp.array(zone_hkl)
-    )
+    rotation: Float[Array, "3 3"] = rotmatrix_vectors(zone_vector, jnp.array(zone_hkl))
     rotated_coords: Float[Array, "M 4"]
     rotated_cell: Float[Array, "3 3"]
     rotated_coords, rotated_cell = rotate_structure(

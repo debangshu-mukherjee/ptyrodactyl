@@ -17,6 +17,8 @@ Internal Functions
 ------------------
 These functions are not exported and are used internally by the module.
 
+- `_slice_atoms`:
+    Partitions atoms into slices along the z-axis and sorts them by slice number
 - `_bessel_kv`:
     Computes the modified Bessel function of the second kind
 - `_compute_min_repeats`:
@@ -30,15 +32,17 @@ import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
 from beartype.typing import Optional, Tuple, Union
-from jaxtyping import Array, Float, Int, jaxtyped
+from jaxtyping import Array, Float, Int, Real, jaxtyped
 
 from .electron_types import (PotentialSlices, ProbeModes,
                              make_potential_slices, make_probe_modes,
-                             scalar_float, scalar_int)
+                             scalar_float, scalar_int, scalar_numeric)
 from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
                        rotmatrix_vectors)
 from .preprocessing import kirkland_potentials
 from .simulations import make_probe, stem_4D
+
+jax.config.update("jax_enable_x64", True)
 
 
 @jaxtyped(typechecker=beartype)
@@ -379,7 +383,6 @@ def _compute_min_repeats(
         - These values will be used to construct supercells that include
           sufficient periodic images for accurate calculations
     """
-    # Compute norms of lattice vectors
     lengths: Float[Array, "3"] = jnp.linalg.norm(cell, axis=1)  # shape (3,)
     n_repeats: Int[Array, "3"] = jnp.ceil(threshold_nm / lengths).astype(int)
     return tuple(n_repeats)
@@ -440,42 +443,65 @@ import jax.numpy as jnp
 
 
 @jaxtyped(typechecker=beartype)
-def slice_atoms(
-    coords: Float[Array, "N 4"], slice_thickness: scalar_float
-) -> Tuple[Int[Array, "N"], Int[Array, "n_slices"], scalar_float, scalar_float]:
+def _slice_atoms(
+    coords: Float[Array, "N 3"],
+    atom_numbers: Int[Array, "N"],
+    slice_thickness: scalar_numeric,
+) -> Float[Array, "N 4"]:
     """
-    Assign atoms to slices and group them using sorted indices.
+    Description
+    -----------
+    Partitions atoms into slices along the z-axis and returns them sorted by slice number.
+    This internal function is used to organize atomic positions for slice-by-slice
+    potential calculations in electron microscopy simulations.
 
-    Returns:
-    - grouped_indices: (N,) reordered atom indices
-    - slice_bounds: list of start indices for each slice in grouped_indices
-    - z_min, z_max
+    Parameters
+    ----------
+    - `coords` (Float[Array, "N 3"]):
+        Atomic positions with shape (N, 3) where columns represent x, y, z coordinates
+        in Angstroms
+    - `atom_numbers` (Int[Array, "N"]):
+        Atomic numbers for each of the N atoms, used to identify element types
+    - `slice_thickness` (scalar_numeric):
+        Thickness of each slice in Angstroms. Can be float, int, or 0-dimensional
+        JAX array
+
+    Returns
+    -------
+    - `sorted_atoms` (Float[Array, "N 4"]):
+        Array with shape (N, 4) containing [x, y, slice_num, atom_number] for each atom,
+        sorted by ascending slice number. Slice numbers start from 0.
+
+    Flow
+    ----
+    - Extract z-coordinates and find minimum and maximum z values
+    - Calculate slice index for each atom based on its z-position:
+        - Atoms are assigned to slices using floor division: (z - z_min) / slice_thickness
+        - This ensures atoms at z_min are in slice 0
+    - Construct output array with x, y positions, slice numbers, and atom numbers
+    - Sort atoms by their slice indices to group atoms within the same slice
+    - Return the sorted array for efficient slice-by-slice processing
+
+    Notes
+    -----
+    - The number of slices is implicitly ceil((z_max - z_min) / slice_thickness)
+    - Atoms exactly at slice boundaries are assigned to the lower slice
+    - All arrays are JAX arrays for compatibility with JIT compilation
     """
-    z_coords: Float[Array, "N"] = coords[:, 3]
+    z_coords: Float[Array, "N"] = coords[:, 2]
     z_min: scalar_float = jnp.min(z_coords)
-    z_max: scalar_float = jnp.max(z_coords)
-    n_slices: scalar_int = jnp.ceil((z_max - z_min) / slice_thickness).astype(int)
-
-    # Slice index for each atom
-    slice_indices: Int[Array, "N"] = jnp.floor(
-        (z_coords - z_min) / slice_thickness
-    ).astype(int)
-
-    # Sort by slice index
-    sorted_order: Int[Array, "N"] = jnp.argsort(slice_indices)
-    sorted_slice_indices: Int[Array, "N"] = slice_indices[sorted_order]
-
-    # Count how many atoms per slice
-    slice_counts: Int[Array, "n_slices"] = jnp.bincount(
-        sorted_slice_indices, length=n_slices
+    slice_indices: Real[Array, "N"] = jnp.floor((z_coords - z_min) / slice_thickness)
+    sorted_atoms_presort: Float[Array, "N 4"] = jnp.column_stack(
+        [
+            coords[:, 0],
+            coords[:, 1],
+            slice_indices.astype(jnp.float32),
+            atom_numbers.astype(jnp.float32),
+        ]
     )
-
-    # Compute slice start positions (cumulative sum)
-    slice_bounds: Int[Array, "n_slices"] = jnp.cumsum(
-        jnp.pad(slice_counts[:-1], (1, 0))
-    )  # Start index of each slice
-
-    return sorted_order, slice_bounds, z_min, z_max
+    sorted_order: Real[Array, "N"] = jnp.argsort(slice_indices)
+    sorted_atoms: Float[Array, "N 4"] = sorted_atoms_presort[sorted_order]
+    return sorted_atoms
 
 
 @jaxtyped(typechecker=beartype)
@@ -648,15 +674,35 @@ def overall_wrapper(
     )
     # i-x-h, j-y-w
 
-    sorted_coords: Int[Array, "M"]
-    slice_bounds: Int[Array, "n_slices"]
-    z_min: scalar_float
-    z_max: scalar_float
-    sorted_coords, slice_bounds, z_min, z_max = slice_atoms(
-        rotated_coords, slice_thickness=1
+    sorted_atoms: Float[Array, "M 4"] = _slice_atoms(
+        rotated_coords[:, 1:4],  # xyz coordinates
+        rotated_coords[:, 0].astype(int),  # atom numbers
+        slice_thickness=1,
     )  # in Angstrom
+
+    # Extract slice bounds from the sorted_atoms array
+    slice_nums: Int[Array, "M"] = sorted_atoms[:, 2].astype(int)
+    n_slices: int = int(jnp.max(slice_nums) + 1)
+    slice_counts: Int[Array, "n_slices"] = jnp.bincount(slice_nums, length=n_slices)
+    slice_bounds: Int[Array, "n_slices"] = jnp.cumsum(
+        jnp.pad(slice_counts[:-1], (1, 0))
+    )
+
+    # Create sorted order array (just indices since sorted_atoms is already sorted)
+    sorted_order: Int[Array, "M"] = jnp.arange(sorted_atoms.shape[0])
+
+    # Reconstruct coords in the format build_slice_wrapper expects: [atom_num, x, y, z]
+    sorted_coords_full: Float[Array, "M 4"] = jnp.column_stack(
+        [
+            sorted_atoms[:, 3],  # atom_number
+            sorted_atoms[:, 0],  # x
+            sorted_atoms[:, 1],  # y
+            jnp.zeros(sorted_atoms.shape[0]),  # z (not used in build_slice_wrapper)
+        ]
+    )
+
     slices: list = build_slice_wrapper(
-        rotated_coords, sorted_coords, slice_bounds, kirkland_jax, pixel_size
+        sorted_coords_full, sorted_order, slice_bounds, kirkland_jax, pixel_size
     )
 
     slices_array: np.ndarray = np.array(slices)

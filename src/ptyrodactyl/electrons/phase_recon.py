@@ -1,6 +1,6 @@
 """
-Module: electrons.reconstruction
---------------------------------
+Module: electrons.phase_recon
+-----------------------------
 Inverse reconstruction algorithms for electron ptychography.
 
 This module contains functions for reconstructing sample potentials from

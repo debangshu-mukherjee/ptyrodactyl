@@ -133,16 +133,11 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
     - Supports broadcasting and autodiff
     - JIT-safe and VMAP-safe
     """
-    # Convert to JAX arrays, preserving dtype
-    v = jnp.asarray(v)
-    x = jnp.asarray(x)
-
-    # Get the dtype to use throughout
-    dtype = x.dtype
+    v: Float[Array, ""] = jnp.asarray(v)
+    x: Float[Array, "..."] = jnp.asarray(x)
+    dtype: jnp.dtype = x.dtype
 
     def k0_small(x):
-        # For K_0(x) when x <= 1, use series expansion
-        # Based on Numerical Recipes formulation
         i0 = jax.scipy.special.i0(x)
         coeffs = jnp.array(
             [
@@ -156,19 +151,15 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
             ],
             dtype=dtype,
         )
-
         x2 = x * x / 4.0
-        poly = coeffs[0]
-        xn = 1.0
-        for i, c in enumerate(coeffs[1:]):
-            xn *= x2
-            poly += c * xn
+
+        # Create powers of x2 using JAX operations
+        powers = jnp.power(x2[..., jnp.newaxis], jnp.arange(7))
+        poly = jnp.sum(coeffs * powers, axis=-1)
 
         return -jnp.log(x / 2.0) * i0 + poly
 
     def k0_large(x):
-        # For K_0(x) when x > 1, use asymptotic expansion
-        # Based on Numerical Recipes formulation
         coeffs = jnp.array(
             [
                 1.25331414,
@@ -181,21 +172,15 @@ def _bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
             ],
             dtype=dtype,
         )
-
         z = 1.0 / x
-        poly = coeffs[0]
-        zn = 1.0
-        for c in coeffs[1:]:
-            zn *= z
-            poly += c * zn
+
+        # Create powers of z using JAX operations
+        powers = jnp.power(z[..., jnp.newaxis], jnp.arange(7))
+        poly = jnp.sum(coeffs * powers, axis=-1)
 
         return jnp.exp(-x) * poly / jnp.sqrt(x)
 
-    # For now, just handle v=0 case which is what's used in the code
-    # Use jnp.where for vectorized conditional
     k0_result = jnp.where(x <= 1.0, k0_small(x), k0_large(x))
-
-    # Return k0_result if v == 0, otherwise zeros
     return jnp.where(v == 0.0, k0_result, jnp.zeros_like(x, dtype=dtype))
 
 

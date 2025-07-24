@@ -655,6 +655,10 @@ def make_xyz_data(
     # This is another unavoidable case for Python if.
     if lattice is not None:
         lattice = jnp.asarray(lattice, dtype=jnp.float64)
+    else:
+        # Default to identity matrix if no lattice is provided
+        # This ensures lattice is always a JAX array for downstream functions
+        lattice = jnp.eye(3, dtype=jnp.float64)
 
     if stress is not None:
         stress = jnp.asarray(stress, dtype=jnp.float64)

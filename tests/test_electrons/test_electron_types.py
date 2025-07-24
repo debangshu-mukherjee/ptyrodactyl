@@ -364,7 +364,10 @@ class TestXYZData(chex.TestCase):
         self.assertIsInstance(xyz, XYZData)
         self.assertEqual(xyz.positions.shape, (self.n_atoms, 3))
         self.assertEqual(xyz.atomic_numbers.shape, (self.n_atoms,))
-        self.assertIsNone(xyz.lattice)
+        # Lattice should now default to identity matrix
+        self.assertIsNotNone(xyz.lattice)
+        self.assertEqual(xyz.lattice.shape, (3, 3))
+        chex.assert_trees_all_close(xyz.lattice, jnp.eye(3, dtype=jnp.float64))
         self.assertIsNone(xyz.stress)
         self.assertIsNone(xyz.energy)
         self.assertIsNone(xyz.properties)
@@ -405,6 +408,13 @@ class TestXYZData(chex.TestCase):
 
         xyz_reconstructed = jax.tree_util.tree_unflatten(treedef, leaves)
         chex.assert_trees_all_equal(xyz, xyz_reconstructed)
+
+    def test_factory_function_with_none_lattice(self):
+        """Test that explicitly passing None for lattice gives identity matrix."""
+        xyz = make_xyz_data(self.positions, self.atomic_numbers, lattice=None)
+        self.assertIsNotNone(xyz.lattice)
+        self.assertEqual(xyz.lattice.shape, (3, 3))
+        chex.assert_trees_all_close(xyz.lattice, jnp.eye(3, dtype=jnp.float64))
 
     @chex.variants(with_jit=True, without_jit=True)
     def test_jax_transformations(self):

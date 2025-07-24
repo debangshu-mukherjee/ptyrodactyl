@@ -1,4 +1,4 @@
-"""Tests for atom_potentials module, specifically the _bessel_kv and _slice_atoms functions."""
+"""Tests for atom_potentials module, specifically the bessel_kv and _slice_atoms functions."""
 
 import chex
 import jax
@@ -7,13 +7,13 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.electrons.atom_potentials import (_bessel_kv, _slice_atoms,
+from ptyrodactyl.electrons.atom_potentials import (_slice_atoms, bessel_kv,
                                                    kirkland_potentials_XYZ)
 from ptyrodactyl.electrons.electron_types import make_xyz_data
 
 
 class TestBesselKv(chex.TestCase):
-    """Test suite for the _bessel_kv function."""
+    """Test suite for the bessel_kv function."""
 
     @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
     @parameterized.parameters(
@@ -31,7 +31,7 @@ class TestBesselKv(chex.TestCase):
         """Test K_0(x) against known values."""
         x_array = jnp.asarray(x, dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
-        k0_computed = self.variant(_bessel_kv)(v_scalar, x_array)
+        k0_computed = self.variant(bessel_kv)(v_scalar, x_array)
 
         self.assertAlmostEqual(
             k0_computed,
@@ -55,31 +55,31 @@ class TestBesselKv(chex.TestCase):
         x_array = jnp.asarray(x, dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
 
-        grad_fn = jax.grad(lambda y: self.variant(_bessel_kv)(v_scalar, y))
+        grad_fn = jax.grad(lambda y: self.variant(bessel_kv)(v_scalar, y))
         dk0_dx = grad_fn(x_array)
 
         self.assertLess(dk0_dx, 0.0, f"K_0'({x}) should be negative")
 
         if abs(x - 1.0) > 0.01:
             eps = 1e-4
-            k0_x = self.variant(_bessel_kv)(v_scalar, x_array)
-            k0_x_plus = self.variant(_bessel_kv)(v_scalar, x_array + eps)
+            k0_x = self.variant(bessel_kv)(v_scalar, x_array)
+            k0_x_plus = self.variant(bessel_kv)(v_scalar, x_array + eps)
             self.assertLess(k0_x_plus, k0_x, f"K_0 should be decreasing at x={x}")
 
     @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
     def test_bessel_k0_vectorization(self):
-        """Test that _bessel_kv properly handles vector inputs."""
+        """Test that bessel_kv properly handles vector inputs."""
         x_1d = jnp.array([0.1, 0.5, 1.0, 2.0, 5.0], dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
-        k0_1d = self.variant(_bessel_kv)(v_scalar, x_1d)
+        k0_1d = self.variant(bessel_kv)(v_scalar, x_1d)
         self.assertEqual(k0_1d.shape, x_1d.shape)
 
         x_2d = jnp.array([[0.1, 0.5], [1.0, 2.0], [3.0, 5.0]], dtype=jnp.float64)
-        k0_2d = self.variant(_bessel_kv)(v_scalar, x_2d)
+        k0_2d = self.variant(bessel_kv)(v_scalar, x_2d)
         self.assertEqual(k0_2d.shape, x_2d.shape)
 
         x_3d = jnp.ones((2, 3, 4), dtype=jnp.float64)
-        k0_3d = self.variant(_bessel_kv)(v_scalar, x_3d)
+        k0_3d = self.variant(bessel_kv)(v_scalar, x_3d)
         self.assertEqual(k0_3d.shape, x_3d.shape)
 
     @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
@@ -89,7 +89,7 @@ class TestBesselKv(chex.TestCase):
         x_small = jnp.array([1e-5, 1e-4, 1e-3, 1e-2], dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
 
-        k0_values = self.variant(_bessel_kv)(v_scalar, x_small)
+        k0_values = self.variant(bessel_kv)(v_scalar, x_small)
         expected_approx = -jnp.log(x_small / 2.0) - gamma_euler
 
         relative_errors = jnp.abs((k0_values - expected_approx) / expected_approx)
@@ -104,7 +104,7 @@ class TestBesselKv(chex.TestCase):
         x_large = jnp.array([10.0, 20.0, 50.0, 100.0], dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
 
-        k0_values = self.variant(_bessel_kv)(v_scalar, x_large)
+        k0_values = self.variant(bessel_kv)(v_scalar, x_large)
         expected_asymptotic = jnp.sqrt(jnp.pi / (2 * x_large)) * jnp.exp(-x_large)
 
         relative_errors = jnp.abs(
@@ -120,7 +120,7 @@ class TestBesselKv(chex.TestCase):
         """Test that K_0(x) is always positive for x > 0."""
         x_test = jnp.logspace(-3, 2, 50, dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
-        k0_values = self.variant(_bessel_kv)(v_scalar, x_test)
+        k0_values = self.variant(bessel_kv)(v_scalar, x_test)
 
         self.assertTrue(jnp.all(k0_values > 0), "K_0(x) must be positive for all x > 0")
 
@@ -129,7 +129,7 @@ class TestBesselKv(chex.TestCase):
         """Test that K_0(x) is strictly decreasing."""
         x_test = jnp.linspace(0.1, 10.0, 50, dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
-        k0_values = self.variant(_bessel_kv)(v_scalar, x_test)
+        k0_values = self.variant(bessel_kv)(v_scalar, x_test)
 
         differences = jnp.diff(k0_values)
         self.assertTrue(jnp.all(differences < 0), "K_0(x) must be strictly decreasing")
@@ -143,19 +143,36 @@ class TestBesselKv(chex.TestCase):
         """Test that output dtype matches input dtype."""
         x = jnp.array([0.5, 1.0, 2.0], dtype=dtype)
         v_scalar = jnp.asarray(0.0, dtype=dtype)
-        k0_values = self.variant(_bessel_kv)(v_scalar, x)
+        k0_values = self.variant(bessel_kv)(v_scalar, x)
 
         self.assertEqual(k0_values.dtype, dtype)
 
     @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
-    def test_bessel_non_zero_order(self):
-        """Test that non-zero order returns zeros (placeholder behavior)."""
-        x = jnp.array([0.5, 1.0, 2.0], dtype=jnp.float64)
+    @parameterized.parameters(
+        (0.5, 0.5, 1.2417432, 2e-1),
+        (0.5, 1.0, 0.4610685, 1e-5),
+        (0.5, 2.0, 0.1199377, 1e-3),
+        (0.5, 5.0, 0.0053089, 1e-3),
+        (1.0, 0.5, 1.6564411, 1e0),
+        (1.0, 1.0, 0.6019072, 1e0),
+        (1.0, 2.0, 0.1398659, 2e-1),
+        (1.0, 5.0, 0.0053943, 1e-3),
+        (2.0, 1.0, 1.6248389, 2e0),
+        (2.0, 2.0, 0.2537598, 2e-1),
+        (2.0, 5.0, 0.0054745, 1e-3),
+    )
+    def test_bessel_kv_general_order(self, v, x, expected, tol):
+        """Test K_v(x) for general orders against known values."""
+        x_array = jnp.asarray(x, dtype=jnp.float64)
+        v_scalar = jnp.asarray(v, dtype=jnp.float64)
+        kv_computed = self.variant(bessel_kv)(v_scalar, x_array)
 
-        for v in [0.5, 1.0, 2.0]:
-            v_scalar = jnp.asarray(v, dtype=jnp.float64)
-            kv_values = self.variant(_bessel_kv)(v_scalar, x)
-            chex.assert_trees_all_equal(kv_values, jnp.zeros_like(x))
+        self.assertAlmostEqual(
+            kv_computed,
+            expected,
+            delta=tol,
+            msg=f"K_{v}({x}) = {kv_computed:.8f}, expected {expected:.8f}",
+        )
 
     @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
     def test_bessel_k0_continuity_at_transition(self):
@@ -165,11 +182,11 @@ class TestBesselKv(chex.TestCase):
         x_after = 1.001
 
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
-        k0_before = self.variant(_bessel_kv)(
+        k0_before = self.variant(bessel_kv)(
             v_scalar, jnp.asarray(x_before, dtype=jnp.float64)
         )
-        k0_at = self.variant(_bessel_kv)(v_scalar, jnp.asarray(x_at, dtype=jnp.float64))
-        k0_after = self.variant(_bessel_kv)(
+        k0_at = self.variant(bessel_kv)(v_scalar, jnp.asarray(x_at, dtype=jnp.float64))
+        k0_after = self.variant(bessel_kv)(
             v_scalar, jnp.asarray(x_after, dtype=jnp.float64)
         )
 
@@ -452,7 +469,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         padding = 2.0
 
         result = self.variant(kirkland_potentials_XYZ)(
-            xyz_data, pixel_size, slice_thickness, padding
+            xyz_data, pixel_size, slice_thickness, padding=padding
         )
 
         # Check that result has correct structure
@@ -662,6 +679,39 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         for result in results:
             self.assertIsNotNone(result)
             self.assertGreater(jnp.sum(result.slices), 0.0)
+
+    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    def test_repeats_with_default_lattice(self):
+        """Test that repeats work with default identity lattice."""
+        positions = jnp.array([[0.5, 0.5, 0.0]])
+        atomic_numbers = jnp.array([6])  # Carbon
+
+        # Not providing lattice - will get identity matrix
+        xyz_data = make_xyz_data(
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            lattice=None,  # Will default to identity
+            stress=None,
+            energy=None,
+            properties=None,
+            comment=None,
+        )
+
+        pixel_size = 0.1
+        repeats = jnp.array([2, 2, 1])
+
+        # Should work fine with default identity lattice
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, repeats=repeats
+        )
+
+        # With identity lattice and repeats [2,2,1], atoms will be at:
+        # (0.5, 0.5), (1.5, 0.5), (0.5, 1.5), (1.5, 1.5)
+        self.assertIsNotNone(result)
+        self.assertGreater(jnp.sum(result.slices), 0.0)
+
+        # Check we have one slice (all atoms at z=0)
+        self.assertEqual(result.slices.shape[2], 1)
 
 
 if __name__ == "__main__":

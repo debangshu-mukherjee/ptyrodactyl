@@ -26,8 +26,8 @@ Submodules
     and 4D-STEM data generation including aberration calculations and probe creation
 """
 
-from .atom_potentials import (contrast_stretch, kirkland_potentials_XYZ,
-                              single_atom_potential)
+from .atom_potentials import (bessel_kv, contrast_stretch,
+                              kirkland_potentials_XYZ, single_atom_potential)
 from .electron_types import (CalibratedArray, CrystalStructure,
                              PotentialSlices, ProbeModes, XYZData,
                              make_calibrated_array, make_crystal_structure,
@@ -52,6 +52,7 @@ __all__: list[str] = [
     "contrast_stretch",
     "single_atom_potential",
     "kirkland_potentials_XYZ",
+    "bessel_kv",
     "rotmatrix_vectors",
     "rotmatrix_axis",
     "rotate_structure",

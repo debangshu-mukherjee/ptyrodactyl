@@ -150,7 +150,7 @@ class PotentialSlices(NamedTuple):
 
     Attributes
     ----------
-    - `slices` (Complex[Array, "H W S"]):
+    - `slices` (Float[Array, "H W S"]):
         Individual potential slices.
         S is number of slices
     - `slice_thickness` (Num[Array, ""]):

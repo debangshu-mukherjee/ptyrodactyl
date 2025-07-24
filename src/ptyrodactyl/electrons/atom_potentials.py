@@ -33,7 +33,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
-from beartype.typing import Dict, Optional, Tuple, Union
+from beartype.typing import Optional, Tuple, Union
 from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
 from .electron_types import (PotentialSlices, ProbeModes, XYZData,
@@ -507,276 +507,6 @@ def _slice_atoms(
 
 
 @jaxtyped(typechecker=beartype)
-def build_slice_potential(
-    coords: Float[Array, "N 4"],
-    canvas_shape: Tuple[int, int],
-    minmaxes: Tuple[float, float, float, float],
-    pixel_size: scalar_float,
-    atomic_potential_fn: Union[Float[Array, "atom_types h w"], np.ndarray],
-) -> np.ndarray:
-    """
-    Sum 2D atomic potentials into a slice canvas, clipping contributions
-    that fall outside the canvas bounds.
-
-    Parameters:
-    - coords: (N, 4) array of atomic xy positions in angstroms
-    - canvas_shape: (H, W)
-    - minmaxes: (x_min, x_max, y_min, y_max) in angstroms
-    - pixel_size: angstroms per pixel
-    - atomic_potential_fn: () -> (h, w) 2D array centered at (0,0)
-
-    Returns:
-    - (H, W) 2D potential array
-    """
-    H: int
-    W: int
-    H, W = canvas_shape
-    canvas: np.ndarray = np.zeros((H, W))
-    x_min: float
-    x_max: float
-    y_min: float
-    y_max: float
-    x_min, x_max, y_min, y_max = minmaxes
-
-    def add_single_atom(canvas: np.ndarray, line: np.ndarray) -> np.ndarray:
-        # Compute center position in pixels
-
-        i_center: int = np.floor((line[1] - x_min) / pixel_size).astype(int)
-        j_center: int = np.floor((line[2] - y_min) / pixel_size).astype(int)
-        atom_pot: np.ndarray = atomic_potential_fn[
-            np.round(line[0]).astype(int)
-        ]  # (h, w)
-
-        h: int
-        w: int
-        h, w = atom_pot.shape
-        half_h: int = h // 2
-        half_w: int = w // 2
-
-        # Bounds in canvas
-        i_start: int = i_center - half_h
-        i_end: int = i_center + half_h
-        j_start: int = j_center - half_w
-        j_end: int = j_center + half_w
-
-        # Compute valid overlapping region between atom_pot and canvas
-        i_start_clip: int = np.maximum(i_start, 0)
-        i_end_clip: int = np.minimum(i_end, H)
-        j_start_clip: int = np.maximum(j_start, 0)
-        j_end_clip: int = np.minimum(j_end, W)
-
-        # Corresponding indices in atom_pot
-        ai_start: int = i_start_clip - i_start
-        ai_end: int = ai_start + (i_end_clip - i_start_clip)
-        aj_start: int = j_start_clip - j_start
-        aj_end: int = aj_start + (j_end_clip - j_start_clip)
-        _h: int = ai_end - ai_start
-        _w: int = aj_end - aj_start
-
-        slice_shape: np.ndarray = np.array([_h, _w])
-        pot_start: np.ndarray = np.array([ai_start, aj_start])
-        clip_start: np.ndarray = np.array([i_start_clip, j_start_clip])
-
-        # Add clipped portion
-        # clipped_atom_pot = jax.lax.dynamic_slice(atom_pot, pot_start, slice_shape)
-        clipped_atom_pot: np.ndarray = atom_pot[
-            pot_start[0] : pot_start[0] + slice_shape[0],
-            pot_start[1] : pot_start[1] + slice_shape[1],
-        ]
-        # original_values = jax.lax.dynamic_slice(canvas, clip_start, slice_shape)
-        canvas[
-            clip_start[0] : clip_start[0] + slice_shape[0],
-            clip_start[1] : clip_start[1] + slice_shape[1],
-        ] += clipped_atom_pot
-        # new_values = original_values + clipped_atom_pot
-        # canvas = jax.lax.dynamic_update_slice(canvas, new_values, clip_start)
-        return canvas
-
-    # Loop over all atoms (could be vmapped, but usually small per slice)
-    for line in coords:
-        canvas = add_single_atom(canvas, line)
-
-    # canvas = jax.lax.fori_loop(0, coords.shape[0], lambda i, c: add_single_atom(c, i), canvas)
-
-    return canvas
-
-
-@jaxtyped(typechecker=beartype)
-def build_slice_wrapper(
-    coords: Float[Array, "N 4"],
-    sorted_order: Int[Array, "N"],
-    slice_bounds: Int[Array, "n_slices"],
-    kirkland_jax: Union[Float[Array, "atom_types h w"], np.ndarray],
-    pixel_size: scalar_float = 0.1,
-) -> list:
-    x_max: scalar_float = jnp.max(coords[:, 1])
-    x_min: scalar_float = jnp.min(coords[:, 1])
-    y_max: scalar_float = jnp.max(coords[:, 2])
-    y_min: scalar_float = jnp.min(coords[:, 2])
-    H: scalar_int = jnp.ceil((x_max - x_min) / pixel_size).astype(int)
-    W: scalar_int = jnp.ceil((y_max - y_min) / pixel_size).astype(int)
-
-    def build_slice_i(i: int) -> Union[Float[Array, "H W"], np.ndarray]:
-        i = int(i)
-        atoms_in_slice_i: Int[Array, "n_atoms"] = sorted_order[
-            slice_bounds[i] : slice_bounds[i + 1]
-        ]
-        if len(atoms_in_slice_i) == 0:
-            return jnp.zeros((H, W))
-        coords_in_slice: Float[Array, "n_atoms 4"] = coords[atoms_in_slice_i]
-        canvas: np.ndarray = build_slice_potential(
-            coords_in_slice,
-            (H, W),
-            (x_min, x_max, y_min, y_max),
-            pixel_size,
-            kirkland_jax,
-        )
-        return canvas
-
-    return [build_slice_i(i) for i in range(len(slice_bounds) - 1)]
-
-
-@jaxtyped(typechecker=beartype)
-def overall_wrapper(
-    atoms: Union[np.ndarray, Float[Array, "N 4"]],
-    metadata: dict,
-    zone_hkl: Union[np.ndarray, Float[Array, "3"]],
-    theta: scalar_float,
-    pixel_size: scalar_float,
-    kirkland_jax: Union[Float[Array, "atom_types h w"], np.ndarray],
-    poss: list = [[0, 0]],
-) -> Tuple[
-    Float[Array, "n_positions H W"], list, Float[Array, "M 4"], Float[Array, "3 3"]
-]:
-    tic: float = time.time()
-    atoms_jnp: Float[Array, "N 4"] = jnp.asarray(atoms, dtype=jnp.float32)
-    metadata_jnp: Float[Array, "3 3"] = jnp.asarray(
-        metadata["lattice"], dtype=jnp.float32
-    )
-    expanded_coords: Float[Array, "M 4"]
-    nx: int
-    ny: int
-    nz: int
-    expanded_coords, (nx, ny, nz) = expand_periodic_images_minimal(
-        atoms_jnp, metadata_jnp, 10
-    )
-    expanded_coords = jnp.hstack(
-        (
-            expanded_coords[:, 0:1],
-            expanded_coords[:, 1:4] - jnp.mean(expanded_coords[:, 1:4], axis=0),
-        )
-    )  # Center the coordinates
-    recip: Float[Array, "3 3"] = reciprocal_lattice(metadata["lattice"])
-    zone_vector: Float[Array, "3"] = zone_hkl @ recip
-    rotation: Float[Array, "3 3"] = rotmatrix_vectors(zone_vector, jnp.array(zone_hkl))
-    rotated_coords: Float[Array, "M 4"]
-    rotated_cell: Float[Array, "3 3"]
-    rotated_coords, rotated_cell = rotate_structure(
-        expanded_coords, metadata_jnp, rotation, theta
-    )
-    # i-x-h, j-y-w
-
-    sorted_atoms: Float[Array, "M 4"] = _slice_atoms(
-        rotated_coords[:, 1:4],  # xyz coordinates
-        rotated_coords[:, 0].astype(int),  # atom numbers
-        slice_thickness=1,
-    )  # in Angstrom
-
-    # Extract slice bounds from the sorted_atoms array
-    slice_nums: Int[Array, "M"] = sorted_atoms[:, 2].astype(int)
-    n_slices: int = int(jnp.max(slice_nums) + 1)
-    slice_counts: Int[Array, "n_slices"] = jnp.bincount(slice_nums, length=n_slices)
-    slice_bounds: Int[Array, "n_slices"] = jnp.cumsum(
-        jnp.pad(slice_counts[:-1], (1, 0))
-    )
-
-    # Create sorted order array (just indices since sorted_atoms is already sorted)
-    sorted_order: Int[Array, "M"] = jnp.arange(sorted_atoms.shape[0])
-
-    # Reconstruct coords in the format build_slice_wrapper expects: [atom_num, x, y, z]
-    sorted_coords_full: Float[Array, "M 4"] = jnp.column_stack(
-        [
-            sorted_atoms[:, 3],  # atom_number
-            sorted_atoms[:, 0],  # x
-            sorted_atoms[:, 1],  # y
-            jnp.zeros(sorted_atoms.shape[0]),  # z (not used in build_slice_wrapper)
-        ]
-    )
-
-    slices: list = build_slice_wrapper(
-        sorted_coords_full, sorted_order, slice_bounds, kirkland_jax, pixel_size
-    )
-
-    slices_array: np.ndarray = np.array(slices)
-    # chop slices_array down to squares
-    if slices_array.shape[2] > slices_array.shape[1]:
-        slices_array = slices_array[
-            :,
-            :,
-            slices_array.shape[2] // 2
-            - slices_array.shape[1] // 2 : slices_array.shape[2] // 2
-            + slices_array.shape[1] // 2,
-        ]
-    else:
-        slices_array = slices_array[
-            :,
-            slices_array.shape[1] // 2
-            - slices_array.shape[2] // 2 : slices_array.shape[1] // 2
-            + slices_array.shape[2] // 2,
-            :,
-        ]
-    probe: Float[Array, "H W 1"] = make_probe(
-        aperture=5,
-        voltage=100,
-        defocus=0.0,
-        image_size=jnp.array(slices_array[0].shape),
-        calibration_pm=pixel_size * 100,
-        # defocus = -0.0,
-        # c3=0.0,
-        # c5=0.0
-    )
-    probe = probe[:, :, jnp.newaxis]
-
-    # Reorganize the slices so that the third dimension becomes the first dimension
-    slices_array = np.moveaxis(slices_array, 0, -1)
-
-    slices_array: Float[Array, "H W n_slices"] = jnp.asarray(
-        slices_array, dtype=jnp.complex64
-    )
-
-    sigma: scalar_float = 0.001  # /(V*Angstrom) at 100 kV
-
-    phase_shift: Float[Array, "H W n_slices"] = jnp.exp(-1j * sigma * slices_array)
-
-    pot_slices: PotentialSlices = make_potential_slices(phase_shift, 1.0, 0.1)
-    beam: ProbeModes = make_probe_modes(probe, jnp.array([1.0]), calib=0.1)
-    toc: float = time.time()
-    print("Time taken for preprocessing:", toc - tic, "seconds")
-
-    # cbed = cbed(slices_array, probe, jnp.asarray([[200.0, 200.0]]), jnp.asarray(bin_size, dtype= jnp.float16), jnp.asarray(100), 0.1)
-    poss: np.ndarray = np.array(poss)
-    center_pixel: np.ndarray = np.array(
-        [slices_array.shape[0] // 2, slices_array.shape[1] // 2]
-    )
-    pixel_shifts: np.ndarray = poss / pixel_size
-    pixels: Float[Array, "n_positions 2"] = jnp.asarray(
-        pixel_shifts + center_pixel, dtype=jnp.float32
-    )
-
-    # cbed_pattern = jax.jit(cbed)(pot_slices, beam, 100.0)
-    cbed_patterns: Float[Array, "n_positions H W"] = stem_4D(
-        pot_slice=pot_slices,
-        beam=beam,
-        positions=pixels,
-        voltage_kV=100.0,
-        calib_ang=pixel_size,
-    )
-    print("time taken for cbed calculation:", time.time() - toc, "seconds")
-
-    return cbed_patterns, slices, rotated_coords, rotated_cell
-
-
-@jaxtyped(typechecker=beartype)
 def kirkland_potentials_XYZ(
     xyz_data: XYZData,
     pixel_size: scalar_float,
@@ -843,7 +573,7 @@ def kirkland_potentials_XYZ(
             atom_no=atom_no,
             pixel_size=pixel_size,
             grid_shape=(height, width),
-            center_coords=jnp.array([0.0, 0.0]),  # Center at origin
+            center_coords=jnp.array([0.0, 0.0]),
             supersampling=16,
             potential_extent=4.0,
         )
@@ -851,13 +581,17 @@ def kirkland_potentials_XYZ(
     atomic_potentials: Float[Array, "n_unique h w"] = jax.vmap(calc_single_potential)(
         unique_atoms
     )
-    atom_to_idx: Dict[int, int] = {
-        int(atom): idx for idx, atom in enumerate(unique_atoms)
-    }
+    max_atom_num = jnp.max(unique_atoms)
+    atom_to_idx_array = jnp.full(max_atom_num + 1, -1, dtype=jnp.int32)
+    atom_to_idx_array = atom_to_idx_array.at[unique_atoms].set(
+        jnp.arange(len(unique_atoms))
+    )
     n_slices: int = int(jnp.max(slice_indices) + 1)
     all_slices: Float[Array, "h w n_slices"] = jnp.zeros(
         (height, width, n_slices), dtype=jnp.float32
     )
+    ky: Float[Array, "h 1"] = jnp.fft.fftfreq(height, d=1.0).reshape(-1, 1)
+    kx: Float[Array, "1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
 
     def process_single_slice(slice_idx: int) -> Float[Array, "h w"]:
         atoms_mask: Bool[Array, "N"] = slice_indices == slice_idx
@@ -879,10 +613,8 @@ def kirkland_potentials_XYZ(
             atom_data: Tuple[scalar_float, scalar_float, scalar_int],
         ) -> Tuple[Float[Array, "h w"], None]:
             slice_pot, sx, sy, atom_no = carry, *atom_data
-            atom_idx: int = atom_to_idx[int(atom_no)]
+            atom_idx = atom_to_idx_array[atom_no]
             atom_pot: Float[Array, "h w"] = atomic_potentials[atom_idx]
-            ky: Float[Array, "h 1"] = jnp.fft.fftfreq(height, d=1.0).reshape(-1, 1)
-            kx: Float[Array, "1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
             phase: Complex[Array, "h w"] = jnp.exp(2j * jnp.pi * (kx * sx + ky * sy))
             atom_pot_fft: Complex[Array, "h w"] = jnp.fft.fft2(atom_pot)
             shifted_fft: Complex[Array, "h w"] = atom_pot_fft * phase
@@ -896,8 +628,9 @@ def kirkland_potentials_XYZ(
         )
         return slice_potential
 
-    for slice_idx in range(n_slices):
-        all_slices = all_slices.at[:, :, slice_idx].set(process_single_slice(slice_idx))
+    slice_indices_array = jnp.arange(n_slices)
+    processed_slices = jax.vmap(process_single_slice)(slice_indices_array)
+    all_slices = processed_slices.transpose(1, 2, 0)
     crop_pixels: int = int(jnp.round(padding / pixel_size))
     cropped_slices: Float[Array, "h_crop w_crop n_slices"] = all_slices[
         crop_pixels:-crop_pixels, crop_pixels:-crop_pixels, :

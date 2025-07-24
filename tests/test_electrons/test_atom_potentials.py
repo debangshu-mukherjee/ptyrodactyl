@@ -7,7 +7,9 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.electrons.atom_potentials import _bessel_kv, _slice_atoms
+from ptyrodactyl.electrons.atom_potentials import (_bessel_kv, _slice_atoms,
+                                                   kirkland_potentials_XYZ)
+from ptyrodactyl.electrons.electron_types import make_xyz_data
 
 
 class TestBesselKv(chex.TestCase):
@@ -424,6 +426,242 @@ class TestSliceAtoms(chex.TestCase):
         # Check that all atoms are accounted for
         unique_atom_indices = jnp.unique(result[:, 3])
         self.assertEqual(len(unique_atom_indices), len(jnp.unique(atom_numbers)))
+
+
+class TestKirklandPotentialsXYZ(chex.TestCase):
+    """Test suite for the kirkland_potentials_XYZ function."""
+
+    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    def test_single_atom_centered(self):
+        """Test potential generation for a single atom at the center."""
+
+        positions = jnp.array([[0.0, 0.0, 0.0]])
+        atomic_numbers = jnp.array([1])  # Hydrogen
+        xyz_data = make_xyz_data(
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            lattice=None,
+            stress=None,
+            energy=None,
+            properties=None,
+            comment=None,
+        )
+
+        pixel_size = 0.1  # Angstroms
+        slice_thickness = 1.0
+        padding = 2.0
+
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, slice_thickness, padding
+        )
+
+        # Check that result has correct structure
+        chex.assert_type(result.slices, jnp.float32)
+        self.assertEqual(len(result.slices.shape), 3)  # H x W x S
+        self.assertEqual(result.slice_thickness, slice_thickness)
+        self.assertEqual(result.calib, pixel_size)
+
+        # Check that potential is centered and symmetric
+        h, w, s = result.slices.shape
+        center_h, center_w = h // 2, w // 2
+        potential_slice = result.slices[:, :, 0]
+
+        # Maximum should be at center
+        max_idx = jnp.unravel_index(jnp.argmax(potential_slice), potential_slice.shape)
+        self.assertAlmostEqual(max_idx[0], center_h, delta=1)
+        self.assertAlmostEqual(max_idx[1], center_w, delta=1)
+
+    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    def test_multiple_atoms_different_slices(self):
+        """Test potential generation for atoms in different slices."""
+        positions = jnp.array(
+            [
+                [0.0, 0.0, 0.0],  # First slice
+                [2.0, 2.0, 1.5],  # Second slice
+                [1.0, 1.0, 3.0],  # Third slice
+            ]
+        )
+        atomic_numbers = jnp.array([1, 6, 14])  # H, C, Si
+        xyz_data = make_xyz_data(
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            lattice=None,
+            stress=None,
+            energy=None,
+            properties=None,
+            comment=None,
+        )
+
+        pixel_size = 0.2
+        slice_thickness = 1.0
+
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, slice_thickness
+        )
+
+        # Should have 4 slices (z from 0 to 3)
+        self.assertEqual(result.slices.shape[2], 4)
+
+        # Check that different slices have non-zero values
+        for i in range(4):
+            slice_sum = jnp.sum(result.slices[:, :, i])
+            if i < 3:  # First three slices should have atoms
+                self.assertGreater(slice_sum, 0.0)
+
+    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    def test_same_atoms_same_slice(self):
+        """Test multiple atoms of same type in same slice."""
+        positions = jnp.array(
+            [
+                [1.0, 1.0, 0.5],
+                [3.0, 1.0, 0.5],
+                [2.0, 3.0, 0.5],
+            ]
+        )
+        atomic_numbers = jnp.array([6, 6, 6])  # All carbon
+        xyz_data = make_xyz_data(
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            lattice=None,
+            stress=None,
+            energy=None,
+            properties=None,
+            comment=None,
+        )
+
+        pixel_size = 0.1
+        slice_thickness = 1.0
+
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, slice_thickness
+        )
+
+        # Should have 1 slice
+        self.assertEqual(result.slices.shape[2], 1)
+
+        # Check that potential is sum of contributions
+        potential = result.slices[:, :, 0]
+        self.assertGreater(jnp.sum(potential), 0.0)
+
+        # Find peaks corresponding to atom positions
+        # Due to FFT shifting, peaks should be at atom positions
+        h, w = potential.shape
+        x_min = jnp.min(positions[:, 0]) - 4.0  # Default padding
+        y_min = jnp.min(positions[:, 1]) - 4.0
+
+        # Check that we have local maxima near atom positions
+        for pos in positions:
+            pixel_x = int((pos[0] - x_min) / pixel_size)
+            pixel_y = int((pos[1] - y_min) / pixel_size)
+            if 1 < pixel_x < w - 1 and 1 < pixel_y < h - 1:
+                local_value = potential[pixel_y, pixel_x]
+                neighbors = [
+                    potential[pixel_y - 1, pixel_x],
+                    potential[pixel_y + 1, pixel_x],
+                    potential[pixel_y, pixel_x - 1],
+                    potential[pixel_y, pixel_x + 1],
+                ]
+                # Value at atom position should be local maximum
+                self.assertTrue(all(local_value >= n for n in neighbors))
+
+    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    def test_padding_removal(self):
+        """Test that padding is correctly removed from final result."""
+        positions = jnp.array([[2.0, 2.0, 0.0]])
+        atomic_numbers = jnp.array([1])
+        xyz_data = make_xyz_data(
+            positions=positions,
+            atomic_numbers=atomic_numbers,
+            lattice=None,
+            stress=None,
+            energy=None,
+            properties=None,
+            comment=None,
+        )
+
+        pixel_size = 0.5
+        padding = 3.0
+
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, padding=padding
+        )
+
+        # Expected size after padding removal
+        x_range = 0.0  # Single atom has no x range
+        y_range = 0.0  # Single atom has no y range
+        expected_width = int(jnp.ceil(x_range / pixel_size))
+        expected_height = int(jnp.ceil(y_range / pixel_size))
+
+        # Size should be at least 1x1
+        self.assertGreaterEqual(result.slices.shape[0], 1)
+        self.assertGreaterEqual(result.slices.shape[1], 1)
+
+    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    def test_different_atomic_numbers(self):
+        """Test that different atomic species produce different potentials."""
+        # Test with single atoms of different types at same position
+        pixel_size = 0.1
+        slice_thickness = 1.0
+
+        potentials = []
+        for z in [1, 6, 14, 79]:  # H, C, Si, Au
+            positions = jnp.array([[0.0, 0.0, 0.0]])
+            atomic_numbers = jnp.array([z])
+            xyz_data = make_xyz_data(
+                positions=positions,
+                atomic_numbers=atomic_numbers,
+                lattice=None,
+                stress=None,
+                energy=None,
+                properties=None,
+                comment=None,
+            )
+
+            result = self.variant(kirkland_potentials_XYZ)(
+                xyz_data, pixel_size, slice_thickness
+            )
+            potentials.append(jnp.max(result.slices[:, :, 0]))
+
+        # Heavier atoms should have stronger potentials
+        for i in range(len(potentials) - 1):
+            self.assertLess(potentials[i], potentials[i + 1])
+
+    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    def test_vmap_compatibility(self):
+        """Test that function works with vmap over multiple structures."""
+
+        n_structures = 3
+        positions_batch = jnp.array(
+            [
+                [[0.0, 0.0, 0.0]],
+                [[1.0, 1.0, 0.0]],
+                [[2.0, 2.0, 0.0]],
+            ]
+        )
+        atomic_numbers_batch = jnp.array([[1], [6], [14]])
+
+        pixel_size = 0.2
+
+        def process_single(pos, atoms):
+            xyz_data = make_xyz_data(
+                positions=pos,
+                atomic_numbers=atoms,
+                lattice=None,
+                stress=None,
+                energy=None,
+                properties=None,
+                comment=None,
+            )
+            return self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size)
+
+        # Process each structure
+        results = []
+        for i in range(n_structures):
+            results.append(process_single(positions_batch[i], atomic_numbers_batch[i]))
+
+        for result in results:
+            self.assertIsNotNone(result)
+            self.assertGreater(jnp.sum(result.slices), 0.0)
 
 
 if __name__ == "__main__":

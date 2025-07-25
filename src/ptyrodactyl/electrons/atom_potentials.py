@@ -39,13 +39,9 @@ from beartype import beartype
 from beartype.typing import Optional, Tuple, Union
 from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
-from .electron_types import (PotentialSlices, ProbeModes, XYZData,
-                             make_potential_slices, make_probe_modes,
+from .electron_types import (PotentialSlices, XYZData, make_potential_slices,
                              scalar_float, scalar_int, scalar_numeric)
-from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
-                       rotmatrix_vectors)
 from .preprocessing import kirkland_potentials
-from .simulations import make_probe, stem_4D
 
 jax.config.update("jax_enable_x64", True)
 

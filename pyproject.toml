@@ -38,6 +38,7 @@ dependencies = [
     "jax[cuda12]>=0.4.30 ; sys_platform == 'linux'",
     "jax>=0.4.30 ; sys_platform == 'win64'",
     "isort>=6.0.1",
+    "pytest-cov>=6.2.1",
 ]
 
 [tool.setuptools]

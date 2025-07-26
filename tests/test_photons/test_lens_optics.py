@@ -10,7 +10,7 @@ from ptyrodactyl.photons.lens_optics import (angular_spectrum_prop,
                                              circular_aperture, digital_zoom,
                                              fraunhofer_prop, fresnel_prop,
                                              optical_zoom)
-from ptyrodactyl.photons.photon_types import OpticalWavefront, scalar_num
+from ptyrodactyl.photons.photon_types import OpticalWavefront, scalar_numeric
 
 jax.config.update("jax_enable_x64", True)
 

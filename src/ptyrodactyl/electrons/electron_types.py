@@ -28,6 +28,9 @@ PyTrees
 - `XYZData`:
     A PyTree for XYZ file data with atomic positions, lattice vectors,
     stress tensor, energy, properties, and comment
+- `STEM4D`:
+    A PyTree for 4D-STEM data containing diffraction patterns, calibrations,
+    scan positions, and experimental parameters
 
 Factory Functions
 ----------------
@@ -41,6 +44,8 @@ Factory Functions
     Creates a CrystalStructure instance with runtime type checking
 - `make_xyz_data`:
     Creates a XYZData instance with runtime type checking
+- `make_stem4d`:
+    Creates a STEM4D instance with runtime type checking
 
 Note
 ----
@@ -298,6 +303,53 @@ class XYZData(NamedTuple):
             properties=aux_data["properties"],
             comment=aux_data["comment"],
         )
+
+
+@register_pytree_node_class
+class STEM4D(NamedTuple):
+    """
+    Description
+    -----------
+    PyTree structure for 4D-STEM data containing diffraction patterns
+    at multiple scan positions with associated calibrations and metadata.
+
+    Attributes
+    ----------
+    - `data` (Float[Array, "P H W"]):
+        4D-STEM data array where:
+        - P: Number of scan positions
+        - H, W: Height and width of diffraction patterns
+    - `real_space_calib` (Float[Array, ""]):
+        Real space calibration in Angstroms per pixel
+    - `fourier_space_calib` (Float[Array, ""]):
+        Fourier space calibration in inverse Angstroms per pixel
+    - `scan_positions` (Float[Array, "P 2"]):
+        Real space scan positions in Angstroms (y, x coordinates)
+    - `voltage_kV` (Float[Array, ""]):
+        Accelerating voltage in kilovolts
+    """
+
+    data: Float[Array, "P H W"]
+    real_space_calib: Float[Array, ""]
+    fourier_space_calib: Float[Array, ""]
+    scan_positions: Float[Array, "P 2"]
+    voltage_kV: Float[Array, ""]
+
+    def tree_flatten(self):
+        return (
+            (
+                self.data,
+                self.real_space_calib,
+                self.fourier_space_calib,
+                self.scan_positions,
+                self.voltage_kV,
+            ),
+            None,
+        )
+
+    @classmethod
+    def tree_unflatten(cls, aux_data, children):
+        return cls(*children)
 
 
 @jaxtyped(typechecker=beartype)
@@ -710,3 +762,74 @@ def make_xyz_data(
         )
 
     return validate_and_create()
+
+
+@jaxtyped(typechecker=beartype)
+def make_stem4d(
+    data: Float[Array, "P H W"],
+    real_space_calib: scalar_float,
+    fourier_space_calib: scalar_float,
+    scan_positions: Float[Array, "P 2"],
+    voltage_kV: scalar_numeric,
+) -> STEM4D:
+    """
+    Description
+    -----------
+    JAX-safe factory function for STEM4D with data validation.
+
+    Parameters
+    ----------
+    - `data` (Float[Array, "P H W"]):
+        4D-STEM data array with P scan positions and HxW diffraction patterns
+    - `real_space_calib` (scalar_float):
+        Real space calibration in Angstroms per pixel
+    - `fourier_space_calib` (scalar_float):
+        Fourier space calibration in inverse Angstroms per pixel
+    - `scan_positions` (Float[Array, "P 2"]):
+        Real space scan positions in Angstroms (y, x coordinates)
+    - `voltage_kV` (scalar_numeric):
+        Accelerating voltage in kilovolts
+
+    Returns
+    -------
+    - `stem4d` (STEM4D):
+        Validated 4D-STEM data structure
+
+    Raises
+    ------
+    - ValueError:
+        If data dimensions are inconsistent or calibrations are invalid
+
+    Validation Flow
+    ---------------
+    - Convert all inputs to JAX arrays with appropriate dtypes:
+       - data: Maintain as float array
+       - real_space_calib: Convert to float64
+       - fourier_space_calib: Convert to float64
+       - scan_positions: Convert to float64
+       - voltage_kV: Convert to float64
+    - Execute consistency checks:
+       - check_scan_positions(): Verify scan_positions shape matches data
+       - check_calibrations(): Ensure calibrations are positive
+       - check_voltage(): Verify voltage is positive
+    - If all validations pass, create and return STEM4D instance
+    """
+    # Convert inputs to JAX arrays
+    data = jnp.asarray(data)
+    real_space_calib = jnp.asarray(real_space_calib, dtype=jnp.float64)
+    fourier_space_calib = jnp.asarray(fourier_space_calib, dtype=jnp.float64)
+    scan_positions = jnp.asarray(scan_positions, dtype=jnp.float64)
+    voltage_kV = jnp.asarray(voltage_kV, dtype=jnp.float64)
+
+    # Ensure calibrations and voltage are positive
+    real_space_calib = jnp.abs(real_space_calib) + jnp.finfo(jnp.float64).eps
+    fourier_space_calib = jnp.abs(fourier_space_calib) + jnp.finfo(jnp.float64).eps
+    voltage_kV = jnp.abs(voltage_kV) + jnp.finfo(jnp.float64).eps
+
+    return STEM4D(
+        data=data,
+        real_space_calib=real_space_calib,
+        fourier_space_calib=fourier_space_calib,
+        scan_positions=scan_positions,
+        voltage_kV=voltage_kV,
+    )

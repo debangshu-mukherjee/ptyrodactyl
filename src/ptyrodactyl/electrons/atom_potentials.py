@@ -668,7 +668,7 @@ def kirkland_potentials_XYZ(
         Thickness of each slice in Angstroms. Default is 1.0
     - `repeats` (Int[Array, "3"], optional):
         Number of unit cell repeats in [x, y, z] directions. Default is
-        [1, 1, 1].
+        [1, 1, 1], which means no repeating.
         Requires xyz_data.lattice to be provided for repeating the structure.
     - `padding` (scalar_float, optional):
         Padding in Angstroms added to all sides. Default is 4.0
@@ -711,10 +711,11 @@ def kirkland_potentials_XYZ(
     lattice: Float[Array, "3 3"] = xyz_data.lattice
 
     def apply_repeats_with_lattice(
-        args: Tuple[Float[Array, "N 3"], Int[Array, "N"], Float[Array, "3 3"]],
+        positions: Float[Array, "N 3"],
+        atomic_numbers: Int[Array, "N"],
+        lattice: Float[Array, "3 3"],
     ) -> Tuple[Float[Array, "M 3"], Int[Array, "M"]]:
         """Apply periodic repeats to positions and atomic numbers."""
-        positions, atomic_numbers, lattice = args
         nx: Int[Array, ""] = repeats[0]
         ny: Int[Array, ""] = repeats[1]
         nz: Int[Array, ""] = repeats[2]
@@ -800,10 +801,11 @@ def kirkland_potentials_XYZ(
         return (repeated_positions_masked, repeated_atomic_numbers_masked)
 
     def return_unchanged(
-        args: Tuple[Float[Array, "N 3"], Int[Array, "N"], Float[Array, "3 3"]],
+        positions: Float[Array, "N 3"],
+        atomic_numbers: Int[Array, "N"],
+        lattice: Float[Array, "3 3"],
     ) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, "max_n^3*N"]]:
         """Return positions and atomic numbers unchanged but in the same shape as apply_repeats."""
-        positions, atomic_numbers, _ = args
         n_atoms: int = positions.shape[0]
         max_n: int = 20
         max_shifts: int = max_n * max_n * max_n
@@ -821,9 +823,11 @@ def kirkland_potentials_XYZ(
 
     positions, atomic_numbers = jax.lax.cond(
         jnp.any(repeats > 1),
-        apply_repeats_with_lattice,
-        return_unchanged,
-        (positions, atomic_numbers, lattice),
+        lambda pos, an, lat: apply_repeats_with_lattice(pos, an, lat),
+        lambda pos, an, lat: return_unchanged(pos, an, lat),
+        positions,
+        atomic_numbers,
+        lattice,
     )
 
     sliced_atoms: Float[Array, "N 4"] = _slice_atoms(

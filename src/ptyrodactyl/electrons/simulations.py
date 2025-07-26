@@ -48,9 +48,10 @@ from jax import lax
 from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
                        PRNGKeyArray, jaxtyped)
 
-from .electron_types import (CalibratedArray, PotentialSlices, ProbeModes,
-                             make_calibrated_array, make_probe_modes,
-                             scalar_float, scalar_int, scalar_numeric)
+from .electron_types import (STEM4D, CalibratedArray, PotentialSlices,
+                             ProbeModes, make_calibrated_array,
+                             make_probe_modes, make_stem4d, scalar_float,
+                             scalar_int, scalar_numeric)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -463,11 +464,11 @@ def cbed(
     ----------
     - `pot_slices` (PotentialSlices):,
         The potential slice(s). It has the following attributes:
-        - `slices` (Complex[Array, "H W S"]):
-            Individual potential slices.
+        - `slices` (Float[Array, "H W S"]):
+            Individual potential slices in Kirkland units.
             S is number of slices
         - `slice_thickness` (scalar_numeric):
-            Mode occupation numbers
+            Thickness of each slice in angstroms
         - `calib` (scalar_float):
             Pixel Calibration
     - `beam` (ProbeModes):
@@ -502,7 +503,7 @@ def cbed(
     """
     calib_ang: scalar_float = jnp.amin(jnp.array([pot_slices.calib, beam.calib]))
     dtype: jnp.dtype = beam.modes.dtype
-    pot_slice: Complex[Array, "H W S"] = jnp.atleast_3d(pot_slices.slices)
+    pot_slice: Float[Array, "H W S"] = jnp.atleast_3d(pot_slices.slices)
     beam_modes: Complex[Array, "H W M"] = jnp.atleast_3d(beam.modes)
     num_slices: int = pot_slice.shape[-1]
     slice_transmission: Complex[Array, "H W"] = propagation_func(
@@ -518,10 +519,13 @@ def cbed(
         carry: Complex[Array, "H W M"], slice_idx: scalar_int
     ) -> Tuple[Complex[Array, "H W M"], None]:
         wave: Complex[Array, "H W M"] = carry
-        trans_slice: Complex[Array, "H W 1"] = lax.dynamic_slice_in_dim(
+        pot_single_slice: Float[Array, "H W 1"] = lax.dynamic_slice_in_dim(
             pot_slice, slice_idx, 1, axis=2
         )
-        trans_slice: Complex[Array, "H W"] = jnp.squeeze(trans_slice, axis=2)
+        pot_single_slice: Float[Array, "H W"] = jnp.squeeze(pot_single_slice, axis=2)
+        trans_slice: Complex[Array, "H W"] = transmission_func(
+            pot_single_slice, voltage_kV
+        )
         wave = wave * trans_slice[..., jnp.newaxis]
 
         def propagate(w: Complex[Array, "H W M"]) -> Complex[Array, "H W M"]:
@@ -621,7 +625,7 @@ def stem_4D(
     positions: Num[Array, "#P 2"],
     voltage_kV: scalar_numeric,
     calib_ang: scalar_float,
-) -> CalibratedArray:
+) -> STEM4D:
     """
     Description
     -----------
@@ -647,20 +651,24 @@ def stem_4D(
 
     Returns
     -------
-    -  `cbed_patterns` (Float[Array, "P H W"]):
-        The calculated CBED patterns for each position.
+    -  `stem4d_data` (STEM4D):
+        Complete 4D-STEM dataset containing:
+        - Diffraction patterns for each scan position
+        - Real and Fourier space calibrations
+        - Scan positions in Angstroms
+        - Accelerating voltage
 
     Flow
     ----
     - Shift beam to all specified positions
     - For each position, run CBED simulation
-    - Return array of all CBED patterns
+    - Return STEM4D PyTree with all data and calibrations
     """
     shifted_beams: Complex[Array, "P H W #M"] = shift_beam_fourier(
         beam.modes, positions, calib_ang
     )
 
-    def process_single_position(pos_idx: scalar_int) -> CalibratedArray:
+    def process_single_position(pos_idx: scalar_int) -> Float[Array, "H W"]:
         current_beam: Complex[Array, "H W #M"] = jnp.take(
             shifted_beams, pos_idx, axis=0
         )
@@ -669,15 +677,39 @@ def stem_4D(
             weights=beam.weights,
             calib=beam.calib,
         )
-        cbed_pattern: CalibratedArray = cbed(
+        cbed_result: CalibratedArray = cbed(
             pot_slices=pot_slice, beam=current_ProbeModes, voltage_kV=voltage_kV
         )
-        return cbed_pattern
+        return cbed_result.data_array
 
-    cbed_patterns: CalibratedArray = jax.vmap(process_single_position)(
+    cbed_patterns: Float[Array, "P H W"] = jax.vmap(process_single_position)(
         jnp.arange(positions.shape[0])
     )
-    return cbed_patterns
+
+    # Calculate Fourier space calibration from the first CBED result
+    # We need to run cbed once to get the calibration
+    first_beam_modes: ProbeModes = ProbeModes(
+        modes=shifted_beams[0],
+        weights=beam.weights,
+        calib=beam.calib,
+    )
+    first_cbed: CalibratedArray = cbed(
+        pot_slices=pot_slice, beam=first_beam_modes, voltage_kV=voltage_kV
+    )
+    fourier_calib: Float[Array, ""] = first_cbed.calib_y
+
+    # Convert positions back to Angstroms for storage
+    scan_positions_ang: Float[Array, "P 2"] = positions * calib_ang
+
+    # Create and return STEM4D PyTree
+    stem4d_data: STEM4D = make_stem4d(
+        data=cbed_patterns,
+        real_space_calib=calib_ang,
+        fourier_space_calib=fourier_calib,
+        scan_positions=scan_positions_ang,
+        voltage_kV=voltage_kV,
+    )
+    return stem4d_data
 
 
 @jaxtyped(typechecker=typechecker)

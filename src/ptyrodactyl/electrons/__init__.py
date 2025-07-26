@@ -24,16 +24,19 @@ Submodules
 - `simulations`:
     Forward simulation functions for electron beam propagation, CBED patterns,
     and 4D-STEM data generation including aberration calculations and probe creation
+- `workflows`:
+    High-level workflows that combine multiple simulation steps for common use cases
+    such as simulating 4D-STEM data from XYZ structure files
 """
 
 from .atom_potentials import (bessel_kv, contrast_stretch,
                               kirkland_potentials_XYZ, single_atom_potential)
-from .electron_types import (CalibratedArray, CrystalStructure,
+from .electron_types import (STEM4D, CalibratedArray, CrystalStructure,
                              PotentialSlices, ProbeModes, XYZData,
                              make_calibrated_array, make_crystal_structure,
                              make_potential_slices, make_probe_modes,
-                             make_xyz_data, non_jax_number, scalar_float,
-                             scalar_int, scalar_numeric)
+                             make_stem4d, make_xyz_data, non_jax_number,
+                             scalar_float, scalar_int, scalar_numeric)
 from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
                        rotmatrix_vectors)
 from .phase_recon import (multi_slice_multi_modal, single_slice_multi_modal,
@@ -43,6 +46,7 @@ from .simulations import (aberration, cbed, decompose_beam_to_modes,
                           fourier_calib, fourier_coords, make_probe,
                           propagation_func, shift_beam_fourier, stem_4D,
                           transmission_func, wavelength_ang)
+from .workflows import xyz_to_4d_stem
 
 __all__: list[str] = [
     "aberration",
@@ -74,15 +78,18 @@ __all__: list[str] = [
     "CalibratedArray",
     "PotentialSlices",
     "ProbeModes",
+    "STEM4D",
     "CrystalStructure",
     "XYZData",
     "make_calibrated_array",
     "make_potential_slices",
     "make_probe_modes",
+    "make_stem4d",
     "make_crystal_structure",
     "make_xyz_data",
     "non_jax_number",
     "scalar_float",
     "scalar_int",
     "scalar_numeric",
+    "xyz_to_4d_stem",
 ]

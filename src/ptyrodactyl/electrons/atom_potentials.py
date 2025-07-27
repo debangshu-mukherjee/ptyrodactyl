@@ -316,7 +316,7 @@ def single_atom_potential(
     pixel_size: scalar_float,
     grid_shape: Optional[Tuple[scalar_int, scalar_int]] = None,
     center_coords: Optional[Float[Array, "2"]] = None,
-    supersampling: Optional[scalar_int] = 16,
+    supersampling: Optional[scalar_int] = 4,
     potential_extent: Optional[scalar_float] = 4.0,
 ) -> Float[Array, "h w"]:
     """
@@ -660,6 +660,7 @@ def kirkland_potentials_XYZ(
     slice_thickness: Optional[scalar_float] = 1.0,
     repeats: Optional[Int[Array, "3"]] = jnp.array([1, 1, 1]),
     padding: Optional[scalar_float] = 4.0,
+    supersampling: Optional[scalar_int] = 4,
 ) -> PotentialSlices:
     """
     Description
@@ -872,7 +873,7 @@ def kirkland_potentials_XYZ(
             pixel_size=pixel_size,
             grid_shape=(height, width),
             center_coords=jnp.array([0.0, 0.0]),
-            supersampling=16,
+            supersampling=supersampling,
             potential_extent=4.0,
         )
 
@@ -880,9 +881,11 @@ def kirkland_potentials_XYZ(
         unique_atoms
     )
     atom_to_idx_array: Int[Array, "119"] = jnp.full(119, -1, dtype=jnp.int32)
-    
+
     # Create mapping for only the unique atoms we actually have
-    atom_to_idx_array = atom_to_idx_array.at[unique_atoms].set(jnp.arange(n_unique_atoms))
+    atom_to_idx_array = atom_to_idx_array.at[unique_atoms].set(
+        jnp.arange(n_unique_atoms)
+    )
     max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
     n_slices: Int[Array, ""] = max_slice_idx + 1
     all_slices: Float[Array, "h w n_slices"] = jnp.zeros(

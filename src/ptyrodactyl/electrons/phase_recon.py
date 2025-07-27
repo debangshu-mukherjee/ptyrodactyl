@@ -52,7 +52,7 @@ OPTIMIZERS: Dict[str, ptt.Optimizer] = {
     "rmsprop": ptt.Optimizer(ptt.init_rmsprop, ptt.rmsprop_update),
 }
 
-from .electron_types import (CalibratedArray, ProbeModes,
+from .electron_types import (STEM4D, CalibratedArray, ProbeModes,
                              make_calibrated_array, scalar_float, scalar_int,
                              scalar_numeric)
 from .simulations import stem_4D
@@ -67,13 +67,10 @@ def _get_optimizer(optimizer_name: str) -> ptt.Optimizer:
 
 @jaxtyped(typechecker=typechecker)
 def single_slice_ptychography(
-    experimental_4dstem: Float[Array, "P H W"],
+    experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
-    pos_list: Float[Array, "P 2"],
     slice_thickness: scalar_numeric,
-    voltage_kV: scalar_numeric,
-    calib_ang: scalar_float,
     save_every: Optional[scalar_int] = 10,
     num_iterations: Optional[scalar_int] = 1000,
     learning_rate: Optional[scalar_float] = 0.001,
@@ -93,20 +90,15 @@ def single_slice_ptychography(
 
     Parameters
     ----------
-    - `experimental_4dstem` (Float[Array, "P H W"]):
-        Experimental 4D-STEM data.
+    - `experimental_stem4d` (STEM4D):
+        Experimental 4D-STEM data PyTree containing diffraction patterns,
+        scan positions, and calibration information.
     - `initial_potential` (pte.CalibratedArray):
         Initial guess for potential slice.
     - `initial_beam` (pte.CalibratedArray):
         Initial guess for electron beam.
-    - `pos_list` (Float[Array, "P 2"]):
-        List of probe positions.
     - `slice_thickness` (scalar_numeric):
         Thickness of each slice.
-    - `voltage_kV` (scalar_numeric):
-        Accelerating voltage.
-    - `calib_ang` (scalar_float):
-        Calibration in angstroms.
     - `save_every` (scalar_int):
         Save every nth iteration.
         Optional, default is 10.
@@ -134,11 +126,15 @@ def single_slice_ptychography(
     - `intermediate_beam` (Complex[Array, "H W S"]):
         Intermediate electron beams.
     """
+    experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
+    pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
+    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
+    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
 
     def forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Float[Array, "P H W"]:
-        return stem_4D(
+        stem4d_result = stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -146,6 +142,7 @@ def single_slice_ptychography(
             voltage_kV,
             calib_ang,
         )
+        return stem4d_result.data
 
     loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 
@@ -234,13 +231,10 @@ def single_slice_ptychography(
 
 @jaxtyped(typechecker=typechecker)
 def single_slice_poscorrected(
-    experimental_4dstem: Float[Array, "P H W"],
+    experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
-    initial_pos_list: Float[Array, "P 2"],
     slice_thickness: scalar_numeric,
-    voltage_kV: scalar_numeric,
-    calib_ang: scalar_float,
     save_every: Optional[scalar_int] = 10,
     num_iterations: Optional[scalar_int] = 1000,
     learning_rate: Optional[Union[scalar_float, Float[Array, "2"]]] = 0.01,
@@ -261,20 +255,15 @@ def single_slice_poscorrected(
 
     Parameters
     ----------
-    - `experimental_4dstem` (Float[Array, "P H W"]):
-        Experimental 4D-STEM data.
-    - `initial_pot_slice` (pte.CalibratedArray):
+    - `experimental_stem4d` (STEM4D):
+        Experimental 4D-STEM data PyTree containing diffraction patterns,
+        scan positions, and calibration information.
+    - `initial_potential` (pte.CalibratedArray):
         Initial guess for potential slice.
     - `initial_beam` (pte.CalibratedArray):
         Initial guess for electron beam.
-    - `initial_pos_list` (Float[Array, "P 2"]):
-        Initial list of probe positions.
     - `slice_thickness` (scalar_numeric):
         Thickness of each slice.
-    - `voltage_kV` (scalar_numeric):
-        Accelerating voltage.
-    - `calib_ang` (scalar_float):
-        Calibration in angstroms.
     - `save_every` (scalar_int):
         Save every nth iteration.
         Optional, default is 10.
@@ -310,13 +299,17 @@ def single_slice_poscorrected(
     - `intermediate_positions` (Float[Array, "P 2 S"]):
         Intermediate probe positions.
     """
+    experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
+    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
+    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
+    initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
     def forward_fn(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        return stem_4D(
+        stem4d_result = stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -324,6 +317,7 @@ def single_slice_poscorrected(
             voltage_kV,
             calib_ang,
         )
+        return stem4d_result.data
 
     loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 
@@ -456,13 +450,10 @@ def single_slice_poscorrected(
 
 @jaxtyped(typechecker=typechecker)
 def single_slice_multi_modal(
-    experimental_4dstem: Float[Array, "P H W"],
+    experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: ProbeModes,
-    initial_pos_list: Float[Array, "P 2"],
     slice_thickness: scalar_numeric,
-    voltage_kV: scalar_numeric,
-    calib_ang: scalar_float,
     save_every: Optional[scalar_int] = 10,
     num_iterations: Optional[scalar_int] = 1000,
     learning_rate: Optional[Union[scalar_float, Float[Array, "2"]]] = 0.01,
@@ -482,20 +473,18 @@ def single_slice_multi_modal(
 
     Parameters
     ----------
-    - `experimental_4dstem` (Float[Array, "P H W"]):
-        Experimental 4D-STEM data.
+    - `experimental_stem4d` (STEM4D):
+        Experimental 4D-STEM data PyTree containing diffraction patterns,
+        scan positions, and calibration information.
     - `initial_pot_slice` (Complex[Array, "H W"]):
         Initial guess for potential slice.
-    - `initial_beam` (Complex[Array, "H W"]):
-        Initial guess for electron beam.
-    - `initial_pos_list` (Float[Array, "P 2"]):
-        Initial list of probe positions.
+    - `initial_beam` (pte.ProbeModes):
+        Initial guess for electron beam with multiple probe modes.
     - `slice_thickness` (scalar_numeric):
         Thickness of each slice.
-    - `voltage_kV` (scalar_numeric):
-        Accelerating voltage.
-    - `calib_ang` (scalar_float):
-        Calibration in angstroms.
+    - `initial_pos_list` (Optional[Float[Array, "P 2"]]):
+        Initial list of probe positions. If None, uses positions from STEM4D.
+        Optional, default is None.
     - `save_every` (scalar_int):
         Save every nth iteration.
         Optional, default is 10.
@@ -529,13 +518,17 @@ def single_slice_multi_modal(
     - `intermediate_beam` (Complex[Array, "H W S"]):
         Intermediate electron beams.
     """
+    experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
+    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
+    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
+    initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
     def forward_fn(
         pot_slice: Complex[Array, "H W"],
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        return stem_4D(
+        stem4d_result = stem_4D(
             pot_slice[None, ...],
             beam,
             pos_list,
@@ -543,6 +536,7 @@ def single_slice_multi_modal(
             voltage_kV,
             calib_ang,
         )
+        return stem4d_result.data
 
     loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 
@@ -640,13 +634,10 @@ def single_slice_multi_modal(
 
 @jaxtyped(typechecker=typechecker)
 def multi_slice_multi_modal(
-    experimental_4dstem: Float[Array, "P H W"],
+    experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: Complex[Array, "H W"],
-    initial_pos_list: Float[Array, "P 2"],
     slice_thickness: scalar_numeric,
-    voltage_kV: scalar_numeric,
-    calib_ang: scalar_float,
     save_every: Optional[scalar_int] = 10,
     num_iterations: Optional[scalar_int] = 1000,
     learning_rate: Optional[scalar_float] = 0.001,
@@ -667,20 +658,18 @@ def multi_slice_multi_modal(
 
     Parameters
     ----------
-    - `experimental_4dstem` (Float[Array, "P H W"]):
-        Experimental 4D-STEM data.
+    - `experimental_stem4d` (STEM4D):
+        Experimental 4D-STEM data PyTree containing diffraction patterns,
+        scan positions, and calibration information.
     - `initial_pot_slice` (Complex[Array, "H W"]):
         Initial guess for potential slice.
     - `initial_beam` (Complex[Array, "H W"]):
         Initial guess for electron beam.
-    - `initial_pos_list` (Float[Array, "P 2"]):
-        Initial list of probe positions.
     - `slice_thickness` (scalar_numeric):
         Thickness of each slice.
-    - `voltage_kV` (scalar_numeric):
-        Accelerating voltage.
-    - `calib_ang` (scalar_float):
-        Calibration in angstroms.
+    - `initial_pos_list` (Optional[Float[Array, "P 2"]]):
+        Initial list of probe positions. If None, uses positions from STEM4D.
+        Optional, default is None.
     - `save_every` (scalar_int):
         Save every nth iteration.
         Optional, default is 10.
@@ -713,13 +702,17 @@ def multi_slice_multi_modal(
     - `intermediate_beam` (Complex[Array, "H W S"]):
         Intermediate electron beams.
     """
+    experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
+    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
+    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
+    initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
     def forward_fn(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        return stem_4D(
+        stem4d_result = stem_4D(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -727,6 +720,7 @@ def multi_slice_multi_modal(
             voltage_kV,
             calib_ang,
         )
+        return stem4d_result.data
 
     loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 

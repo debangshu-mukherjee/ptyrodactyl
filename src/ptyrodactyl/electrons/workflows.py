@@ -20,8 +20,7 @@ from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from .atom_potentials import kirkland_potentials_XYZ
 from .electron_types import (STEM4D, PotentialSlices, ProbeModes, XYZData,
-                             make_probe_modes, make_stem4d, scalar_float,
-                             scalar_numeric)
+                             make_probe_modes, scalar_float, scalar_numeric)
 from .preprocessing import parse_xyz
 from .simulations import make_probe, stem_4D
 

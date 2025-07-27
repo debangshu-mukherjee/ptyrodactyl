@@ -259,6 +259,9 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     """
     Parses an XYZ file and returns a validated XYZData PyTree.
 
+    Supports both atomic symbols (e.g., "H", "Fe") and atomic numbers (e.g., "1", "26")
+    in the first column of atom data.
+
     Parameters
     ----------
     - `file_path` (str or Path):
@@ -307,7 +310,15 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
             symbol, x, y, z = parts[:4]
 
         positions.append([float(x), float(y), float(z)])
-        atomic_numbers.append(atomic_symbol(symbol))
+
+        # Handle both atomic symbols and atomic numbers
+        try:
+            # Try to parse as an integer (atomic number)
+            atomic_num = int(symbol)
+            atomic_numbers.append(atomic_num)
+        except ValueError:
+            # Not a number, treat as atomic symbol
+            atomic_numbers.append(atomic_symbol(symbol))
 
     positions_arr: Float[Array, "N 3"] = jnp.array(positions, dtype=jnp.float64)
     atomic_Z_arr: Int[Array, "N"] = jnp.array(atomic_numbers, dtype=jnp.int32)

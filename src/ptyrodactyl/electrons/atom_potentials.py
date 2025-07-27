@@ -233,9 +233,19 @@ def bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
 
                 def compute_kn():
                     init = (k0, k1)
-                    carry, k_vals = jax.lax.scan(
-                        recurrence_step, init, jnp.arange(1, n, dtype=jnp.float32)
-                    )
+                    max_n = 20  # Maximum order we support
+                    indices = jnp.arange(1, max_n, dtype=jnp.float32)
+
+                    def masked_step(carry, i):
+                        k_prev2, k_prev1 = carry
+                        mask = i < n
+                        two_i_over_x: Float[Array, "..."] = 2.0 * i / x
+                        k_curr: Float[Array, "..."] = two_i_over_x * k_prev1 + k_prev2
+                        # Only update if within our target range
+                        k_curr = jnp.where(mask, k_curr, k_prev1)
+                        return (k_prev1, k_curr), k_curr
+
+                    carry, k_vals = jax.lax.scan(masked_step, init, indices)
                     final_k: Float[Array, "..."] = carry[1]
                     return final_k
 

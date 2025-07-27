@@ -651,7 +651,7 @@ def stem_4D(
 
     Returns
     -------
-    -  `stem4d_data` (STEM4D):
+    - `stem4d_data` (STEM4D):
         Complete 4D-STEM dataset containing:
         - Diffraction patterns for each scan position
         - Real and Fourier space calibrations
@@ -685,9 +685,6 @@ def stem_4D(
     cbed_patterns: Float[Array, "P H W"] = jax.vmap(process_single_position)(
         jnp.arange(positions.shape[0])
     )
-
-    # Calculate Fourier space calibration from the first CBED result
-    # We need to run cbed once to get the calibration
     first_beam_modes: ProbeModes = ProbeModes(
         modes=shifted_beams[0],
         weights=beam.weights,
@@ -697,11 +694,7 @@ def stem_4D(
         pot_slices=pot_slice, beam=first_beam_modes, voltage_kV=voltage_kV
     )
     fourier_calib: Float[Array, ""] = first_cbed.calib_y
-
-    # Convert positions back to Angstroms for storage
     scan_positions_ang: Float[Array, "P 2"] = positions * calib_ang
-
-    # Create and return STEM4D PyTree
     stem4d_data: STEM4D = make_stem4d(
         data=cbed_patterns,
         real_space_calib=calib_ang,

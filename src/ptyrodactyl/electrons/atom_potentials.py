@@ -863,7 +863,8 @@ def kirkland_potentials_XYZ(
     height_float: Float[Array, ""] = jnp.ceil(y_range / pixel_size)
     width: Int[Array, ""] = width_float.astype(jnp.int32)
     height: Int[Array, ""] = height_float.astype(jnp.int32)
-    unique_atoms: Int[Array, "n_unique"] = jnp.unique(atom_nums, size=118, fill_value=0)
+    unique_atoms: Int[Array, "n_unique"] = jnp.unique(atom_nums)
+    n_unique_atoms = unique_atoms.shape[0]
 
     def calc_single_potential(atom_no: scalar_int) -> Float[Array, "h w"]:
         return single_atom_potential(
@@ -879,11 +880,9 @@ def kirkland_potentials_XYZ(
         unique_atoms
     )
     atom_to_idx_array: Int[Array, "119"] = jnp.full(119, -1, dtype=jnp.int32)
-    valid_mask: Bool[Array, "118"] = unique_atoms > 0
-    valid_atoms: Int[Array, "118"] = jnp.where(valid_mask, unique_atoms, 0)
-    atom_to_idx_array = atom_to_idx_array.at[valid_atoms].set(
-        jnp.where(valid_mask, jnp.arange(118), -1)
-    )
+    
+    # Create mapping for only the unique atoms we actually have
+    atom_to_idx_array = atom_to_idx_array.at[unique_atoms].set(jnp.arange(n_unique_atoms))
     max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
     n_slices: Int[Array, ""] = max_slice_idx + 1
     all_slices: Float[Array, "h w n_slices"] = jnp.zeros(

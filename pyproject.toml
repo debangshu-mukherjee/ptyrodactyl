@@ -39,6 +39,7 @@ dependencies = [
     "jax>=0.4.30 ; sys_platform == 'win64'",
     "isort>=6.0.1",
     "pytest-cov>=6.2.1",
+    "jupyterlab>=4.4.5",
 ]
 
 [tool.setuptools]

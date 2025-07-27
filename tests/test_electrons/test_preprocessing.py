@@ -580,6 +580,127 @@ Xx   1.0   1.0   1.0
         finally:
             xyz_path.unlink()
 
+    def test_parse_xyz_with_atomic_numbers(self):
+        """Test parsing XYZ file with atomic numbers instead of symbols."""
+        xyz_content = """3
+Water molecule with atomic numbers
+8    0.0000   0.0000   0.0000
+1    0.7570   0.5860   0.0000
+1   -0.7570   0.5860   0.0000
+"""
+        xyz_path = self.create_temp_xyz_file(xyz_content)
+
+        try:
+            result = parse_xyz(xyz_path)
+
+            # Check positions shape and values
+            assert result.positions.shape == (3, 3)
+            assert jnp.allclose(result.positions[0], jnp.array([0.0, 0.0, 0.0]))
+            assert jnp.allclose(result.positions[1], jnp.array([0.7570, 0.5860, 0.0]))
+            assert jnp.allclose(result.positions[2], jnp.array([-0.7570, 0.5860, 0.0]))
+
+            # Check atomic numbers
+            assert result.atomic_numbers.shape == (3,)
+            assert result.atomic_numbers[0] == 8  # Oxygen
+            assert result.atomic_numbers[1] == 1  # Hydrogen
+            assert result.atomic_numbers[2] == 1  # Hydrogen
+
+            # Check comment
+            assert result.comment == "Water molecule with atomic numbers"
+        finally:
+            xyz_path.unlink()
+
+    def test_parse_xyz_mixed_symbols_and_numbers(self):
+        """Test parsing XYZ file with mixed atomic symbols and numbers."""
+        xyz_content = """4
+Mixed format test
+C    0.0   0.0   0.0
+14   1.0   1.0   1.0
+Fe   2.0   2.0   2.0
+79   3.0   3.0   3.0
+"""
+        xyz_path = self.create_temp_xyz_file(xyz_content)
+
+        try:
+            result = parse_xyz(xyz_path)
+
+            # Check atomic numbers
+            assert result.atomic_numbers.shape == (4,)
+            assert result.atomic_numbers[0] == 6  # C -> Carbon
+            assert result.atomic_numbers[1] == 14  # 14 -> Silicon
+            assert result.atomic_numbers[2] == 26  # Fe -> Iron
+            assert result.atomic_numbers[3] == 79  # 79 -> Gold
+        finally:
+            xyz_path.unlink()
+
+    def test_parse_xyz_large_atomic_numbers(self):
+        """Test parsing XYZ file with large atomic numbers."""
+        xyz_content = """3
+Heavy elements
+92   0.0   0.0   0.0
+103  1.0   1.0   1.0
+118  2.0   2.0   2.0
+"""
+        xyz_path = self.create_temp_xyz_file(xyz_content)
+
+        try:
+            result = parse_xyz(xyz_path)
+
+            # Check atomic numbers
+            assert result.atomic_numbers[0] == 92  # Uranium
+            assert result.atomic_numbers[1] == 103  # Lawrencium
+            assert result.atomic_numbers[2] == 118  # Oganesson
+        finally:
+            xyz_path.unlink()
+
+    def test_parse_xyz_invalid_atomic_number(self):
+        """Test error handling for invalid atomic numbers."""
+        xyz_content = """2
+Invalid atomic number
+1    0.0   0.0   0.0
+999  1.0   1.0   1.0
+"""
+        xyz_path = self.create_temp_xyz_file(xyz_content)
+
+        try:
+            # Should parse successfully - no validation on atomic number range
+            result = parse_xyz(xyz_path)
+            assert result.atomic_numbers[0] == 1
+            assert result.atomic_numbers[1] == 999
+        finally:
+            xyz_path.unlink()
+
+    def test_parse_xyz_zero_atomic_number(self):
+        """Test parsing XYZ file with zero as atomic number."""
+        xyz_content = """2
+Zero test
+0    0.0   0.0   0.0
+1    1.0   1.0   1.0
+"""
+        xyz_path = self.create_temp_xyz_file(xyz_content)
+
+        try:
+            result = parse_xyz(xyz_path)
+            assert result.atomic_numbers[0] == 0
+            assert result.atomic_numbers[1] == 1
+        finally:
+            xyz_path.unlink()
+
+    def test_parse_xyz_negative_atomic_number(self):
+        """Test parsing XYZ file with negative atomic number."""
+        xyz_content = """2
+Negative test
+-1   0.0   0.0   0.0
+1    1.0   1.0   1.0
+"""
+        xyz_path = self.create_temp_xyz_file(xyz_content)
+
+        try:
+            with pytest.raises(ValueError, match="atomic_numbers must be non-negative"):
+                parse_xyz(xyz_path)
+        finally:
+            xyz_path.unlink()
+
     def test_parse_xyz_invalid_coordinates(self):
         """Test error handling for non-numeric coordinates."""
         xyz_content = """2

@@ -45,8 +45,8 @@ from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
 from .simulations import (aberration, annular_detector, cbed,
                           decompose_beam_to_modes, fourier_calib,
                           fourier_coords, make_probe, propagation_func,
-                          shift_beam_fourier, stem_4D, transmission_func,
-                          wavelength_ang)
+                          shift_beam_fourier, stem_4D, stem_4D_parallel,
+                          stem_4D_sharded, transmission_func, wavelength_ang)
 from .workflows import xyz_to_4d_stem
 
 __all__: list[str] = [
@@ -71,6 +71,8 @@ __all__: list[str] = [
     "propagation_func",
     "shift_beam_fourier",
     "stem_4D",
+    "stem_4D_sharded",
+    "stem_4D_parallel",
     "transmission_func",
     "wavelength_ang",
     "multi_slice_multi_modal",

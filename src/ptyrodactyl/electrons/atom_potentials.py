@@ -104,6 +104,7 @@ def contrast_stretch(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def bessel_kv(v: scalar_float, x: Float[Array, "..."]) -> Float[Array, "..."]:
     """
     Description
@@ -433,7 +434,11 @@ def single_atom_potential(
     ya: Float[Array, "h w"]
     xa: Float[Array, "h w"]
     ya, xa = jnp.meshgrid(y_coords, x_coords, indexing="ij")
-    r: Float[Array, "h w"] = jnp.sqrt((xa - center_x) ** 2 + (ya - center_y) ** 2)
+    # Add small epsilon to avoid r=0 which causes NaN in Bessel K_0(0)
+    epsilon = 1e-10
+    r: Float[Array, "h w"] = jnp.sqrt(
+        (xa - center_x) ** 2 + (ya - center_y) ** 2 + epsilon
+    )
     bessel_term1: Float[Array, "h w"] = kirk_params[0] * bessel_kv(
         0.0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[1]) * r
     )
@@ -483,6 +488,12 @@ def single_atom_potential(
         potential, (0, 0), (target_height, target_width)
     )
     return potential_resized
+
+
+# JIT compile single_atom_potential with static arguments
+single_atom_potential = jax.jit(
+    single_atom_potential, static_argnames=["grid_shape", "supersampling"]
+)
 
 
 @jaxtyped(typechecker=beartype)
@@ -864,27 +875,56 @@ def kirkland_potentials_XYZ(
     height_float: Float[Array, ""] = jnp.ceil(y_range / pixel_size)
     width: Int[Array, ""] = width_float.astype(jnp.int32)
     height: Int[Array, ""] = height_float.astype(jnp.int32)
-    unique_atoms: Int[Array, "n_unique"] = jnp.unique(atom_nums)
-    n_unique_atoms = unique_atoms.shape[0]
+    # Use size parameter for JIT compatibility - max 118 elements in periodic table
+    unique_atoms: Int[Array, "118"] = jnp.unique(atom_nums, size=118, fill_value=-1)
+    # Create mask for valid (non-fill) atoms
+    valid_mask = unique_atoms >= 0
+    n_unique_atoms = jnp.sum(valid_mask)
 
-    def calc_single_potential(atom_no: scalar_int) -> Float[Array, "h w"]:
-        return single_atom_potential(
+    # Convert height and width to Python integers for use in the function
+    height_int = int(height)
+    width_int = int(width)
+
+    # Create a specialized version of single_atom_potential for this specific grid size
+    @jax.jit
+    def calc_single_potential_fixed_grid(
+        atom_no: scalar_int, is_valid: Bool
+    ) -> Float[Array, "h w"]:
+        # Calculate potential only for valid atoms, return zeros for padding
+        potential = single_atom_potential(
             atom_no=atom_no,
             pixel_size=pixel_size,
-            grid_shape=(height, width),
+            grid_shape=(height_int, width_int),
             center_coords=jnp.array([0.0, 0.0]),
             supersampling=supersampling,
             potential_extent=4.0,
         )
+        # Return potential if valid, zeros otherwise
+        return jnp.where(is_valid, potential, jnp.zeros((height_int, width_int)))
 
-    atomic_potentials: Float[Array, "n_unique h w"] = jax.vmap(calc_single_potential)(
-        unique_atoms
-    )
+    # Calculate potentials for all 118 slots (padded with zeros)
+    atomic_potentials: Float[Array, "118 h w"] = jax.vmap(
+        calc_single_potential_fixed_grid
+    )(unique_atoms, valid_mask)
     atom_to_idx_array: Int[Array, "119"] = jnp.full(119, -1, dtype=jnp.int32)
 
     # Create mapping for only the unique atoms we actually have
-    atom_to_idx_array = atom_to_idx_array.at[unique_atoms].set(
-        jnp.arange(n_unique_atoms)
+    # Use where to only set indices for valid atoms
+    indices = jnp.arange(118, dtype=jnp.int32)
+    atom_indices = jnp.where(valid_mask, unique_atoms, -1)
+
+    # Build the mapping array using a scan
+    def update_mapping(carry, idx_atom):
+        mapping_array = carry
+        idx, atom = idx_atom
+        # Only update if atom is valid (>= 0)
+        mapping_array = jnp.where(
+            atom >= 0, mapping_array.at[atom].set(idx), mapping_array
+        )
+        return mapping_array, None
+
+    atom_to_idx_array, _ = jax.lax.scan(
+        update_mapping, atom_to_idx_array, (indices, atom_indices)
     )
     max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
     n_slices: Int[Array, ""] = max_slice_idx + 1
@@ -895,47 +935,54 @@ def kirkland_potentials_XYZ(
     kx: Float[Array, "1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
 
     def process_single_slice(slice_idx: int) -> Float[Array, "h w"]:
-        atoms_mask: Bool[Array, "N"] = slice_indices == slice_idx
-        slice_x: Float[Array, "n_atoms"] = x_coords[atoms_mask]
-        slice_y: Float[Array, "n_atoms"] = y_coords[atoms_mask]
-        slice_atoms: Int[Array, "n_atoms"] = atom_nums[atoms_mask]
         slice_potential: Float[Array, "h w"] = jnp.zeros(
             (height, width), dtype=jnp.float32
         )
-        x_offset: Float[Array, "n_atoms"] = slice_x - x_min
-        y_offset: Float[Array, "n_atoms"] = slice_y - y_min
-        pixel_x: Float[Array, "n_atoms"] = x_offset / pixel_size
-        pixel_y: Float[Array, "n_atoms"] = y_offset / pixel_size
         center_x: float = width / 2.0
         center_y: float = height / 2.0
-        shift_x: Float[Array, "n_atoms"] = pixel_x - center_x
-        shift_y: Float[Array, "n_atoms"] = pixel_y - center_y
 
         def add_atom_contribution(
             carry: Float[Array, "h w"],
-            atom_data: Tuple[scalar_float, scalar_float, scalar_int],
+            atom_data: Tuple[scalar_float, scalar_float, scalar_int, scalar_int],
         ) -> Tuple[Float[Array, "h w"], None]:
             slice_pot: Float[Array, "h w"] = carry
-            sx: scalar_float
-            sy: scalar_float
+            x: scalar_float
+            y: scalar_float
             atom_no: scalar_int
-            sx, sy, atom_no = atom_data
+            atom_slice_idx: scalar_int
+            x, y, atom_no, atom_slice_idx = atom_data
+
+            # Only add contribution if atom is in current slice
+            x_offset: scalar_float = x - x_min
+            y_offset: scalar_float = y - y_min
+            pixel_x: scalar_float = x_offset / pixel_size
+            pixel_y: scalar_float = y_offset / pixel_size
+            shift_x: scalar_float = pixel_x - center_x
+            shift_y: scalar_float = pixel_y - center_y
+
             atom_idx: int = atom_to_idx_array[atom_no]
             atom_pot: Float[Array, "h w"] = atomic_potentials[atom_idx]
-            kx_sx: Float[Array, "h w"] = kx * sx
-            ky_sy: Float[Array, "h w"] = ky * sy
+            kx_sx: Float[Array, "h w"] = kx * shift_x
+            ky_sy: Float[Array, "h w"] = ky * shift_y
             phase_arg: Float[Array, "h w"] = kx_sx + ky_sy
             phase: Complex[Array, "h w"] = jnp.exp(2j * jnp.pi * phase_arg)
             atom_pot_fft: Complex[Array, "h w"] = jnp.fft.fft2(atom_pot)
             shifted_fft: Complex[Array, "h w"] = atom_pot_fft * phase
             shifted_pot: Float[Array, "h w"] = jnp.real(jnp.fft.ifft2(shifted_fft))
-            updated_pot: Float[Array, "h w"] = slice_pot + shifted_pot
+
+            # Add contribution only if atom is in current slice
+            contribution: Float[Array, "h w"] = jnp.where(
+                atom_slice_idx == slice_idx, shifted_pot, jnp.zeros_like(shifted_pot)
+            ).astype(jnp.float32)
+            updated_pot: Float[Array, "h w"] = (slice_pot + contribution).astype(
+                jnp.float32
+            )
             return updated_pot, None
 
         slice_potential, _ = jax.lax.scan(
             add_atom_contribution,
             slice_potential,
-            (shift_x, shift_y, slice_atoms),
+            (x_coords, y_coords, atom_nums, slice_indices),
         )
         return slice_potential
 

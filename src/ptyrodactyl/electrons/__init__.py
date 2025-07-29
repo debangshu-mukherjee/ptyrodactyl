@@ -42,14 +42,16 @@ from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
 from .phase_recon import (multi_slice_multi_modal, single_slice_multi_modal,
                           single_slice_poscorrected, single_slice_ptychography)
 from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
-from .simulations import (aberration, cbed, decompose_beam_to_modes,
-                          fourier_calib, fourier_coords, make_probe,
-                          propagation_func, shift_beam_fourier, stem_4D,
-                          transmission_func, wavelength_ang)
+from .simulations import (aberration, annular_detector, cbed,
+                          decompose_beam_to_modes, fourier_calib,
+                          fourier_coords, make_probe, propagation_func,
+                          shift_beam_fourier, stem_4D, transmission_func,
+                          wavelength_ang)
 from .workflows import xyz_to_4d_stem
 
 __all__: list[str] = [
     "aberration",
+    "annular_detector",
     "atomic_symbol",
     "kirkland_potentials",
     "parse_xyz",

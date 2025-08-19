@@ -8,14 +8,18 @@ from beartype.roar import BeartypeCallHintParamViolation
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Integer, Num
 
-from ptyrodactyl.photons.photon_types import (Diffractogram, GridParams,
-                                              LensParams, MicroscopeData,
-                                              OpticalWavefront,
-                                              make_diffractogram,
-                                              make_grid_params,
-                                              make_lens_params,
-                                              make_microscope_data,
-                                              make_optical_wavefront)
+from ptyrodactyl.photons.photon_types import (
+    Diffractogram,
+    GridParams,
+    LensParams,
+    MicroscopeData,
+    OpticalWavefront,
+    make_diffractogram,
+    make_grid_params,
+    make_lens_params,
+    make_microscope_data,
+    make_optical_wavefront,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -350,9 +354,7 @@ class TestMicroscopeData(chex.TestCase):
         wavelength = jnp.array(500e-9)
         dx = jnp.array(1e-6)
 
-        microscope_data = MicroscopeData(
-            image_data=image_data, wavelength=wavelength, dx=dx
-        )
+        microscope_data = MicroscopeData(image_data=image_data, wavelength=wavelength, dx=dx)
 
         assert hasattr(microscope_data, "image_data")
         assert hasattr(microscope_data, "wavelength")
@@ -367,9 +369,7 @@ class TestMicroscopeData(chex.TestCase):
         wavelength = jnp.array(500e-9)
         dx = jnp.array(1e-6)
 
-        microscope_data = MicroscopeData(
-            image_data=image_data, wavelength=wavelength, dx=dx
-        )
+        microscope_data = MicroscopeData(image_data=image_data, wavelength=wavelength, dx=dx)
 
         @jax.jit
         def fn(m):

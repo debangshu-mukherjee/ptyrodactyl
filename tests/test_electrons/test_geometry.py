@@ -8,9 +8,12 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.electrons.geometry import (reciprocal_lattice,
-                                            rotate_structure, rotmatrix_axis,
-                                            rotmatrix_vectors)
+from ptyrodactyl.electrons.geometry import (
+    reciprocal_lattice,
+    rotate_structure,
+    rotmatrix_axis,
+    rotmatrix_vectors,
+)
 
 
 class TestRotmatrixVectors(chex.TestCase):
@@ -174,9 +177,7 @@ class TestRotmatrixAxis(chex.TestCase):
 
         cos_theta = jnp.cos(theta)
         sin_theta = jnp.sin(theta)
-        expected = jnp.array(
-            [[cos_theta, -sin_theta, 0], [sin_theta, cos_theta, 0], [0, 0, 1]]
-        )
+        expected = jnp.array([[cos_theta, -sin_theta, 0], [sin_theta, cos_theta, 0], [0, 0, 1]])
 
         self.assertTrue(jnp.allclose(R, expected, atol=1e-10))
 
@@ -255,18 +256,14 @@ class TestRotateStructure(chex.TestCase):
 
     def test_identity_rotation(self):
         """Test that identity rotation preserves structure."""
-        rotated_coords, rotated_cell = rotate_structure(
-            self.coords, self.cell, self.R_identity
-        )
+        rotated_coords, rotated_cell = rotate_structure(self.coords, self.cell, self.R_identity)
 
         self.assertTrue(jnp.allclose(rotated_coords, self.coords))
         self.assertTrue(jnp.allclose(rotated_cell, self.cell))
 
     def test_90_degree_rotation(self):
         """Test 90 degree rotation around z-axis."""
-        rotated_coords, rotated_cell = rotate_structure(
-            self.coords, self.cell, self.R_90z
-        )
+        rotated_coords, rotated_cell = rotate_structure(self.coords, self.cell, self.R_90z)
 
         self.assertAlmostEqual(rotated_coords[1, 1], 0.0, places=10)
         self.assertAlmostEqual(rotated_coords[1, 2], 1.0, places=10)
@@ -316,16 +313,12 @@ class TestRotateStructure(chex.TestCase):
         for i in range(len(self.coords)):
             for j in range(i + 1, len(self.coords)):
                 orig_dist = jnp.linalg.norm(self.coords[i, 1:] - self.coords[j, 1:])
-                rot_dist = jnp.linalg.norm(
-                    rotated_coords[i, 1:] - rotated_coords[j, 1:]
-                )
+                rot_dist = jnp.linalg.norm(rotated_coords[i, 1:] - rotated_coords[j, 1:])
                 original_distances.append(orig_dist)
                 rotated_distances.append(rot_dist)
 
         self.assertTrue(
-            jnp.allclose(
-                jnp.array(original_distances), jnp.array(rotated_distances), atol=1e-10
-            )
+            jnp.allclose(jnp.array(original_distances), jnp.array(rotated_distances), atol=1e-10)
         )
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -336,9 +329,7 @@ class TestRotateStructure(chex.TestCase):
             return rotate_structure(coords, cell, R, theta)
 
         R = rotmatrix_axis(jnp.array([0.0, 1.0, 0.0]), jnp.pi / 6)
-        rotated_coords, rotated_cell = self.variant(apply_rotation)(
-            self.coords, self.cell, R, 0.0
-        )
+        rotated_coords, rotated_cell = self.variant(apply_rotation)(self.coords, self.cell, R, 0.0)
 
         self.assertEqual(rotated_coords.shape, self.coords.shape)
         self.assertEqual(rotated_cell.shape, self.cell.shape)
@@ -352,9 +343,7 @@ class TestRotateStructure(chex.TestCase):
         coords2, cell2 = rotate_structure(coords1, cell1, R2)
 
         R_combined = R2 @ R1
-        coords_direct, cell_direct = rotate_structure(
-            self.coords, self.cell, R_combined
-        )
+        coords_direct, cell_direct = rotate_structure(self.coords, self.cell, R_combined)
 
         self.assertTrue(jnp.allclose(coords2, coords_direct, atol=1e-10))
         self.assertTrue(jnp.allclose(cell2, cell_direct, atol=1e-10))
@@ -571,9 +560,7 @@ class TestGeometryIntegration(chex.TestCase):
         self.assertEqual(rotated_cell.shape, cell.shape)
         self.assertEqual(recip_rotated.shape, recip_original.shape)
 
-        self.assertAlmostEqual(
-            jnp.linalg.det(rotated_cell), jnp.linalg.det(cell), places=10
-        )
+        self.assertAlmostEqual(jnp.linalg.det(rotated_cell), jnp.linalg.det(cell), places=10)
 
 
 if __name__ == "__main__":

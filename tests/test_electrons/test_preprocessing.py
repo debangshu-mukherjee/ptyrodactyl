@@ -11,12 +11,14 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from ptyrodactyl.electrons.preprocessing import (_ATOMIC_NUMBERS,
-                                                 _KIRKLAND_POTENTIALS,
-                                                 _parse_xyz_metadata,
-                                                 atomic_symbol,
-                                                 kirkland_potentials,
-                                                 parse_xyz)
+from ptyrodactyl.electrons.preprocessing import (
+    _ATOMIC_NUMBERS,
+    _KIRKLAND_POTENTIALS,
+    _parse_xyz_metadata,
+    atomic_symbol,
+    kirkland_potentials,
+    parse_xyz,
+)
 
 
 class TestAtomicSymbol(chex.TestCase):
@@ -176,9 +178,7 @@ class TestKirklandPotentials(chex.TestCase):
 
         # Check specific known values (first element - Hydrogen)
         # These are from the actual CSV file
-        expected_h_first_four = jnp.array(
-            [0.0355221981, 0.225354459, 0.0262782423, 0.225354636]
-        )
+        expected_h_first_four = jnp.array([0.0355221981, 0.225354459, 0.0262782423, 0.225354636])
         assert jnp.allclose(kp[0, :4], expected_h_first_four, rtol=1e-9)
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -316,9 +316,7 @@ H  -0.7570   0.5860   0.0000
             # Check lattice
             assert result.lattice is not None
             assert result.lattice.shape == (3, 3)
-            expected_lattice = jnp.array(
-                [[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]]
-            )
+            expected_lattice = jnp.array([[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]])
             assert jnp.allclose(result.lattice, expected_lattice)
 
             # Check atoms
@@ -341,9 +339,7 @@ Fe   0.0   0.0   0.0
             # Check stress tensor
             assert result.stress is not None
             assert result.stress.shape == (3, 3)
-            expected_stress = jnp.array(
-                [[1.0, 0.5, 0.3], [0.5, 2.0, 0.1], [0.3, 0.1, 1.5]]
-            )
+            expected_stress = jnp.array([[1.0, 0.5, 0.3], [0.5, 2.0, 0.1], [0.3, 0.1, 1.5]])
             assert jnp.allclose(result.stress, expected_stress)
 
             # Check atom
@@ -479,9 +475,7 @@ He  -1.5e+2   3.7e+1    4.2e+0
         try:
             result = parse_xyz(xyz_path)
 
-            assert jnp.allclose(
-                result.positions[0], jnp.array([1.0e-10, 2.5e-9, -3.0e-8])
-            )
+            assert jnp.allclose(result.positions[0], jnp.array([1.0e-10, 2.5e-9, -3.0e-8]))
             assert jnp.allclose(result.positions[1], jnp.array([-1.5e2, 3.7e1, 4.2e0]))
         finally:
             xyz_path.unlink()
@@ -512,9 +506,7 @@ co  2.0   0.0   0.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(
-                ValueError, match="Invalid XYZ file: fewer than 2 lines"
-            ):
+            with pytest.raises(ValueError, match="Invalid XYZ file: fewer than 2 lines"):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()
@@ -528,9 +520,7 @@ C   0.0   0.0   0.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(
-                ValueError, match="First line must be the number of atoms"
-            ):
+            with pytest.raises(ValueError, match="First line must be the number of atoms"):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()
@@ -735,9 +725,7 @@ H   0.0   0.0   0.0
 
             # Results should be equivalent
             assert jnp.array_equal(result_path.positions, result_str.positions)
-            assert jnp.array_equal(
-                result_path.atomic_numbers, result_str.atomic_numbers
-            )
+            assert jnp.array_equal(result_path.atomic_numbers, result_str.atomic_numbers)
         finally:
             xyz_path.unlink()
 

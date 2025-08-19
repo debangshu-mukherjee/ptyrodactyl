@@ -7,15 +7,18 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.electrons.electron_types import (CalibratedArray,
-                                                  CrystalStructure,
-                                                  PotentialSlices, ProbeModes,
-                                                  XYZData,
-                                                  make_calibrated_array,
-                                                  make_crystal_structure,
-                                                  make_potential_slices,
-                                                  make_probe_modes,
-                                                  make_xyz_data)
+from ptyrodactyl.electrons.electron_types import (
+    CalibratedArray,
+    CrystalStructure,
+    PotentialSlices,
+    ProbeModes,
+    XYZData,
+    make_calibrated_array,
+    make_crystal_structure,
+    make_potential_slices,
+    make_probe_modes,
+    make_xyz_data,
+)
 
 
 class TestCalibratedArray(chex.TestCase):
@@ -33,9 +36,7 @@ class TestCalibratedArray(chex.TestCase):
 
     def test_factory_function_valid_int(self):
         """Test factory function with valid integer data."""
-        arr = make_calibrated_array(
-            self.int_data, self.calib_y, self.calib_x, self.real_space
-        )
+        arr = make_calibrated_array(self.int_data, self.calib_y, self.calib_x, self.real_space)
         self.assertIsInstance(arr, CalibratedArray)
         self.assertEqual(arr.data_array.shape, (self.h, self.w))
         self.assertEqual(arr.data_array.dtype, jnp.int32)
@@ -45,25 +46,19 @@ class TestCalibratedArray(chex.TestCase):
 
     def test_factory_function_valid_float(self):
         """Test factory function with valid float data."""
-        arr = make_calibrated_array(
-            self.float_data, self.calib_y, self.calib_x, self.real_space
-        )
+        arr = make_calibrated_array(self.float_data, self.calib_y, self.calib_x, self.real_space)
         self.assertIsInstance(arr, CalibratedArray)
         self.assertEqual(arr.data_array.dtype, jnp.float64)
 
     def test_factory_function_valid_complex(self):
         """Test factory function with valid complex data."""
-        arr = make_calibrated_array(
-            self.complex_data, self.calib_y, self.calib_x, self.real_space
-        )
+        arr = make_calibrated_array(self.complex_data, self.calib_y, self.calib_x, self.real_space)
         self.assertIsInstance(arr, CalibratedArray)
         self.assertEqual(arr.data_array.dtype, jnp.complex128)
 
     def test_pytree_flatten_unflatten(self):
         """Test PyTree flatten and unflatten operations."""
-        arr = make_calibrated_array(
-            self.float_data, self.calib_y, self.calib_x, self.real_space
-        )
+        arr = make_calibrated_array(self.float_data, self.calib_y, self.calib_x, self.real_space)
 
         leaves, treedef = jax.tree_util.tree_flatten(arr)
         self.assertEqual(len(leaves), 4)
@@ -83,9 +78,7 @@ class TestCalibratedArray(chex.TestCase):
                 real_space=arr.real_space,
             )
 
-        arr = make_calibrated_array(
-            self.float_data, self.calib_y, self.calib_x, self.real_space
-        )
+        arr = make_calibrated_array(self.float_data, self.calib_y, self.calib_x, self.real_space)
 
         processed = self.variant(process_array)(arr)
         self.assertTrue(jnp.allclose(processed.data_array, self.float_data * 2))
@@ -93,9 +86,7 @@ class TestCalibratedArray(chex.TestCase):
     def test_invalid_inputs(self):
         """Test factory function with invalid inputs."""
         with self.assertRaises(Exception):
-            make_calibrated_array(
-                jnp.ones(10), self.calib_y, self.calib_x, self.real_space
-            )
+            make_calibrated_array(jnp.ones(10), self.calib_y, self.calib_x, self.real_space)
 
     def test_jax_compliant_adjustments(self):
         """Test JAX-compliant adjustments for invalid values."""
@@ -103,9 +94,7 @@ class TestCalibratedArray(chex.TestCase):
         self.assertTrue(arr.calib_y > 0)
         self.assertTrue(arr.calib_x > 0)
 
-        arr = make_calibrated_array(
-            self.float_data, jnp.nan, self.calib_x, self.real_space
-        )
+        arr = make_calibrated_array(self.float_data, jnp.nan, self.calib_x, self.real_space)
         self.assertTrue(jnp.isnan(arr.calib_y))
 
 
@@ -474,9 +463,7 @@ class TestJAXCompliance(chex.TestCase):
         self.assertEqual(arr.data_array.shape, (5, 5))
 
         jitted_probe = self.variant(make_probe_modes)
-        probe = jitted_probe(
-            jnp.ones((5, 5, 2), dtype=jnp.complex128), jnp.array([0.5, 0.5]), 0.1
-        )
+        probe = jitted_probe(jnp.ones((5, 5, 2), dtype=jnp.complex128), jnp.array([0.5, 0.5]), 0.1)
         self.assertEqual(probe.modes.shape, (5, 5, 2))
 
         jitted_potential = self.variant(make_potential_slices)
@@ -497,9 +484,7 @@ class TestJAXCompliance(chex.TestCase):
         batch_calib_y = jnp.array([0.1, 0.2, 0.3])
         batch_calib_x = jnp.array([0.15, 0.25, 0.35])
 
-        vmapped_fn = jax.vmap(
-            lambda cy, cx: make_calibrated_array(jnp.ones((5, 5)), cy, cx, True)
-        )
+        vmapped_fn = jax.vmap(lambda cy, cx: make_calibrated_array(jnp.ones((5, 5)), cy, cx, True))
 
         arrays = vmapped_fn(batch_calib_y, batch_calib_x)
         self.assertEqual(arrays.calib_y.shape, (3,))

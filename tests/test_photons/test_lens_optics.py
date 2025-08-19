@@ -6,10 +6,14 @@ from absl.testing import parameterized
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float
 
-from ptyrodactyl.photons.lens_optics import (angular_spectrum_prop,
-                                             circular_aperture, digital_zoom,
-                                             fraunhofer_prop, fresnel_prop,
-                                             optical_zoom)
+from ptyrodactyl.photons.lens_optics import (
+    angular_spectrum_prop,
+    circular_aperture,
+    digital_zoom,
+    fraunhofer_prop,
+    fresnel_prop,
+    optical_zoom,
+)
 from ptyrodactyl.photons.photon_types import OpticalWavefront, scalar_numeric
 
 jax.config.update("jax_enable_x64", True)
@@ -21,9 +25,7 @@ class TestAngularSpectrumProp(chex.TestCase):
         {"shape": (64, 64), "wavelength": 500e-9, "z_move": 0.01},
         {"shape": (128, 128), "wavelength": 600e-9, "z_move": 0.05},
     )
-    def test_propagation_shape(
-        self, shape: Tuple[int, int], wavelength: float, z_move: float
-    ):
+    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float):
         """Test that the propagated field has the correct shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -85,9 +87,7 @@ class TestFresnelProp(chex.TestCase):
         {"shape": (64, 64), "wavelength": 500e-9, "z_move": 0.01},
         {"shape": (128, 128), "wavelength": 600e-9, "z_move": 0.05},
     )
-    def test_propagation_shape(
-        self, shape: Tuple[int, int], wavelength: float, z_move: float
-    ):
+    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float):
         """Test that the propagated field has the correct shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -122,9 +122,7 @@ class TestFraunhoferProp(chex.TestCase):
         {"shape": (64, 64), "wavelength": 500e-9, "z_move": 0.1},
         {"shape": (128, 128), "wavelength": 600e-9, "z_move": 0.2},
     )
-    def test_propagation_shape(
-        self, shape: Tuple[int, int], wavelength: float, z_move: float
-    ):
+    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float):
         """Test that the propagated field has the correct shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -185,9 +183,7 @@ class TestCircularAperture(chex.TestCase):
 
         chex.assert_shape(apertured.field, shape)
 
-        chex.assert_trees_all_close(
-            apertured.z_position, incoming.z_position, atol=1e-10
-        )
+        chex.assert_trees_all_close(apertured.z_position, incoming.z_position, atol=1e-10)
 
 
 class TestDigitalZoom(chex.TestCase):
@@ -199,12 +195,8 @@ class TestDigitalZoom(chex.TestCase):
         """Test that digital zooming preserves the wavefront shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
-        field_real: Float[Array, "H W"] = jax.random.normal(
-            key1, shape, dtype=jnp.float64
-        )
-        field_imag: Float[Array, "H W"] = jax.random.normal(
-            key2, shape, dtype=jnp.float64
-        )
+        field_real: Float[Array, "H W"] = jax.random.normal(key1, shape, dtype=jnp.float64)
+        field_imag: Float[Array, "H W"] = jax.random.normal(key2, shape, dtype=jnp.float64)
         field: Complex[Array, "H W"] = field_real + 1j * field_imag
 
         dx = 1e-6
@@ -242,12 +234,8 @@ class TestOpticalZoom(chex.TestCase):
         """Test that optical zooming preserves the field but updates the calibration."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
-        field_real: Float[Array, "H W"] = jax.random.normal(
-            key1, shape, dtype=jnp.float64
-        )
-        field_imag: Float[Array, "H W"] = jax.random.normal(
-            key2, shape, dtype=jnp.float64
-        )
+        field_real: Float[Array, "H W"] = jax.random.normal(key1, shape, dtype=jnp.float64)
+        field_imag: Float[Array, "H W"] = jax.random.normal(key2, shape, dtype=jnp.float64)
         field: Complex[Array, "H W"] = field_real + 1j * field_imag
 
         dx = 1e-6

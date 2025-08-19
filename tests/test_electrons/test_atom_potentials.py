@@ -7,8 +7,7 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.electrons.atom_potentials import (_slice_atoms, bessel_kv,
-                                                   kirkland_potentials_XYZ)
+from ptyrodactyl.electrons.atom_potentials import _slice_atoms, bessel_kv, kirkland_potentials_XYZ
 from ptyrodactyl.electrons.electron_types import make_xyz_data
 
 
@@ -107,9 +106,7 @@ class TestBesselKv(chex.TestCase):
         k0_values = self.variant(bessel_kv)(v_scalar, x_large)
         expected_asymptotic = jnp.sqrt(jnp.pi / (2 * x_large)) * jnp.exp(-x_large)
 
-        relative_errors = jnp.abs(
-            (k0_values - expected_asymptotic) / expected_asymptotic
-        )
+        relative_errors = jnp.abs((k0_values - expected_asymptotic) / expected_asymptotic)
         self.assertTrue(
             jnp.all(relative_errors < 0.1),
             f"Large x asymptotic failed: max error = {jnp.max(relative_errors):.6f}",
@@ -182,13 +179,9 @@ class TestBesselKv(chex.TestCase):
         x_after = 1.001
 
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
-        k0_before = self.variant(bessel_kv)(
-            v_scalar, jnp.asarray(x_before, dtype=jnp.float64)
-        )
+        k0_before = self.variant(bessel_kv)(v_scalar, jnp.asarray(x_before, dtype=jnp.float64))
         k0_at = self.variant(bessel_kv)(v_scalar, jnp.asarray(x_at, dtype=jnp.float64))
-        k0_after = self.variant(bessel_kv)(
-            v_scalar, jnp.asarray(x_after, dtype=jnp.float64)
-        )
+        k0_after = self.variant(bessel_kv)(v_scalar, jnp.asarray(x_after, dtype=jnp.float64))
 
         self.assertAlmostEqual(k0_before, k0_at, delta=2e-2)
         self.assertAlmostEqual(k0_at, k0_after, delta=2e-2)
@@ -374,21 +367,15 @@ class TestSliceAtoms(chex.TestCase):
         atom_numbers = jnp.array([1, 2], dtype=jnp.int32)
         slice_thickness_f32 = jnp.array(1.0, dtype=jnp.float32)
 
-        result_f32 = self.variant(_slice_atoms)(
-            coords_f32, atom_numbers, slice_thickness_f32
-        )
+        result_f32 = self.variant(_slice_atoms)(coords_f32, atom_numbers, slice_thickness_f32)
         self.assertEqual(result_f32.dtype, jnp.float32)
 
         # Test with float64 input if x64 is enabled
         if jax.config.x64_enabled:
-            coords_f64 = jnp.array(
-                [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float64
-            )
+            coords_f64 = jnp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float64)
             slice_thickness_f64 = jnp.array(1.0, dtype=jnp.float64)
 
-            result_f64 = self.variant(_slice_atoms)(
-                coords_f64, atom_numbers, slice_thickness_f64
-            )
+            result_f64 = self.variant(_slice_atoms)(coords_f64, atom_numbers, slice_thickness_f64)
             # Note: When x64 is enabled, JAX preserves float64 precision
             self.assertEqual(result_f64.dtype, jnp.float64)
 
@@ -426,9 +413,7 @@ class TestSliceAtoms(chex.TestCase):
                 jax.random.uniform(z_key, (n_atoms,), minval=0, maxval=5),
             ]
         )
-        atom_numbers = jax.random.randint(
-            jax.random.PRNGKey(43), (n_atoms,), minval=1, maxval=100
-        )
+        atom_numbers = jax.random.randint(jax.random.PRNGKey(43), (n_atoms,), minval=1, maxval=100)
         slice_thickness = 0.5
 
         result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
@@ -512,9 +497,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.2
         slice_thickness = 1.0
 
-        result = self.variant(kirkland_potentials_XYZ)(
-            xyz_data, pixel_size, slice_thickness
-        )
+        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, slice_thickness)
 
         # Should have 4 slices (z from 0 to 3)
         self.assertEqual(result.slices.shape[2], 4)
@@ -549,9 +532,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.1
         slice_thickness = 1.0
 
-        result = self.variant(kirkland_potentials_XYZ)(
-            xyz_data, pixel_size, slice_thickness
-        )
+        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, slice_thickness)
 
         # Should have 1 slice
         self.assertEqual(result.slices.shape[2], 1)
@@ -599,9 +580,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.5
         padding = 3.0
 
-        result = self.variant(kirkland_potentials_XYZ)(
-            xyz_data, pixel_size, padding=padding
-        )
+        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, padding=padding)
 
         # Expected size after padding removal
         x_range = 0.0  # Single atom has no x range
@@ -634,9 +613,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
                 comment=None,
             )
 
-            result = self.variant(kirkland_potentials_XYZ)(
-                xyz_data, pixel_size, slice_thickness
-            )
+            result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, slice_thickness)
             potentials.append(jnp.max(result.slices[:, :, 0]))
 
         # Heavier atoms should have stronger potentials
@@ -701,9 +678,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         repeats = jnp.array([2, 2, 1])
 
         # Should work fine with default identity lattice
-        result = self.variant(kirkland_potentials_XYZ)(
-            xyz_data, pixel_size, repeats=repeats
-        )
+        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, repeats=repeats)
 
         # With identity lattice and repeats [2,2,1], atoms will be at:
         # (0.5, 0.5), (1.5, 0.5), (0.5, 1.5), (1.5, 1.5)

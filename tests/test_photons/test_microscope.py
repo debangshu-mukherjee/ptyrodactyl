@@ -8,8 +8,7 @@ from jaxtyping import Array, Complex, Float
 
 from ptyrodactyl.photons.lenses import double_convex_lens
 from ptyrodactyl.photons.microscope import lens_propagation
-from ptyrodactyl.photons.photon_types import (LensParams, OpticalWavefront,
-                                              make_optical_wavefront)
+from ptyrodactyl.photons.photon_types import LensParams, OpticalWavefront, make_optical_wavefront
 
 jax.config.update("jax_enable_x64", True)
 
@@ -51,9 +50,7 @@ class TestLensPropagation(chex.TestCase):
 
         chex.assert_shape(propagated.field, shape)
 
-        chex.assert_trees_all_close(
-            propagated.z_position, incoming.z_position, atol=1e-10
-        )
+        chex.assert_trees_all_close(propagated.z_position, incoming.z_position, atol=1e-10)
 
     @chex.all_variants(without_device=False)
     def test_phase_modulation(self):

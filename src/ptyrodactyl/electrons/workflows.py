@@ -29,7 +29,7 @@ from .electron_types import (
     scalar_numeric,
 )
 from .preprocessing import parse_xyz
-from .simulations import make_probe, stem_4D
+from .simulations import make_probe, stem_4d
 
 jax.config.update("jax_enable_x64", True)
 
@@ -40,7 +40,7 @@ def xyz_to_4d_stem(
     slice_thickness: scalar_float,
     lateral_extent: scalar_float,
     cbed_aperture_mrad: scalar_numeric,
-    voltage_kV: scalar_numeric,
+    voltage_kv: scalar_numeric,
     scan_positions: Float[Array, "P 2"],
     cbed_pixel_size_ang: scalar_float,
     probe_defocus: Optional[scalar_numeric] = 0.0,
@@ -66,7 +66,7 @@ def xyz_to_4d_stem(
         The structure will be repeated to ensure at least this extent.
     - `cbed_aperture_mrad` (scalar_numeric):
         Probe aperture size in milliradians
-    - `voltage_kV` (scalar_numeric):
+    - `voltage_kv` (scalar_numeric):
         Accelerating voltage in kilovolts
     - `scan_positions` (Float[Array, "P 2"]):
         Array of (y, x) scan positions in Angstroms where P is number of positions
@@ -129,7 +129,7 @@ def xyz_to_4d_stem(
     image_size: Int[Array, " 2"] = jnp.array([image_height, image_width])
     probe: Complex[Array, "H W"] = make_probe(
         aperture=cbed_aperture_mrad,
-        voltage=voltage_kV,
+        voltage=voltage_kv,
         image_size=image_size,
         calibration_pm=cbed_pixel_size_ang * 100.0,
         defocus=probe_defocus,
@@ -142,11 +142,11 @@ def xyz_to_4d_stem(
         calib=cbed_pixel_size_ang,
     )
     scan_positions_pixels: Float[Array, "P 2"] = scan_positions / cbed_pixel_size_ang
-    stem4d_data: STEM4D = stem_4D(
+    stem4d_data: STEM4D = stem_4d(
         pot_slice=potential_slices,
         beam=probe_modes,
         positions=scan_positions_pixels,
-        voltage_kV=voltage_kV,
+        voltage_kV=voltage_kv,
         calib_ang=cbed_pixel_size_ang,
     )
     return stem4d_data

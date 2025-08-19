@@ -393,9 +393,7 @@ def make_lens_params(
             return lax.cond(
                 diameter > 0,
                 lambda: diameter,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: diameter, lambda: diameter)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: diameter, lambda: diameter)),
             )
 
         def check_refractive_index():
@@ -418,9 +416,7 @@ def make_lens_params(
             return lax.cond(
                 jnp.logical_and(jnp.isfinite(r1), jnp.isfinite(r2)),
                 lambda: (r1, r2),
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: (r1, r2), lambda: (r1, r2))
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: (r1, r2), lambda: (r1, r2))),
             )
 
         check_focal_length()
@@ -514,9 +510,7 @@ def make_grid_params(
             return lax.cond(
                 jnp.logical_and(
                     jnp.logical_and(xx.shape == (H, W), yy.shape == (H, W)),
-                    jnp.logical_and(
-                        phase_profile.shape == (H, W), transmission.shape == (H, W)
-                    ),
+                    jnp.logical_and(phase_profile.shape == (H, W), transmission.shape == (H, W)),
                 ),
                 lambda: (xx, yy, phase_profile, transmission),
                 lambda: lax.stop_gradient(
@@ -550,9 +544,7 @@ def make_grid_params(
             return lax.cond(
                 jnp.logical_and(jnp.all(jnp.isfinite(xx)), jnp.all(jnp.isfinite(yy))),
                 lambda: (xx, yy),
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: (xx, yy), lambda: (xx, yy))
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: (xx, yy), lambda: (xx, yy))),
             )
 
         check_2d_arrays()
@@ -626,27 +618,21 @@ def make_optical_wavefront(
             return lax.cond(
                 field.ndim == 2,
                 lambda: field,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: field, lambda: field)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: field, lambda: field)),
             )
 
         def check_field_finite():
             return lax.cond(
                 jnp.all(jnp.isfinite(field)),
                 lambda: field,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: field, lambda: field)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: field, lambda: field)),
             )
 
         def check_wavelength():
             return lax.cond(
                 wavelength > 0,
                 lambda: wavelength,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: wavelength, lambda: wavelength)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: wavelength, lambda: wavelength)),
             )
 
         def check_dx():
@@ -660,9 +646,7 @@ def make_optical_wavefront(
             return lax.cond(
                 jnp.isfinite(z_position),
                 lambda: z_position,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: z_position, lambda: z_position)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: z_position, lambda: z_position)),
             )
 
         check_2d_field()
@@ -740,54 +724,42 @@ def make_microscope_data(
             return lax.cond(
                 jnp.logical_or(image_data.ndim == 3, image_data.ndim == 4),
                 lambda: image_data,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: image_data, lambda: image_data)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: image_data, lambda: image_data)),
             )
 
         def check_image_finite():
             return lax.cond(
                 jnp.all(jnp.isfinite(image_data)),
                 lambda: image_data,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: image_data, lambda: image_data)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: image_data, lambda: image_data)),
             )
 
         def check_image_nonnegative():
             return lax.cond(
                 jnp.all(image_data >= 0),
                 lambda: image_data,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: image_data, lambda: image_data)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: image_data, lambda: image_data)),
             )
 
         def check_positions_shape():
             return lax.cond(
                 positions.shape[1] == 2,
                 lambda: positions,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: positions, lambda: positions)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: positions, lambda: positions)),
             )
 
         def check_positions_finite():
             return lax.cond(
                 jnp.all(jnp.isfinite(positions)),
                 lambda: positions,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: positions, lambda: positions)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: positions, lambda: positions)),
             )
 
         def check_wavelength():
             return lax.cond(
                 wavelength > 0,
                 lambda: wavelength,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: wavelength, lambda: wavelength)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: wavelength, lambda: wavelength)),
             )
 
         def check_dx():
@@ -826,9 +798,7 @@ def make_microscope_data(
                     ),
                 )
 
-            return lax.cond(
-                image_data.ndim == 3, check_3d_consistency, check_4d_consistency
-            )
+            return lax.cond(image_data.ndim == 3, check_3d_consistency, check_4d_consistency)
 
         check_image_dimensions()
         check_image_finite()
@@ -899,36 +869,28 @@ def make_diffractogram(
             return lax.cond(
                 image.ndim == 2,
                 lambda: image,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: image, lambda: image)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: image, lambda: image)),
             )
 
         def check_image_finite():
             return lax.cond(
                 jnp.all(jnp.isfinite(image)),
                 lambda: image,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: image, lambda: image)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: image, lambda: image)),
             )
 
         def check_image_nonnegative():
             return lax.cond(
                 jnp.all(image >= 0),
                 lambda: image,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: image, lambda: image)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: image, lambda: image)),
             )
 
         def check_wavelength():
             return lax.cond(
                 wavelength > 0,
                 lambda: wavelength,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: wavelength, lambda: wavelength)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: wavelength, lambda: wavelength)),
             )
 
         def check_dx():
@@ -998,18 +960,14 @@ def make_sample_function(
             return lax.cond(
                 sample.ndim == 2,
                 lambda: sample,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: sample, lambda: sample)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: sample, lambda: sample)),
             )
 
         def check_sample_finite():
             return lax.cond(
                 jnp.all(jnp.isfinite(sample)),
                 lambda: sample,
-                lambda: lax.stop_gradient(
-                    lax.cond(False, lambda: sample, lambda: sample)
-                ),
+                lambda: lax.stop_gradient(lax.cond(False, lambda: sample, lambda: sample)),
             )
 
         def check_dx():

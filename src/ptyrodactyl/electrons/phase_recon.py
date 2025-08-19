@@ -41,17 +41,7 @@ import jax.numpy as jnp
 from beartype import beartype as typechecker
 from beartype.typing import Any, Dict, Optional, Tuple, Union
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
-
 import ptyrodactyl.tools as ptt
-
-jax.config.update("jax_enable_x64", True)
-
-OPTIMIZERS: Dict[str, ptt.Optimizer] = {
-    "adam": ptt.Optimizer(ptt.init_adam, ptt.adam_update),
-    "adagrad": ptt.Optimizer(ptt.init_adagrad, ptt.adagrad_update),
-    "rmsprop": ptt.Optimizer(ptt.init_rmsprop, ptt.rmsprop_update),
-}
-
 from .electron_types import (
     STEM4D,
     CalibratedArray,
@@ -62,6 +52,14 @@ from .electron_types import (
     scalar_numeric,
 )
 from .simulations import stem_4D
+
+jax.config.update("jax_enable_x64", True)
+
+OPTIMIZERS: Dict[str, ptt.Optimizer] = {
+    "adam": ptt.Optimizer(ptt.init_adam, ptt.adam_update),
+    "adagrad": ptt.Optimizer(ptt.init_adagrad, ptt.adagrad_update),
+    "rmsprop": ptt.Optimizer(ptt.init_rmsprop, ptt.rmsprop_update),
+}
 
 
 @typechecker
@@ -137,7 +135,7 @@ def single_slice_ptychography(
     voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
 
-    def forward_fn(
+    def _forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Float[Array, "P H W"]:
         stem4d_result = stem_4D(
@@ -150,10 +148,10 @@ def single_slice_ptychography(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
-    def loss_and_grad(
+    def _loss_and_grad(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Tuple[Float[Array, " "], Dict[str, Complex[Array, "H W"]]]:
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(pot_slice, beam)
@@ -171,7 +169,7 @@ def single_slice_ptychography(
         beam = jnp.fft.ifft2(initial_beam.data_array)
 
     @jax.jit
-    def update_step(
+    def _update_step(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pot_slice_state: Any,
@@ -179,7 +177,7 @@ def single_slice_ptychography(
     ) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"], Any, Any, Float[Array, " "]]:
         loss: Float[Array, " "]
         grads: Dict[str, Complex[Array, "H W"]]
-        loss, grads = loss_and_grad(pot_slice, beam)
+        loss, grads = _loss_and_grad(pot_slice, beam)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
@@ -205,7 +203,7 @@ def single_slice_ptychography(
 
     for ii in range(num_iterations):
         loss: Float[Array, " "]
-        pot_slice, beam, pot_slice_state, beam_state, loss = update_step(
+        pot_slice, beam, pot_slice_state, beam_state, loss = _update_step(
             pot_slice, beam, pot_slice_state, beam_state
         )
 
@@ -306,7 +304,7 @@ def single_slice_poscorrected(
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
-    def forward_fn(
+    def _forward_fn(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
@@ -321,10 +319,10 @@ def single_slice_poscorrected(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
-    def loss_and_grad(
+    def _loss_and_grad(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
@@ -343,7 +341,7 @@ def single_slice_poscorrected(
         learning_rate = jnp.array([learning_rate, learning_rate])
 
     @jax.jit
-    def update_step(
+    def _update_step(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
@@ -361,7 +359,7 @@ def single_slice_poscorrected(
     ]:
         loss: Float[Array, " "]
         grads: Dict[str, Array]
-        loss, grads = loss_and_grad(pot_slice, beam, pos_list)
+        loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
@@ -409,7 +407,7 @@ def single_slice_poscorrected(
             beam_state,
             pos_state,
             loss,
-        ) = update_step(pot_guess, beam_guess, pos_guess, pot_slice_state, beam_state, pos_state)
+        ) = _update_step(pot_guess, beam_guess, pos_guess, pot_slice_state, beam_state, pos_state)
 
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
@@ -515,7 +513,7 @@ def single_slice_multi_modal(
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
-    def forward_fn(
+    def _forward_fn(
         pot_slice: Complex[Array, "H W"],
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
@@ -530,10 +528,10 @@ def single_slice_multi_modal(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
-    def loss_and_grad(
+    def _loss_and_grad(
         pot_slice: Complex[Array, "H W"],
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
@@ -551,7 +549,7 @@ def single_slice_multi_modal(
         learning_rate = jnp.array([learning_rate, learning_rate])
 
     @jax.jit
-    def update_step(
+    def _update_step(
         pot_slice: Complex[Array, "H W"],
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
@@ -569,7 +567,7 @@ def single_slice_multi_modal(
     ]:
         loss: Float[Array, " "]
         grads: Dict[str, Any]
-        loss, grads = loss_and_grad(pot_slice, beam, pos_list)
+        loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate[0]
         )
@@ -695,7 +693,7 @@ def multi_slice_multi_modal(
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
-    def forward_fn(
+    def _forward_fn(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
@@ -710,10 +708,10 @@ def multi_slice_multi_modal(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
-    def loss_and_grad(
+    def _loss_and_grad(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
@@ -727,7 +725,7 @@ def multi_slice_multi_modal(
     pos_state: Any = optimizer.init(initial_pos_list.shape)
 
     @jax.jit
-    def update_step(
+    def _update_step(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
@@ -745,7 +743,7 @@ def multi_slice_multi_modal(
     ]:
         loss: Float[Array, " "]
         grads: Dict[str, Array]
-        loss, grads = loss_and_grad(pot_slice, beam, pos_list)
+        loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )

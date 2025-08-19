@@ -27,11 +27,19 @@ from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 from .helper import add_phase_screen, field_intensity, scale_pixel
 from .lens_optics import circular_aperture, fraunhofer_prop, optical_zoom
 from .lenses import create_lens_phase
-from .photon_types import (Diffractogram, LensParams, MicroscopeData,
-                           OpticalWavefront, SampleFunction,
-                           make_diffractogram, make_microscope_data,
-                           make_optical_wavefront, make_sample_function,
-                           scalar_float, scalar_numeric)
+from .photon_types import (
+    Diffractogram,
+    LensParams,
+    MicroscopeData,
+    OpticalWavefront,
+    SampleFunction,
+    make_diffractogram,
+    make_microscope_data,
+    make_optical_wavefront,
+    make_sample_function,
+    scalar_float,
+    scalar_numeric,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -250,18 +258,12 @@ def simple_microscope(
     interaction_size: Tuple[int, int] = lightwave.field.shape
     pixel_positions: Float[Array, " n 2"] = positions / lightwave.dx
 
-    def diffractogram_at_position(
-        sample: SampleFunction, this_position: Num[Array, " 2"]
-    ):
+    def diffractogram_at_position(sample: SampleFunction, this_position: Num[Array, " 2"]):
         x: scalar_numeric
         y: scalar_numeric
         x, y = this_position
-        start_cut_x: Int[Array, ""] = jnp.floor(x - (0.5 * interaction_size[1])).astype(
-            int
-        )
-        start_cut_y: Int[Array, ""] = jnp.floor(y - (0.5 * interaction_size[0])).astype(
-            int
-        )
+        start_cut_x: Int[Array, ""] = jnp.floor(x - (0.5 * interaction_size[1])).astype(int)
+        start_cut_y: Int[Array, ""] = jnp.floor(y - (0.5 * interaction_size[0])).astype(int)
         cutout_sample: Complex[Array, "H W"] = jax.lax.dynamic_slice(
             sample.sample,
             (start_cut_y, start_cut_x),

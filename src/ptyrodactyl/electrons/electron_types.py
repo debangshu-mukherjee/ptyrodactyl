@@ -167,7 +167,7 @@ class PotentialSlices(NamedTuple):
     slice_thickness: Num[Array, " "]
     calib: Float[Array, " "]
 
-    def tree_flatten(self):
+    def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
         return (
             (
                 self.slices,
@@ -324,7 +324,7 @@ class STEM4D(NamedTuple):
         Fourier space calibration in inverse Angstroms per pixel
     - `scan_positions` (Float[Array, "P 2"]):
         Real space scan positions in Angstroms (y, x coordinates)
-    - `voltage_kV` (Float[Array, " "]):
+    - `voltage_kv` (Float[Array, " "]):
         Accelerating voltage in kilovolts
     """
 
@@ -332,16 +332,16 @@ class STEM4D(NamedTuple):
     real_space_calib: Float[Array, " "]
     fourier_space_calib: Float[Array, " "]
     scan_positions: Float[Array, "P 2"]
-    voltage_kV: Float[Array, " "]
+    voltage_kv: Float[Array, " "]
 
-    def tree_flatten(self):
+    def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
         return (
             (
                 self.data,
                 self.real_space_calib,
                 self.fourier_space_calib,
                 self.scan_positions,
-                self.voltage_kV,
+                self.voltage_kv,
             ),
             None,
         )
@@ -468,33 +468,89 @@ def make_probe_modes(
     - Convert inputs to JAX arrays with appropriate dtypes:
        - modes: Convert to complex128
        - weights: Convert to float64
-       - calib: Convert to float64
-    - Extract shape information (H, W, M) from modes array
-    - Execute validation checks using JAX-compatible conditional logic:
-       - check_3d_modes(): Verify modes array has exactly 3 dimensions
-       - check_modes_finite(): Ensure all values in modes are finite (no inf/nan)
-       - check_weights_shape(): Confirm weights has shape (M,) matching modes dimension
-       - check_weights_nonnegative(): Verify all weights are non-negative
-       - check_weights_sum(): Ensure sum of weights is strictly positive
-       - check_calib(): Confirm calibration value is strictly positive
-    - If all validations pass, create and return ProbeModes instance
-    - If any validation fails, the JAX-compatible error handling will stop execution
+       - calib: Convert to float64 scalar
+    - Extract shape information from modes array and expected dimensions
+    - Define validation functions:
+       - _check_3d_modes(): Verify modes array has exactly 3 dimensions
+       - _check_modes_finite(): Ensure all values in modes are finite (no inf/nan)
+       - _check_weights_shape(): Confirm weights has shape (M,) matching modes dimension
+       - _check_weights_nonnegative(): Verify all weights are non-negative
+       - _check_weights_sum(): Ensure sum of weights is strictly positive
+       - _check_calib_positive(): Confirm calibration value is strictly positive
+    - Chain all validation checks with jnp.logical_and
+    - Use jax.lax.cond to branch based on validation result:
+       - If valid: Normalize weights to sum to 1, ensure positive calibration, return ProbeModes
+       - If invalid: Return ProbeModes with NaN values to signal validation failure
     """
-    modes = jnp.asarray(modes, dtype=jnp.complex128)
-    weights = jnp.asarray(weights, dtype=jnp.float64)
-    calib = jnp.asarray(calib, dtype=jnp.float64)
-    weights = jnp.abs(weights)
-    weight_sum = jnp.sum(weights)
-    weights = jnp.where(
-        weight_sum > jnp.finfo(jnp.float64).eps,
-        weights / weight_sum,
-        jnp.ones_like(weights) / weights.shape[0],
+    modes: Complex[Array, " H W M"] = jnp.asarray(modes, dtype=jnp.complex128)
+    weights: Float[Array, " M"] = jnp.asarray(weights, dtype=jnp.float64)
+    calib: Float[Array, " "] = jnp.asarray(calib, dtype=jnp.float64)
+
+    expected_dims: int = 3
+    modes_shape: Tuple[int, int, int] = modes.shape
+    num_modes: int = modes_shape[2] if len(modes_shape) == expected_dims else 0
+
+    def _check_3d_modes() -> Bool[Array, " "]:
+        return jnp.array(len(modes.shape) == expected_dims)
+
+    def _check_modes_finite() -> Bool[Array, " "]:
+        return jnp.all(jnp.isfinite(modes))
+
+    def _check_weights_shape() -> Bool[Array, " "]:
+        return jnp.array(weights.shape == (num_modes,))
+
+    def _check_weights_nonnegative() -> Bool[Array, " "]:
+        return jnp.all(weights >= 0)
+
+    def _check_weights_sum() -> Bool[Array, " "]:
+        weight_sum: Float[Array, " "] = jnp.sum(weights)
+        return weight_sum > jnp.finfo(jnp.float64).eps
+
+    def _check_calib_positive() -> Bool[Array, " "]:
+        return calib > 0
+
+    def _valid_processing() -> ProbeModes:
+        normalized_weights: Float[Array, " M"] = jnp.abs(weights)
+        weight_sum: Float[Array, " "] = jnp.sum(normalized_weights)
+        normalized_weights = jax.lax.cond(
+            weight_sum > jnp.finfo(jnp.float64).eps,
+            lambda w: w / weight_sum,
+            lambda w: jnp.ones_like(w) / w.shape[0],
+            normalized_weights,
+        )
+        positive_calib: Float[Array, " "] = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
+
+        return ProbeModes(
+            modes=modes,
+            weights=normalized_weights,
+            calib=positive_calib,
+        )
+
+    def _invalid_processing() -> ProbeModes:
+        nan_weights: Float[Array, " M"] = jnp.full_like(weights, jnp.nan)
+        nan_calib: Float[Array, " "] = jnp.array(jnp.nan, dtype=jnp.float64)
+        return ProbeModes(
+            modes=modes,
+            weights=nan_weights,
+            calib=nan_calib,
+        )
+
+    all_valid: Bool[Array, " "] = jnp.logical_and(
+        _check_3d_modes(),
+        jnp.logical_and(
+            _check_modes_finite(),
+            jnp.logical_and(
+                _check_weights_shape(),
+                jnp.logical_and(
+                    _check_weights_nonnegative(),
+                    jnp.logical_and(_check_weights_sum(), _check_calib_positive()),
+                ),
+            ),
+        ),
     )
-    calib = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
-    return ProbeModes(
-        modes=modes,
-        weights=weights,
-        calib=calib,
+
+    return jax.lax.cond(
+        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
     )
 
 
@@ -531,31 +587,73 @@ def make_potential_slices(
     Validation Flow
     ---------------
     - Convert inputs to JAX arrays with appropriate dtypes:
-       - slices: Convert to complex128
-       - slice_thickness: Convert to float64
-       - calib: Convert to float64
-    - Extract shape information (H, W, S) from slices array
-    - Execute validation checks using JAX-compatible conditional logic:
-       - check_3d_slices(): Verify slices array has exactly 3 dimensions
-       - check_slices_finite(): Ensure all values in slices are finite (no inf/nan)
-       - check_slice_thickness(): Confirm slice_thickness is strictly positive
-       - check_calib(): Confirm calibration value is strictly positive
-    - If all validations pass, create and return PotentialSlices instance
-    - If any validation fails, the JAX-compatible error handling will stop execution
+       - slices: Convert to float64
+       - slice_thickness: Convert to float64 scalar
+       - calib: Convert to float64 scalar
+    - Set expected dimensions constant
+    - Define validation functions:
+       - _check_3d_slices(): Verify slices array has exactly 3 dimensions
+       - _check_slices_finite(): Ensure all values in slices are finite (no inf/nan)
+       - _check_slice_thickness_positive(): Confirm slice_thickness is strictly positive
+       - _check_calib_positive(): Confirm calibration value is strictly positive
+    - Chain all validation checks with jnp.logical_and
+    - Use jax.lax.cond to branch based on validation result:
+       - If valid: Ensure positive values for thickness and calibration, return PotentialSlices
+       - If invalid: Return PotentialSlices with NaN values to signal validation failure
     """
-    slices: Float[Array, "H W S"] = jnp.asarray(slices, dtype=jnp.float64)
-    slice_thickness: Float[Array, ""] = jnp.asarray(slice_thickness, dtype=jnp.float64)
-    calib: Float[Array, ""] = jnp.asarray(calib, dtype=jnp.float64)
-    slice_thickness: Float[Array, ""] = jnp.abs(slice_thickness) + jnp.finfo(jnp.float64).eps
-    calib: Float[Array, ""] = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
-    return PotentialSlices(
-        slices=slices,
-        slice_thickness=slice_thickness,
-        calib=calib,
+    slices: Float[Array, " H W S"] = jnp.asarray(slices, dtype=jnp.float64)
+    slice_thickness: Float[Array, " "] = jnp.asarray(slice_thickness, dtype=jnp.float64)
+    calib: Float[Array, " "] = jnp.asarray(calib, dtype=jnp.float64)
+
+    expected_dims: int = 3
+
+    def _check_3d_slices() -> Bool[Array, " "]:
+        return jnp.array(len(slices.shape) == expected_dims)
+
+    def _check_slices_finite() -> Bool[Array, " "]:
+        return jnp.all(jnp.isfinite(slices))
+
+    def _check_slice_thickness_positive() -> Bool[Array, " "]:
+        return slice_thickness > 0
+
+    def _check_calib_positive() -> Bool[Array, " "]:
+        return calib > 0
+
+    def _valid_processing() -> PotentialSlices:
+        positive_thickness: Float[Array, " "] = (
+            jnp.abs(slice_thickness) + jnp.finfo(jnp.float64).eps
+        )
+        positive_calib: Float[Array, " "] = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
+
+        return PotentialSlices(
+            slices=slices,
+            slice_thickness=positive_thickness,
+            calib=positive_calib,
+        )
+
+    def _invalid_processing() -> PotentialSlices:
+        nan_thickness: Float[Array, " "] = jnp.array(jnp.nan, dtype=jnp.float64)
+        nan_calib: Float[Array, " "] = jnp.array(jnp.nan, dtype=jnp.float64)
+        return PotentialSlices(
+            slices=slices,
+            slice_thickness=nan_thickness,
+            calib=nan_calib,
+        )
+
+    all_valid: Bool[Array, " "] = jnp.logical_and(
+        _check_3d_slices(),
+        jnp.logical_and(
+            _check_slices_finite(),
+            jnp.logical_and(_check_slice_thickness_positive(), _check_calib_positive()),
+        ),
+    )
+
+    return jax.lax.cond(
+        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
     )
 
 
-@beartype
+@jaxtyped(typechecker=beartype)
 def make_crystal_structure(
     frac_positions: Float[Array, "* 4"],
     cart_positions: Num[Array, "* 4"],
@@ -589,35 +687,108 @@ def make_crystal_structure(
     Validation Flow
     ---------------
     - Convert all inputs to JAX arrays:
-       - frac_positions: Convert to JAX array (maintains original dtype)
+       - frac_positions: Convert to float64
        - cart_positions: Convert to JAX array (maintains original dtype)
        - cell_lengths: Convert to JAX array (maintains original dtype)
        - cell_angles: Convert to JAX array (maintains original dtype)
-    - Execute shape validation checks:
-       - check_frac_shape(): Verify frac_positions has 4 columns [x, y, z, atomic_number]
-       - check_cart_shape(): Verify cart_positions has 4 columns [x, y, z, atomic_number]
-       - check_cell_lengths_shape(): Confirm cell_lengths has shape (3,)
-       - check_cell_angles_shape(): Confirm cell_angles has shape (3,)
-    - Execute consistency validation checks:
-       - check_atom_count(): Ensure frac_positions and cart_positions have same number of atoms
-       - check_atomic_numbers(): Verify atomic numbers match between frac and cart positions
-    - Execute value validation checks:
-       - check_cell_lengths_positive(): Confirm all cell lengths are strictly positive
-       - check_cell_angles_valid(): Ensure all angles are in range (0, 180) degrees
-    - If all validations pass, create and return CrystalStructure instance
-    - If any validation fails, the JAX-compatible error handling will stop execution
+    - Set constants for validation (num_cols, num_cell_params, angle limits)
+    - Define validation functions:
+       - _check_frac_shape(): Verify frac_positions has 4 columns [x, y, z, atomic_number]
+       - _check_cart_shape(): Verify cart_positions has 4 columns [x, y, z, atomic_number]
+       - _check_cell_lengths_shape(): Confirm cell_lengths has shape (3,)
+       - _check_cell_angles_shape(): Confirm cell_angles has shape (3,)
+       - _check_atom_count(): Ensure frac_positions and cart_positions have same atom count
+       - _check_atomic_numbers(): Verify atomic numbers match between frac and cart positions
+       - _check_cell_lengths_positive(): Confirm all cell lengths are strictly positive
+       - _check_cell_angles_valid(): Ensure all angles are in range (0, 180) degrees
+    - Chain all validation checks with jnp.logical_and
+    - Use jax.lax.cond to branch based on validation result:
+       - If valid: Ensure positive cell lengths and clip angles to valid range, return CrystalStructure
+       - If invalid: Return CrystalStructure with NaN values to signal validation failure
     """
-    frac_positions: Float[Array, "* 4"] = jnp.asarray(frac_positions)
-    cart_positions: Num[Array, "* 4"] = jnp.asarray(cart_positions)
+    frac_positions: Float[Array, " * 4"] = jnp.asarray(frac_positions, dtype=jnp.float64)
+    cart_positions: Num[Array, " * 4"] = jnp.asarray(cart_positions)
     cell_lengths: Num[Array, " 3"] = jnp.asarray(cell_lengths)
     cell_angles: Num[Array, " 3"] = jnp.asarray(cell_angles)
-    cell_lengths: Num[Array, " 3"] = jnp.abs(cell_lengths) + jnp.finfo(jnp.float64).eps
-    cell_angles: Num[Array, " 3"] = jnp.clip(cell_angles, 0.1, 179.9)
-    return CrystalStructure(
-        frac_positions=frac_positions,
-        cart_positions=cart_positions,
-        cell_lengths=cell_lengths,
-        cell_angles=cell_angles,
+
+    num_cols: int = 4
+    num_cell_params: int = 3
+    min_angle: float = 0.1
+    max_angle: float = 179.9
+    max_angle_check: float = 180.0
+
+    def _check_frac_shape() -> Bool[Array, " "]:
+        return jnp.array(frac_positions.shape[1] == num_cols)
+
+    def _check_cart_shape() -> Bool[Array, " "]:
+        return jnp.array(cart_positions.shape[1] == num_cols)
+
+    def _check_cell_lengths_shape() -> Bool[Array, " "]:
+        return jnp.array(cell_lengths.shape[0] == num_cell_params)
+
+    def _check_cell_angles_shape() -> Bool[Array, " "]:
+        return jnp.array(cell_angles.shape[0] == num_cell_params)
+
+    def _check_atom_count() -> Bool[Array, " "]:
+        return jnp.array(frac_positions.shape[0] == cart_positions.shape[0])
+
+    def _check_atomic_numbers() -> Bool[Array, " "]:
+        frac_atomic_nums: Num[Array, " *"] = frac_positions[:, 3]
+        cart_atomic_nums: Num[Array, " *"] = cart_positions[:, 3]
+        return jnp.all(frac_atomic_nums == cart_atomic_nums)
+
+    def _check_cell_lengths_positive() -> Bool[Array, " "]:
+        return jnp.all(cell_lengths > 0)
+
+    def _check_cell_angles_valid() -> Bool[Array, " "]:
+        return jnp.logical_and(jnp.all(cell_angles > 0), jnp.all(cell_angles < max_angle_check))
+
+    def _valid_processing() -> CrystalStructure:
+        positive_lengths: Num[Array, " 3"] = jnp.abs(cell_lengths) + jnp.finfo(jnp.float64).eps
+        valid_angles: Num[Array, " 3"] = jnp.clip(cell_angles, min_angle, max_angle)
+
+        return CrystalStructure(
+            frac_positions=frac_positions,
+            cart_positions=cart_positions,
+            cell_lengths=positive_lengths,
+            cell_angles=valid_angles,
+        )
+
+    def _invalid_processing() -> CrystalStructure:
+        nan_lengths: Num[Array, " 3"] = jnp.full((num_cell_params,), jnp.nan)
+        nan_angles: Num[Array, " 3"] = jnp.full((num_cell_params,), jnp.nan)
+
+        return CrystalStructure(
+            frac_positions=frac_positions,
+            cart_positions=cart_positions,
+            cell_lengths=nan_lengths,
+            cell_angles=nan_angles,
+        )
+
+    all_valid: Bool[Array, " "] = jnp.logical_and(
+        _check_frac_shape(),
+        jnp.logical_and(
+            _check_cart_shape(),
+            jnp.logical_and(
+                _check_cell_lengths_shape(),
+                jnp.logical_and(
+                    _check_cell_angles_shape(),
+                    jnp.logical_and(
+                        _check_atom_count(),
+                        jnp.logical_and(
+                            _check_atomic_numbers(),
+                            jnp.logical_and(
+                                _check_cell_lengths_positive(), _check_cell_angles_valid()
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    return jax.lax.cond(
+        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
     )
 
 
@@ -670,7 +841,8 @@ def make_xyz_data(
     - Execute shape validation checks:
        - check_shape(): Verify positions has shape (N, 3) and atomic_numbers has shape (N,)
     - Execute value validation checks:
-       - check_finiteness(): Ensure all position values are finite and atomic numbers are non-negative
+       - check_finiteness(): Ensure all position values are finite and atomic numbers
+         are non-negative
     - Execute optional matrix validation checks (if provided):
        - check_optional_matrices(): For lattice and stress tensors:
          * Verify shape is (3, 3)
@@ -696,7 +868,8 @@ def make_xyz_data(
         nn: Int[Array, ""] = positions.shape[0]
 
         def check_shape() -> None:
-            if positions.shape[1] != 3:
+            expected_pos_dims: int = 3
+            if positions.shape[1] != expected_pos_dims:
                 raise ValueError("positions must have shape (N, 3)")
             if atomic_numbers.shape[0] != nn:
                 raise ValueError("atomic_numbers must have shape (N,)")
@@ -768,42 +941,112 @@ def make_stem4d(
     - `stem4d` (STEM4D):
         Validated 4D-STEM data structure
 
-    Raises
-    ------
-    - ValueError:
-        If data dimensions are inconsistent or calibrations are invalid
-
     Validation Flow
     ---------------
     - Convert all inputs to JAX arrays with appropriate dtypes:
-       - data: Maintain as float array
-       - real_space_calib: Convert to float64
-       - fourier_space_calib: Convert to float64
+       - data: Convert to float64
+       - real_space_calib: Convert to float64 scalar
+       - fourier_space_calib: Convert to float64 scalar
        - scan_positions: Convert to float64
-       - voltage_kV: Convert to float64
-    - Execute consistency checks:
-       - check_scan_positions(): Verify scan_positions shape matches data
-       - check_calibrations(): Ensure calibrations are positive
-       - check_voltage(): Verify voltage is positive
-    - If all validations pass, create and return STEM4D instance
+       - voltage_kv: Convert to float64 scalar
+    - Extract shape information and set constants
+    - Define validation functions:
+       - _check_data_3d(): Verify data array has exactly 3 dimensions
+       - _check_data_finite(): Ensure all values in data are finite (no inf/nan)
+       - _check_scan_positions_shape(): Verify scan_positions shape matches data
+       - _check_scan_positions_finite(): Ensure all scan positions are finite
+       - _check_real_space_calib_positive(): Ensure real space calibration is positive
+       - _check_fourier_space_calib_positive(): Ensure Fourier space calibration is positive
+       - _check_voltage_positive(): Verify voltage is positive
+    - Chain all validation checks with jnp.logical_and
+    - Use jax.lax.cond to branch based on validation result:
+       - If valid: Ensure positive calibrations and voltage, return STEM4D
+       - If invalid: Return STEM4D with NaN values to signal validation failure
     """
-    data: Float[Array, "P H W"] = jnp.asarray(data)
+    data: Float[Array, " P H W"] = jnp.asarray(data, dtype=jnp.float64)
     real_space_calib: Float[Array, " "] = jnp.asarray(
         real_space_calib,
         dtype=jnp.float64,
     )
     fourier_space_calib: Float[Array, " "] = jnp.asarray(fourier_space_calib, dtype=jnp.float64)
-    scan_positions: Float[Array, "P 2"] = jnp.asarray(scan_positions, dtype=jnp.float64)
+    scan_positions: Float[Array, " P 2"] = jnp.asarray(scan_positions, dtype=jnp.float64)
     voltage_kv: Float[Array, " "] = jnp.asarray(voltage_kv, dtype=jnp.float64)
-    real_space_calib: Float[Array, " "] = jnp.abs(real_space_calib) + jnp.finfo(jnp.float64).eps
-    fourier_space_calib: Float[Array, " "] = (
-        jnp.abs(fourier_space_calib) + jnp.finfo(jnp.float64).eps
+
+    num_scan_positions: int = data.shape[0] if len(data.shape) >= 1 else 0
+    num_scan_coords: int = 2
+    expected_dims: int = 3
+
+    def _check_data_3d() -> Bool[Array, " "]:
+        return jnp.array(len(data.shape) == expected_dims)
+
+    def _check_data_finite() -> Bool[Array, " "]:
+        return jnp.all(jnp.isfinite(data))
+
+    def _check_scan_positions_shape() -> Bool[Array, " "]:
+        return jnp.logical_and(
+            jnp.array(scan_positions.shape[0] == num_scan_positions),
+            jnp.array(scan_positions.shape[1] == num_scan_coords),
+        )
+
+    def _check_scan_positions_finite() -> Bool[Array, " "]:
+        return jnp.all(jnp.isfinite(scan_positions))
+
+    def _check_real_space_calib_positive() -> Bool[Array, " "]:
+        return real_space_calib > 0
+
+    def _check_fourier_space_calib_positive() -> Bool[Array, " "]:
+        return fourier_space_calib > 0
+
+    def _check_voltage_positive() -> Bool[Array, " "]:
+        return voltage_kv > 0
+
+    def _valid_processing() -> STEM4D:
+        positive_real_calib: Float[Array, " "] = (
+            jnp.abs(real_space_calib) + jnp.finfo(jnp.float64).eps
+        )
+        positive_fourier_calib: Float[Array, " "] = (
+            jnp.abs(fourier_space_calib) + jnp.finfo(jnp.float64).eps
+        )
+        positive_voltage: Float[Array, " "] = jnp.abs(voltage_kv) + jnp.finfo(jnp.float64).eps
+
+        return STEM4D(
+            data=data,
+            real_space_calib=positive_real_calib,
+            fourier_space_calib=positive_fourier_calib,
+            scan_positions=scan_positions,
+            voltage_kv=positive_voltage,
+        )
+
+    def _invalid_processing() -> STEM4D:
+        nan_calib: Float[Array, " "] = jnp.array(jnp.nan, dtype=jnp.float64)
+
+        return STEM4D(
+            data=data,
+            real_space_calib=nan_calib,
+            fourier_space_calib=nan_calib,
+            scan_positions=scan_positions,
+            voltage_kv=nan_calib,
+        )
+
+    all_valid: Bool[Array, " "] = jnp.logical_and(
+        _check_data_3d(),
+        jnp.logical_and(
+            _check_data_finite(),
+            jnp.logical_and(
+                _check_scan_positions_shape(),
+                jnp.logical_and(
+                    _check_scan_positions_finite(),
+                    jnp.logical_and(
+                        _check_real_space_calib_positive(),
+                        jnp.logical_and(
+                            _check_fourier_space_calib_positive(), _check_voltage_positive()
+                        ),
+                    ),
+                ),
+            ),
+        ),
     )
-    voltage_kv: Float[Array, " "] = jnp.abs(voltage_kv) + jnp.finfo(jnp.float64).eps
-    return STEM4D(
-        data=data,
-        real_space_calib=real_space_calib,
-        fourier_space_calib=fourier_space_calib,
-        scan_positions=scan_positions,
-        voltage_kV=voltage_kv,
+
+    return jax.lax.cond(
+        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
     )

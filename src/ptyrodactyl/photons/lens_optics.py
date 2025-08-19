@@ -85,8 +85,8 @@ def angular_spectrum_prop(
     nx: scalar_integer = incoming.field.shape[1]
     wavenumber: Float[Array, ""] = 2 * jnp.pi / incoming.wavelength
     path_length = refractive_index * z_move
-    fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
-    fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
+    fx: Float[Array, " H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
+    fy: Float[Array, " W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
@@ -94,7 +94,7 @@ def angular_spectrum_prop(
     asp_transfer: Complex[Array, ""] = jnp.exp(
         1j * wavenumber * path_length * jnp.sqrt(1 - (incoming.wavelength**2) * FSQ),
     )
-    evanescent_mask: Bool[Array, "H W"] = (1 / incoming.wavelength) ** 2 >= FSQ
+    evanescent_mask: Bool[Array, " H W"] = (1 / incoming.wavelength) ** 2 >= FSQ
     H_mask: Complex[Array, "H W"] = asp_transfer * evanescent_mask
     field_ft: Complex[Array, "H W"] = jnp.fft.fft2(incoming.field)
     propagated_ft: Complex[Array, "H W"] = field_ft * H_mask
@@ -160,8 +160,8 @@ def fresnel_prop(
     ny: scalar_integer = incoming.field.shape[0]
     nx: scalar_integer = incoming.field.shape[1]
     k: Float[Array, ""] = (2 * jnp.pi) / incoming.wavelength
-    x: Float[Array, "H"] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
-    y: Float[Array, "W"] = jnp.arange(-ny // 2, ny // 2) * incoming.dx
+    x: Float[Array, " H"] = jnp.arange(-nx // 2, nx // 2) * incoming.dx
+    y: Float[Array, " W"] = jnp.arange(-ny // 2, ny // 2) * incoming.dx
     X: Float[Array, "H W"]
     Y: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
@@ -174,8 +174,8 @@ def fresnel_prop(
     field_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(jnp.fft.ifftshift(field_with_phase)),
     )
-    fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
-    fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
+    fx: Float[Array, " H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
+    fy: Float[Array, " W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
@@ -246,8 +246,8 @@ def fraunhofer_prop(
     """
     ny: scalar_integer = incoming.field.shape[0]
     nx: scalar_integer = incoming.field.shape[1]
-    fx: Float[Array, "H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
-    fy: Float[Array, "W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
+    fx: Float[Array, " H"] = jnp.fft.fftfreq(nx, d=incoming.dx)
+    fy: Float[Array, " W"] = jnp.fft.fftfreq(ny, d=incoming.dx)
     FX: Float[Array, "H W"]
     FY: Float[Array, "H W"]
     FX, FY = jnp.meshgrid(fx, fy)
@@ -271,7 +271,7 @@ def fraunhofer_prop(
 def circular_aperture(
     incoming: OpticalWavefront,
     diameter: scalar_float,
-    center: Optional[Float[Array, "2"]] = None,
+    center: Optional[Float[Array, " 2"]] = None,
     transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
@@ -294,7 +294,7 @@ def circular_aperture(
             Wave front position in meters
     - `diameter` (scalar_float):
         Diameter of the circular aperture in meters
-    - `center` (Optional[Float[Array, "2"]]):
+    - `center` (Optional[Float[Array, " 2"]]):
         Center position of the circular aperture in meters.
         Default is the center of the input field.
     - `transmittivity` (Optional[scalar_float]):
@@ -322,12 +322,12 @@ def circular_aperture(
     diameter_pixels: scalar_float = diameter / incoming.dx
     ny: scalar_integer = incoming.field.shape[0]
     nx: scalar_integer = incoming.field.shape[1]
-    x: Float[Array, "W"] = jnp.arange(-nx // 2, nx // 2)
-    y: Float[Array, "H"] = jnp.arange(-ny // 2, ny // 2)
+    x: Float[Array, " W"] = jnp.arange(-nx // 2, nx // 2)
+    y: Float[Array, " H"] = jnp.arange(-ny // 2, ny // 2)
     Y: Float[Array, "H W"]
     X: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
-    aperture_mask: Bool[Array, "H W"] = (
+    aperture_mask: Bool[Array, " H W"] = (
         (X - center_pixels[0]) ** 2 + (Y - center_pixels[1]) ** 2
     ) <= ((diameter_pixels / 2) ** 2)
     transmission: Float[Array, "H W"] = (

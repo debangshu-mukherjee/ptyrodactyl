@@ -1,6 +1,6 @@
 [project]
 name = "ptyrodactyl"
-version = "2025.07.15"
+version = "2025.07.20"
 description = "Ptychography through differentiable programming in JAX"
 authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 license = {file = "LICENSE.md"}
@@ -34,10 +34,8 @@ dependencies = [
     "optax >= 0.1.8",
     "pytest >= 8.0.0",
     "beartype>=0.19.0",
-    "black[jupyter]>=25.1.0",
     "jax[cuda12]>=0.4.30 ; sys_platform == 'linux'",
     "jax>=0.4.30 ; sys_platform == 'win64'",
-    "isort>=6.0.1",
     "pytest-cov>=6.2.1",
     "jupyterlab>=4.4.5",
     "jupyter>=1.1.1",
@@ -52,27 +50,44 @@ license-files = []
 namespaces = true
 where = ["src"]
 
-[tool.uv]
-dev-dependencies = [
+[project.optional-dependencies]
+docs = [
+    "furo>=2025.7.19",
     "ipykernel>=6.29.5",
     "myst-parser>=4.0.1",
     "nbsphinx>=0.9.6",
     "pydata-sphinx-theme>=0.16.1",
+    "sphinx>=8.1.3",
+    "sphinx-autodoc-typehints>=3.0.1",
+    "sphinx-rtd-theme>=3.0.2",
+    "sphinxcontrib-napoleon>=0.7",
+]
+test = [
+    "pytest>=8.3.5",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "chex>=0.1.89",
+]
+dev = [
+    "black[all]>=25.1.0",
+    "ipykernel>=6.29.5",
+    "isort>=6.0.1",
+    "myst-parser>=4.0.1",
+    "nbsphinx>=0.9.6",
+    "pydata-sphinx-theme>=0.16.1",
+    "ruff>=0.12.9",
     "sphinx>=8.1.3",
     "sphinx-rtd-theme>=3.0.2",
     "sphinxcontrib-napoleon>=0.7",
     "twine>=6.1.0",
 ]
-
-[project.optional-dependencies]
-docs = [
+notebooks = [
+    "ipywidgets>=8.1.0",
     "ipykernel>=6.29.5",
-    "myst-parser>=4.0.1",
-    "nbsphinx>=0.9.6",
-    "pydata-sphinx-theme>=0.16.1",
-    "sphinx>=8.1.3",
-    "sphinx-rtd-theme>=3.0.2",
-    "sphinxcontrib-napoleon>=0.7",
+    "nbconvert>=7.16.6",
+]
+all = [
+    "ptyrodactyl[docs,test,dev,notebooks]",
 ]
 
 [project.urls]
@@ -96,3 +111,28 @@ python_functions = "test_*"
 [tool.coverage.run]
 source = ["ptyrodactyl"]
 omit = ["*/tests/*", "*/site-packages/*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4", "PIE", "PT", "RET", "SIM", "ARG", "ERA", "PL"]
+ignore = [
+    "ANN401",  # Ignore "Any" type hint errors - useful for jaxtyping
+    "PYI021",  # Ignore errors related to jaxtyping Array imports/usages
+    "F722",    # Ignore forward annotation error with jaxtyping Array
+    "COM812",  # Disabled to avoid conflicts with formatter
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/*.py" = ["F821"]  # Ignore undefined name errors which often occur with jaxtyping
+
+[tool.ruff.lint.isort]
+known-third-party = ["jax", "jaxtyping"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+quote-style = "preserve"

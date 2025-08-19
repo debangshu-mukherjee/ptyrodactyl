@@ -314,9 +314,9 @@ class Optimizer(NamedTuple):
 
 
 def wirtinger_grad(
-    func2diff: Callable[..., Float[Array, "..."]],
+    func2diff: Callable[..., Float[Array, " ..."]],
     argnums: Optional[Union[int, Sequence[int]]] = 0,
-) -> Callable[..., Union[Complex[Array, "..."], Tuple[Complex[Array, "..."], ...]]]:
+) -> Callable[..., Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]]:
     """
     Description
     -----------
@@ -329,7 +329,7 @@ def wirtinger_grad(
 
     Parameters
     ----------
-    - `func2diff` (Callable[..., Float[Array, "..."]]):
+    - `func2diff` (Callable[..., Float[Array, " ..."]]):
         A complex-valued function to differentiate.
     - `argnums` (Union[int, Sequence[int]]):
         Specifies which argument(s) to compute the gradient with respect to.
@@ -337,15 +337,15 @@ def wirtinger_grad(
 
     Returns
     -------
-    - grad_f (Callable[..., Union[Complex[Array, "..."],
-              Tuple[Complex[Array, "..."], ...]]]):
+    - grad_f (Callable[..., Union[Complex[Array, " ..."],
+              Tuple[Complex[Array, " ..."], ...]]]):
         A function that computes the Wirtinger gradient of f with respect to
         the specified argument(s).
     """
 
     def grad_f(
         *args: Any,
-    ) -> Union[Complex[Array, "..."], Tuple[Complex[Array, "..."], ...]]:
+    ) -> Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]:
         def split_complex(args):
             return tuple(
                 jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args
@@ -381,15 +381,15 @@ def wirtinger_grad(
 
 
 def complex_adam(
-    params: Complex[Array, "..."],
-    grads: Complex[Array, "..."],
-    state: Tuple[Complex[Array, "..."], Complex[Array, "..."], int],
+    params: Complex[Array, " ..."],
+    grads: Complex[Array, " ..."],
+    state: Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int],
     learning_rate: float = 0.001,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
 ) -> Tuple[
-    Complex[Array, "..."], Tuple[Complex[Array, "..."], Complex[Array, "..."], int]
+    Complex[Array, " ..."], Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]
 ]:
     """
     Description
@@ -401,11 +401,11 @@ def complex_adam(
 
     Parameters
     ----------
-    - `params` (Complex[Array, "..."]):
+    - `params` (Complex[Array, " ..."]):
         Current complex-valued parameters
-    - `grads` (Complex[Array, "..."]):
+    - `grads` (Complex[Array, " ..."]):
         Complex-valued gradients computed using Wirtinger derivatives
-    - `state` (Tuple[Complex[Array, "..."], Complex[Array, "..."], int]):
+    - `state` (Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]):
         Optimizer state containing (first moment, second moment, timestep)
     - `learning_rate` (float):
         Learning rate for parameter updates.
@@ -422,9 +422,9 @@ def complex_adam(
 
     Returns
     -------
-    - `new_params` (Complex[Array, "..."]):
+    - `new_params` (Complex[Array, " ..."]):
         Updated complex-valued parameters
-    - `new_state` (Tuple[Complex[Array, "..."], Complex[Array, "..."], int]):
+    - `new_state` (Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]):
         Updated optimizer state
 
     Flow
@@ -449,12 +449,12 @@ def complex_adam(
 
 
 def complex_adagrad(
-    params: Complex[Array, "..."],
-    grads: Complex[Array, "..."],
-    state: Complex[Array, "..."],
+    params: Complex[Array, " ..."],
+    grads: Complex[Array, " ..."],
+    state: Complex[Array, " ..."],
     learning_rate: float = 0.01,
     eps: float = 1e-8,
-) -> Tuple[Complex[Array, "..."], Complex[Array, "..."]]:
+) -> Tuple[Complex[Array, " ..."], Complex[Array, " ..."]]:
     """
     Description
     -----------
@@ -465,11 +465,11 @@ def complex_adagrad(
 
     Parameters
     ----------
-    - `params` (Complex[Array, "..."]):
+    - `params` (Complex[Array, " ..."]):
         Current complex-valued parameters
-    - `grads` (Complex[Array, "..."]):
+    - `grads` (Complex[Array, " ..."]):
         Complex-valued gradients computed using Wirtinger derivatives
-    - `state` (Complex[Array, "..."]):
+    - `state` (Complex[Array, " ..."]):
         Optimizer state containing accumulated squared gradients
     - `learning_rate` (float):
         Learning rate for parameter updates.
@@ -480,9 +480,9 @@ def complex_adagrad(
 
     Returns
     -------
-    - `new_params` (Complex[Array, "..."]):
+    - `new_params` (Complex[Array, " ..."]):
         Updated complex-valued parameters
-    - `new_state` (Complex[Array, "..."]):
+    - `new_state` (Complex[Array, " ..."]):
         Updated optimizer state with accumulated gradients
 
     Flow
@@ -507,13 +507,13 @@ def complex_adagrad(
 
 
 def complex_rmsprop(
-    params: Complex[Array, "..."],
-    grads: Complex[Array, "..."],
-    state: Complex[Array, "..."],
+    params: Complex[Array, " ..."],
+    grads: Complex[Array, " ..."],
+    state: Complex[Array, " ..."],
     learning_rate: float = 0.001,
     decay_rate: float = 0.9,
     eps: float = 1e-8,
-) -> Tuple[Complex[Array, "..."], Complex[Array, "..."]]:
+) -> Tuple[Complex[Array, " ..."], Complex[Array, " ..."]]:
     """
     Description
     -----------
@@ -524,11 +524,11 @@ def complex_rmsprop(
 
     Parameters
     ----------
-    - `params` (Complex[Array, "..."]):
+    - `params` (Complex[Array, " ..."]):
         Current complex-valued parameters
-    - `grads` (Complex[Array, "..."]):
+    - `grads` (Complex[Array, " ..."]):
         Complex-valued gradients computed using Wirtinger derivatives
-    - `state` (Complex[Array, "..."]):
+    - `state` (Complex[Array, " ..."]):
         Optimizer state containing moving average of squared gradients
     - `learning_rate` (float):
         Learning rate for parameter updates.
@@ -542,9 +542,9 @@ def complex_rmsprop(
 
     Returns
     -------
-    - `new_params` (Complex[Array, "..."]):
+    - `new_params` (Complex[Array, " ..."]):
         Updated complex-valued parameters
-    - `new_state` (Complex[Array, "..."]):
+    - `new_state` (Complex[Array, " ..."]):
         Updated optimizer state with moving average
 
     Flow
@@ -626,14 +626,14 @@ def init_rmsprop(shape: tuple) -> OptimizerState:
 
 
 def adam_update(
-    params: Complex[Array, "..."],
-    grads: Complex[Array, "..."],
+    params: Complex[Array, " ..."],
+    grads: Complex[Array, " ..."],
     state: OptimizerState,
     learning_rate: float = 0.001,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
-) -> tuple[Complex[Array, "..."], OptimizerState]:
+) -> tuple[Complex[Array, " ..."], OptimizerState]:
     """
     Description
     -----------
@@ -641,9 +641,9 @@ def adam_update(
 
     Parameters
     ----------
-    - `params` (Complex[Array, "..."]):
+    - `params` (Complex[Array, " ..."]):
         Current complex-valued parameters
-    - `grads` (Complex[Array, "..."]):
+    - `grads` (Complex[Array, " ..."]):
         Complex-valued gradients computed using Wirtinger derivatives
     - `state` (OptimizerState):
         Current optimizer state
@@ -662,7 +662,7 @@ def adam_update(
 
     Returns
     -------
-    - `new_params` (Complex[Array, "..."]):
+    - `new_params` (Complex[Array, " ..."]):
         Updated complex-valued parameters
     - `new_state` (OptimizerState):
         Updated optimizer state
@@ -681,12 +681,12 @@ def adam_update(
 
 
 def adagrad_update(
-    params: Complex[Array, "..."],
-    grads: Complex[Array, "..."],
+    params: Complex[Array, " ..."],
+    grads: Complex[Array, " ..."],
     state: OptimizerState,
     learning_rate: float = 0.01,
     eps: float = 1e-8,
-) -> tuple[Complex[Array, "..."], OptimizerState]:
+) -> tuple[Complex[Array, " ..."], OptimizerState]:
     """
     Description
     -----------
@@ -694,9 +694,9 @@ def adagrad_update(
 
     Parameters
     ----------
-    - `params` (Complex[Array, "..."]):
+    - `params` (Complex[Array, " ..."]):
         Current complex-valued parameters
-    - `grads` (Complex[Array, "..."]):
+    - `grads` (Complex[Array, " ..."]):
         Complex-valued gradients computed using Wirtinger derivatives
     - `state` (OptimizerState):
         Current optimizer state
@@ -709,7 +709,7 @@ def adagrad_update(
 
     Returns
     -------
-    - `new_params` (Complex[Array, "..."]):
+    - `new_params` (Complex[Array, " ..."]):
         Updated complex-valued parameters
     - `new_state` (OptimizerState):
         Updated optimizer state
@@ -726,13 +726,13 @@ def adagrad_update(
 
 
 def rmsprop_update(
-    params: Complex[Array, "..."],
-    grads: Complex[Array, "..."],
+    params: Complex[Array, " ..."],
+    grads: Complex[Array, " ..."],
     state: OptimizerState,
     learning_rate: float = 0.001,
     decay_rate: float = 0.9,
     eps: float = 1e-8,
-) -> tuple[Complex[Array, "..."], OptimizerState]:
+) -> tuple[Complex[Array, " ..."], OptimizerState]:
     """
     Description
     -----------
@@ -740,9 +740,9 @@ def rmsprop_update(
 
     Parameters
     ----------
-    - `params` (Complex[Array, "..."]):
+    - `params` (Complex[Array, " ..."]):
         Current complex-valued parameters
-    - `grads` (Complex[Array, "..."]):
+    - `grads` (Complex[Array, " ..."]):
         Complex-valued gradients computed using Wirtinger derivatives
     - `state` (OptimizerState):
         Current optimizer state
@@ -758,7 +758,7 @@ def rmsprop_update(
 
     Returns
     -------
-    - `new_params` (Complex[Array, "..."]):
+    - `new_params` (Complex[Array, " ..."]):
         Updated complex-valued parameters
     - `new_state` (OptimizerState):
         Updated optimizer state

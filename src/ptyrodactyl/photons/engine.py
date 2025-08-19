@@ -195,7 +195,7 @@ def single_pie_iteration(
     object_prop_ft: Complex[Array, "H W"],
     surface_pattern: Complex[Array, "H W"],
     measurement: Float[Array, "H W"],
-    position: Float[Array, "2"],
+    position: Float[Array, " 2"],
     frequency_x_grid: Float[Array, "H W"],
     frequency_y_grid: Float[Array, "H W"],
     pixel_mask: Float[Array, "H W"],
@@ -221,7 +221,7 @@ def single_pie_iteration(
         Surface pattern function
     - `measurement` (Float[Array, "H W"]):
         Measured intensity at current position
-    - `position` (Float[Array, "2"]):
+    - `position` (Float[Array, " 2"]):
         Current scanning position [x, y]
     - `frequency_x_grid` (Float[Array, "H W"]):
         Frequency grid in x direction
@@ -686,7 +686,7 @@ def _apply_coherent_transfer_function(
 @jaxtyped(typechecker=beartype)
 def _apply_position_shift(
     field_ft: Complex[Array, "H W"],
-    position: Float[Array, "2"],
+    position: Float[Array, " 2"],
     frequency_x_grid: Float[Array, "H W"],
     frequency_y_grid: Float[Array, "H W"],
 ) -> Complex[Array, "H W"]:
@@ -700,7 +700,7 @@ def _apply_position_shift(
     ----------
     - `field_ft` (Complex[Array, "H W"]):
         Field in Fourier domain
-    - `position` (Float[Array, "2"]):
+    - `position` (Float[Array, " 2"]):
         Position shift [x, y]
     - `frequency_x_grid` (Float[Array, "H W"]):
         Frequency grid in x direction
@@ -780,8 +780,8 @@ def _get_propagation_kernel(
     height: int
     width: int
     height, width = field_shape
-    frequency_x: Float[Array, "W"] = jnp.fft.fftfreq(width, dx)
-    frequency_y: Float[Array, "H"] = jnp.fft.fftfreq(height, dx)
+    frequency_x: Float[Array, " W"] = jnp.fft.fftfreq(width, dx)
+    frequency_y: Float[Array, " H"] = jnp.fft.fftfreq(height, dx)
     frequency_x_grid: Float[Array, "H W"]
     frequency_y_grid: Float[Array, "H W"]
     frequency_x_grid, frequency_y_grid = jnp.meshgrid(frequency_x, frequency_y)
@@ -873,8 +873,8 @@ def _create_frequency_grids(
     """
     height: scalar_integer = field.shape[0]
     width: scalar_integer = field.shape[1]
-    frequency_x: Float[Array, "W"] = jnp.fft.fftfreq(width, dx)
-    frequency_y: Float[Array, "H"] = jnp.fft.fftfreq(height, dx)
+    frequency_x: Float[Array, " W"] = jnp.fft.fftfreq(width, dx)
+    frequency_y: Float[Array, " H"] = jnp.fft.fftfreq(height, dx)
     frequency_x_grid: Float[Array, "H W"]
     frequency_y_grid: Float[Array, "H W"]
     frequency_x_grid, frequency_y_grid = jnp.meshgrid(frequency_x, frequency_y)

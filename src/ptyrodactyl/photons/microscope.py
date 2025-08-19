@@ -66,8 +66,8 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
     H: int
     W: int
     H, W = incoming.field.shape
-    x: Float[Array, W] = jnp.linspace(-W // 2, W // 2 - 1, W) * incoming.dx
-    y: Float[Array, H] = jnp.linspace(-H // 2, H // 2 - 1, H) * incoming.dx
+    x: Float[Array, " W"] = jnp.linspace(-W // 2, W // 2 - 1, W) * incoming.dx
+    y: Float[Array, " H"] = jnp.linspace(-H // 2, H // 2 - 1, H) * incoming.dx
     X: Float[Array, "H W"]
     Y: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
@@ -130,7 +130,7 @@ def simple_diffractogram(
     aperture_diameter: scalar_float,
     travel_distance: scalar_float,
     camera_pixel_size: scalar_float,
-    aperture_center: Optional[Float[Array, "2"]] = None,
+    aperture_center: Optional[Float[Array, " 2"]] = None,
 ) -> Diffractogram:
     """
     Description
@@ -156,7 +156,7 @@ def simple_diffractogram(
         The distance traveled by the light in meters
     - `camera_pixel_size` (scalar_float):
         The pixel size of the camera in meters
-    - `aperture_center` (Optional[Float[Array, "2"]]):
+    - `aperture_center` (Optional[Float[Array, " 2"]]):
         The center of the aperture in pixels
 
     Returns
@@ -199,13 +199,13 @@ def simple_diffractogram(
 @jaxtyped(typechecker=beartype)
 def simple_microscope(
     sample: SampleFunction,
-    positions: Num[Array, "n 2"],
+    positions: Num[Array, " n 2"],
     lightwave: OpticalWavefront,
     zoom_factor: scalar_float,
     aperture_diameter: scalar_float,
     travel_distance: scalar_float,
     camera_pixel_size: scalar_float,
-    aperture_center: Optional[Float[Array, "2"]] = None,
+    aperture_center: Optional[Float[Array, " 2"]] = None,
 ) -> MicroscopeData:
     """
     Description
@@ -219,7 +219,7 @@ def simple_microscope(
     ----------
     - `sample` (SampleFunction):
         The sample function representing the optical properties of the sample
-    - `positions` (Num[Array, "n 2"]):
+    - `positions` (Num[Array, " n 2"]):
         The positions in the sample plane where the diffractograms are calculated
     - `lightwave` (OpticalWavefront):
         The incoming optical wavefront
@@ -231,7 +231,7 @@ def simple_microscope(
         The distance traveled by the light in meters
     - `camera_pixel_size` (scalar_float):
         The pixel size of the camera in meters
-    - `aperture_center` (Optional[Float[Array, "2"]]):
+    - `aperture_center` (Optional[Float[Array, " 2"]]):
         The center of the aperture in pixels
 
     Returns
@@ -248,10 +248,10 @@ def simple_microscope(
     - Return the MicroscopeData object
     """
     interaction_size: Tuple[int, int] = lightwave.field.shape
-    pixel_positions: Float[Array, "n 2"] = positions / lightwave.dx
+    pixel_positions: Float[Array, " n 2"] = positions / lightwave.dx
 
     def diffractogram_at_position(
-        sample: SampleFunction, this_position: Num[Array, "2"]
+        sample: SampleFunction, this_position: Num[Array, " 2"]
     ):
         x: scalar_numeric
         y: scalar_numeric

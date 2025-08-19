@@ -6,13 +6,13 @@ Data structures and type definitions for optical ptychography.
 Type Aliases
 ------------
 - `scalar_float`:
-    A type alias for float or Float[Array, ""]
+    A type alias for float or Float[Array, " "]
 - `scalar_integer`:
-    A type alias for int or Int[Array, ""]
+    A type alias for int or Int[Array, " "]
 - `scalar_complex`:
-    A type alias for complex or Complex[Array, ""]
+    A type alias for complex or Complex[Array, " "]
 - `scalar_numeric`:
-    A type alias for int, float, complex or Num[Array, ""]
+    A type alias for int, float, complex or Num[Array, " "]
 - `non_jax_number`:
     A type alias for int, float or complex
 
@@ -60,10 +60,10 @@ from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 
-scalar_float: TypeAlias = Union[float, Float[Array, ""]]
-scalar_integer: TypeAlias = Union[int, Int[Array, ""]]
-scalar_complex: TypeAlias = Union[complex, Complex[Array, ""]]
-scalar_numeric: TypeAlias = Union[int, float, complex, Num[Array, ""]]
+scalar_float: TypeAlias = Union[float, Float[Array, " "]]
+scalar_integer: TypeAlias = Union[int, Int[Array, " "]]
+scalar_complex: TypeAlias = Union[complex, Complex[Array, " "]]
+scalar_numeric: TypeAlias = Union[int, float, complex, Num[Array, " "]]
 non_jax_number: TypeAlias = Union[int, float, complex]
 
 
@@ -223,7 +223,7 @@ class MicroscopeData(NamedTuple):
     ----------
     - `image_data` (Float[Array, "P H W"] | Float[Array, "X Y H W"]):
         3D or 4D image data representing the optical field.
-    - `positions` (Num[Array, "P 2"]):
+    - `positions` (Num[Array, " P 2"]):
         Positions of the images during collection.
     - `wavelength` (scalar_float):
         Wavelength of the optical wavefront in meters.
@@ -232,7 +232,7 @@ class MicroscopeData(NamedTuple):
     """
 
     image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
-    positions: Num[Array, "P 2"]
+    positions: Num[Array, " P 2"]
     wavelength: scalar_float
     dx: scalar_float
 
@@ -684,7 +684,7 @@ def make_optical_wavefront(
 @jaxtyped(typechecker=beartype)
 def make_microscope_data(
     image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]],
-    positions: Num[Array, "P 2"],
+    positions: Num[Array, " P 2"],
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> MicroscopeData:
@@ -697,7 +697,7 @@ def make_microscope_data(
     ----------
     - `image_data` (Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]):
         3D or 4D image data representing the optical field
-    - `positions` (Num[Array, "P 2"]):
+    - `positions` (Num[Array, " P 2"]):
         Positions of the images during collection
     - `wavelength` (scalar_float):
         Wavelength of the optical wavefront in meters

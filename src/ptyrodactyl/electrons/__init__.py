@@ -29,24 +29,54 @@ Submodules
     such as simulating 4D-STEM data from XYZ structure files
 """
 
-from .atom_potentials import (bessel_kv, contrast_stretch,
-                              kirkland_potentials_XYZ, single_atom_potential)
-from .electron_types import (STEM4D, CalibratedArray, CrystalStructure,
-                             PotentialSlices, ProbeModes, XYZData,
-                             make_calibrated_array, make_crystal_structure,
-                             make_potential_slices, make_probe_modes,
-                             make_stem4d, make_xyz_data, non_jax_number,
-                             scalar_float, scalar_int, scalar_numeric)
-from .geometry import (reciprocal_lattice, rotate_structure, rotmatrix_axis,
-                       rotmatrix_vectors)
-from .phase_recon import (multi_slice_multi_modal, single_slice_multi_modal,
-                          single_slice_poscorrected, single_slice_ptychography)
+from .atom_potentials import (
+    bessel_kv,
+    contrast_stretch,
+    kirkland_potentials_XYZ,
+    single_atom_potential,
+)
+from .electron_types import (
+    STEM4D,
+    CalibratedArray,
+    CrystalStructure,
+    PotentialSlices,
+    ProbeModes,
+    XYZData,
+    make_calibrated_array,
+    make_crystal_structure,
+    make_potential_slices,
+    make_probe_modes,
+    make_stem4d,
+    make_xyz_data,
+    non_jax_number,
+    scalar_float,
+    scalar_int,
+    scalar_numeric,
+)
+from .geometry import reciprocal_lattice, rotate_structure, rotmatrix_axis, rotmatrix_vectors
+from .phase_recon import (
+    multi_slice_multi_modal,
+    single_slice_multi_modal,
+    single_slice_poscorrected,
+    single_slice_ptychography,
+)
 from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
-from .simulations import (aberration, annular_detector, cbed,
-                          decompose_beam_to_modes, fourier_calib,
-                          fourier_coords, make_probe, propagation_func,
-                          shift_beam_fourier, stem_4D, stem_4D_parallel,
-                          stem_4D_sharded, transmission_func, wavelength_ang)
+from .simulations import (
+    aberration,
+    annular_detector,
+    cbed,
+    decompose_beam_to_modes,
+    fourier_calib,
+    fourier_coords,
+    make_probe,
+    propagation_func,
+    shift_beam_fourier,
+    stem_4D,
+    stem_4D_parallel,
+    stem_4D_sharded,
+    transmission_func,
+    wavelength_ang,
+)
 from .workflows import xyz_to_4d_stem
 
 __all__: list[str] = [

@@ -40,7 +40,7 @@ import jax
 import jax.numpy as jnp
 from beartype import beartype as typechecker
 from beartype.typing import Any, Dict, Optional, Tuple, Union
-from jaxtyping import Array, Complex, Float, jaxtyped
+from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 import ptyrodactyl.tools as ptt
 
@@ -52,9 +52,15 @@ OPTIMIZERS: Dict[str, ptt.Optimizer] = {
     "rmsprop": ptt.Optimizer(ptt.init_rmsprop, ptt.rmsprop_update),
 }
 
-from .electron_types import (STEM4D, CalibratedArray, ProbeModes,
-                             make_calibrated_array, scalar_float, scalar_int,
-                             scalar_numeric)
+from .electron_types import (
+    STEM4D,
+    CalibratedArray,
+    ProbeModes,
+    make_calibrated_array,
+    scalar_float,
+    scalar_int,
+    scalar_numeric,
+)
 from .simulations import stem_4D
 
 
@@ -128,8 +134,8 @@ def single_slice_ptychography(
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
-    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
-    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
+    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
 
     def forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
@@ -144,12 +150,12 @@ def single_slice_ptychography(
         )
         return stem4d_result.data
 
-    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
     def loss_and_grad(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
-    ) -> Tuple[Float[Array, ""], Dict[str, Complex[Array, "H W"]]]:
+    ) -> Tuple[Float[Array, " "], Dict[str, Complex[Array, "H W"]]]:
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(pot_slice, beam)
         return loss, {"pot_slice": grads[0], "beam": grads[1]}
 
@@ -170,18 +176,14 @@ def single_slice_ptychography(
         beam: Complex[Array, "H W"],
         pot_slice_state: Any,
         beam_state: Any,
-    ) -> Tuple[
-        Complex[Array, "H W"], Complex[Array, "H W"], Any, Any, Float[Array, ""]
-    ]:
-        loss: Float[Array, ""]
+    ) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"], Any, Any, Float[Array, " "]]:
+        loss: Float[Array, " "]
         grads: Dict[str, Complex[Array, "H W"]]
         loss, grads = loss_and_grad(pot_slice, beam)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
-        beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, learning_rate
-        )
+        beam, beam_state = optimizer.update(beam, grads["beam"], beam_state, learning_rate)
         return pot_slice, beam, pot_slice_state, beam_state, loss
 
     intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
@@ -202,14 +204,14 @@ def single_slice_ptychography(
     )
 
     for ii in range(num_iterations):
-        loss: Float[Array, ""]
+        loss: Float[Array, " "]
         pot_slice, beam, pot_slice_state, beam_state, loss = update_step(
             pot_slice, beam, pot_slice_state, beam_state
         )
 
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
-            saver: scalar_int = jnp.floor(ii / save_every)
+            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(jnp.int32)
             intermediate_potslice = intermediate_potslice.at[:, :, saver].set(pot_slice)
             intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
 
@@ -300,8 +302,8 @@ def single_slice_poscorrected(
         Intermediate probe positions.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
-    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
+    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
     def forward_fn(
@@ -319,17 +321,15 @@ def single_slice_poscorrected(
         )
         return stem4d_result.data
 
-    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
     def loss_and_grad(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
-    ) -> Tuple[Float[Array, ""], Dict[str, Array]]:
-        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
-            pot_slice, beam, pos_list
-        )
+    ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(pot_slice, beam, pos_list)
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
     optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
@@ -357,17 +357,15 @@ def single_slice_poscorrected(
         Any,
         Any,
         Any,
-        Float[Array, ""],
+        Float[Array, " "],
     ]:
-        loss: Float[Array, ""]
+        loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
-        beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, learning_rate
-        )
+        beam, beam_state = optimizer.update(beam, grads["beam"], beam_state, learning_rate)
         pos_list, pos_state = optimizer.update(
             pos_list, grads["pos_list"], pos_state, learning_rate[1]
         )
@@ -411,20 +409,14 @@ def single_slice_poscorrected(
             beam_state,
             pos_state,
             loss,
-        ) = update_step(
-            pot_guess, beam_guess, pos_guess, pot_slice_state, beam_state, pos_state
-        )
+        ) = update_step(pot_guess, beam_guess, pos_guess, pot_slice_state, beam_state, pos_state)
 
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
-            saver: scalar_int = jnp.floor(ii / save_every)
-            intermediate_potslices = intermediate_potslices.at[:, :, saver].set(
-                pot_guess
-            )
+            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(jnp.int32)
+            intermediate_potslices = intermediate_potslices.at[:, :, saver].set(pot_guess)
             intermediate_beams = intermediate_beams.at[:, :, saver].set(beam_guess)
-            intermediate_positions = intermediate_positions.at[:, :, saver].set(
-                pos_guess
-            )
+            intermediate_positions = intermediate_positions.at[:, :, saver].set(pos_guess)
 
     final_potential: CalibratedArray = make_calibrated_array(
         data_array=pot_guess,
@@ -519,8 +511,8 @@ def single_slice_multi_modal(
         Intermediate electron beams.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
-    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
+    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
     def forward_fn(
@@ -538,17 +530,15 @@ def single_slice_multi_modal(
         )
         return stem4d_result.data
 
-    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
     def loss_and_grad(
         pot_slice: Complex[Array, "H W"],
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
-    ) -> Tuple[Float[Array, ""], Dict[str, Any]]:
-        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
-            pot_slice, beam, pos_list
-        )
+    ) -> Tuple[Float[Array, " "], Dict[str, Any]]:
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(pot_slice, beam, pos_list)
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
     optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
@@ -575,9 +565,9 @@ def single_slice_multi_modal(
         Any,
         Any,
         Any,
-        Float[Array, ""],
+        Float[Array, " "],
     ]:
-        loss: Float[Array, ""]
+        loss: Float[Array, " "]
         grads: Dict[str, Any]
         loss, grads = loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
@@ -616,16 +606,14 @@ def single_slice_multi_modal(
     )
 
     for ii in range(num_iterations):
-        loss: Float[Array, ""]
-        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = (
-            update_step(
-                pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
-            )
+        loss: Float[Array, " "]
+        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = update_step(
+            pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
         )
 
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
-            saver: scalar_int = jnp.floor(ii / save_every)
+            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(jnp.int32)
             intermediate_potslice = intermediate_potslice.at[:, :, saver].set(pot_slice)
             intermediate_beam = intermediate_beam.at[:, :, :, saver].set(beam.modes)
 
@@ -703,8 +691,8 @@ def multi_slice_multi_modal(
         Intermediate electron beams.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kV: Float[Array, ""] = experimental_data.voltage_kV
-    calib_ang: Float[Array, ""] = experimental_data.real_space_calib
+    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
     def forward_fn(
@@ -722,17 +710,15 @@ def multi_slice_multi_modal(
         )
         return stem4d_result.data
 
-    loss_func = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(forward_fn, experimental_4dstem, loss_type)
 
     @jax.jit
     def loss_and_grad(
         pot_slice: Complex[Array, "H W"],
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
-    ) -> Tuple[Float[Array, ""], Dict[str, Array]]:
-        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
-            pot_slice, beam, pos_list
-        )
+    ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(pot_slice, beam, pos_list)
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
     optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
@@ -755,17 +741,15 @@ def multi_slice_multi_modal(
         Any,
         Any,
         Any,
-        Float[Array, ""],
+        Float[Array, " "],
     ]:
-        loss: Float[Array, ""]
+        loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
-        beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, learning_rate
-        )
+        beam, beam_state = optimizer.update(beam, grads["beam"], beam_state, learning_rate)
         pos_list, pos_state = optimizer.update(
             pos_list, grads["pos_list"], pos_state, pos_learning_rate
         )
@@ -793,16 +777,14 @@ def multi_slice_multi_modal(
     )
 
     for ii in range(num_iterations):
-        loss: Float[Array, ""]
-        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = (
-            update_step(
-                pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
-            )
+        loss: Float[Array, " "]
+        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = update_step(
+            pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
         )
 
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
-            saver: scalar_int = jnp.floor(ii / save_every)
+            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(jnp.int32)
             intermediate_potslice = intermediate_potslice.at[:, :, saver].set(pot_slice)
             intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
 

@@ -20,9 +20,15 @@ from jaxtyping import Array, Complex, Float, jaxtyped
 import ptyrodactyl.tools as ptt
 
 from .microscope import simple_microscope
-from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
-                           make_optical_wavefront, make_sample_function,
-                           scalar_float, scalar_integer)
+from .photon_types import (
+    MicroscopeData,
+    OpticalWavefront,
+    SampleFunction,
+    make_optical_wavefront,
+    make_sample_function,
+    scalar_float,
+    scalar_integer,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -57,9 +63,7 @@ def simple_microscope_ptychography(
     zoom_factor_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
     aperture_diameter_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
     travel_distance_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
-    aperture_center_bounds: Optional[
-        Tuple[Float[Array, " 2"], Float[Array, " 2"]]
-    ] = None,
+    aperture_center_bounds: Optional[Tuple[Float[Array, " 2"], Float[Array, " 2"]]] = None,
 ) -> Tuple[
     Tuple[
         SampleFunction,  # final_sample
@@ -188,9 +192,7 @@ def simple_microscope_ptychography(
         return simulated_data.image_data
 
     # Create loss function using the tools module
-    loss_func = ptt.create_loss_function(
-        forward_fn, experimental_data.image_data, loss_type
-    )
+    loss_func = ptt.create_loss_function(forward_fn, experimental_data.image_data, loss_type)
 
     # Define function to compute loss and gradients
     @jax.jit
@@ -212,15 +214,9 @@ def simple_microscope_ptychography(
         ):
             # Enforce bounds before calculating loss
             bounded_zoom_factor = enforce_bounds(zoom_factor, zoom_factor_bounds)
-            bounded_aperture_diameter = enforce_bounds(
-                aperture_diameter, aperture_diameter_bounds
-            )
-            bounded_travel_distance = enforce_bounds(
-                travel_distance, travel_distance_bounds
-            )
-            bounded_aperture_center = enforce_bounds_2d(
-                aperture_center, aperture_center_bounds
-            )
+            bounded_aperture_diameter = enforce_bounds(aperture_diameter, aperture_diameter_bounds)
+            bounded_travel_distance = enforce_bounds(travel_distance, travel_distance_bounds)
+            bounded_aperture_center = enforce_bounds_2d(aperture_center, aperture_center_bounds)
 
             return loss_func(
                 sample_field,
@@ -266,9 +262,7 @@ def simple_microscope_ptychography(
     current_zoom_factor = zoom_factor
     current_aperture_diameter = aperture_diameter
     current_travel_distance = travel_distance
-    current_aperture_center = (
-        jnp.zeros(2) if aperture_center is None else aperture_center
-    )
+    current_aperture_center = jnp.zeros(2) if aperture_center is None else aperture_center
 
     # Set up intermediate result storage
     num_saves = jnp.floor(num_iterations / save_every).astype(int)
@@ -407,24 +401,22 @@ def simple_microscope_ptychography(
             print(f"Iteration {ii}, Loss: {loss}")
             save_idx = ii // save_every
             if save_idx < num_saves:
-                intermediate_samples = intermediate_samples.at[:, :, save_idx].set(
-                    sample_field
+                intermediate_samples = intermediate_samples.at[:, :, save_idx].set(sample_field)
+                intermediate_lightwaves = intermediate_lightwaves.at[:, :, save_idx].set(
+                    lightwave_field
                 )
-                intermediate_lightwaves = intermediate_lightwaves.at[
-                    :, :, save_idx
-                ].set(lightwave_field)
                 intermediate_zoom_factors = intermediate_zoom_factors.at[save_idx].set(
                     current_zoom_factor
                 )
-                intermediate_aperture_diameters = intermediate_aperture_diameters.at[
-                    save_idx
-                ].set(current_aperture_diameter)
-                intermediate_travel_distances = intermediate_travel_distances.at[
-                    save_idx
-                ].set(current_travel_distance)
-                intermediate_aperture_centers = intermediate_aperture_centers.at[
-                    :, save_idx
-                ].set(current_aperture_center)
+                intermediate_aperture_diameters = intermediate_aperture_diameters.at[save_idx].set(
+                    current_aperture_diameter
+                )
+                intermediate_travel_distances = intermediate_travel_distances.at[save_idx].set(
+                    current_travel_distance
+                )
+                intermediate_aperture_centers = intermediate_aperture_centers.at[:, save_idx].set(
+                    current_aperture_center
+                )
 
     # Create final objects
     final_sample = make_sample_function(sample=sample_field, dx=guess_sample.dx)

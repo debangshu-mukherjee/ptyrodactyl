@@ -67,8 +67,7 @@ grad, and vmap.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import (Any, Callable, NamedTuple, Optional, Sequence,
-                             Tuple, Union)
+from beartype.typing import Any, Callable, NamedTuple, Optional, Sequence, Tuple, Union
 from jaxtyping import Array, Complex, Float
 
 
@@ -240,9 +239,7 @@ def create_warmup_cosine_scheduler(
         decay_progress = jnp.maximum(0.0, state.step - warmup_steps) / remaining_steps
         decay_progress = jnp.minimum(decay_progress, 1.0)
         cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * decay_progress))
-        decay_lr = state.initial_lr * (
-            final_lr_factor + (1 - final_lr_factor) * cosine_decay
-        )
+        decay_lr = state.initial_lr * (final_lr_factor + (1 - final_lr_factor) * cosine_decay)
 
         # Choose between warmup and decay
         lr = jnp.where(state.step < warmup_steps, warmup_lr, decay_lr)
@@ -347,17 +344,13 @@ def wirtinger_grad(
         *args: Any,
     ) -> Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]:
         def split_complex(args):
-            return tuple(
-                jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args
-            ) + tuple(
-                jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg)
-                for arg in args
+            return tuple(jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args) + tuple(
+                jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg) for arg in args
             )
 
         def combine_complex(r, i):
             return tuple(
-                rr + 1j * ii if jnp.iscomplexobj(arg) else rr
-                for rr, ii, arg in zip(r, i, args)
+                rr + 1j * ii if jnp.iscomplexobj(arg) else rr for rr, ii, arg in zip(r, i, args)
             )
 
         split_args = split_complex(args)
@@ -388,9 +381,7 @@ def complex_adam(
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
-) -> Tuple[
-    Complex[Array, " ..."], Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]
-]:
+) -> Tuple[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]]:
     """
     Description
     -----------
@@ -770,7 +761,5 @@ def rmsprop_update(
     - Return updated parameters and state
     """
     m, v, step = state
-    new_params, new_v = complex_rmsprop(
-        params, grads, v, learning_rate, decay_rate, eps
-    )
+    new_params, new_v = complex_rmsprop(params, grads, v, learning_rate, decay_rate, eps)
     return new_params, OptimizerState(m=m, v=new_v, step=step + 1)

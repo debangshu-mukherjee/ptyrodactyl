@@ -38,9 +38,15 @@ from beartype.typing import Callable, Optional, Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 from .lens_optics import angular_spectrum_prop
-from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
-                           make_optical_wavefront, make_sample_function,
-                           scalar_float, scalar_integer)
+from .photon_types import (
+    MicroscopeData,
+    OpticalWavefront,
+    SampleFunction,
+    make_optical_wavefront,
+    make_sample_function,
+    scalar_float,
+    scalar_integer,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -143,24 +149,22 @@ def epie_optical(
         position_processor: Callable = jax.lax.cond(
             use_vmap, lambda: single_pie_vmap, lambda: single_pie_sequential
         )
-        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
-            position_processor(
-                object_prop_ft,
-                surface_pattern_current,
-                image_data,
-                positions,
-                frequency_x_grid,
-                frequency_y_grid,
-                pixel_mask,
-                propagation_distance_2,
-                magnification,
-                alpha_object,
-                gamma_object,
-                alpha_surface,
-                gamma_surface,
-                initial_object.wavelength,
-                initial_object.dx,
-            )
+        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = position_processor(
+            object_prop_ft,
+            surface_pattern_current,
+            image_data,
+            positions,
+            frequency_x_grid,
+            frequency_y_grid,
+            pixel_mask,
+            propagation_distance_2,
+            magnification,
+            alpha_object,
+            gamma_object,
+            alpha_surface,
+            gamma_surface,
+            initial_object.wavelength,
+            initial_object.dx,
         )
         return updated_state
 
@@ -184,9 +188,7 @@ def epie_optical(
         initial_object.dx,
         initial_object.z_position,
     )
-    recovered_surface: SampleFunction = make_sample_function(
-        final_surface, initial_surface.dx
-    )
+    recovered_surface: SampleFunction = make_sample_function(final_surface, initial_surface.dx)
     return recovered_object, recovered_surface
 
 
@@ -278,28 +280,18 @@ def single_pie_iteration(
     surface_plane: Complex[Array, "H W"] = object_shifted * surface_pattern
     surface_prop_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(surface_plane)
-    ) * _get_propagation_kernel(
-        surface_plane.shape, propagation_distance_2, wavelength, dx
-    )
-    sensor_plane_ft: Complex[Array, "H W"] = _apply_coherent_transfer_function(
-        surface_prop_ft
-    )
-    sensor_plane: Complex[Array, "H W"] = jnp.fft.ifft2(
-        jnp.fft.ifftshift(sensor_plane_ft)
-    )
+    ) * _get_propagation_kernel(surface_plane.shape, propagation_distance_2, wavelength, dx)
+    sensor_plane_ft: Complex[Array, "H W"] = _apply_coherent_transfer_function(surface_prop_ft)
+    sensor_plane: Complex[Array, "H W"] = jnp.fft.ifft2(jnp.fft.ifftshift(sensor_plane_ft))
     sensor_intensity: Float[Array, "H W"] = _compute_sensor_intensity(
         sensor_plane, pixel_mask, magnification
     )
-    ratio_map: Float[Array, "H W"] = jnp.sqrt(measurement) / (
-        jnp.sqrt(sensor_intensity) + 1e-10
-    )
+    ratio_map: Float[Array, "H W"] = jnp.sqrt(measurement) / (jnp.sqrt(sensor_intensity) + 1e-10)
     ratio_map_upsampled: Float[Array, "H W"] = jnp.repeat(
         jnp.repeat(ratio_map, magnification, axis=0), magnification, axis=1
     )
     sensor_plane_new: Complex[Array, "H W"] = ratio_map_upsampled * sensor_plane
-    sensor_plane_new_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
-        jnp.fft.fft2(sensor_plane_new)
-    )
+    sensor_plane_new_ft: Complex[Array, "H W"] = jnp.fft.fftshift(jnp.fft.fft2(sensor_plane_new))
     ctf_conj: Complex[Array, "H W"] = jnp.conj(_get_ctf())
     ctf_max_squared: Float[Array, ""] = jnp.max(jnp.abs(_get_ctf()) ** 2)
     surface_prop_ft_updated: Complex[Array, "H W"] = surface_prop_ft + (
@@ -430,10 +422,8 @@ def single_pie_sequential(
             dx,
         )
 
-    updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
-        jax.lax.fori_loop(
-            0, num_positions, position_body, (object_prop_ft, surface_pattern)
-        )
+    updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = jax.lax.fori_loop(
+        0, num_positions, position_body, (object_prop_ft, surface_pattern)
     )
     return updated_state
 
@@ -731,9 +721,7 @@ def _apply_position_shift(
         )
     )
     shifted_field_ft: Complex[Array, "H W"] = field_ft * phase_factor
-    shifted_field: Complex[Array, "H W"] = jnp.fft.ifft2(
-        jnp.fft.ifftshift(shifted_field_ft)
-    )
+    shifted_field: Complex[Array, "H W"] = jnp.fft.ifft2(jnp.fft.ifftshift(shifted_field_ft))
     return shifted_field
 
 
@@ -787,9 +775,7 @@ def _get_propagation_kernel(
     frequency_x_grid, frequency_y_grid = jnp.meshgrid(frequency_x, frequency_y)
     frequency_squared: Float[Array, "H W"] = frequency_x_grid**2 + frequency_y_grid**2
     k_0: scalar_float = 2 * jnp.pi / wavelength
-    k_z: Complex[Array, "H W"] = jnp.sqrt(
-        k_0**2 - (2 * jnp.pi) ** 2 * frequency_squared + 0j
-    )
+    k_z: Complex[Array, "H W"] = jnp.sqrt(k_0**2 - (2 * jnp.pi) ** 2 * frequency_squared + 0j)
     kernel: Complex[Array, "H W"] = jnp.exp(1j * k_z * distance)
     return kernel
 
@@ -882,9 +868,7 @@ def _create_frequency_grids(
 
 
 @jaxtyped(typechecker=beartype)
-def _get_ctf(
-    field_shape: Optional[Tuple[int, int]] = (256, 256)
-) -> Complex[Array, "H W"]:
+def _get_ctf(field_shape: Optional[Tuple[int, int]] = (256, 256)) -> Complex[Array, "H W"]:
     """
     Description
     -----------

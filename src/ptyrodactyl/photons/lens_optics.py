@@ -26,8 +26,13 @@ from beartype.typing import Optional
 from jaxtyping import Array, Bool, Complex, Float, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (OpticalWavefront, make_optical_wavefront,
-                           scalar_float, scalar_integer, scalar_numeric)
+from .photon_types import (
+    OpticalWavefront,
+    make_optical_wavefront,
+    scalar_float,
+    scalar_integer,
+    scalar_numeric,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -330,9 +335,7 @@ def circular_aperture(
     aperture_mask: Bool[Array, " H W"] = (
         (X - center_pixels[0]) ** 2 + (Y - center_pixels[1]) ** 2
     ) <= ((diameter_pixels / 2) ** 2)
-    transmission: Float[Array, "H W"] = (
-        jnp.ones_like(aperture_mask, dtype=float) * transmittivity
-    )
+    transmission: Float[Array, "H W"] = jnp.ones_like(aperture_mask, dtype=float) * transmittivity
     float_aperture = aperture_mask.astype(float) * transmission
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * float_aperture,

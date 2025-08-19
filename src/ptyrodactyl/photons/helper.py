@@ -23,8 +23,7 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
-from .photon_types import (OpticalWavefront, make_optical_wavefront,
-                           scalar_float)
+from .photon_types import OpticalWavefront, make_optical_wavefront, scalar_float
 
 jax.config.update("jax_enable_x64", True)
 
@@ -200,12 +199,8 @@ def scale_pixel(
         """
         new_H: Int[Array, " "] = jnp.floor(new_fov_h / old_dx).astype(int)
         new_W: Int[Array, " "] = jnp.floor(new_fov_w / old_dx).astype(int)
-        start_h: Int[Array, " "] = jnp.floor(
-            (current_fov_h - new_fov_h) / (2 * old_dx)
-        ).astype(int)
-        start_w: Int[Array, " "] = jnp.floor(
-            (current_fov_w - new_fov_w) / (2 * old_dx)
-        ).astype(int)
+        start_h: Int[Array, " "] = jnp.floor((current_fov_h - new_fov_h) / (2 * old_dx)).astype(int)
+        start_w: Int[Array, " "] = jnp.floor((current_fov_w - new_fov_w) / (2 * old_dx)).astype(int)
         cropped: Complex[Array, "new_H new_W"] = jax.lax.dynamic_slice(
             field, (start_h, start_w), (new_H, new_W)
         )
@@ -249,9 +244,7 @@ def scale_pixel(
         )
         return padded
 
-    resized_field = jax.lax.cond(
-        scale > 1.0, larger_pixel_size, smaller_pixel_size, field
-    )
+    resized_field = jax.lax.cond(scale > 1.0, larger_pixel_size, smaller_pixel_size, field)
     resized_wavefront = make_optical_wavefront(
         field=resized_field,
         dx=new_dx,

@@ -90,7 +90,7 @@ def contrast_stretch(
         len(original_shape) == is_2d_image, series[jnp.newaxis, :, :], series
     )
 
-    def rescale_single_image(image: Float[Array, " H W"]) -> Float[Array, " H W"]:
+    def _rescale_single_image(image: Float[Array, " H W"]) -> Float[Array, " H W"]:
         flattened: Float[Array, " HW"] = image.flatten()
         lower_bound: Float[Array, ""] = jnp.percentile(flattened, p1)
         upper_bound: Float[Array, ""] = jnp.percentile(flattened, p2)
@@ -101,7 +101,7 @@ def contrast_stretch(
         )
         return rescaled_image
 
-    transformed: Float[Array, " N H W"] = jax.vmap(rescale_single_image)(series_reshaped)
+    transformed: Float[Array, " N H W"] = jax.vmap(_rescale_single_image)(series_reshaped)
     is_2d_image: int = 2
     final_result: Union[Float[Array, " H W"], Float[Array, " N H W"]] = jnp.where(
         len(original_shape) == is_2d_image, transformed[0], transformed
@@ -155,7 +155,7 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
     x: Float[Array, " ..."] = jnp.asarray(x)
     dtype: jnp.dtype = x.dtype
 
-    def iv_series(v_order: scalar_float, x_val: Float[Array, " ..."]) -> Float[Array, " ..."]:
+    def _iv_series(v_order: scalar_float, x_val: Float[Array, " ..."]) -> Float[Array, " ..."]:
         """Compute I_v(x) using series expansion"""
         x_half: Float[Array, " ..."] = x_val / 2.0
         x_half_v: Float[Array, " ..."] = jnp.power(x_half, v_order)
@@ -176,7 +176,7 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
         result: Float[Array, " ..."] = x_half_v / gamma_v_plus_1 * jnp.sum(series_terms, axis=-1)
         return result
 
-    def kv_small(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
+    def _kv_small(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
         """Series expansion for small x using the relation with I_v"""
         v_int: Float[Array, ""] = jnp.round(v)
         epsilon_tolerance: float = 1e-10
@@ -184,8 +184,8 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 
         def non_integer_case() -> Float[Array, " ..."]:
             error_bound: Float[Array, ""] = jnp.asarray(1e-10)
-            iv_pos: Float[Array, " ..."] = iv_series(v, x)
-            iv_neg: Float[Array, " ..."] = iv_series(-v, x)
+            iv_pos: Float[Array, " ..."] = _iv_series(v, x)
+            iv_neg: Float[Array, " ..."] = _iv_series(-v, x)
             sin_piv: Float[Array, ""] = jnp.sin(jnp.pi * v)
             pi_over_2sin: Float[Array, ""] = jnp.pi / (2.0 * sin_piv)
             iv_diff: Float[Array, " ..."] = iv_neg - iv_pos
@@ -197,7 +197,7 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
         def integer_case() -> Float[Array, " ..."]:
             n: Int[Array, ""] = jnp.abs(v_int).astype(jnp.int32)
 
-            def k0_series() -> Float[Array, " ..."]:
+            def _k0_series() -> Float[Array, " ..."]:
                 i0: Float[Array, " ..."] = jax.scipy.special.i0(x)
                 coeffs: Float[Array, " 7"] = jnp.array(
                     [
@@ -218,8 +218,8 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
                 result: Float[Array, " ..."] = log_term + poly
                 return result
 
-            def kn_series() -> Float[Array, " ..."]:
-                k0: Float[Array, " ..."] = k0_series()
+            def _kn_series() -> Float[Array, " ..."]:
+                k0: Float[Array, " ..."] = _k0_series()
 
                 i1: Float[Array, " ..."] = jax.scipy.special.i1(x)
                 k1_coeffs: Float[Array, " 5"] = jnp.array(
@@ -232,23 +232,24 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
                 k1: Float[Array, " ..."] = log_i1_term + k1_poly / x
 
                 def recurrence_step(
-                    carry: Tuple[Float[Array, " ..."], Float[Array, " ..."]],
-                    i: Float[Array, ""]
+                    carry: Tuple[Float[Array, " ..."], Float[Array, " ..."]], i: Float[Array, ""]
                 ) -> Tuple[Tuple[Float[Array, " ..."], Float[Array, " ..."]], Float[Array, " ..."]]:
                     k_prev2, k_prev1 = carry
                     two_i_over_x: Float[Array, " ..."] = 2.0 * i / x
                     k_curr: Float[Array, " ..."] = two_i_over_x * k_prev1 + k_prev2
                     return (k_prev1, k_curr), k_curr
 
-                def compute_kn() -> Float[Array, " ..."]:
+                def _compute_kn() -> Float[Array, " ..."]:
                     init = (k0, k1)
                     max_n = 20  # Maximum order we support
                     indices = jnp.arange(1, max_n, dtype=jnp.float32)
 
                     def masked_step(
                         carry: Tuple[Float[Array, " ..."], Float[Array, " ..."]],
-                        i: Float[Array, ""]
-                    ) -> Tuple[Tuple[Float[Array, " ..."], Float[Array, " ..."]], Float[Array, " ..."]]:
+                        i: Float[Array, ""],
+                    ) -> Tuple[
+                        Tuple[Float[Array, " ..."], Float[Array, " ..."]], Float[Array, " ..."]
+                    ]:
                         k_prev2, k_prev1 = carry
                         mask = i < n
                         two_i_over_x: Float[Array, " ..."] = 2.0 * i / x
@@ -261,11 +262,11 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
                     return final_k
 
                 kn_result: Float[Array, " ..."] = jnp.where(
-                    n == 0, k0, jnp.where(n == 1, k1, compute_kn())
+                    n == 0, k0, jnp.where(n == 1, k1, _compute_kn())
                 )
                 return kn_result
 
-            pos_v_result: Float[Array, " ..."] = jnp.where(v >= 0, kn_series(), kn_series())
+            pos_v_result: Float[Array, " ..."] = jnp.where(v >= 0, _kn_series(), _kn_series())
             return pos_v_result
 
         small_x_result: Float[Array, " ..."] = jnp.where(
@@ -273,7 +274,7 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
         )
         return small_x_result
 
-    def kv_large(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
+    def _kv_large(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
         """Asymptotic expansion for large x"""
         sqrt_term: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
         exp_term: Float[Array, " ..."] = jnp.exp(-x)
@@ -298,18 +299,20 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
         large_x_result: Float[Array, " ..."] = sqrt_term * exp_term * poly
         return large_x_result
 
-    def k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
+    def _k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
         sqrt_pi_over_2x: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
         exp_neg_x: Float[Array, " ..."] = jnp.exp(-x)
         k_half_result: Float[Array, " ..."] = sqrt_pi_over_2x * exp_neg_x
         return k_half_result
 
-    small_x_vals: Float[Array, " ..."] = kv_small(v, x)
-    large_x_vals: Float[Array, " ..."] = kv_large(v, x)
+    small_x_vals: Float[Array, " ..."] = _kv_small(v, x)
+    large_x_vals: Float[Array, " ..."] = _kv_large(v, x)
     small_x_threshold: float = 2.0
-    general_result: Float[Array, " ..."] = jnp.where(x <= small_x_threshold, small_x_vals, large_x_vals)
+    general_result: Float[Array, " ..."] = jnp.where(
+        x <= small_x_threshold, small_x_vals, large_x_vals
+    )
 
-    k_half_vals: Float[Array, " ..."] = k_half(x)
+    k_half_vals: Float[Array, " ..."] = _k_half(x)
     epsilon_tolerance: float = 1e-10
     is_half: Bool[Array, ""] = jnp.abs(v - 0.5) < epsilon_tolerance
     final_result: Float[Array, " ..."] = jnp.where(is_half, k_half_vals, general_result)
@@ -582,14 +585,14 @@ def _expand_periodic_images(
     shifts: Int[Array, " M 3"] = jnp.stack([ii.ravel(), jj.ravel(), kk.ravel()], axis=-1)
     shift_vectors: Float[Array, " M 3"] = shifts @ cell
 
-    def shift_all_atoms(shift_vec: Float[Array, " 3"]) -> Float[Array, " N 4"]:
+    def _shift_all_atoms(shift_vec: Float[Array, " 3"]) -> Float[Array, " N 4"]:
         atom_numbers: Float[Array, " N 1"] = coords[:, 0:1]
         positions: Float[Array, " N 3"] = coords[:, 1:4]
         shifted_positions: Float[Array, " N 3"] = positions + shift_vec
         new_coords: Float[Array, " N 4"] = jnp.hstack((atom_numbers, shifted_positions))
         return new_coords
 
-    expanded_coords: Float[Array, " M N 4"] = jax.vmap(shift_all_atoms)(shift_vectors)
+    expanded_coords: Float[Array, " M N 4"] = jax.vmap(_shift_all_atoms)(shift_vectors)
     final_coords: Float[Array, " M 4"] = expanded_coords.reshape(-1, 4)
     repeat_counts: Tuple[int, int, int] = (nx, ny, nz)
     return final_coords, repeat_counts
@@ -742,7 +745,7 @@ def kirkland_potentials_XYZ(
     atomic_numbers: Int[Array, " N"] = xyz_data.atomic_numbers
     lattice: Float[Array, " 3 3"] = xyz_data.lattice
 
-    def apply_repeats_with_lattice(
+    def _apply_repeats_with_lattice(
         positions: Float[Array, " N 3"],
         atomic_numbers: Int[Array, " N"],
         lattice: Float[Array, " 3 3"],
@@ -822,7 +825,7 @@ def kirkland_potentials_XYZ(
 
         return (repeated_positions_masked, repeated_atomic_numbers_masked)
 
-    def return_unchanged(
+    def _return_unchanged(
         positions: Float[Array, " N 3"],
         atomic_numbers: Int[Array, " N"],
     ) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, " max_n^3*N"]]:
@@ -842,8 +845,8 @@ def kirkland_potentials_XYZ(
 
     positions, atomic_numbers = jax.lax.cond(
         jnp.any(repeats > 1),
-        lambda pos, an, lat: apply_repeats_with_lattice(pos, an, lat),
-        lambda pos, an, lat: return_unchanged(pos, an, lat),
+        lambda pos, an, lat: _apply_repeats_with_lattice(pos, an, lat),
+        lambda pos, an, lat: _return_unchanged(pos, an, lat),
         positions,
         atomic_numbers,
         lattice,
@@ -879,7 +882,7 @@ def kirkland_potentials_XYZ(
     width_int: int = int(width)
 
     @jax.jit
-    def calc_single_potential_fixed_grid(
+    def _calc_single_potential_fixed_grid(
         atom_no: scalar_int, is_valid: Bool
     ) -> Float[Array, " h w"]:
         potential = single_atom_potential(
@@ -892,7 +895,7 @@ def kirkland_potentials_XYZ(
         )
         return jnp.where(is_valid, potential, jnp.zeros((height_int, width_int)))
 
-    atomic_potentials: Float[Array, " 118 h w"] = jax.vmap(calc_single_potential_fixed_grid)(
+    atomic_potentials: Float[Array, " 118 h w"] = jax.vmap(_calc_single_potential_fixed_grid)(
         unique_atoms, valid_mask
     )
     atom_to_idx_array: Int[Array, " 119"] = jnp.full(119, -1, dtype=jnp.int32)
@@ -900,7 +903,7 @@ def kirkland_potentials_XYZ(
     indices: Int[Array, " 118"] = jnp.arange(118, dtype=jnp.int32)
     atom_indices: Int[Array, " 118"] = jnp.where(valid_mask, unique_atoms, -1)
 
-    def update_mapping(
+    def _update_mapping(
         carry: Int[Array, " 119"], idx_atom: Tuple[scalar_int, scalar_int]
     ) -> Tuple[Int[Array, " 119"], None]:
         mapping_array: Int[Array, " 119"] = carry
@@ -910,7 +913,7 @@ def kirkland_potentials_XYZ(
         mapping_array = jnp.where(atom >= 0, mapping_array.at[atom].set(idx), mapping_array)
         return mapping_array, None
 
-    atom_to_idx_array, _ = jax.lax.scan(update_mapping, atom_to_idx_array, (indices, atom_indices))
+    atom_to_idx_array, _ = jax.lax.scan(_update_mapping, atom_to_idx_array, (indices, atom_indices))
     max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
     n_slices: Int[Array, ""] = max_slice_idx + 1
     all_slices: Float[Array, " h w n_slices"] = jnp.zeros(
@@ -919,12 +922,12 @@ def kirkland_potentials_XYZ(
     ky: Float[Array, " h 1"] = jnp.fft.fftfreq(height, d=1.0).reshape(-1, 1)
     kx: Float[Array, " 1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
 
-    def process_single_slice(slice_idx: int) -> Float[Array, " h w"]:
+    def _process_single_slice(slice_idx: int) -> Float[Array, " h w"]:
         slice_potential: Float[Array, " h w"] = jnp.zeros((height, width), dtype=jnp.float32)
         center_x: float = width / 2.0
         center_y: float = height / 2.0
 
-        def add_atom_contribution(
+        def _add_atom_contribution(
             carry: Float[Array, " h w"],
             atom_data: Tuple[scalar_float, scalar_float, scalar_int, scalar_int],
         ) -> Tuple[Float[Array, " h w"], None]:
@@ -959,14 +962,14 @@ def kirkland_potentials_XYZ(
             return updated_pot, None
 
         slice_potential, _ = jax.lax.scan(
-            add_atom_contribution,
+            _add_atom_contribution,
             slice_potential,
             (x_coords, y_coords, atom_nums, slice_indices),
         )
         return slice_potential
 
     slice_indices_array: Int[Array, " n_slices"] = jnp.arange(n_slices)
-    processed_slices: Float[Array, "n_slices h w"] = jax.vmap(process_single_slice)(
+    processed_slices: Float[Array, "n_slices h w"] = jax.vmap(_process_single_slice)(
         slice_indices_array
     )
     all_slices: Float[Array, " h w n_slices"] = processed_slices.transpose(1, 2, 0)

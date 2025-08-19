@@ -21,7 +21,7 @@ from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Float, Real, jaxtyped
 
-from .electron_types import scalar_float, scalar_numeric
+from .electron_types import scalar_numeric
 
 
 @jaxtyped(typechecker=beartype)
@@ -77,11 +77,11 @@ def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Arr
     dot: Float[Array, " "] = jnp.dot(v1, v2)
     sin_theta: Float[Array, " "] = jnp.linalg.norm(cross)
 
-    def fallback_parallel() -> Float[Array, "3 3"]:
+    def _fallback_parallel() -> Float[Array, "3 3"]:
         rotation_matrix_parallel: Float[Array, "3 3"] = jnp.eye(3)
         return rotation_matrix_parallel
 
-    def fallback_opposite() -> Float[Array, "3 3"]:
+    def _fallback_opposite() -> Float[Array, "3 3"]:
         ortho: Float[Array, " 3"] = jnp.where(
             jnp.abs(v1[0]) < 0.9, jnp.array([1.0, 0.0, 0.0]), jnp.array([0.0, 1.0, 0.0])
         )
@@ -93,7 +93,7 @@ def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Arr
         rotation_matrix_opposite: Float[Array, "3 3"] = jnp.eye(3) + 2 * K @ K
         return rotation_matrix_opposite
 
-    def compute() -> Float[Array, "3 3"]:
+    def _compute() -> Float[Array, "3 3"]:
         axis: Float[Array, " 3"] = cross / sin_theta
         K: Float[Array, "3 3"] = jnp.array(
             [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
@@ -107,8 +107,8 @@ def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Arr
     is_opposite: Bool[Array, " "] = dot < -0.9999
     rotation_matrix: Float[Array, "3 3"] = jax.lax.cond(
         is_parallel,
-        lambda: jax.lax.cond(is_opposite, fallback_opposite, fallback_parallel),
-        compute,
+        lambda: jax.lax.cond(is_opposite, _fallback_opposite, _fallback_parallel),
+        _compute,
     )
     return rotation_matrix
 
@@ -249,18 +249,18 @@ def rotate_structure(
     rotated_coords_with_ids: Float[Array, " N 4"] = jnp.hstack((coords[:, 0:1], rotated_coords))
     rotated_cell: Real[Array, "3 3"] = cell @ rotation_matrix.T
 
-    def apply_inplane_rotation() -> Float[Array, " N 4"]:
+    def _apply_inplane_rotation() -> Float[Array, " N 4"]:
         in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(jnp.array([0.0, 0.0, 1.0]), theta)
         rotated_coords_in_plane: Float[Array, " N 3"] = (
             rotated_coords_with_ids[:, 1:4] @ in_plane_rotation.T
         )
         return jnp.hstack((rotated_coords_with_ids[:, 0:1], rotated_coords_in_plane))
 
-    def no_inplane_rotation() -> Float[Array, " N 4"]:
+    def _no_inplane_rotation() -> Float[Array, " N 4"]:
         return rotated_coords_with_ids
 
     rotated_coords_final: Float[Array, " N 4"] = jax.lax.cond(
-        theta != 0, apply_inplane_rotation, no_inplane_rotation
+        theta != 0, _apply_inplane_rotation, _no_inplane_rotation
     )
     return (rotated_coords_final, rotated_cell)
 

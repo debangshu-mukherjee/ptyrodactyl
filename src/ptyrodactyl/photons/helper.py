@@ -31,8 +31,8 @@ jax.config.update("jax_enable_x64", True)
 
 @jaxtyped(typechecker=beartype)
 def create_spatial_grid(
-    diameter: Num[Array, ""],
-    num_points: Int[Array, ""],
+    diameter: Num[Array, " "],
+    num_points: Int[Array, " "],
 ) -> Tuple[Float[Array, "N N"], Float[Array, "N N"]]:
     """
     Description
@@ -41,9 +41,9 @@ def create_spatial_grid(
 
     Parameters
     ----------
-    - `diameter` (Num[Array, ""]):
+    - `diameter` (Num[Array, " "]):
         Physical size of the grid in meters
-    - `num_points` (Int[Array, ""]):
+    - `num_points` (Int[Array, " "]):
         Number of points in each dimension
 
     Returns
@@ -57,8 +57,8 @@ def create_spatial_grid(
     - Create a meshgrid of spatial coordinates
     - Return the meshgrid
     """
-    x: Float[Array, "N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
-    y: Float[Array, "N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
+    x: Float[Array, " N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
+    y: Float[Array, " N"] = jnp.linspace(-diameter / 2, diameter / 2, num_points)
     xx: Float[Array, "N N"]
     yy: Float[Array, "N N"]
     xx, yy = jnp.meshgrid(x, y)
@@ -88,7 +88,7 @@ def normalize_field(field: Complex[Array, "H W"]) -> Complex[Array, "H W"]:
     - Normalize the field by dividing by the square root of the power
     - Return the normalized field
     """
-    power: Float[Array, ""] = jnp.sum(jnp.abs(field) ** 2)
+    power: Float[Array, " "] = jnp.sum(jnp.abs(field) ** 2)
     normalized_field: Complex[Array, "H W"] = field / jnp.sqrt(power)
     return normalized_field
 
@@ -198,12 +198,12 @@ def scale_pixel(
         the same.
         So here the order is crop, then resize.
         """
-        new_H: Int[Array, ""] = jnp.floor(new_fov_h / old_dx).astype(int)
-        new_W: Int[Array, ""] = jnp.floor(new_fov_w / old_dx).astype(int)
-        start_h: Int[Array, ""] = jnp.floor(
+        new_H: Int[Array, " "] = jnp.floor(new_fov_h / old_dx).astype(int)
+        new_W: Int[Array, " "] = jnp.floor(new_fov_w / old_dx).astype(int)
+        start_h: Int[Array, " "] = jnp.floor(
             (current_fov_h - new_fov_h) / (2 * old_dx)
         ).astype(int)
-        start_w: Int[Array, ""] = jnp.floor(
+        start_w: Int[Array, " "] = jnp.floor(
             (current_fov_w - new_fov_w) / (2 * old_dx)
         ).astype(int)
         cropped: Complex[Array, "new_H new_W"] = jax.lax.dynamic_slice(
@@ -228,19 +228,19 @@ def scale_pixel(
         field.
         So here the order is resize then pad.
         """
-        data_minimia_h: Float[Array, ""] = jnp.min(jnp.abs(field))
-        new_H: Int[Array, ""] = jnp.floor(current_fov_h / new_dx).astype(int)
-        new_W: Int[Array, ""] = jnp.floor(current_fov_w / new_dx).astype(int)
+        data_minimia_h: Float[Array, " "] = jnp.min(jnp.abs(field))
+        new_H: Int[Array, " "] = jnp.floor(current_fov_h / new_dx).astype(int)
+        new_W: Int[Array, " "] = jnp.floor(current_fov_w / new_dx).astype(int)
         resized: Complex[Array, "H W"] = jax.image.resize(
             field,
             (new_H, new_W),
             method="linear",
             antialias=True,
         )
-        pad_h_0: Int[Array, ""] = jnp.floor((H - new_H) / 2).astype(int)
-        pad_h_1: Int[Array, ""] = H - (new_H + pad_h_0)
-        pad_w_0: Int[Array, ""] = jnp.floor((W - new_W) / 2).astype(int)
-        pad_w_1: Int[Array, ""] = W - (new_W + pad_w_0)
+        pad_h_0: Int[Array, " "] = jnp.floor((H - new_H) / 2).astype(int)
+        pad_h_1: Int[Array, " "] = H - (new_H + pad_h_0)
+        pad_w_0: Int[Array, " "] = jnp.floor((W - new_W) / 2).astype(int)
+        pad_w_1: Int[Array, " "] = W - (new_W + pad_w_0)
         padded = jnp.pad(
             resized,
             ((pad_h_0, pad_h_1), (pad_w_0, pad_w_1)),

@@ -48,7 +48,7 @@ def simple_microscope_ptychography(
     aperture_diameter: scalar_float,
     travel_distance: scalar_float,
     camera_pixel_size: scalar_float,
-    aperture_center: Optional[Float[Array, "2"]] = None,
+    aperture_center: Optional[Float[Array, " 2"]] = None,
     learning_rate: Optional[scalar_float] = 0.01,
     num_iterations: Optional[scalar_integer] = 1000,
     save_every: Optional[scalar_integer] = 10,
@@ -58,7 +58,7 @@ def simple_microscope_ptychography(
     aperture_diameter_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
     travel_distance_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
     aperture_center_bounds: Optional[
-        Tuple[Float[Array, "2"], Float[Array, "2"]]
+        Tuple[Float[Array, " 2"], Float[Array, " 2"]]
     ] = None,
 ) -> Tuple[
     Tuple[
@@ -66,16 +66,16 @@ def simple_microscope_ptychography(
         OpticalWavefront,  # final_lightwave
         scalar_float,  # final_zoom_factor
         scalar_float,  # final_aperture_diameter
-        Optional[Float[Array, "2"]],  # final_aperture_center
+        Optional[Float[Array, " 2"]],  # final_aperture_center
         scalar_float,  # final_travel_distance
     ],
     Tuple[
         Complex[Array, "H W S"],  # intermediate_samples
         Complex[Array, "H W S"],  # intermediate_lightwaves
-        Float[Array, "S"],  # intermediate_zoom_factors
-        Float[Array, "S"],  # intermediate_aperture_diameters
-        Float[Array, "2 S"],  # intermediate_aperture_centers
-        Float[Array, "S"],  # intermediate_travel_distances
+        Float[Array, " S"],  # intermediate_zoom_factors
+        Float[Array, " S"],  # intermediate_aperture_diameters
+        Float[Array, " 2 S"],  # intermediate_aperture_centers
+        Float[Array, " S"],  # intermediate_travel_distances
     ],
 ]:
     """
@@ -101,7 +101,7 @@ def simple_microscope_ptychography(
         Initial guess for the light propagation distance in meters
     - `camera_pixel_size` (scalar_float):
         The pixel size of the camera in meters (fixed parameter)
-    - `aperture_center` (Optional[Float[Array, "2"]]):
+    - `aperture_center` (Optional[Float[Array, " 2"]]):
         Initial guess for the center of the aperture
     - `learning_rate` (Optional[scalar_float]):
         Learning rate for optimization (default: 0.01)
@@ -119,7 +119,7 @@ def simple_microscope_ptychography(
         Lower and upper bounds for aperture diameter optimization
     - `travel_distance_bounds` (Optional[Tuple[scalar_float, scalar_float]]):
         Lower and upper bounds for travel distance optimization
-    - `aperture_center_bounds` (Optional[Tuple[Float[Array, "2"], Float[Array, "2"]]]):
+    - `aperture_center_bounds` (Optional[Tuple[Float[Array, " 2"], Float[Array, " 2"]]]):
         Lower and upper bounds for aperture center optimization
 
     Returns
@@ -130,15 +130,15 @@ def simple_microscope_ptychography(
           - `final_lightwave` (OpticalWavefront): Optimized lightwave
           - `final_zoom_factor` (scalar_float): Optimized zoom factor
           - `final_aperture_diameter` (scalar_float): Optimized aperture diameter
-          - `final_aperture_center` (Optional[Float[Array, "2"]]): Optimized aperture center
+          - `final_aperture_center` (Optional[Float[Array, " 2"]]): Optimized aperture center
           - `final_travel_distance` (scalar_float): Optimized travel distance
       - Intermediate results tuple:
           - `intermediate_samples` (Complex[Array, "H W S"]): Intermediate samples during optimization
           - `intermediate_lightwaves` (Complex[Array, "H W S"]): Intermediate lightwaves during optimization
-          - `intermediate_zoom_factors` (Float[Array, "S"]): Intermediate zoom factors during optimization
-          - `intermediate_aperture_diameters` (Float[Array, "S"]): Intermediate aperture diameters during optimization
-          - `intermediate_aperture_centers` (Float[Array, "2 S"]): Intermediate aperture centers during optimization
-          - `intermediate_travel_distances` (Float[Array, "S"]): Intermediate travel distances during optimization
+          - `intermediate_zoom_factors` (Float[Array, " S"]): Intermediate zoom factors during optimization
+          - `intermediate_aperture_diameters` (Float[Array, " S"]): Intermediate aperture diameters during optimization
+          - `intermediate_aperture_centers` (Float[Array, " 2 S"]): Intermediate aperture centers during optimization
+          - `intermediate_travel_distances` (Float[Array, " S"]): Intermediate travel distances during optimization
     """
 
     # Define bound enforcement functions

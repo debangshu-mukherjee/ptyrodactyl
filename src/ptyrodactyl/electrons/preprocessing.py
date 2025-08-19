@@ -42,9 +42,7 @@ from jaxtyping import Array, Float, Int, jaxtyped
 
 from .electron_types import XYZData, make_xyz_data, scalar_int
 
-_KIRKLAND_PATH: Path = (
-    Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
-)
+_KIRKLAND_PATH: Path = Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
 _ATOMS_PATH: Path = Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
 
 jax.config.update("jax_enable_x64", True)
@@ -125,8 +123,7 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
     if normalized_symbol not in _ATOMIC_NUMBERS:
         available_symbols: str = ", ".join(sorted(_ATOMIC_NUMBERS.keys()))
         raise KeyError(
-            f"Atomic symbol '{symbol_string}' not found. "
-            f"Available symbols: {available_symbols}"
+            f"Atomic symbol '{symbol_string}' not found. Available symbols: {available_symbols}"
         )
 
     atomic_number: scalar_int = _ATOMIC_NUMBERS[normalized_symbol]
@@ -164,9 +161,7 @@ def _load_kirkland_csv(
     kirkland_numpy: np.ndarray = np.loadtxt(file_path, delimiter=",", dtype=np.float64)
     if kirkland_numpy.shape != (103, 12):
         raise ValueError(f"Expected CSV shape (103, 12), got {kirkland_numpy.shape}")
-    kirkland_data: Float[Array, "103 12"] = jnp.asarray(
-        kirkland_numpy, dtype=jnp.float64
-    )
+    kirkland_data: Float[Array, "103 12"] = jnp.asarray(kirkland_numpy, dtype=jnp.float64)
     return kirkland_data
 
 
@@ -218,14 +213,14 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
 
     lattice_match: Optional[re.Match[str]] = re.search(r'Lattice="([^"]+)"', line)
     if lattice_match:
-        values: list = list(map(float, lattice_match.group(1).split()))
+        values: List[float] = list(map(float, lattice_match.group(1).split()))
         if len(values) != 9:
             raise ValueError("Lattice must contain 9 values")
         metadata["lattice"] = jnp.array(values, dtype=jnp.float64).reshape(3, 3)
 
     stress_match: Optional[re.Match[str]] = re.search(r'stress="([^"]+)"', line)
     if stress_match:
-        values: list = list(map(float, stress_match.group(1).split()))
+        values: List[float] = list(map(float, stress_match.group(1).split()))
         if len(values) != 9:
             raise ValueError("Stress tensor must contain 9 values")
         metadata["stress"] = jnp.array(values, dtype=jnp.float64).reshape(3, 3)
@@ -239,8 +234,8 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
     props_match: Optional[re.Match[str]] = re.search(r"Properties=([^ ]+)", line)
     if props_match:
         raw_props: str = props_match.group(1)
-        parts: list = raw_props.split(":")
-        props: list = []
+        parts: List[str] = raw_props.split(":")
+        props: List[Dict[str, Union[str, int]]] = []
         for i in range(0, len(parts), 3):
             props.append(
                 {
@@ -273,7 +268,7 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
         Validated JAX-compatible structure with all contents from the XYZ file.
     """
     with open(file_path, "r") as f:
-        lines: list = f.readlines()
+        lines: List[str] = f.readlines()
 
     if len(lines) < 2:
         raise ValueError("Invalid XYZ file: fewer than 2 lines.")
@@ -289,11 +284,11 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     if len(lines) < 2 + num_atoms:
         raise ValueError(f"Expected {num_atoms} atoms, found only {len(lines) - 2}.")
 
-    positions: list = []
-    atomic_numbers: list = []
+    positions: List[List[float]] = []
+    atomic_numbers: List[int] = []
 
     for i in range(2, 2 + num_atoms):
-        parts: list = lines[i].split()
+        parts: List[str] = lines[i].split()
         if len(parts) not in {4, 5, 6, 7}:
             raise ValueError(f"Line {i + 1} has unexpected format: {lines[i].strip()}")
 
@@ -314,14 +309,14 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
         # Handle both atomic symbols and atomic numbers
         try:
             # Try to parse as an integer (atomic number)
-            atomic_num = int(symbol)
+            atomic_num: int = int(symbol)
             atomic_numbers.append(atomic_num)
         except ValueError:
             # Not a number, treat as atomic symbol
             atomic_numbers.append(atomic_symbol(symbol))
 
-    positions_arr: Float[Array, "N 3"] = jnp.array(positions, dtype=jnp.float64)
-    atomic_Z_arr: Int[Array, "N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
+    positions_arr: Float[Array, " N 3"] = jnp.array(positions, dtype=jnp.float64)
+    atomic_Z_arr: Int[Array, " N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
 
     return make_xyz_data(
         positions=positions_arr,

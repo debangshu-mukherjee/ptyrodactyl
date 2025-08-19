@@ -25,9 +25,7 @@ from .electron_types import scalar_float, scalar_numeric
 
 
 @jaxtyped(typechecker=beartype)
-def rotmatrix_vectors(
-    v1: Real[Array, "3"], v2: Real[Array, "3"]
-) -> Float[Array, "3 3"]:
+def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Array, "3 3"]:
     """
     Description
     -----------
@@ -37,9 +35,9 @@ def rotmatrix_vectors(
 
     Parameters
     ----------
-    - `v1` (Real[Array, "3"]):
+    - `v1` (Real[Array, " 3"]):
         Initial 3D vector to be rotated
-    - `v2` (Real[Array, "3"]):
+    - `v2` (Real[Array, " 3"]):
         Target 3D vector that v1 should be rotated to align with
 
     Returns
@@ -73,22 +71,22 @@ def rotmatrix_vectors(
         - If vectors are parallel, check if they're opposite or same direction
         - Return appropriate rotation matrix based on the case
     """
-    v1: Float[Array, "3"] = v1 / jnp.linalg.norm(v1)
-    v2: Float[Array, "3"] = v2 / jnp.linalg.norm(v2)
-    cross: Float[Array, "3"] = jnp.cross(v1, v2)
-    dot: Float[Array, ""] = jnp.dot(v1, v2)
-    sin_theta: Float[Array, ""] = jnp.linalg.norm(cross)
+    v1: Float[Array, " 3"] = v1 / jnp.linalg.norm(v1)
+    v2: Float[Array, " 3"] = v2 / jnp.linalg.norm(v2)
+    cross: Float[Array, " 3"] = jnp.cross(v1, v2)
+    dot: Float[Array, " "] = jnp.dot(v1, v2)
+    sin_theta: Float[Array, " "] = jnp.linalg.norm(cross)
 
     def fallback_parallel() -> Float[Array, "3 3"]:
         rotation_matrix_parallel: Float[Array, "3 3"] = jnp.eye(3)
         return rotation_matrix_parallel
 
     def fallback_opposite() -> Float[Array, "3 3"]:
-        ortho: Float[Array, "3"] = jnp.where(
+        ortho: Float[Array, " 3"] = jnp.where(
             jnp.abs(v1[0]) < 0.9, jnp.array([1.0, 0.0, 0.0]), jnp.array([0.0, 1.0, 0.0])
         )
-        axis: Float[Array, "3"] = jnp.cross(v1, ortho)
-        axis: Float[Array, "3"] = axis / jnp.linalg.norm(axis)
+        axis: Float[Array, " 3"] = jnp.cross(v1, ortho)
+        axis: Float[Array, " 3"] = axis / jnp.linalg.norm(axis)
         K: Float[Array, "3 3"] = jnp.array(
             [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
         )
@@ -96,7 +94,7 @@ def rotmatrix_vectors(
         return rotation_matrix_opposite
 
     def compute() -> Float[Array, "3 3"]:
-        axis: Float[Array, "3"] = cross / sin_theta
+        axis: Float[Array, " 3"] = cross / sin_theta
         K: Float[Array, "3 3"] = jnp.array(
             [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
         )
@@ -105,8 +103,8 @@ def rotmatrix_vectors(
         )
         return rotation_matrix_general
 
-    is_parallel: Bool[Array, ""] = sin_theta < 1e-8
-    is_opposite: Bool[Array, ""] = dot < -0.9999
+    is_parallel: Bool[Array, " "] = sin_theta < 1e-8
+    is_opposite: Bool[Array, " "] = dot < -0.9999
     rotation_matrix: Float[Array, "3 3"] = jax.lax.cond(
         is_parallel,
         lambda: jax.lax.cond(is_opposite, fallback_opposite, fallback_parallel),
@@ -116,9 +114,7 @@ def rotmatrix_vectors(
 
 
 @jaxtyped(typechecker=beartype)
-def rotmatrix_axis(
-    axis: Real[Array, "3"], theta: scalar_numeric
-) -> Float[Array, "3 3"]:
+def rotmatrix_axis(axis: Real[Array, " 3"], theta: scalar_numeric) -> Float[Array, "3 3"]:
     """
     Description
     -----------
@@ -128,7 +124,7 @@ def rotmatrix_axis(
 
     Parameters
     ----------
-    - `axis` (Real[Array, "3"]):
+    - `axis` (Real[Array, " 3"]):
         3D vector defining the axis of rotation (will be normalized)
     - `theta` (scalar_numeric):
         Rotation angle in radians (positive for counter-clockwise rotation
@@ -164,12 +160,12 @@ def rotmatrix_axis(
         - And similarly for other rows following the pattern
     - Return the constructed 3x3 rotation matrix
     """
-    axis: Float[Array, "3"] = axis / jnp.linalg.norm(axis)
-    cos_theta: Float[Array, ""] = jnp.cos(theta)
-    sin_theta: Float[Array, ""] = jnp.sin(theta)
-    ux: Float[Array, ""]
-    uy: Float[Array, ""]
-    uz: Float[Array, ""]
+    axis: Float[Array, " 3"] = axis / jnp.linalg.norm(axis)
+    cos_theta: Float[Array, " "] = jnp.cos(theta)
+    sin_theta: Float[Array, " "] = jnp.sin(theta)
+    ux: Float[Array, " "]
+    uy: Float[Array, " "]
+    uz: Float[Array, " "]
     ux, uy, uz = axis
     rot_matrix: Float[Array, "3 3"] = jnp.array(
         [
@@ -195,11 +191,11 @@ def rotmatrix_axis(
 
 @jaxtyped(typechecker=beartype)
 def rotate_structure(
-    coords: Real[Array, "N 4"],
+    coords: Real[Array, " N 4"],
     cell: Real[Array, "3 3"],
     rotation_matrix: Real[Array, "3 3"],
     theta: Optional[scalar_numeric] = 0,
-) -> Tuple[Float[Array, "N 4"], Float[Array, "3 3"]]:
+) -> Tuple[Float[Array, " N 4"], Float[Array, "3 3"]]:
     """
     Description
     -----------
@@ -209,7 +205,7 @@ def rotate_structure(
 
     Parameters
     ----------
-    - `coords` (Real[Array, "N 4"]):
+    - `coords` (Real[Array, " N 4"]):
         Atomic coordinates array where each row contains [atom_id, x, y, z].
         First column is the atom identifier, remaining columns are 3D positions
     - `cell` (Real[Array, "3 3"]):
@@ -222,7 +218,7 @@ def rotate_structure(
 
     Returns
     -------
-    - `rotated_coords` (Float[Array, "N 4"]):
+    - `rotated_coords` (Float[Array, " N 4"]):
         Rotated atomic coordinates maintaining the same format as input
     - `rotated_cell` (Float[Array, "3 3"]):
         Rotated unit cell matrix
@@ -249,25 +245,21 @@ def rotate_structure(
         - Both atomic coordinates and unit cell are rotated consistently
         - Crystal symmetry and relative positions are preserved
     """
-    rotated_coords: Real[Array, "N 3"] = coords[:, 1:4] @ rotation_matrix.T
-    rotated_coords_with_ids: Float[Array, "N 4"] = jnp.hstack(
-        (coords[:, 0:1], rotated_coords)
-    )
+    rotated_coords: Real[Array, " N 3"] = coords[:, 1:4] @ rotation_matrix.T
+    rotated_coords_with_ids: Float[Array, " N 4"] = jnp.hstack((coords[:, 0:1], rotated_coords))
     rotated_cell: Real[Array, "3 3"] = cell @ rotation_matrix.T
 
-    def apply_inplane_rotation():
-        in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(
-            jnp.array([0.0, 0.0, 1.0]), theta
-        )
-        rotated_coords_in_plane: Float[Array, "N 3"] = (
+    def apply_inplane_rotation() -> Float[Array, " N 4"]:
+        in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(jnp.array([0.0, 0.0, 1.0]), theta)
+        rotated_coords_in_plane: Float[Array, " N 3"] = (
             rotated_coords_with_ids[:, 1:4] @ in_plane_rotation.T
         )
         return jnp.hstack((rotated_coords_with_ids[:, 0:1], rotated_coords_in_plane))
 
-    def no_inplane_rotation():
+    def no_inplane_rotation() -> Float[Array, " N 4"]:
         return rotated_coords_with_ids
 
-    rotated_coords_final: Float[Array, "N 4"] = jax.lax.cond(
+    rotated_coords_final: Float[Array, " N 4"] = jax.lax.cond(
         theta != 0, apply_inplane_rotation, no_inplane_rotation
     )
     return (rotated_coords_final, rotated_cell)
@@ -312,12 +304,12 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
         - Diffraction pattern calculations
         - Brillouin zone constructions
     """
-    a1: Float[Array, "3"]
-    a2: Float[Array, "3"]
-    a3: Float[Array, "3"]
+    a1: Float[Array, " 3"]
+    a2: Float[Array, " 3"]
+    a3: Float[Array, " 3"]
     a1, a2, a3 = cell
-    V: scalar_float = jnp.dot(a1, jnp.cross(a2, a3))
-    b1: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a2, a3) / V
-    b2: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a3, a1) / V
-    b3: Float[Array, "3"] = 2 * jnp.pi * jnp.cross(a1, a2) / V
+    V: Float[Array, ""] = jnp.dot(a1, jnp.cross(a2, a3))
+    b1: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a2, a3) / V
+    b2: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a3, a1) / V
+    b3: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a1, a2) / V
     return jnp.stack([b1, b2, b3])

@@ -19,8 +19,15 @@ from beartype.typing import Optional
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from .atom_potentials import kirkland_potentials_XYZ
-from .electron_types import (STEM4D, PotentialSlices, ProbeModes, XYZData,
-                             make_probe_modes, scalar_float, scalar_numeric)
+from .electron_types import (
+    STEM4D,
+    PotentialSlices,
+    ProbeModes,
+    XYZData,
+    make_probe_modes,
+    scalar_float,
+    scalar_numeric,
+)
 from .preprocessing import parse_xyz
 from .simulations import make_probe, stem_4D
 
@@ -95,22 +102,20 @@ def xyz_to_4d_stem(
     """
     xyz_data: XYZData = parse_xyz(xyz_filepath)
     if xyz_data.lattice is not None:
-        a_length: Float[Array, ""] = jnp.linalg.norm(xyz_data.lattice[0])
-        b_length: Float[Array, ""] = jnp.linalg.norm(xyz_data.lattice[1])
-        c_length: Float[Array, ""] = jnp.linalg.norm(xyz_data.lattice[2])
-        repeat_x: Int[Array, ""] = jnp.ceil(lateral_extent / a_length).astype(jnp.int32)
-        repeat_y: Int[Array, ""] = jnp.ceil(lateral_extent / b_length).astype(jnp.int32)
-        z_coords: Float[Array, "N"] = xyz_data.positions[:, 2]
-        z_min: Float[Array, ""] = jnp.min(z_coords)
-        z_max: Float[Array, ""] = jnp.max(z_coords)
-        structure_thickness: Float[Array, ""] = z_max - z_min
-        total_thickness_needed: Float[Array, ""] = structure_thickness + slice_thickness
-        repeat_z: Int[Array, ""] = jnp.ceil(total_thickness_needed / c_length).astype(
-            jnp.int32
-        )
-        repeats: Int[Array, "3"] = jnp.array([repeat_x, repeat_y, repeat_z])
+        a_length: Float[Array, " "] = jnp.linalg.norm(xyz_data.lattice[0])
+        b_length: Float[Array, " "] = jnp.linalg.norm(xyz_data.lattice[1])
+        c_length: Float[Array, " "] = jnp.linalg.norm(xyz_data.lattice[2])
+        repeat_x: Int[Array, " "] = jnp.ceil(lateral_extent / a_length).astype(jnp.int32)
+        repeat_y: Int[Array, " "] = jnp.ceil(lateral_extent / b_length).astype(jnp.int32)
+        z_coords: Float[Array, " N"] = xyz_data.positions[:, 2]
+        z_min: Float[Array, " "] = jnp.min(z_coords)
+        z_max: Float[Array, " "] = jnp.max(z_coords)
+        structure_thickness: Float[Array, " "] = z_max - z_min
+        total_thickness_needed: Float[Array, " "] = structure_thickness + slice_thickness
+        repeat_z: Int[Array, " "] = jnp.ceil(total_thickness_needed / c_length).astype(jnp.int32)
+        repeats: Int[Array, " 3"] = jnp.array([repeat_x, repeat_y, repeat_z])
     else:
-        repeats: Int[Array, "3"] = jnp.array([1, 1, 1])
+        repeats: Int[Array, " 3"] = jnp.array([1, 1, 1])
 
     potential_slices: PotentialSlices = kirkland_potentials_XYZ(
         xyz_data=xyz_data,
@@ -119,9 +124,9 @@ def xyz_to_4d_stem(
         repeats=repeats,
         padding=4.0,
     )
-    image_height: int = potential_slices.slices.shape[0]
-    image_width: int = potential_slices.slices.shape[1]
-    image_size: Int[Array, "2"] = jnp.array([image_height, image_width])
+    image_height: Int[Array, ""] = jnp.asarray(potential_slices.slices.shape[0], dtype=jnp.int32)
+    image_width: Int[Array, ""] = jnp.asarray(potential_slices.slices.shape[1], dtype=jnp.int32)
+    image_size: Int[Array, " 2"] = jnp.array([image_height, image_width])
     probe: Complex[Array, "H W"] = make_probe(
         aperture=cbed_aperture_mrad,
         voltage=voltage_kV,

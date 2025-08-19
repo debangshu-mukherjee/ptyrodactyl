@@ -40,12 +40,12 @@ jax.config.update("jax_enable_x64", True)
 
 @jaxtyped(typechecker=beartype)
 def lens_thickness_profile(
-    r: Float[Array, "H W"],
+    r: Float[Array, " H W"],
     r1: scalar_float,
     r2: scalar_float,
     center_thickness: scalar_float,
     diameter: scalar_float,
-) -> Float[Array, "H W"]:
+) -> Float[Array, " H W"]:
     """ "
     Description
     -----------
@@ -54,7 +54,7 @@ def lens_thickness_profile(
 
     Parameters
     ----------
-    - `r` (Float[Array, "H W"]):
+    - `r` (Float[Array, " H W"]):
         Radial distance from the optical axis
     - `r1` (scalar_float):
         Radius of curvature of the first surface
@@ -68,7 +68,7 @@ def lens_thickness_profile(
 
     Returns
     -------
-    - `thickness` (Float[Array, "H W"]):
+    - `thickness` (Float[Array, " H W"]):
         Thickness profile of the lens
 
 
@@ -81,20 +81,20 @@ def lens_thickness_profile(
     in_ap = r <= diameter / 2
 
     finite_r1 = jnp.isfinite(r1)
-    sag1: Float[Array, "H W"] = jnp.where(
+    sag1: Float[Array, " H W"] = jnp.where(
         in_ap & finite_r1,
         r1 - jnp.sqrt(jnp.maximum(r1**2 - r**2, 0.0)),
         0.0,
     )
 
     finite_r2 = jnp.isfinite(r2)
-    sag2: Float[Array, "H W"] = jnp.where(
+    sag2: Float[Array, " H W"] = jnp.where(
         in_ap & finite_r2,
         r2 - jnp.sqrt(jnp.maximum(r2**2 - r**2, 0.0)),
         0.0,
     )
 
-    thickness: Float[Array, "H W"] = jnp.where(
+    thickness: Float[Array, " H W"] = jnp.where(
         in_ap,
         center_thickness + sag1 - sag2,
         0.0,
@@ -144,11 +144,11 @@ def lens_focal_length(
 
 @jaxtyped(typechecker=beartype)
 def create_lens_phase(
-    xx: Float[Array, "H W"],
-    yy: Float[Array, "H W"],
+    xx: Float[Array, " H W"],
+    yy: Float[Array, " H W"],
     params: LensParams,
     wavelength: scalar_float,
-) -> Tuple[Float[Array, "H W"], Float[Array, "H W"]]:
+) -> Tuple[Float[Array, " H W"], Float[Array, " H W"]]:
     """
     Description
     -----------
@@ -156,9 +156,9 @@ def create_lens_phase(
 
     Parameters
     ----------
-    - `xx` (Float[Array, "H W"]):
+    - `xx` (Float[Array, " H W"]):
         X coordinates grid
-    - `yy` (Float[Array, "H W"]):
+    - `yy` (Float[Array, " H W"]):
         Y coordinates grid
     - `params` (LensParams):
         Lens parameters
@@ -167,9 +167,9 @@ def create_lens_phase(
 
     Returns
     -------
-    - `phase_profile` (Float[Array, "H W"]):
+    - `phase_profile` (Float[Array, " H W"]):
         Phase profile of the lens
-    - `transmission` (Float[Array, "H W"]):
+    - `transmission` (Float[Array, " H W"]):
         Transmission mask of the lens
 
     Flow
@@ -180,8 +180,8 @@ def create_lens_phase(
     - Create transmission mask
     - Return phase and transmission
     """
-    r: Float[Array, "H W"] = jnp.sqrt(xx**2 + yy**2)
-    thickness: Float[Array, "H W"] = lens_thickness_profile(
+    r: Float[Array, " H W"] = jnp.sqrt(xx**2 + yy**2)
+    thickness: Float[Array, " H W"] = lens_thickness_profile(
         r,
         params.r1,
         params.r2,
@@ -189,16 +189,16 @@ def create_lens_phase(
         params.diameter,
     )
     k: Float[Array, ""] = jnp.asarray(2 * jnp.pi / wavelength)
-    phase_profile: Float[Array, "H W"] = k * (params.n - 1) * thickness
-    transmission: Float[Array, "H W"] = (r <= params.diameter / 2).astype(float)
+    phase_profile: Float[Array, " H W"] = k * (params.n - 1) * thickness
+    transmission: Float[Array, " H W"] = (r <= params.diameter / 2).astype(float)
     return (phase_profile, transmission)
 
 
 @jaxtyped(typechecker=beartype)
 def propagate_through_lens(
     field: Complex[Array, "H W"],
-    phase_profile: Float[Array, "H W"],
-    transmission: Float[Array, "H W"],
+    phase_profile: Float[Array, " H W"],
+    transmission: Float[Array, " H W"],
 ) -> Complex[Array, "H W"]:
     """
     Description
@@ -209,9 +209,9 @@ def propagate_through_lens(
     ----------
     - `field` (Complex[Array, "H W"]):
         Input complex field
-    - `phase_profile` (Float[Array, "H W"]):
+    - `phase_profile` (Float[Array, " H W"]):
         Phase profile of the lens
-    - `transmission` (Float[Array, "H W"]):
+    - `transmission` (Float[Array, " H W"]):
         Transmission mask of the lens
 
     Returns

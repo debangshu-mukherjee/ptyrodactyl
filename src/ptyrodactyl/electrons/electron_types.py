@@ -56,16 +56,15 @@ NamedTuple classes to ensure proper runtime type checking of the contents.
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Dict, List, NamedTuple, Optional, TypeAlias, Union
-from jax import lax
+from beartype.typing import Any, Dict, List, NamedTuple, Optional, Tuple, TypeAlias, Union
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 
-scalar_numeric: TypeAlias = Union[int, float, Num[Array, ""]]
-scalar_float: TypeAlias = Union[float, Float[Array, ""]]
-scalar_int: TypeAlias = Union[int, Int[Array, ""]]
+scalar_numeric: TypeAlias = Union[int, float, Num[Array, " "]]
+scalar_float: TypeAlias = Union[float, Float[Array, " "]]
+scalar_int: TypeAlias = Union[int, Int[Array, " "]]
 non_jax_number: TypeAlias = Union[int, float]
 
 
@@ -80,21 +79,21 @@ class CalibratedArray(NamedTuple):
     ----------
     - `data_array` (Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]):
         The actual array data
-    - `calib_y` (Float[Array, ""]):
+    - `calib_y` (Float[Array, " "]):
         Calibration in y direction (0-dimensional JAX array)
-    - `calib_x` (Float[Array, ""]):
+    - `calib_x` (Float[Array, " "]):
         Calibration in x direction (0-dimensional JAX array)
-    - `real_space` (Bool[Array, ""]):
+    - `real_space` (Bool[Array, " "]):
         Whether the array is in real space.
         If False, it is in reciprocal space.
     """
 
     data_array: Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]
-    calib_y: Float[Array, ""]
-    calib_x: Float[Array, ""]
-    real_space: Bool[Array, ""]
+    calib_y: Float[Array, " "]
+    calib_x: Float[Array, " "]
+    real_space: Bool[Array, " "]
 
-    def tree_flatten(self):
+    def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
         return (
             (
                 self.data_array,
@@ -106,7 +105,7 @@ class CalibratedArray(NamedTuple):
         )
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, _aux_data: None, children: Tuple[Any, ...]) -> "CalibratedArray":
         return cls(*children)
 
 
@@ -121,17 +120,17 @@ class ProbeModes(NamedTuple):
     ----------
     - `modes` (Complex[Array, "H W M"]):
         M is number of modes
-    - `weights` (Float[Array, "M"]):
+    - `weights` (Float[Array, " M"]):
         Mode occupation numbers.
-    - `calib` (Float[Array, ""]):
+    - `calib` (Float[Array, " "]):
         Pixel Calibration (0-dimensional JAX array)
     """
 
     modes: Complex[Array, "H W M"]
-    weights: Float[Array, "M"]
-    calib: Float[Array, ""]
+    weights: Float[Array, " M"]
+    calib: Float[Array, " "]
 
-    def tree_flatten(self):
+    def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
         return (
             (
                 self.modes,
@@ -142,7 +141,7 @@ class ProbeModes(NamedTuple):
         )
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, _aux_data: None, children: Tuple[Any, ...]) -> "ProbeModes":
         return cls(*children)
 
 
@@ -158,15 +157,15 @@ class PotentialSlices(NamedTuple):
     - `slices` (Float[Array, "H W S"]):
         Individual potential slices.
         S is number of slices
-    - `slice_thickness` (Num[Array, ""]):
+    - `slice_thickness` (Num[Array, " "]):
         Thickness of each slice (0-dimensional JAX array)
-    - `calib` (Float[Array, ""]):
+    - `calib` (Float[Array, " "]):
         Pixel Calibration (0-dimensional JAX array)
     """
 
     slices: Float[Array, "H W S"]
-    slice_thickness: Num[Array, ""]
-    calib: Float[Array, ""]
+    slice_thickness: Num[Array, " "]
+    calib: Float[Array, " "]
 
     def tree_flatten(self):
         return (
@@ -179,7 +178,7 @@ class PotentialSlices(NamedTuple):
         )
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, _aux_data: None, children: Tuple[Any, ...]) -> "PotentialSlices":
         return cls(*children)
 
 
@@ -203,9 +202,9 @@ class CrystalStructure(NamedTuple):
         Each row contains [x, y, z, atomic_number] where:
         - x, y, z: Cartesian coordinates in Ångstroms
         - atomic_number: Integer atomic number (Z) of the element
-    - `cell_lengths` (Num[Array, "3"]):
+    - `cell_lengths` (Num[Array, " 3"]):
         Unit cell lengths [a, b, c] in Ångstroms
-    - `cell_angles` (Num[Array, "3"]):
+    - `cell_angles` (Num[Array, " 3"]):
         Unit cell angles [α, β, γ] in degrees.
         - α is the angle between b and c
         - β is the angle between a and c
@@ -220,10 +219,10 @@ class CrystalStructure(NamedTuple):
 
     frac_positions: Float[Array, "* 4"]
     cart_positions: Num[Array, "* 4"]
-    cell_lengths: Num[Array, "3"]
-    cell_angles: Num[Array, "3"]
+    cell_lengths: Num[Array, " 3"]
+    cell_angles: Num[Array, " 3"]
 
-    def tree_flatten(self):
+    def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
         return (
             (
                 self.frac_positions,
@@ -235,7 +234,7 @@ class CrystalStructure(NamedTuple):
         )
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, _aux_data: None, children: Tuple[Any, ...]) -> "CrystalStructure":
         return cls(*children)
 
 
@@ -248,9 +247,9 @@ class XYZData(NamedTuple):
 
     Attributes
     ----------
-    - `positions` (Float[Array, "N 3"]):
+    - `positions` (Float[Array, " N 3"]):
         Cartesian positions in Ångstroms.
-    - `atomic_numbers` (Int[Array, "N"]):
+    - `atomic_numbers` (Int[Array, " N"]):
         Atomic numbers (Z) corresponding to each atom.
     - `lattice` (Optional[Float[Array, "3 3"]]):
         Lattice vectors in Ångstroms if present, otherwise None.
@@ -269,15 +268,15 @@ class XYZData(NamedTuple):
     - Compatible with JAX transformations (jit, vmap, etc).
     """
 
-    positions: Float[Array, "N 3"]
-    atomic_numbers: Int[Array, "N"]
+    positions: Float[Array, " N 3"]
+    atomic_numbers: Int[Array, " N"]
     lattice: Optional[Float[Array, "3 3"]]
     stress: Optional[Float[Array, "3 3"]]
-    energy: Optional[Float[Array, ""]]
+    energy: Optional[Float[Array, " "]]
     properties: Optional[List[Dict[str, Union[str, int]]]]
     comment: Optional[str]
 
-    def tree_flatten(self):
+    def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
         children = (
             self.positions,
             self.atomic_numbers,
@@ -292,7 +291,7 @@ class XYZData(NamedTuple):
         return children, aux_data
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, aux_data: Dict[str, Any], children: Tuple[Any, ...]) -> "XYZData":
         positions, atomic_numbers, lattice, stress, energy = children
         return cls(
             positions=positions,
@@ -319,21 +318,21 @@ class STEM4D(NamedTuple):
         4D-STEM data array where:
         - P: Number of scan positions
         - H, W: Height and width of diffraction patterns
-    - `real_space_calib` (Float[Array, ""]):
+    - `real_space_calib` (Float[Array, " "]):
         Real space calibration in Angstroms per pixel
-    - `fourier_space_calib` (Float[Array, ""]):
+    - `fourier_space_calib` (Float[Array, " "]):
         Fourier space calibration in inverse Angstroms per pixel
     - `scan_positions` (Float[Array, "P 2"]):
         Real space scan positions in Angstroms (y, x coordinates)
-    - `voltage_kV` (Float[Array, ""]):
+    - `voltage_kV` (Float[Array, " "]):
         Accelerating voltage in kilovolts
     """
 
     data: Float[Array, "P H W"]
-    real_space_calib: Float[Array, ""]
-    fourier_space_calib: Float[Array, ""]
+    real_space_calib: Float[Array, " "]
+    fourier_space_calib: Float[Array, " "]
     scan_positions: Float[Array, "P 2"]
-    voltage_kV: Float[Array, ""]
+    voltage_kV: Float[Array, " "]
 
     def tree_flatten(self):
         return (
@@ -348,7 +347,7 @@ class STEM4D(NamedTuple):
         )
 
     @classmethod
-    def tree_unflatten(cls, aux_data, children):
+    def tree_unflatten(cls, _aux_data: None, children: Tuple[Any, ...]) -> "STEM4D":
         return cls(*children)
 
 
@@ -357,7 +356,7 @@ def make_calibrated_array(
     data_array: Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]],
     calib_y: scalar_float,
     calib_x: scalar_float,
-    real_space: Union[bool, Bool[Array, ""]],
+    real_space: Union[bool, Bool[Array, " "]],
 ) -> CalibratedArray:
     """
     Description
@@ -372,7 +371,7 @@ def make_calibrated_array(
         Calibration in y direction
     - `calib_x` (scalar_float):
         Calibration in x direction
-    - `real_space` (Bool[Array, ""]):
+    - `real_space` (Bool[Array, " "]):
         Whether the array is in real space
 
     Returns
@@ -437,7 +436,7 @@ def make_calibrated_array(
 @jaxtyped(typechecker=beartype)
 def make_probe_modes(
     modes: Complex[Array, "H W M"],
-    weights: Float[Array, "M"],
+    weights: Float[Array, " M"],
     calib: scalar_float,
 ) -> ProbeModes:
     """
@@ -449,7 +448,7 @@ def make_probe_modes(
     ----------
     - `modes` (Complex[Array, "H W M"]):
         Complex probe modes, M is number of modes
-    - `weights` (Float[Array, "M"]):
+    - `weights` (Float[Array, " M"]):
         Mode occupation numbers
     - `calib` (scalar_float):
         Pixel calibration
@@ -484,23 +483,14 @@ def make_probe_modes(
     modes = jnp.asarray(modes, dtype=jnp.complex128)
     weights = jnp.asarray(weights, dtype=jnp.float64)
     calib = jnp.asarray(calib, dtype=jnp.float64)
-
-    # For JAX compliance, we rely on jaxtyping for shape/type validation
-    # and only do JAX-compatible runtime adjustments
-
-    # Ensure weights are non-negative and normalized
     weights = jnp.abs(weights)
     weight_sum = jnp.sum(weights)
-    # If all weights are zero, make them uniform
     weights = jnp.where(
         weight_sum > jnp.finfo(jnp.float64).eps,
         weights / weight_sum,
         jnp.ones_like(weights) / weights.shape[0],
     )
-
-    # Ensure calibration is positive
     calib = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
-
     return ProbeModes(
         modes=modes,
         weights=weights,
@@ -553,11 +543,11 @@ def make_potential_slices(
     - If all validations pass, create and return PotentialSlices instance
     - If any validation fails, the JAX-compatible error handling will stop execution
     """
-    slices = jnp.asarray(slices, dtype=jnp.float64)
-    slice_thickness = jnp.asarray(slice_thickness, dtype=jnp.float64)
-    calib = jnp.asarray(calib, dtype=jnp.float64)
-    slice_thickness = jnp.abs(slice_thickness) + jnp.finfo(jnp.float64).eps
-    calib = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
+    slices: Float[Array, "H W S"] = jnp.asarray(slices, dtype=jnp.float64)
+    slice_thickness: Float[Array, ""] = jnp.asarray(slice_thickness, dtype=jnp.float64)
+    calib: Float[Array, ""] = jnp.asarray(calib, dtype=jnp.float64)
+    slice_thickness: Float[Array, ""] = jnp.abs(slice_thickness) + jnp.finfo(jnp.float64).eps
+    calib: Float[Array, ""] = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
     return PotentialSlices(
         slices=slices,
         slice_thickness=slice_thickness,
@@ -569,8 +559,8 @@ def make_potential_slices(
 def make_crystal_structure(
     frac_positions: Float[Array, "* 4"],
     cart_positions: Num[Array, "* 4"],
-    cell_lengths: Num[Array, "3"],
-    cell_angles: Num[Array, "3"],
+    cell_lengths: Num[Array, " 3"],
+    cell_angles: Num[Array, " 3"],
 ) -> CrystalStructure:
     """
     Factory function to create a CrystalStructure instance with type checking.
@@ -581,9 +571,9 @@ def make_crystal_structure(
         Array of shape (n_atoms, 4) containing atomic positions in fractional coordinates.
     - `cart_positions` : Num[Array, "* 4"]
         Array of shape (n_atoms, 4) containing atomic positions in Cartesian coordinates.
-    - `cell_lengths` : Num[Array, "3"]
+    - `cell_lengths` : Num[Array, " 3"]
         Unit cell lengths [a, b, c] in Ångstroms.
-    - `cell_angles` : Num[Array, "3"]
+    - `cell_angles` : Num[Array, " 3"]
         Unit cell angles [α, β, γ] in degrees.
 
     Returns
@@ -617,21 +607,12 @@ def make_crystal_structure(
     - If all validations pass, create and return CrystalStructure instance
     - If any validation fails, the JAX-compatible error handling will stop execution
     """
-    frac_positions = jnp.asarray(frac_positions)
-    cart_positions = jnp.asarray(cart_positions)
-    cell_lengths = jnp.asarray(cell_lengths)
-    cell_angles = jnp.asarray(cell_angles)
-
-    # For JAX compliance, we rely on beartype for shape/type validation
-    # and only do JAX-compatible runtime adjustments
-
-    # Ensure cell lengths are positive
-    cell_lengths = jnp.abs(cell_lengths) + jnp.finfo(jnp.float64).eps
-
-    # Ensure cell angles are in valid range (0, 180)
-    # Clamp to valid range rather than failing
-    cell_angles = jnp.clip(cell_angles, 0.1, 179.9)
-
+    frac_positions: Float[Array, "* 4"] = jnp.asarray(frac_positions)
+    cart_positions: Num[Array, "* 4"] = jnp.asarray(cart_positions)
+    cell_lengths: Num[Array, " 3"] = jnp.asarray(cell_lengths)
+    cell_angles: Num[Array, " 3"] = jnp.asarray(cell_angles)
+    cell_lengths: Num[Array, " 3"] = jnp.abs(cell_lengths) + jnp.finfo(jnp.float64).eps
+    cell_angles: Num[Array, " 3"] = jnp.clip(cell_angles, 0.1, 179.9)
     return CrystalStructure(
         frac_positions=frac_positions,
         cart_positions=cart_positions,
@@ -642,8 +623,8 @@ def make_crystal_structure(
 
 @jaxtyped(typechecker=beartype)
 def make_xyz_data(
-    positions: Float[Array, "N 3"],
-    atomic_numbers: Int[Array, "N"],
+    positions: Float[Array, " N 3"],
+    atomic_numbers: Int[Array, " N"],
     lattice: Optional[Float[Array, "3 3"]] = None,
     stress: Optional[Float[Array, "3 3"]] = None,
     energy: Optional[scalar_float] = None,
@@ -657,9 +638,9 @@ def make_xyz_data(
 
     Parameters
     ----------
-    - `positions` (Float[Array, "N 3"]):
+    - `positions` (Float[Array, " N 3"]):
         Cartesian positions in Ångstroms
-    - `atomic_numbers` (Int[Array, "N"]):
+    - `atomic_numbers` (Int[Array, " N"]):
         Atomic numbers (Z) for each atom
     - `lattice` (Optional[Float[Array, "3 3"]]):
         Lattice vectors (if any)
@@ -700,16 +681,9 @@ def make_xyz_data(
 
     positions = jnp.asarray(positions, dtype=jnp.float64)
     atomic_numbers = jnp.asarray(atomic_numbers, dtype=jnp.int32)
-
-    # Convert optional parameters to JAX arrays
-    # Note: We have to use Python if for None checks since lax.cond requires
-    # JAX-compatible boolean conditions and both branches must return same type.
-    # This is another unavoidable case for Python if.
     if lattice is not None:
         lattice = jnp.asarray(lattice, dtype=jnp.float64)
     else:
-        # Default to identity matrix if no lattice is provided
-        # This ensures lattice is always a JAX array for downstream functions
         lattice = jnp.eye(3, dtype=jnp.float64)
 
     if stress is not None:
@@ -718,23 +692,22 @@ def make_xyz_data(
     if energy is not None:
         energy = jnp.asarray(energy, dtype=jnp.float64)
 
-    def validate_and_create():
-        N = positions.shape[0]
+    def validate_and_create() -> XYZData:
+        nn: Int[Array, ""] = positions.shape[0]
 
-        def check_shape():
+        def check_shape() -> None:
             if positions.shape[1] != 3:
                 raise ValueError("positions must have shape (N, 3)")
-            if atomic_numbers.shape[0] != N:
+            if atomic_numbers.shape[0] != nn:
                 raise ValueError("atomic_numbers must have shape (N,)")
 
-        def check_finiteness():
+        def check_finiteness() -> None:
             if not jnp.all(jnp.isfinite(positions)):
                 raise ValueError("positions contain non-finite values")
             if not jnp.all(atomic_numbers >= 0):
                 raise ValueError("atomic_numbers must be non-negative")
 
-        def check_optional_matrices():
-            # We have to use Python if for None checks here as well
+        def check_optional_matrices() -> None:
             if lattice is not None:
                 if lattice.shape != (3, 3):
                     raise ValueError("lattice must have shape (3, 3)")
@@ -770,7 +743,7 @@ def make_stem4d(
     real_space_calib: scalar_float,
     fourier_space_calib: scalar_float,
     scan_positions: Float[Array, "P 2"],
-    voltage_kV: scalar_numeric,
+    voltage_kv: scalar_numeric,
 ) -> STEM4D:
     """
     Description
@@ -787,7 +760,7 @@ def make_stem4d(
         Fourier space calibration in inverse Angstroms per pixel
     - `scan_positions` (Float[Array, "P 2"]):
         Real space scan positions in Angstroms (y, x coordinates)
-    - `voltage_kV` (scalar_numeric):
+    - `voltage_kv` (scalar_numeric):
         Accelerating voltage in kilovolts
 
     Returns
@@ -814,22 +787,23 @@ def make_stem4d(
        - check_voltage(): Verify voltage is positive
     - If all validations pass, create and return STEM4D instance
     """
-    # Convert inputs to JAX arrays
-    data = jnp.asarray(data)
-    real_space_calib = jnp.asarray(real_space_calib, dtype=jnp.float64)
-    fourier_space_calib = jnp.asarray(fourier_space_calib, dtype=jnp.float64)
-    scan_positions = jnp.asarray(scan_positions, dtype=jnp.float64)
-    voltage_kV = jnp.asarray(voltage_kV, dtype=jnp.float64)
-
-    # Ensure calibrations and voltage are positive
-    real_space_calib = jnp.abs(real_space_calib) + jnp.finfo(jnp.float64).eps
-    fourier_space_calib = jnp.abs(fourier_space_calib) + jnp.finfo(jnp.float64).eps
-    voltage_kV = jnp.abs(voltage_kV) + jnp.finfo(jnp.float64).eps
-
+    data: Float[Array, "P H W"] = jnp.asarray(data)
+    real_space_calib: Float[Array, " "] = jnp.asarray(
+        real_space_calib,
+        dtype=jnp.float64,
+    )
+    fourier_space_calib: Float[Array, " "] = jnp.asarray(fourier_space_calib, dtype=jnp.float64)
+    scan_positions: Float[Array, "P 2"] = jnp.asarray(scan_positions, dtype=jnp.float64)
+    voltage_kv: Float[Array, " "] = jnp.asarray(voltage_kv, dtype=jnp.float64)
+    real_space_calib: Float[Array, " "] = jnp.abs(real_space_calib) + jnp.finfo(jnp.float64).eps
+    fourier_space_calib: Float[Array, " "] = (
+        jnp.abs(fourier_space_calib) + jnp.finfo(jnp.float64).eps
+    )
+    voltage_kv: Float[Array, " "] = jnp.abs(voltage_kv) + jnp.finfo(jnp.float64).eps
     return STEM4D(
         data=data,
         real_space_calib=real_space_calib,
         fourier_space_calib=fourier_space_calib,
         scan_positions=scan_positions,
-        voltage_kV=voltage_kV,
+        voltage_kV=voltage_kv,
     )

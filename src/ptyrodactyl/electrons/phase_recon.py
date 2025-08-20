@@ -51,7 +51,7 @@ from .electron_types import (
     scalar_int,
     scalar_numeric,
 )
-from .simulations import stem_4D
+from .simulations import stem_4d
 
 jax.config.update("jax_enable_x64", True)
 
@@ -138,7 +138,7 @@ def single_slice_ptychography(
     def _forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Float[Array, "P H W"]:
-        stem4d_result = stem_4D(
+        stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -309,7 +309,7 @@ def single_slice_poscorrected(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        stem4d_result = stem_4D(
+        stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,
@@ -518,7 +518,7 @@ def single_slice_multi_modal(
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        stem4d_result = stem_4D(
+        stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam,
             pos_list,
@@ -698,7 +698,7 @@ def multi_slice_multi_modal(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        stem4d_result = stem_4D(
+        stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
             pos_list,

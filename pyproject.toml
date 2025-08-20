@@ -1,6 +1,6 @@
 [project]
 name = "ptyrodactyl"
-version = "2025.07.20"
+version = "2025.07.25"
 description = "Ptychography through differentiable programming in JAX"
 authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
 license = {file = "LICENSE.md"}
@@ -36,6 +36,7 @@ dependencies = [
     "beartype>=0.19.0",
     "jax[cuda12]>=0.4.30 ; sys_platform == 'linux'",
     "jax>=0.4.30 ; sys_platform == 'win64'",
+    "jax>=0.4.30 ; sys_platform == 'darwin'",
     "pytest-cov>=6.2.1",
     "jupyterlab>=4.4.5",
     "jupyter>=1.1.1",

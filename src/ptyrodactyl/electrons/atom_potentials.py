@@ -11,7 +11,7 @@ Functions
 - `single_atom_potential`:
     Calculates the projected potential of a single atom using Kirkland
     scattering factors
-- `kirkland_potentials_XYZ`:
+- `kirkland_potentials_xyz`:
     Converts XYZData structure to PotentialSlices using FFT-based atomic
     positioning
 - `bessel_kv`:
@@ -29,6 +29,46 @@ These functions are not exported and are used internally by the module.
 - `_expand_periodic_images`:
     Expands periodic images of a crystal structure to cover a given
     threshold distance
+- `_bessel_iv_series`:
+    Compute I_v(x) using series expansion for Bessel function
+- `_bessel_k0_series`:
+    Compute K_0(x) using series expansion
+- `_bessel_kn_recurrence`:
+    Compute K_n(x) using recurrence relation
+- `_bessel_kv_small_non_integer`:
+    Compute K_v(x) for small x and non-integer v
+- `_bessel_kv_small_integer`:
+    Compute K_v(x) for small x and integer v
+- `_bessel_kv_large`:
+    Asymptotic expansion for K_v(x) for large x
+- `_bessel_k_half`:
+    Special case K_{1/2}(x) = sqrt(π/(2x)) * exp(-x)
+- `_calculate_bessel_contributions`:
+    Calculate Bessel function contributions to the atomic potential
+- `_calculate_gaussian_contributions`:
+    Calculate Gaussian contributions to the atomic potential
+- `_downsample_potential`:
+    Downsample the supersampled potential to target resolution
+- `_apply_periodic_repeats`:
+    Apply periodic repeats to atomic structure using lattice vectors
+- `_return_positions_unchanged`:
+    Return positions and atomic numbers unchanged but in the same shape as apply_repeats
+- `_build_atomic_potential_lookup`:
+    Build lookup table of atomic potentials and mapping array
+- `_add_atom_to_slice`:
+    Add single atom contribution to a slice using FFT shifting
+- `_compute_grid_dimensions`:
+    Compute grid dimensions and ranges for potential slices
+- `_process_all_slices`:
+    Process all slices and accumulate atomic potentials
+- `_build_shift_masks`:
+    Build shift indices and masks for periodic repeats
+- `_tile_positions_with_shifts`:
+    Tile positions and atomic numbers with shift vectors
+- `_apply_repeats_or_return`:
+    Apply periodic repeats or return unchanged positions
+- `_build_potential_lookup`:
+    Build lookup table for atomic potentials
 """
 
 import jax
@@ -948,13 +988,13 @@ def _process_all_slices(
 @jaxtyped(typechecker=beartype)
 def _build_shift_masks(
     repeats: Int[Array, " 3"],
+    max_n: Optional[int] = 20,
 ) -> Tuple[Bool[Array, " max_n^3"], Int[Array, " max_n^3 3"]]:
     """Build shift indices and masks for periodic repeats."""
     nx: Int[Array, ""] = repeats[0]
     ny: Int[Array, ""] = repeats[1]
     nz: Int[Array, ""] = repeats[2]
 
-    max_n: int = 20
     ix: Int[Array, " max_n"] = jnp.arange(max_n)
     iy: Int[Array, " max_n"] = jnp.arange(max_n)
     iz: Int[Array, " max_n"] = jnp.arange(max_n)
@@ -1037,29 +1077,29 @@ def _apply_repeats_or_return(
         atomic_numbers: Int[Array, " N"],
         lattice: Float[Array, " 3 3"],
     ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
-        mask_flat: Bool[Array, " max_n^3"]
-        shift_indices: Int[Array, " max_n^3 3"]
+        mask_flat: Bool[Array, " M"]
+        shift_indices: Int[Array, " M 3"]
         mask_flat, shift_indices = _build_shift_masks(repeats)
 
-        mask_float: Float[Array, " max_n^3"] = mask_flat.astype(jnp.float32)
-        shift_indices_float: Float[Array, "max_n^3 3"] = shift_indices.astype(jnp.float32)
-        mask_expanded: Float[Array, "max_n^3 1"] = mask_float[:, None]
-        shift_indices_masked: Float[Array, "max_n^3 3"] = shift_indices_float * mask_expanded
-        shift_vectors: Float[Array, "max_n^3 3"] = shift_indices_masked @ lattice
+        mask_float: Float[Array, " M"] = mask_flat.astype(jnp.float32)
+        shift_indices_float: Float[Array, " M 3"] = shift_indices.astype(jnp.float32)
+        mask_expanded: Float[Array, " M 1"] = mask_float[:, None]
+        shift_indices_masked: Float[Array, " M 3"] = shift_indices_float * mask_expanded
+        shift_vectors: Float[Array, " M 3"] = shift_indices_masked @ lattice
 
         return _tile_positions_with_shifts(positions, atomic_numbers, shift_vectors, mask_flat)
 
     def _return_unchanged(
         positions: Float[Array, " N 3"],
         atomic_numbers: Int[Array, " N"],
-    ) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, " max_n^3*N"]]:
+    ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
         n_atoms: int = positions.shape[0]
         max_n: int = 20
         max_shifts: int = max_n * max_n * max_n
         max_total: int = max_shifts * n_atoms
 
-        positions_padded: Float[Array, "max_n^3*N 3"] = jnp.zeros((max_total, 3))
-        atomic_numbers_padded: Int[Array, " max_n^3*N"] = jnp.zeros(max_total, dtype=jnp.int32)
+        positions_padded: Float[Array, " M 3"] = jnp.zeros((max_total, 3))
+        atomic_numbers_padded: Int[Array, " M"] = jnp.zeros(max_total, dtype=jnp.int32)
 
         positions_padded = positions_padded.at[:n_atoms].set(positions)
         atomic_numbers_padded = atomic_numbers_padded.at[:n_atoms].set(atomic_numbers)

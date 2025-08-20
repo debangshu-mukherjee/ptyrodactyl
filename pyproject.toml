@@ -125,6 +125,9 @@ ignore = [
     "COM812",  # Disabled to avoid conflicts with formatter
 ]
 
+[tool.ruff.lint.pylint]
+max-args = 10  # Allow up to 10 arguments in function definitions
+
 [tool.ruff.lint.per-file-ignores]
 "**/*.py" = ["F821"]  # Ignore undefined name errors which often occur with jaxtyping
 

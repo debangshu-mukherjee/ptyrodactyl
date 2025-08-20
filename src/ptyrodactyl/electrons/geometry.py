@@ -21,7 +21,7 @@ from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Float, Real, jaxtyped
 
-from .electron_types import scalar_numeric
+from .electron_types import scalar_float, scalar_numeric
 
 
 @jaxtyped(typechecker=beartype)
@@ -51,7 +51,7 @@ def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Arr
         - Divide v1 and v2 by their respective norms to get unit vectors
         - This ensures the rotation is purely rotational without scaling
     - Calculate rotation parameters:
-        - Compute cross product: cross = v1 × v2 (gives rotation axis direction)
+        - Compute cross product: cross = v1 * v2 (gives rotation axis direction)
         - Compute dot product: dot = v1 · v2 (gives cosine of rotation angle)
         - Calculate sin(θ) as the norm of the cross product
     - Handle special cases:
@@ -82,32 +82,41 @@ def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Arr
         return rotation_matrix_parallel
 
     def _fallback_opposite() -> Float[Array, "3 3"]:
+        """
+        Description
+        -----------
+        Compute a rotation matrix for a 180° rotation around an arbitrary axis.
+        This handles the case where the vectors are nearly opposite.
+        """
+        magic_number: scalar_float = 0.9
         ortho: Float[Array, " 3"] = jnp.where(
-            jnp.abs(v1[0]) < 0.9, jnp.array([1.0, 0.0, 0.0]), jnp.array([0.0, 1.0, 0.0])
+            jnp.abs(v1[0]) < magic_number, jnp.array([1.0, 0.0, 0.0]), jnp.array([0.0, 1.0, 0.0])
         )
         axis: Float[Array, " 3"] = jnp.cross(v1, ortho)
         axis: Float[Array, " 3"] = axis / jnp.linalg.norm(axis)
-        K: Float[Array, "3 3"] = jnp.array(
+        kk: Float[Array, "3 3"] = jnp.array(
             [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
         )
-        rotation_matrix_opposite: Float[Array, "3 3"] = jnp.eye(3) + 2 * K @ K
+        rotation_matrix_opposite: Float[Array, "3 3"] = jnp.eye(3) + 2 * kk @ kk
         return rotation_matrix_opposite
 
     def _compute() -> Float[Array, "3 3"]:
         axis: Float[Array, " 3"] = cross / sin_theta
-        K: Float[Array, "3 3"] = jnp.array(
+        kk: Float[Array, "3 3"] = jnp.array(
             [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
         )
         rotation_matrix_general: Float[Array, "3 3"] = (
-            jnp.eye(3) + sin_theta * K + (1 - dot) * (K @ K)
+            jnp.eye(3) + sin_theta * kk + (1 - dot) * (kk @ kk)
         )
         return rotation_matrix_general
 
-    is_parallel: Bool[Array, " "] = sin_theta < 1e-8
-    is_opposite: Bool[Array, " "] = dot < -0.9999
+    close_to_zero: scalar_float = 1e-8
+    almost_parallel: Bool[Array, " "] = sin_theta < close_to_zero
+    close_to_one: scalar_float = 0.999999
+    almost_opposite: Bool[Array, " "] = dot < -close_to_one
     rotation_matrix: Float[Array, "3 3"] = jax.lax.cond(
-        is_parallel,
-        lambda: jax.lax.cond(is_opposite, _fallback_opposite, _fallback_parallel),
+        almost_parallel,
+        lambda: jax.lax.cond(almost_opposite, _fallback_opposite, _fallback_parallel),
         _compute,
     )
     return rotation_matrix
@@ -308,8 +317,8 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
     a2: Float[Array, " 3"]
     a3: Float[Array, " 3"]
     a1, a2, a3 = cell
-    V: Float[Array, ""] = jnp.dot(a1, jnp.cross(a2, a3))
-    b1: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a2, a3) / V
-    b2: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a3, a1) / V
-    b3: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a1, a2) / V
+    vv: Float[Array, ""] = jnp.dot(a1, jnp.cross(a2, a3))
+    b1: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a2, a3) / vv
+    b2: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a3, a1) / vv
+    b3: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a1, a2) / vv
     return jnp.stack([b1, b2, b3])

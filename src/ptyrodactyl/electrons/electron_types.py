@@ -703,7 +703,8 @@ def make_crystal_structure(
        - _check_cell_angles_valid(): Ensure all angles are in range (0, 180) degrees
     - Chain all validation checks with jnp.logical_and
     - Use jax.lax.cond to branch based on validation result:
-       - If valid: Ensure positive cell lengths and clip angles to valid range, return CrystalStructure
+       - If valid: Ensure positive cell lengths and clip angles to valid range,
+        return CrystalStructure
        - If invalid: Return CrystalStructure with NaN values to signal validation failure
     """
     frac_positions: Float[Array, " * 4"] = jnp.asarray(frac_positions, dtype=jnp.float64)

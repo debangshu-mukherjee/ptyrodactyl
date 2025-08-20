@@ -32,7 +32,7 @@ Submodules
 from .atom_potentials import (
     bessel_kv,
     contrast_stretch,
-    kirkland_potentials_XYZ,
+    kirkland_potentials_xyz,
     single_atom_potential,
 )
 from .electron_types import (
@@ -87,7 +87,7 @@ __all__: list[str] = [
     "parse_xyz",
     "contrast_stretch",
     "single_atom_potential",
-    "kirkland_potentials_XYZ",
+    "kirkland_potentials_xyz",
     "bessel_kv",
     "rotmatrix_vectors",
     "rotmatrix_axis",

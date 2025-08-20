@@ -74,7 +74,7 @@ def _load_atomic_numbers(json_path: Optional[Path] = _ATOMS_PATH) -> Dict[str, i
         If JSON file is malformed
     """
     file_path: Path = json_path if json_path is not None else _ATOMS_PATH
-    with open(file_path, "r", encoding="utf-8") as file:
+    with open(file_path, encoding="utf-8") as file:
         atomic_data: Dict[str, int] = json.load(file)
     return atomic_data
 
@@ -210,18 +210,18 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
         If lattice or stress tensor dimensions are incorrect
     """
     metadata: Dict[str, Any] = {}
-
+    max_xyz_columns: int = 9
     lattice_match: Optional[re.Match[str]] = re.search(r'Lattice="([^"]+)"', line)
     if lattice_match:
         values: List[float] = list(map(float, lattice_match.group(1).split()))
-        if len(values) != 9:
+        if len(values) != max_xyz_columns:
             raise ValueError("Lattice must contain 9 values")
         metadata["lattice"] = jnp.array(values, dtype=jnp.float64).reshape(3, 3)
 
     stress_match: Optional[re.Match[str]] = re.search(r'stress="([^"]+)"', line)
     if stress_match:
         values: List[float] = list(map(float, stress_match.group(1).split()))
-        if len(values) != 9:
+        if len(values) != max_xyz_columns:
             raise ValueError("Stress tensor must contain 9 values")
         metadata["stress"] = jnp.array(values, dtype=jnp.float64).reshape(3, 3)
 
@@ -267,16 +267,16 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     - `XYZData`:
         Validated JAX-compatible structure with all contents from the XYZ file.
     """
-    with open(file_path, "r") as f:
+    with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()
-
-    if len(lines) < 2:
+    too_small: int = 2
+    if len(lines) < too_small:
         raise ValueError("Invalid XYZ file: fewer than 2 lines.")
 
     try:
         num_atoms: int = int(lines[0].strip())
-    except ValueError:
-        raise ValueError("First line must be the number of atoms (int).")
+    except ValueError as err:
+        raise ValueError("First line must be the number of atoms (int).") from err
 
     comment: str = lines[1].strip()
     metadata: Dict[str, Any] = _parse_xyz_metadata(comment)
@@ -286,19 +286,20 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
 
     positions: List[List[float]] = []
     atomic_numbers: List[int] = []
-
-    for i in range(2, 2 + num_atoms):
-        parts: List[str] = lines[i].split()
+    columns_normal: int = 4
+    columns_extra: int = 5
+    for ii in range(2, 2 + num_atoms):
+        parts: List[str] = lines[ii].split()
         if len(parts) not in {4, 5, 6, 7}:
-            raise ValueError(f"Line {i + 1} has unexpected format: {lines[i].strip()}")
+            raise ValueError(f"Line {ii + 1} has unexpected format: {lines[ii].strip()}")
 
-        if len(parts) == 4:
+        if len(parts) == columns_normal:
             symbol: str
             x: str
             y: str
             z: str
             symbol, x, y, z = parts
-        elif len(parts) == 5:
+        elif len(parts) == columns_extra:
             _: str
             symbol, x, y, z = parts
         else:
@@ -316,11 +317,11 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
             atomic_numbers.append(atomic_symbol(symbol))
 
     positions_arr: Float[Array, " N 3"] = jnp.array(positions, dtype=jnp.float64)
-    atomic_Z_arr: Int[Array, " N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
+    atomic_z_arr: Int[Array, " N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
 
     return make_xyz_data(
         positions=positions_arr,
-        atomic_numbers=atomic_Z_arr,
+        atomic_numbers=atomic_z_arr,
         lattice=metadata.get("lattice"),
         stress=metadata.get("stress"),
         energy=metadata.get("energy"),

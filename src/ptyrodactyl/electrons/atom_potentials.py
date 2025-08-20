@@ -56,33 +56,26 @@ def contrast_stretch(
     p1: float,
     p2: float,
 ) -> Union[Float[Array, " H W"], Float[Array, " N H W"]]:
-    """
-    Description
-    -----------
-    Rescales intensity values of image series between specified percentiles
-    using pure JAX operations. Handles both 2D single images and 3D image
-    stacks.
+    """Rescales intensity values of image series between specified percentiles.
+    
+    Uses pure JAX operations to rescale intensity values. Handles both 2D single
+    images and 3D image stacks.
 
-    Parameters
-    ----------
-    - `series` (Union[Float[Array, " H W"], Float[Array, " N H W"]]):
-        Input image or stack of images to process
-    - `p1` (float):
-        Lower percentile for intensity rescaling
-    - `p2` (float):
-        Upper percentile for intensity rescaling
+    Args:
+        series: Input image or stack of images to process. Can be either
+            Float[Array, "H W"] for 2D or Float[Array, "N H W"] for 3D.
+        p1: Lower percentile for intensity rescaling.
+        p2: Upper percentile for intensity rescaling.
 
-    Returns
-    -------
-    - `transformed` (Union[Float[Array, " H W"], Float[Array, " N H W"]]):
-        Intensity-rescaled image(s) with same shape as input
+    Returns:
+        Intensity-rescaled image(s) with same shape as input. Returns
+        Float[Array, "H W"] for 2D input or Float[Array, "N H W"] for 3D.
 
-    Flow
-    ----
-    - Handle dimension expansion for 2D inputs
-    - Compute percentiles for each image independently
-    - Apply rescaling transformation using vectorized operations
-    - Return result with original shape
+    Algorithm:
+        - Handle dimension expansion for 2D inputs
+        - Compute percentiles for each image independently
+        - Apply rescaling transformation using vectorized operations
+        - Return result with original shape
     """
     original_shape: Tuple[int, ...] = series.shape
     is_2d_image: int = 2
@@ -112,7 +105,7 @@ def contrast_stretch(
 def _bessel_iv_series(
     v_order: scalar_float, x_val: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
-    """Compute I_v(x) using series expansion for Bessel function"""
+    """Compute I_v(x) using series expansion for Bessel function."""
     x_half: Float[Array, " ..."] = x_val / 2.0
     x_half_v: Float[Array, " ..."] = jnp.power(x_half, v_order)
     x2_quarter: Float[Array, " ..."] = (x_val * x_val) / 4.0
@@ -134,7 +127,7 @@ def _bessel_iv_series(
 
 
 def _bessel_k0_series(x: Float[Array, " ..."], dtype: jnp.dtype) -> Float[Array, " ..."]:
-    """Compute K_0(x) using series expansion"""
+    """Compute K_0(x) using series expansion."""
     i0: Float[Array, " ..."] = jax.scipy.special.i0(x)
     coeffs: Float[Array, " 7"] = jnp.array(
         [
@@ -162,7 +155,7 @@ def _bessel_kn_recurrence(
     k0: Float[Array, " ..."],
     k1: Float[Array, " ..."],
 ) -> Float[Array, " ..."]:
-    """Compute K_n(x) using recurrence relation"""
+    """Compute K_n(x) using recurrence relation."""
 
     def _compute_kn() -> Float[Array, " ..."]:
         init = (k0, k1)
@@ -191,7 +184,7 @@ def _bessel_kn_recurrence(
 def _bessel_kv_small_non_integer(
     v: scalar_float, x: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
-    """Compute K_v(x) for small x and non-integer v"""
+    """Compute K_v(x) for small x and non-integer v."""
     error_bound: Float[Array, ""] = jnp.asarray(1e-10)
     iv_pos: Float[Array, " ..."] = _bessel_iv_series(v, x, dtype)
     iv_neg: Float[Array, " ..."] = _bessel_iv_series(-v, x, dtype)
@@ -207,7 +200,7 @@ def _bessel_kv_small_non_integer(
 def _bessel_kv_small_integer(
     v: Float[Array, ""], x: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
-    """Compute K_v(x) for small x and integer v"""
+    """Compute K_v(x) for small x and integer v."""
     v_int: Float[Array, ""] = jnp.round(v)
     n: Int[Array, ""] = jnp.abs(v_int).astype(jnp.int32)
 
@@ -227,7 +220,7 @@ def _bessel_kv_small_integer(
 
 
 def _bessel_kv_large(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
-    """Asymptotic expansion for K_v(x) for large x"""
+    """Asymptotic expansion for K_v(x) for large x."""
     sqrt_term: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
     exp_term: Float[Array, " ..."] = jnp.exp(-x)
 
@@ -249,7 +242,7 @@ def _bessel_kv_large(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, "
 
 
 def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
-    """Special case K_{1/2}(x) = sqrt(π/(2x)) * exp(-x)"""
+    """Special case K_{1/2}(x) = sqrt(π/(2x)) * exp(-x)."""
     sqrt_pi_over_2x: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
     exp_neg_x: Float[Array, " ..."] = jnp.exp(-x)
     k_half_result: Float[Array, " ..."] = sqrt_pi_over_2x * exp_neg_x
@@ -259,44 +252,34 @@ def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
-    """
-    Description
-    -----------
-    Computes the modified Bessel function of the second kind
-    K_v(x) for real order v >= 0 and x > 0,
-    using a numerically stable and differentiable
-    JAX-compatible approximation.
+    """Computes the modified Bessel function of the second kind K_v(x).
+    
+    Computes K_v(x) for real order v >= 0 and x > 0, using a numerically stable
+    and differentiable JAX-compatible approximation.
 
-    Parameters
-    ----------
-    - `v` (scalar_float):
-        Order of the Bessel function (v >= 0)
-    - `x` (Float[Array, " ..."]):
-        Positive real input array
+    Args:
+        v: Order of the Bessel function (v >= 0). Can be scalar_float.
+        x: Positive real input array. Can be Float[Array, "..."].
 
-    Returns
-    -------
-    - `k_v` (Float[Array, " ..."]):
-        Approximated values of K_v(x)
+    Returns:
+        Approximated values of K_v(x) as Float[Array, "..."].
 
-    Notes
-    -----
-    - Valid for v >= 0 and x > 0
-    - Supports broadcasting and autodiff
-    - JIT-safe and VMAP-safe
-    - Uses series expansion for small x (x <= 2.0) and asymptotic expansion
-      for large x
-    - For non-integer v, uses the reflection formula:
-      K_v = π/(2sin(πv)) * (I_{-v} - I_v)
-    - For integer v, uses specialized series expansions and recurrence relations
-    - Special exact formula for v = 0.5: K_{1/2}(x) = sqrt(π/(2x)) * exp(-x)
-    - The transition point between small and large x approximations is set
-      at x = 2.0
+    Note:
+        - Valid for v >= 0 and x > 0
+        - Supports broadcasting and autodiff
+        - JIT-safe and VMAP-safe
+        - Uses series expansion for small x (x <= 2.0) and asymptotic expansion
+          for large x
+        - For non-integer v, uses the reflection formula:
+          K_v = π/(2sin(πv)) * (I_{-v} - I_v)
+        - For integer v, uses specialized series expansions and recurrence relations
+        - Special exact formula for v = 0.5: K_{1/2}(x) = sqrt(π/(2x)) * exp(-x)
+        - The transition point between small and large x approximations is set
+          at x = 2.0
 
-    Flow
-    ----
-    - For integer orders n > 1, uses recurrence relations with masked updates
-      to only update values within the target range
+    Algorithm:
+        - For integer orders n > 1, uses recurrence relations with masked updates
+          to only update values within the target range
     """
     v: Float[Array, ""] = jnp.asarray(v)
     x: Float[Array, " ..."] = jnp.asarray(x)
@@ -327,7 +310,7 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 def _calculate_bessel_contributions(
     kirk_params: Float[Array, " 12"], r: Float[Array, " h w"], term1: Float[Array, ""]
 ) -> Float[Array, " h w"]:
-    """Calculate Bessel function contributions to the atomic potential"""
+    """Calculate Bessel function contributions to the atomic potential."""
     bessel_term1: Float[Array, " h w"] = kirk_params[0] * bessel_kv(
         0.0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[1]) * r
     )
@@ -343,7 +326,7 @@ def _calculate_bessel_contributions(
 def _calculate_gaussian_contributions(
     kirk_params: Float[Array, " 12"], r: Float[Array, " h w"], term2: Float[Array, ""]
 ) -> Float[Array, " h w"]:
-    """Calculate Gaussian contributions to the atomic potential"""
+    """Calculate Gaussian contributions to the atomic potential."""
     gauss_term1: Float[Array, " h w"] = (kirk_params[6] / kirk_params[7]) * jnp.exp(
         -(jnp.pi**2 / kirk_params[7]) * r**2
     )
@@ -362,7 +345,7 @@ def _downsample_potential(
     target_height: Int[Array, ""],
     target_width: Int[Array, ""],
 ) -> Float[Array, " h w"]:
-    """Downsample the supersampled potential to target resolution"""
+    """Downsample the supersampled potential to target resolution."""
     height: Int[Array, ""] = jnp.asarray(supersampled_potential.shape[0], dtype=jnp.int32)
     width: Int[Array, ""] = jnp.asarray(supersampled_potential.shape[1], dtype=jnp.int32)
     new_height: Int[Array, ""] = (height // supersampling) * supersampling
@@ -395,81 +378,68 @@ def single_atom_potential(
     supersampling: Optional[scalar_int] = 4,
     potential_extent: Optional[scalar_float] = 4.0,
 ) -> Float[Array, " h w"]:
-    """
-    Description
-    -----------
-    Calculate the projected potential of a single atom using Kirkland
-    scattering factors.
+    """Calculate the projected potential of a single atom using Kirkland scattering factors.
+    
     The potential can be centered at arbitrary coordinates within a custom grid.
 
-    Parameters
-    ----------
-    - `atom_no` (scalar_int):
-        Atomic number of the atom whose potential is being calculated
-    - `pixel_size` (scalar_float):
-        Real space pixel size in Ångstroms
-    - `grid_shape` (Tuple[scalar_int, scalar_int], optional):
-        Shape of the output grid (height, width). If None, calculated from
-        potential_extent
-    - `center_coords` (Float[Array, " 2"], optional):
-        (x, y) coordinates in Ångstroms where atom should be centered.
-        If None, centers at grid center
-    - `supersampling` (scalar_int, optional):
-        Supersampling factor for increased accuracy. Default is 16
-    - `potential_extent` (scalar_float, optional):
-        Distance in Ångstroms from atom center to calculate potential.
-        Default is 4.0 Å
+    Args:
+        atom_no: Atomic number of the atom whose potential is being calculated.
+        pixel_size: Real space pixel size in Ångstroms.
+        grid_shape: Shape of the output grid (height, width). If None, calculated from
+            potential_extent. Optional, defaults to None.
+        center_coords: (x, y) coordinates in Ångstroms where atom should be centered.
+            If None, centers at grid center. Optional, defaults to None.
+        supersampling: Supersampling factor for increased accuracy. Optional,
+            defaults to 4.
+        potential_extent: Distance in Ångstroms from atom center to calculate potential.
+            Optional, defaults to 4.0 Å.
 
-    Returns
-    -------
-    - `potential` (Float[Array, " h w"]):
+    Returns:
         Projected potential matrix with atom centered at specified coordinates
+        as Float[Array, "h w"].
 
-    Flow
-    ----
-    - Initialize physical constants:
-        - a0 = 0.5292 Å (Bohr radius)
-        - ek = 14.4 eV·Å (electron charge squared divided by 4πε₀)
-        - Calculate prefactors for Bessel (term1) and Gaussian (term2)
-          contributions
-    - Load Kirkland scattering parameters:
-        - Extract 12 parameters for the specified atom from preloaded
-          Kirkland data
-        - Parameters alternate between amplitudes and reciprocal space widths
-    - Determine grid dimensions:
-        - If grid_shape provided: use it directly, multiplied by supersampling
-        - If grid_shape is None: calculate from potential_extent to ensure
-          full coverage
-        - Calculate step size as pixel_size divided by supersampling factor
-    - Set atom center position:
-        - If center_coords provided: use (x, y) coordinates directly
-        - If center_coords is None: place atom at origin (0, 0)
-
-    - Generate coordinate grids:
-        - Create x and y coordinate arrays centered around the atom position
-        - Account for supersampling in coordinate spacing
-        - Use meshgrid to create 2D coordinate arrays
-    - Calculate radial distances:
-        - Compute distance from each grid point to the atom center
-        - r = sqrt((x - center_x)² + (y - center_y)²)
-        - Add small epsilon (1e-10) to avoid r=0 which causes NaN in Bessel K_0(0)
-    - Evaluate Bessel function contributions:
-        - Calculate three Bessel K₀ terms using the first 6 Kirkland parameters
-        - Each term: amplitude * K₀(2π * sqrt(width) * r)
-        - Sum all three terms and multiply by term1 prefactor
-    - Evaluate Gaussian contributions:
-        - Calculate three Gaussian terms using the last 6 Kirkland parameters
-        - Each term: (amplitude/width) * exp(-π²/width * r²)
-        - Sum all three terms and multiply by term2 prefactor
-    - Combine contributions:
-        - Total potential = Bessel contributions + Gaussian contributions
-        - Result is supersampled potential on fine grid
-
-    - Downsample to target resolution:
-        - Reshape array to group supersampling pixels together
-        - Average over supersampling dimensions
-        - Crop to exact target dimensions if necessary
-    - Return the final potential array at the requested resolution
+    Algorithm:
+        - Initialize physical constants:
+            - a0 = 0.5292 Å (Bohr radius)
+            - ek = 14.4 eV·Å (electron charge squared divided by 4πε₀)
+            - Calculate prefactors for Bessel (term1) and Gaussian (term2)
+              contributions
+        - Load Kirkland scattering parameters:
+            - Extract 12 parameters for the specified atom from preloaded
+              Kirkland data
+            - Parameters alternate between amplitudes and reciprocal space widths
+        - Determine grid dimensions:
+            - If grid_shape provided: use it directly, multiplied by supersampling
+            - If grid_shape is None: calculate from potential_extent to ensure
+              full coverage
+            - Calculate step size as pixel_size divided by supersampling factor
+        - Set atom center position:
+            - If center_coords provided: use (x, y) coordinates directly
+            - If center_coords is None: place atom at origin (0, 0)
+        - Generate coordinate grids:
+            - Create x and y coordinate arrays centered around the atom position
+            - Account for supersampling in coordinate spacing
+            - Use meshgrid to create 2D coordinate arrays
+        - Calculate radial distances:
+            - Compute distance from each grid point to the atom center
+            - r = sqrt((x - center_x)² + (y - center_y)²)
+            - Add small epsilon (1e-10) to avoid r=0 which causes NaN in Bessel K_0(0)
+        - Evaluate Bessel function contributions:
+            - Calculate three Bessel K₀ terms using the first 6 Kirkland parameters
+            - Each term: amplitude * K₀(2π * sqrt(width) * r)
+            - Sum all three terms and multiply by term1 prefactor
+        - Evaluate Gaussian contributions:
+            - Calculate three Gaussian terms using the last 6 Kirkland parameters
+            - Each term: (amplitude/width) * exp(-π²/width * r²)
+            - Sum all three terms and multiply by term2 prefactor
+        - Combine contributions:
+            - Total potential = Bessel contributions + Gaussian contributions
+            - Result is supersampled potential on fine grid
+        - Downsample to target resolution:
+            - Reshape array to group supersampling pixels together
+            - Average over supersampling dimensions
+            - Crop to exact target dimensions if necessary
+        - Return the final potential array at the requested resolution
     """
     a0: Float[Array, ""] = jnp.asarray(0.5292)
     ek: Float[Array, ""] = jnp.asarray(14.4)
@@ -532,45 +502,35 @@ single_atom_potential = jax.jit(
 def _compute_min_repeats(
     cell: Float[Array, " 3 3"], threshold_nm: scalar_float
 ) -> Tuple[int, int, int]:
-    """
-    Description
-    -----------
+    """Compute minimal unit cell repeats to exceed threshold distance.
+    
     Internal function to compute the minimal number of unit cell repeats
     along each lattice vector direction such that the resulting supercell
     dimensions exceed a specified threshold distance. This is used to ensure
-    periodic images are included
-    for accurate potential calculations.
+    periodic images are included for accurate potential calculations.
 
-    Parameters
-    ----------
-    - `cell` (Float[Array, " 3 3"]):
-        Real-space unit cell matrix where rows represent lattice vectors
-        a1, a2, a3
-    - `threshold_nm` (scalar_float):
-        Minimum required length in nanometers for the supercell along each
-        direction
+    Args:
+        cell: Real-space unit cell matrix where rows represent lattice vectors
+            a1, a2, a3. Float[Array, "3 3"].
+        threshold_nm: Minimum required length in nanometers for the supercell 
+            along each direction.
 
-    Returns
-    -------
-    - `n_repeats` (Tuple[int, int, int]):
+    Returns:
         Number of repeats (nx, ny, nz) needed along each lattice vector
-        direction
+        direction as Tuple[int, int, int].
 
-    Flow
-    ----
-    - Calculate lattice vector lengths:
-        - Compute the norm of each row in the cell matrix
-        - This gives the physical length of each lattice vector in nm
-
-    - Determine minimal repeats:
-        - For each direction, divide threshold by lattice vector length
-        - Use ceiling function to ensure we exceed the threshold
-        - Convert to integers for use as repeat counts
-
-    - Return repeat counts:
-        - Package the three repeat values as a tuple
-        - These values will be used to construct supercells that include
-          sufficient periodic images for accurate calculations
+    Algorithm:
+        - Calculate lattice vector lengths:
+            - Compute the norm of each row in the cell matrix
+            - This gives the physical length of each lattice vector in nm
+        - Determine minimal repeats:
+            - For each direction, divide threshold by lattice vector length
+            - Use ceiling function to ensure we exceed the threshold
+            - Convert to integers for use as repeat counts
+        - Return repeat counts:
+            - Package the three repeat values as a tuple
+            - These values will be used to construct supercells that include
+              sufficient periodic images for accurate calculations
     """
     lengths: Float[Array, " 3"] = jnp.linalg.norm(cell, axis=1)
     repeat_ratios: Float[Array, " 3"] = threshold_nm / lengths
@@ -584,19 +544,19 @@ def _compute_min_repeats(
 def _expand_periodic_images(
     coords: Float[Array, " N 4"], cell: Float[Array, " 3 3"], threshold_nm: scalar_float
 ) -> Tuple[Float[Array, " M 4"], Tuple[int, int, int]]:
-    """
+    """Expand coordinates to exceed minimum bounding box size.
+    
     Expand coordinates in all directions just enough to exceed (twice of) a
-    minimum
-    bounding box size along each axis.
+    minimum bounding box size along each axis.
 
-    Parameters:
-    - coords: (N, 4)
-    - cell: (3, 3) lattice matrix (rows = a1, a2, a3)
-    - threshold_nm: float
+    Args:
+        coords: Input coordinates (N, 4).
+        cell: Lattice matrix (3, 3) where rows are a1, a2, a3.
+        threshold_nm: Minimum bounding box size in nanometers.
 
     Returns:
-    - expanded_coords: (M, 4)
-    - nx, ny, nz: number of repeats used in each direction
+        Tuple of expanded_coords (M, 4) and number of repeats (nx, ny, nz) 
+        used in each direction.
     """
     nx: int
     ny: int
@@ -634,51 +594,40 @@ def _slice_atoms(
     atom_numbers: Int[Array, " N"],
     slice_thickness: scalar_numeric,
 ) -> Float[Array, " N 4"]:
-    """
-    Description
-    -----------
-    Partitions atoms into slices along the z-axis and returns them sorted by
-    slice number. This internal function is used to organize atomic positions
-    for slice-by-slice
-    potential calculations in electron microscopy simulations.
+    """Partitions atoms into slices along the z-axis.
+    
+    This internal function is used to organize atomic positions for slice-by-slice
+    potential calculations in electron microscopy simulations. Returns atoms sorted
+    by slice number.
 
-    Parameters
-    ----------
-    - `coords` (Float[Array, " N 3"]):
-        Atomic positions with shape (N, 3) where columns represent x, y, z
-        coordinates
-        in Angstroms
-    - `atom_numbers` (Int[Array, " N"]):
-        Atomic numbers for each of the N atoms, used to identify element types
-    - `slice_thickness` (scalar_numeric):
-        Thickness of each slice in Angstroms. Can be float, int, or
-        0-dimensional
-        JAX array
+    Args:
+        coords: Atomic positions with shape (N, 3) where columns represent x, y, z
+            coordinates in Angstroms. Float[Array, "N 3"].
+        atom_numbers: Atomic numbers for each of the N atoms, used to identify 
+            element types. Int[Array, "N"].
+        slice_thickness: Thickness of each slice in Angstroms. Can be float, int, or
+            0-dimensional JAX array.
 
-    Returns
-    -------
-    - `sorted_atoms` (Float[Array, " N 4"]):
+    Returns:
         Array with shape (N, 4) containing [x, y, slice_num, atom_number]
-        for each atom,
-        sorted by ascending slice number. Slice numbers start from 0.
+        for each atom, sorted by ascending slice number. Slice numbers start 
+        from 0. Float[Array, "N 4"].
 
-    Flow
-    ----
-    - Extract z-coordinates and find minimum and maximum z values
-    - Calculate slice index for each atom based on its z-position:
-        - Atoms are assigned to slices using floor division:
-          (z - z_min) / slice_thickness
-        - This ensures atoms at z_min are in slice 0
-    - Construct output array with x, y positions, slice numbers, and atom
-      numbers
-    - Sort atoms by their slice indices to group atoms within the same slice
-    - Return the sorted array for efficient slice-by-slice processing
+    Note:
+        - The number of slices is implicitly ceil((z_max - z_min) / slice_thickness)
+        - Atoms exactly at slice boundaries are assigned to the lower slice
+        - All arrays are JAX arrays for compatibility with JIT compilation
 
-    Notes
-    -----
-    - The number of slices is implicitly ceil((z_max - z_min) / slice_thickness)
-    - Atoms exactly at slice boundaries are assigned to the lower slice
-    - All arrays are JAX arrays for compatibility with JIT compilation
+    Algorithm:
+        - Extract z-coordinates and find minimum and maximum z values
+        - Calculate slice index for each atom based on its z-position:
+            - Atoms are assigned to slices using floor division:
+              (z - z_min) / slice_thickness
+            - This ensures atoms at z_min are in slice 0
+        - Construct output array with x, y positions, slice numbers, and atom
+          numbers
+        - Sort atoms by their slice indices to group atoms within the same slice
+        - Return the sorted array for efficient slice-by-slice processing
     """
     z_coords: Float[Array, " N"] = coords[:, 2]
     z_min: Float[Array, ""] = jnp.min(z_coords)
@@ -705,7 +654,7 @@ def _apply_periodic_repeats(
     lattice: Float[Array, " 3 3"],
     repeats: Int[Array, " 3"],
 ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
-    """Apply periodic repeats to atomic structure using lattice vectors"""
+    """Apply periodic repeats to atomic structure using lattice vectors."""
     nx: Int[Array, ""] = repeats[0]
     ny: Int[Array, ""] = repeats[1]
     nz: Int[Array, ""] = repeats[2]
@@ -760,7 +709,7 @@ def _apply_periodic_repeats(
 def _return_positions_unchanged(
     positions: Float[Array, " N 3"], atomic_numbers: Int[Array, " N"]
 ) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, " max_n^3*N"]]:
-    """Return positions and atomic numbers unchanged but in the same shape as apply_repeats"""
+    """Return positions and atomic numbers unchanged but in the same shape as apply_repeats."""
     n_atoms: int = positions.shape[0]
     max_n: int = 20
     max_shifts: int = max_n * max_n * max_n
@@ -782,7 +731,7 @@ def _build_atomic_potential_lookup(
     pixel_size: scalar_float,
     supersampling: scalar_int,
 ) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
-    """Build lookup table of atomic potentials and mapping array"""
+    """Build lookup table of atomic potentials and mapping array."""
     unique_atoms: Int[Array, " 118"] = jnp.unique(atom_nums, size=118, fill_value=-1)
     valid_mask: Bool[Array, " 118"] = unique_atoms >= 0
 
@@ -842,7 +791,7 @@ def _add_atom_to_slice(
     ],
     slice_idx: int,
 ) -> Float[Array, " h w"]:
-    """Add single atom contribution to a slice using FFT shifting"""
+    """Add single atom contribution to a slice using FFT shifting."""
     x: scalar_float
     y: scalar_float
     atom_no: scalar_int
@@ -889,7 +838,7 @@ def _compute_grid_dimensions(
     padding: scalar_float,
     pixel_size: scalar_float,
 ) -> Tuple[Float[Array, ""], Float[Array, ""], int, int]:
-    """Compute grid dimensions and ranges for potential slices"""
+    """Compute grid dimensions and ranges for potential slices."""
     x_coords_min: Float[Array, ""] = jnp.min(x_coords)
     x_coords_max: Float[Array, ""] = jnp.max(x_coords)
     y_coords_min: Float[Array, ""] = jnp.min(y_coords)
@@ -929,7 +878,7 @@ def _process_all_slices(
         int,  # width
     ],
 ) -> Float[Array, " h w n_slices"]:
-    """Process all slices and accumulate atomic potentials"""
+    """Process all slices and accumulate atomic potentials."""
     x_coords, y_coords, atom_nums, slice_indices = atom_data
     atomic_potentials, atom_to_idx_array = potential_data
     x_min, y_min, pixel_size, height, width = grid_params
@@ -1000,7 +949,7 @@ def _process_all_slices(
 def _build_shift_masks(
     repeats: Int[Array, " 3"],
 ) -> Tuple[Bool[Array, " max_n^3"], Int[Array, " max_n^3 3"]]:
-    """Build shift indices and masks for periodic repeats"""
+    """Build shift indices and masks for periodic repeats."""
     nx: Int[Array, ""] = repeats[0]
     ny: Int[Array, ""] = repeats[1]
     nz: Int[Array, ""] = repeats[2]
@@ -1040,7 +989,7 @@ def _tile_positions_with_shifts(
     shift_vectors: Float[Array, "max_n^3 3"],
     mask_flat: Bool[Array, " max_n^3"],
 ) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, " max_n^3*N"]]:
-    """Tile positions and atomic numbers with shift vectors"""
+    """Tile positions and atomic numbers with shift vectors."""
     n_atoms: int = positions.shape[0]
     max_n: int = 20
     max_shifts: int = max_n * max_n * max_n
@@ -1081,7 +1030,7 @@ def _apply_repeats_or_return(
     lattice: Float[Array, " 3 3"],
     repeats: Int[Array, " 3"],
 ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
-    """Apply periodic repeats or return unchanged positions"""
+    """Apply periodic repeats or return unchanged positions."""
 
     def _apply_repeats_with_lattice(
         positions: Float[Array, " N 3"],
@@ -1184,71 +1133,61 @@ def kirkland_potentials_xyz(
     padding: Optional[scalar_float] = 4.0,
     supersampling: Optional[scalar_int] = 4,
 ) -> PotentialSlices:
-    """
-    Description
-    -----------
-    Converts XYZData structure to PotentialSlices by calculating atomic
-    potentials
-    and assembling them into slices using FFT shifts for precise positioning.
+    """Converts XYZData structure to PotentialSlices.
+    
+    Calculates atomic potentials and assembles them into slices using FFT 
+    shifts for precise positioning.
 
-    Parameters
-    ----------
-    - `xyz_data` (XYZData):
-        Input structure containing atomic positions and numbers
-    - `pixel_size` (scalar_float):
-        Size of each pixel in Angstroms (becomes calib in PotentialSlices)
-    - `slice_thickness` (scalar_float, optional):
-        Thickness of each slice in Angstroms. Default is 1.0
-    - `repeats` (Int[Array, " 3"], optional):
-        Number of unit cell repeats in [x, y, z] directions. Default is
-        [1, 1, 1], which means no repeating.
-        Requires xyz_data.lattice to be provided for repeating the structure.
-    - `padding` (scalar_float, optional):
-        Padding in Angstroms added to all sides. Default is 4.0
+    Args:
+        xyz_data: Input structure containing atomic positions and numbers.
+        pixel_size: Size of each pixel in Angstroms (becomes calib in PotentialSlices).
+        slice_thickness: Thickness of each slice in Angstroms. Optional, defaults to 1.0.
+        repeats: Number of unit cell repeats in [x, y, z] directions. Default is
+            [1, 1, 1], which means no repeating. Requires xyz_data.lattice to be 
+            provided for repeating the structure. Optional.
+        padding: Padding in Angstroms added to all sides. Optional, defaults to 4.0.
+        supersampling: Supersampling factor for accuracy. Optional, defaults to 4.
 
-    Returns
-    -------
-    - `potential_slices` (PotentialSlices):
-        Sliced potentials with wraparound artifacts removed
+    Returns:
+        Sliced potentials with wraparound artifacts removed as PotentialSlices.
 
-    Flow
-    ----
-    - Extract atomic positions, atomic numbers, and lattice from the input
-      XYZData structure
-    - If repeats > [1,1,1], tile the structure using the lattice vectors to
-      create a supercell
-    - Partition atoms into slices along the z-axis using _slice_atoms,
-      assigning each atom to a slice based on its z-coordinate and the
-      specified slice_thickness
-    - Compute the minimum and maximum x and y coordinates of all atoms, add
-      padding, and determine the grid size (width, height) in pixels
-    - Identify all unique atomic numbers present in the structure
-      - Use size parameter (118) for JIT compatibility - max 118 elements in periodic table
-      - Create mask for valid (non-fill) atoms
-    - Convert height and width to Python integers for use in the function
-    - For each unique atomic number, precompute a single-atom projected
-      potential using single_atom_potential (centered at the origin, with the
-      correct grid size and pixel size)
-      - Calculate potential only for valid atoms, return zeros for padding
-      - Return potential if valid, zeros otherwise
-    - Calculate potentials for all 118 slots (padded with zeros)
-    - Build a lookup array to map atomic numbers to their corresponding
-      precomputed potential indices
-      - Create mapping for only the unique atoms we actually have
-      - Use where to only set indices for valid atoms
-      - Build the mapping array using a scan
-      - Only update if atom is valid (>= 0)
-    - For each slice:
-        - Initialize a zero grid for the slice
-        - For each atom in the slice:
-            - Only add contribution if atom is in current slice
-            - Place the corresponding atomic potential at the atom's (x, y)
-              position using FFT-based shifting for subpixel accuracy
-            - Accumulate all atomic contributions for the slice
-    - Remove the extra padding from the edges of the grid to obtain the
-      final region of interest
-    - Return a PotentialSlices object containing the 3D array of potential
-      slices, the slice thickness, and the pixel size
+    Algorithm:
+        - Extract atomic positions, atomic numbers, and lattice from the input
+          XYZData structure
+        - If repeats > [1,1,1], tile the structure using the lattice vectors to
+          create a supercell
+        - Partition atoms into slices along the z-axis using _slice_atoms,
+          assigning each atom to a slice based on its z-coordinate and the
+          specified slice_thickness
+        - Compute the minimum and maximum x and y coordinates of all atoms, add
+          padding, and determine the grid size (width, height) in pixels
+        - Identify all unique atomic numbers present in the structure
+            - Use size parameter (118) for JIT compatibility - max 118 elements in periodic table
+            - Create mask for valid (non-fill) atoms
+        - Convert height and width to Python integers for use in the function
+        - For each unique atomic number, precompute a single-atom projected
+          potential using single_atom_potential (centered at the origin, with the
+          correct grid size and pixel size)
+            - Calculate potential only for valid atoms, return zeros for padding
+            - Return potential if valid, zeros otherwise
+        - Calculate potentials for all 118 slots (padded with zeros)
+        - Build a lookup array to map atomic numbers to their corresponding
+          precomputed potential indices
+            - Create mapping for only the unique atoms we actually have
+            - Use where to only set indices for valid atoms
+            - Build the mapping array using a scan
+            - Only update if atom is valid (>= 0)
+        - For each slice:
+            - Initialize a zero grid for the slice
+            - For each atom in the slice:
+                - Only add contribution if atom is in current slice
+                - Place the corresponding atomic potential at the atom (x, y)
+                  position using FFT-based shifting for subpixel accuracy
+                - Accumulate all atomic contributions for the slice
+        - Remove the extra padding from the edges of the grid to obtain the
+          final region of interest
+        - Return a PotentialSlices object containing the three-dimensional array of potential
+          slices, the slice thickness, and the pixel size
     """
     positions: Float[Array, " N 3"] = xyz_data.positions
     atomic_numbers: Int[Array, " N"] = xyz_data.atomic_numbers

@@ -18,7 +18,7 @@ from beartype import beartype
 from beartype.typing import Optional
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-from .atom_potentials import kirkland_potentials_XYZ
+from .atom_potentials import kirkland_potentials_xyz
 from .electron_types import (
     STEM4D,
     PotentialSlices,
@@ -117,7 +117,7 @@ def xyz_to_4d_stem(
     else:
         repeats: Int[Array, " 3"] = jnp.array([1, 1, 1])
 
-    potential_slices: PotentialSlices = kirkland_potentials_XYZ(
+    potential_slices: PotentialSlices = kirkland_potentials_xyz(
         xyz_data=xyz_data,
         pixel_size=cbed_pixel_size_ang,
         slice_thickness=slice_thickness,

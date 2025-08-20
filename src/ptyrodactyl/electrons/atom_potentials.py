@@ -827,14 +827,14 @@ def _add_atom_to_slice(
     atom_data: Tuple[scalar_float, scalar_float, scalar_int, scalar_int],
     potential_lookup: Tuple[
         Float[Array, " 118 h w"],  # atomic_potentials
-        Int[Array, " 119"],         # atom_to_idx_array
+        Int[Array, " 119"],  # atom_to_idx_array
     ],
     grid_params: Tuple[
         scalar_float,  # x_min
         scalar_float,  # y_min
         scalar_float,  # pixel_size
-        int,          # width
-        int,          # height
+        int,  # width
+        int,  # height
     ],
     freq_grids: Tuple[
         Float[Array, " 1 w"],  # kx
@@ -848,7 +848,7 @@ def _add_atom_to_slice(
     atom_no: scalar_int
     atom_slice_idx: scalar_int
     x, y, atom_no, atom_slice_idx = atom_data
-    
+
     atomic_potentials, atom_to_idx_array = potential_lookup
     x_min, y_min, pixel_size, width, height = grid_params
     kx, ky = freq_grids
@@ -914,26 +914,26 @@ def _process_all_slices(
     atom_data: Tuple[
         Float[Array, " N"],  # x_coords
         Float[Array, " N"],  # y_coords
-        Int[Array, " N"],    # atom_nums
-        Int[Array, " N"],    # slice_indices
+        Int[Array, " N"],  # atom_nums
+        Int[Array, " N"],  # slice_indices
     ],
     potential_data: Tuple[
         Float[Array, " 118 h w"],  # atomic_potentials
-        Int[Array, " 119"],         # atom_to_idx_array
+        Int[Array, " 119"],  # atom_to_idx_array
     ],
     grid_params: Tuple[
         scalar_float,  # x_min
         scalar_float,  # y_min
         scalar_float,  # pixel_size
-        int,          # height
-        int,          # width
+        int,  # height
+        int,  # width
     ],
 ) -> Float[Array, " h w n_slices"]:
     """Process all slices and accumulate atomic potentials"""
     x_coords, y_coords, atom_nums, slice_indices = atom_data
     atomic_potentials, atom_to_idx_array = potential_data
     x_min, y_min, pixel_size, height, width = grid_params
-    
+
     max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
     n_slices: Int[Array, ""] = max_slice_idx + 1
     all_slices: Float[Array, " h w n_slices"] = jnp.zeros(
@@ -998,7 +998,7 @@ def _process_all_slices(
 
 @jaxtyped(typechecker=beartype)
 def _build_shift_masks(
-    repeats: Int[Array, " 3"]
+    repeats: Int[Array, " 3"],
 ) -> Tuple[Bool[Array, " max_n^3"], Int[Array, " max_n^3 3"]]:
     """Build shift indices and masks for periodic repeats"""
     nx: Int[Array, ""] = repeats[0]
@@ -1022,16 +1022,14 @@ def _build_shift_masks(
     mask_x_expanded: Bool[Array, " max_n 1 1"] = mask_x[:, None, None]
     mask_y_expanded: Bool[Array, " 1 max_n 1"] = mask_y[None, :, None]
     mask_z_expanded: Bool[Array, " 1 1 max_n"] = mask_z[None, None, :]
-    mask_3d: Bool[Array, " max_n max_n max_n"] = (
-        mask_x_expanded & mask_y_expanded & mask_z_expanded
-    )
+    mask_3d: Bool[Array, " max_n max_n max_n"] = mask_x_expanded & mask_y_expanded & mask_z_expanded
 
     ixx_flat: Int[Array, " max_n^3"] = ixx.ravel()
     iyy_flat: Int[Array, " max_n^3"] = iyy.ravel()
     izz_flat: Int[Array, " max_n^3"] = izz.ravel()
     shift_indices: Int[Array, " max_n^3 3"] = jnp.stack([ixx_flat, iyy_flat, izz_flat], axis=-1)
     mask_flat: Bool[Array, " max_n^3"] = mask_3d.ravel()
-    
+
     return mask_flat, shift_indices
 
 
@@ -1071,9 +1069,7 @@ def _tile_positions_with_shifts(
 
     atomic_numbers_tiled: Int[Array, " max_n^3*N"] = jnp.tile(atomic_numbers, max_shifts)
     atom_mask_int: Int[Array, " max_n^3*N"] = atom_mask.astype(jnp.int32)
-    repeated_atomic_numbers_masked: Int[Array, " max_n^3*N"] = (
-        atomic_numbers_tiled * atom_mask_int
-    )
+    repeated_atomic_numbers_masked: Int[Array, " max_n^3*N"] = atomic_numbers_tiled * atom_mask_int
 
     return (repeated_positions_masked, repeated_atomic_numbers_masked)
 
@@ -1086,6 +1082,7 @@ def _apply_repeats_or_return(
     repeats: Int[Array, " 3"],
 ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
     """Apply periodic repeats or return unchanged positions"""
+
     def _apply_repeats_with_lattice(
         positions: Float[Array, " N 3"],
         atomic_numbers: Int[Array, " N"],
@@ -1094,13 +1091,13 @@ def _apply_repeats_or_return(
         mask_flat: Bool[Array, " max_n^3"]
         shift_indices: Int[Array, " max_n^3 3"]
         mask_flat, shift_indices = _build_shift_masks(repeats)
-        
+
         mask_float: Float[Array, " max_n^3"] = mask_flat.astype(jnp.float32)
         shift_indices_float: Float[Array, "max_n^3 3"] = shift_indices.astype(jnp.float32)
         mask_expanded: Float[Array, "max_n^3 1"] = mask_float[:, None]
         shift_indices_masked: Float[Array, "max_n^3 3"] = shift_indices_float * mask_expanded
         shift_vectors: Float[Array, "max_n^3 3"] = shift_indices_masked @ lattice
-        
+
         return _tile_positions_with_shifts(positions, atomic_numbers, shift_vectors, mask_flat)
 
     def _return_unchanged(
@@ -1286,7 +1283,7 @@ def kirkland_potentials_xyz(
     all_slices: Float[Array, " h w n_slices"] = _process_all_slices(
         (x_coords, y_coords, atom_nums, slice_indices),
         (atomic_potentials, atom_to_idx_array),
-        (x_min, y_min, pixel_size, height, width)
+        (x_min, y_min, pixel_size, height, width),
     )
 
     padding_pixels_float: Float[Array, ""] = jnp.round(padding / pixel_size)

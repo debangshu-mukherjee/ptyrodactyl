@@ -1,20 +1,23 @@
-"""Codes for optical propagation through lenses and optical elements.
+"""
+Module: ptyrodactyl.photons.invertor
+------------------------------------
+Codes for optical propagation through lenses and optical elements.
 
 Functions
 ---------
-get_optimizer
+- `get_optimizer`:
     Returns an optimizer object based on the specified name
-simple_microscope_ptychography
+- `simple_microscope_ptychography`:
     Performs ptychography reconstruction using a simple microscope model
 """
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Dict, Optional, Tuple
-from jaxtyping import Array, Complex, Float, jaxtyped
+from jaxtyping import Array, Complex, Float
 
 import ptyrodactyl.tools as ptt
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .microscope import simple_microscope
 from .photon_types import (

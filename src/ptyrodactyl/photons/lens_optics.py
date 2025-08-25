@@ -1,24 +1,28 @@
-"""Codes for optical propgation steps.
+"""
+Module: ptyrodactyl.photons.lens_optics
+---------------------------------------
+Codes for optical propgation steps.
 
 Functions
 ---------
-angular_spectrum_prop
+- `angular_spectrum_prop`:
     Propagates a complex optical field using the angular spectrum method
-fresnel_prop
+- `fresnel_prop`:
     Propagates a complex optical field using the Fresnel approximation
-fraunhofer_prop
+- `fraunhofer_prop`:
     Propagates a complex optical field using the Fraunhofer approximation
-digital_zoom
+- `digital_zoom`:
     Zooms an optical wavefront by a specified factor
-optical_zoom
+- `optical_zoom`:
     Modifies the calibration of an optical wavefront without changing its field
 """
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Optional
-from jaxtyping import Array, Bool, Complex, Float, jaxtyped
+from jaxtyping import Array, Bool, Complex, Float
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .helper import add_phase_screen
 from .photon_types import (

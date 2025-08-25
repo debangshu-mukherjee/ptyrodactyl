@@ -1,4 +1,7 @@
-"""Inverse reconstruction algorithms for electron ptychography.
+"""
+Module: ptyrodactyl.electrons.phase_recon
+------------------------------------------
+Inverse reconstruction algorithms for electron ptychography.
 
 This module contains functions for reconstructing sample potentials from
 experimental ptychography data using various optimization algorithms.
@@ -7,9 +10,9 @@ with options for position correction and multi-modal probe handling.
 
 Functions
 ---------
-single_slice_ptychography
+- `single_slice_ptychography`:
     Performs single-slice ptychography reconstruction
-single_slice_poscorrected
+- `single_slice_poscorrected`:
     Performs single-slice reconstruction with position correction
 single_slice_multi_modal
     Performs single-slice reconstruction with multi-modal probe
@@ -30,11 +33,12 @@ Internal functions (not exported):
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype as typechecker
 from beartype.typing import Any, Dict, Optional, Tuple, Union
-from jaxtyping import Array, Complex, Float, Int, jaxtyped
+from jaxtyping import Array, Complex, Float, Int
 
 import ptyrodactyl.tools as ptt
+from ptyrodactyl._decorators import beartype as typechecker
+from ptyrodactyl._decorators import jaxtyped
 
 from .electron_types import (
     STEM4D,

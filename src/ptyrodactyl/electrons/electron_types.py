@@ -1,47 +1,50 @@
-"""Data structures and type definitions for electron microscopy and ptychography.
+"""
+Module: ptyrodactyl.electrons.electron_types
+---------------------------------------------
+Data structures and type definitions for electron microscopy and ptychography.
 
 Type Aliases
 ------------
-scalar_numeric
+- `scalar_numeric`:
     Type alias for numeric types (int, float or Num array)
     Num Array has 0 dimensions
-scalar_float
+- `scalar_float`:
     Type alias for float or Float array of 0 dimensions
-scalar_int
+- `scalar_int`:
     Type alias for int or Integer array of 0 dimensions
-non_jax_number
+- `non_jax_number`:
     Type alias for non-JAX numeric types (int, float)
 
 PyTrees
 -------
-CalibratedArray
+- `CalibratedArray`:
     A PyTree for calibrated array data with spatial calibration
-ProbeModes
+- `ProbeModes`:
     A PyTree for multimodal electron probe state
-PotentialSlices
+- `PotentialSlices`:
     A PyTree for potential slices in multi-slice simulations
-CrystalStructure
+- `CrystalStructure`:
     A PyTree for crystal structure with fractional and Cartesian coordinates
-XYZData
+- `XYZData`:
     A PyTree for XYZ file data with atomic positions, lattice vectors,
     stress tensor, energy, properties, and comment
-STEM4D
+- `STEM4D`:
     A PyTree for 4D-STEM data containing diffraction patterns, calibrations,
     scan positions, and experimental parameters
 
 Factory Functions
 -----------------
-make_calibrated_array
+- `make_calibrated_array`:
     Creates a CalibratedArray instance with runtime type checking
-make_probe_modes
+- `make_probe_modes`:
     Creates a ProbeModes instance with runtime type checking
-make_potential_slices
+- `make_potential_slices`:
     Creates a PotentialSlices instance with runtime type checking
-make_crystal_structure
+- `make_crystal_structure`:
     Creates a CrystalStructure instance with runtime type checking
-make_xyz_data
+- `make_xyz_data`:
     Creates a XYZData instance with runtime type checking
-make_stem4d
+- `make_stem4d`:
     Creates a STEM4D instance with runtime type checking
 
 Notes
@@ -52,7 +55,6 @@ NamedTuple classes to ensure proper runtime type checking of the contents.
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import (
     Any,
     Dict,
@@ -64,7 +66,9 @@ from beartype.typing import (
     Union,
 )
 from jax.tree_util import register_pytree_node_class
-from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
+from jaxtyping import Array, Bool, Complex, Float, Int, Num
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 
@@ -149,19 +153,16 @@ class ProbeModes(NamedTuple):
 
 @register_pytree_node_class
 class PotentialSlices(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for multiple potential slices.
+    """PyTree structure for multiple potential slices.
 
     Attributes
     ----------
-    - `slices` (Float[Array, "H W S"]):
+    slices : Float[Array, "H W S"]
         Individual potential slices.
         S is number of slices
-    - `slice_thickness` (Num[Array, " "]):
+    slice_thickness : Num[Array, " "]
         Thickness of each slice (0-dimensional JAX array)
-    - `calib` (Float[Array, " "]):
+    calib : Float[Array, " "]
         Pixel Calibration (0-dimensional JAX array)
     """
 
@@ -188,27 +189,24 @@ class PotentialSlices(NamedTuple):
 
 @register_pytree_node_class
 class CrystalStructure(NamedTuple):
-    """
-    Description
-    -----------
-    A JAX-compatible data structure representing a crystal structure with both
+    """A JAX-compatible data structure representing a crystal structure with both
     fractional and Cartesian coordinates.
 
     Attributes
     ----------
-    - `frac_positions` (Float[Array, "* 4"]):
+    frac_positions : Float[Array, "* 4"]
         Array of shape (n_atoms, 4) containing atomic positions in fractional coordinates.
         Each row contains [x, y, z, atomic_number] where:
         - x, y, z: Fractional coordinates in the unit cell (range [0,1])
         - atomic_number: Integer atomic number (Z) of the element
-    - `cart_positions` (Num[Array, "* 4"]):
+    cart_positions : Num[Array, "* 4"]
         Array of shape (n_atoms, 4) containing atomic positions in Cartesian coordinates.
         Each row contains [x, y, z, atomic_number] where:
         - x, y, z: Cartesian coordinates in Ångstroms
         - atomic_number: Integer atomic number (Z) of the element
-    - `cell_lengths` (Num[Array, " 3"]):
+    cell_lengths : Num[Array, " 3"]
         Unit cell lengths [a, b, c] in Ångstroms
-    - `cell_angles` (Num[Array, " 3"]):
+    cell_angles : Num[Array, " 3"]
         Unit cell angles [α, β, γ] in degrees.
         - α is the angle between b and c
         - β is the angle between a and c
@@ -246,26 +244,23 @@ class CrystalStructure(NamedTuple):
 
 @register_pytree_node_class
 class XYZData(NamedTuple):
-    """
-    Description
-    -----------
-    JAX-compatible PyTree representing a full parsed XYZ file.
+    """JAX-compatible PyTree representing a full parsed XYZ file.
 
     Attributes
     ----------
-    - `positions` (Float[Array, " N 3"]):
+    positions : Float[Array, " N 3"]
         Cartesian positions in Ångstroms.
-    - `atomic_numbers` (Int[Array, " N"]):
+    atomic_numbers : Int[Array, " N"]
         Atomic numbers (Z) corresponding to each atom.
-    - `lattice` (Optional[Float[Array, "3 3"]]):
+    lattice : Optional[Float[Array, "3 3"]]
         Lattice vectors in Ångstroms if present, otherwise None.
-    - `stress` (Optional[Float[Array, "3 3"]]):
+    stress : Optional[Float[Array, "3 3"]]
         Symmetric stress tensor if present.
-    - `energy` (Optional[scalar_float]):
+    energy : Optional[scalar_float]
         Total energy in eV if present.
-    - `properties` (Optional[List[Dict[str, Union[str, int]]]]):
+    properties : Optional[List[Dict[str, Union[str, int]]]]
         List of properties described in the metadata.
-    - `comment` (Optional[str]):
+    comment : Optional[str]
         The raw comment line from the XYZ file.
 
     Notes
@@ -314,25 +309,22 @@ class XYZData(NamedTuple):
 
 @register_pytree_node_class
 class STEM4D(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for 4D-STEM data containing diffraction patterns
+    """PyTree structure for 4D-STEM data containing diffraction patterns
     at multiple scan positions with associated calibrations and metadata.
 
     Attributes
     ----------
-    - `data` (Float[Array, "P H W"]):
+    data : Float[Array, "P H W"]
         4D-STEM data array where:
         - P: Number of scan positions
         - H, W: Height and width of diffraction patterns
-    - `real_space_calib` (Float[Array, " "]):
+    real_space_calib : Float[Array, " "]
         Real space calibration in Angstroms per pixel
-    - `fourier_space_calib` (Float[Array, " "]):
+    fourier_space_calib : Float[Array, " "]
         Fourier space calibration in inverse Angstroms per pixel
-    - `scan_positions` (Float[Array, "P 2"]):
+    scan_positions : Float[Array, "P 2"]
         Real space scan positions in Angstroms (y, x coordinates)
-    - `voltage_kv` (Float[Array, " "]):
+    voltage_kv : Float[Array, " "]
         Accelerating voltage in kilovolts
     """
 
@@ -444,32 +436,30 @@ def make_probe_modes(
     weights: Float[Array, " M"],
     calib: scalar_float,
 ) -> ProbeModes:
-    """
-    Description
-    -----------
-    JAX-safe factory function for ProbeModes with data validation.
+    """JAX-safe factory function for ProbeModes with data validation.
 
     Parameters
     ----------
-    - `modes` (Complex[Array, "H W M"]):
+    modes : Complex[Array, "H W M"]
         Complex probe modes, M is number of modes
-    - `weights` (Float[Array, " M"]):
+    weights : Float[Array, " M"]
         Mode occupation numbers
-    - `calib` (scalar_float):
+    calib : scalar_float
         Pixel calibration
 
     Returns
     -------
-    - `probe_modes` (ProbeModes):
+    ProbeModes
         Validated probe modes instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If data is invalid or parameters are out of valid ranges
 
-    Validation Flow
-    ---------------
+    Notes
+    -----
+    Validation Flow:
     - Convert inputs to JAX arrays with appropriate dtypes:
        - modes: Convert to complex128
        - weights: Convert to float64
@@ -565,32 +555,30 @@ def make_potential_slices(
     slice_thickness: scalar_numeric,
     calib: scalar_float,
 ) -> PotentialSlices:
-    """
-    Description
-    -----------
-    JAX-safe factory function for PotentialSlices with data validation.
+    """JAX-safe factory function for PotentialSlices with data validation.
 
     Parameters
     ----------
-    - `slices` (Float[Array, "H W S"]):
+    slices : Float[Array, "H W S"]
         Individual potential slices, S is number of slices
-    - `slice_thickness` (scalar_numeric):
+    slice_thickness : scalar_numeric
         Thickness of each slice
-    - `calib` (scalar_float):
+    calib : scalar_float
         Pixel calibration
 
     Returns
     -------
-    - `potential_slices` (PotentialSlices):
+    PotentialSlices
         Validated potential slices instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If data is invalid or parameters are out of valid ranges
 
-    Validation Flow
-    ---------------
+    Notes
+    -----
+    Validation Flow:
     - Convert inputs to JAX arrays with appropriate dtypes:
        - slices: Convert to float64
        - slice_thickness: Convert to float64 scalar
@@ -665,23 +653,22 @@ def make_crystal_structure(
     cell_lengths: Num[Array, " 3"],
     cell_angles: Num[Array, " 3"],
 ) -> CrystalStructure:
-    """
-    Factory function to create a CrystalStructure instance with type checking.
+    """Factory function to create a CrystalStructure instance with type checking.
 
     Parameters
     ----------
-    - `frac_positions` : Float[Array, "* 4"]
+    frac_positions : Float[Array, "* 4"]
         Array of shape (n_atoms, 4) containing atomic positions in fractional coordinates.
-    - `cart_positions` : Num[Array, "* 4"]
+    cart_positions : Num[Array, "* 4"]
         Array of shape (n_atoms, 4) containing atomic positions in Cartesian coordinates.
-    - `cell_lengths` : Num[Array, " 3"]
+    cell_lengths : Num[Array, " 3"]
         Unit cell lengths [a, b, c] in Ångstroms.
-    - `cell_angles` : Num[Array, " 3"]
+    cell_angles : Num[Array, " 3"]
         Unit cell angles [α, β, γ] in degrees.
 
     Returns
     -------
-    - `CrystalStructure` : CrystalStructure
+    CrystalStructure
         A validated CrystalStructure instance.
 
     Raises
@@ -689,8 +676,9 @@ def make_crystal_structure(
     ValueError
         If the input arrays have incompatible shapes or invalid values.
 
-    Validation Flow
-    ---------------
+    Notes
+    -----
+    Validation Flow:
     - Convert all inputs to JAX arrays:
        - frac_positions: Convert to float64
        - cart_positions: Convert to JAX array (maintains original dtype)
@@ -815,35 +803,38 @@ def make_xyz_data(
     properties: Optional[List[Dict[str, Union[str, int]]]] = None,
     comment: Optional[str] = None,
 ) -> XYZData:
-    """
-    Description
-    -----------
-    JAX-safe factory function for XYZData with runtime validation.
+    """JAX-safe factory function for XYZData with runtime validation.
 
     Parameters
     ----------
-    - `positions` (Float[Array, " N 3"]):
+    positions : Float[Array, " N 3"]
         Cartesian positions in Ångstroms
-    - `atomic_numbers` (Int[Array, " N"]):
+    atomic_numbers : Int[Array, " N"]
         Atomic numbers (Z) for each atom
-    - `lattice` (Optional[Float[Array, "3 3"]]):
+    lattice : Optional[Float[Array, "3 3"]], default=None
         Lattice vectors (if any)
-    - `stress` (Optional[Float[Array, "3 3"]]):
+    stress : Optional[Float[Array, "3 3"]], default=None
         Stress tensor (if any)
-    - `energy` (Optional[scalar_float]):
+    energy : Optional[scalar_float], default=None
         Total energy (if any)
-    - `properties` (Optional[List[Dict[str, Union[str, int]]]]):
+    properties : Optional[List[Dict[str, Union[str, int]]]], default=None
         Per-atom metadata
-    - `comment` (Optional[str]):
+    comment : Optional[str], default=None
         Original XYZ comment line
 
     Returns
     -------
-    - `XYZData`:
+    XYZData
         Validated PyTree structure for XYZ file contents
 
-    Validation Flow
-    ---------------
+    Raises
+    ------
+    ValueError
+        If input arrays have incompatible shapes or invalid values
+
+    Notes
+    -----
+    Validation Flow:
     - Convert required inputs to JAX arrays with appropriate dtypes:
        - positions: Convert to float64
        - atomic_numbers: Convert to int32
@@ -931,31 +922,29 @@ def make_stem4d(
     scan_positions: Float[Array, "P 2"],
     voltage_kv: scalar_numeric,
 ) -> STEM4D:
-    """
-    Description
-    -----------
-    JAX-safe factory function for STEM4D with data validation.
+    """JAX-safe factory function for STEM4D with data validation.
 
     Parameters
     ----------
-    - `data` (Float[Array, "P H W"]):
+    data : Float[Array, "P H W"]
         4D-STEM data array with P scan positions and HxW diffraction patterns
-    - `real_space_calib` (scalar_float):
+    real_space_calib : scalar_float
         Real space calibration in Angstroms per pixel
-    - `fourier_space_calib` (scalar_float):
+    fourier_space_calib : scalar_float
         Fourier space calibration in inverse Angstroms per pixel
-    - `scan_positions` (Float[Array, "P 2"]):
+    scan_positions : Float[Array, "P 2"]
         Real space scan positions in Angstroms (y, x coordinates)
-    - `voltage_kv` (scalar_numeric):
+    voltage_kv : scalar_numeric
         Accelerating voltage in kilovolts
 
     Returns
     -------
-    - `stem4d` (STEM4D):
+    STEM4D
         Validated 4D-STEM data structure
 
-    Validation Flow
-    ---------------
+    Notes
+    -----
+    Validation Flow:
     - Convert all inputs to JAX arrays with appropriate dtypes:
        - data: Convert to float64
        - real_space_calib: Convert to float64 scalar

@@ -1,19 +1,23 @@
-"""High-level workflows for electron microscopy simulations.
+"""
+Module: ptyrodactyl.electrons.workflows
+---------------------------------------
+High-level workflows for electron microscopy simulations.
 
 This module provides complete workflows that combine multiple simulation
 steps into convenient functions for common use cases.
 
 Functions
 ---------
-xyz_to_4d_stem
+- `xyz_to_4d_stem`:
     Simulates 4D-STEM data from an XYZ structure file
 """
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Optional
-from jaxtyping import Array, Complex, Float, Int, jaxtyped
+from jaxtyping import Array, Complex, Float, Int
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .atom_potentials import kirkland_potentials_xyz
 from .electron_types import (
@@ -45,10 +49,6 @@ def xyz_to_4d_stem(
     probe_c5: Optional[scalar_numeric] = 0.0,
 ) -> STEM4D:
     """Complete workflow to simulate 4D-STEM data from an XYZ structure file.
-    
-    This function loads the structure, calculates appropriate repeats based
-    on thickness and lateral extents, generates Kirkland potentials, creates
-    a probe, and simulates CBED patterns at multiple scan positions.
 
     Parameters
     ----------
@@ -85,6 +85,10 @@ def xyz_to_4d_stem(
 
     Notes
     -----
+    This function loads the structure, calculates appropriate repeats based
+    on thickness and lateral extents, generates Kirkland potentials, creates
+    a probe, and simulates CBED patterns at multiple scan positions.
+    
     Algorithm:
     - Load XYZ structure from file
     - Calculate repeats needed:

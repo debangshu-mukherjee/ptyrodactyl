@@ -1,6 +1,6 @@
 """
-Module: photons.aperture
-------------------------
+Module: ptyrodactyl.photons.apertures
+-------------------------------------
 Aperture and apodizer elements for shaping optical wavefronts.
 
 Functions
@@ -26,9 +26,10 @@ Functions
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Callable, Optional, Union
-from jaxtyping import Array, Bool, Float, jaxtyped
+from jaxtyping import Array, Bool, Float
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .photon_types import (
     OpticalWavefront,
@@ -39,7 +40,7 @@ from .photon_types import (
 
 jax.config.update("jax_enable_x64", True)
 
-
+@jaxtyped(typechecker=beartype)
 def _xy_grids(nx: int, ny: int, dx: float) -> tuple[Float[Array, " H W"], Float[Array, " H W"]]:
     """
     Internal helper to create centered spatial coordinate grids (in meters).
@@ -181,8 +182,8 @@ def rectangular_aperture(
     hx = width / 2.0
     hy = height / 2.0
 
-    inside_x: Bool[Array, " H W"] = (X >= (x0 - hx)) & (X <= (x0 + hx))
-    inside_y: Bool[Array, " H W"] = (Y >= (y0 - hy)) & (Y <= (y0 + hy))
+    inside_x: Bool[Array, " H W"] = ((x0 - hx) <= X) & ((x0 + hx) >= X)
+    inside_y: Bool[Array, " H W"] = ((y0 - hy) <= Y) & ((y0 + hy) >= Y)
     inside: Bool[Array, " H W"] = inside_x & inside_y
     t = jnp.clip(jnp.asarray(transmittivity, dtype=float), 0.0, 1.0)
 
@@ -318,18 +319,16 @@ def variable_transmission_aperture(
 
     if transmission_fn is not None:
         tmap: Float[Array, " H W"] = transmission_fn(X, Y)
+    elif transmission is None:
+        # Default to pass-through if neither is given
+        tmap = jnp.ones_like(incoming.field.real, dtype=float)
+    elif jnp.ndim(jnp.asarray(transmission)) == 0:
+        # Scalar attenuation
+        scalar_t = jnp.asarray(transmission, dtype=float)
+        tmap = jnp.ones((ny, nx), dtype=float) * scalar_t
     else:
-        if transmission is None:
-            # Default to pass-through if neither is given
-            tmap = jnp.ones_like(incoming.field.real, dtype=float)
-        else:
-            if jnp.ndim(jnp.asarray(transmission)) == 0:
-                # Scalar attenuation
-                scalar_t = jnp.asarray(transmission, dtype=float)
-                tmap = jnp.ones((ny, nx), dtype=float) * scalar_t
-            else:
-                # Array map
-                tmap = jnp.asarray(transmission, dtype=float)
+        # Array map
+        tmap = jnp.asarray(transmission, dtype=float)
 
     tmap = jnp.clip(tmap, 0.0, 1.0)
 

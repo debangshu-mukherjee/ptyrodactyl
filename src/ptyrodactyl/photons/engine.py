@@ -1,34 +1,41 @@
-"""Extended Ptychographic Iterative Engine (ePIE) for optical ptychography.
-
-Local functions are prefixed with an underscore, and are not exported.
+"""
+Module: ptyrodactyl.photons.engine
+----------------------------------
+Engine for optical ptychography.
 
 Functions
 ---------
-epie_optical
+- `epie_optical`:
     Main ePIE reconstruction algorithm for optical ptychography
-single_pie_iteration
+- `single_pie_iteration`:
     Single iteration of the ePIE algorithm
-single_pie_vmap
+- `single_pie_vmap`:
     Parallel processing over positions using vmap for faster but approximate PIE.
-single_pie_sequential
+- `single_pie_sequential`:
     Sequential processing over positions for refinement.
 
-Notes
------
-Local functions (not exported):
-- _update_object_wavefront: Updates object wavefront using rPIE algorithm
-- _update_surface_pattern: Updates surface pattern using modified PIE
-- _apply_coherent_transfer_function: Applies coherent transfer function in Fourier domain
-- _apply_position_shift: Applies position shift using phase multiplication
-- _compute_sensor_intensity: Computes sensor plane intensity with pixel response
-- _create_frequency_grids: Creates frequency grids for Fourier transforms
+Internal Functions
+------------------
+- `_update_object_wavefront`:
+    Updates object wavefront using rPIE algorithm
+- `_update_surface_pattern`:
+    Updates surface pattern using modified PIE
+- `_apply_coherent_transfer_function`:
+    Applies coherent transfer function in Fourier domain
+- `_apply_position_shift`:
+    Applies position shift using phase multiplication
+- `_compute_sensor_intensity`:
+    Computes sensor plane intensity with pixel response
+- `_create_frequency_grids`:
+    Creates frequency grids for Fourier transforms
 """
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Callable, Optional, Tuple
-from jaxtyping import Array, Complex, Float, jaxtyped
+from jaxtyping import Array, Complex, Float
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .lens_optics import angular_spectrum_prop
 from .photon_types import (

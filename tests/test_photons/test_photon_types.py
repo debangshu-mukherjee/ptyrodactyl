@@ -1,12 +1,7 @@
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
-from absl.testing import parameterized
-from beartype.roar import BeartypeCallHintParamViolation
-from beartype.typing import Tuple
-from jaxtyping import Array, Complex, Float, Integer, Num
 
 from ptyrodactyl.photons.photon_types import (
     Diffractogram,
@@ -27,7 +22,7 @@ jax.config.update("jax_enable_x64", True)
 class TestLensParams(chex.TestCase):
     """Test the LensParams class structure and PyTree compatibility."""
 
-    def test_lens_params_structure(self):
+    def test_lens_params_structure(self) -> None:
         """Test the structure of LensParams."""
         params = LensParams(
             focal_length=jnp.array(0.1),
@@ -45,7 +40,7 @@ class TestLensParams(chex.TestCase):
         assert hasattr(params, "R1")
         assert hasattr(params, "R2")
 
-    def test_lens_params_pytree_compatibility(self):
+    def test_lens_params_pytree_compatibility(self) -> None:
         """Test that LensParams is compatible with JAX transformations."""
         params = LensParams(
             focal_length=jnp.array(0.1),
@@ -82,7 +77,7 @@ class TestLensParams(chex.TestCase):
 class TestMakeLensParams(chex.TestCase):
     """Test the make_lens_params factory function."""
 
-    def test_make_lens_params_with_valid_types(self):
+    def test_make_lens_params_with_valid_types(self) -> None:
         """Test that make_lens_params works with valid types."""
         lens_params = make_lens_params(
             focal_length=jnp.array(0.1),
@@ -99,10 +94,10 @@ class TestMakeLensParams(chex.TestCase):
         assert lens_params.diameter == jnp.array(0.05)
         assert lens_params.n == jnp.array(1.5)
         assert lens_params.center_thickness == jnp.array(0.01)
-        assert lens_params.R1 == jnp.array(0.2)
-        assert lens_params.R2 == jnp.array(0.2)
+        assert jnp.array(0.2) == lens_params.R1
+        assert jnp.array(0.2) == lens_params.R2
 
-    def test_make_lens_params_with_invalid_types(self):
+    def test_make_lens_params_with_invalid_types(self) -> None:
         """Test that make_lens_params raises an error with invalid types."""
         with pytest.raises(Exception):
             make_lens_params(
@@ -128,7 +123,7 @@ class TestMakeLensParams(chex.TestCase):
 class TestGridParams(chex.TestCase):
     """Test the GridParams class structure and PyTree compatibility."""
 
-    def test_grid_params_structure(self):
+    def test_grid_params_structure(self) -> None:
         """Test the structure of GridParams."""
         shape = (32, 32)
         X, Y = jnp.meshgrid(jnp.arange(shape[1]), jnp.arange(shape[0]))
@@ -147,7 +142,7 @@ class TestGridParams(chex.TestCase):
         chex.assert_shape(params.phase_profile, shape)
         chex.assert_shape(params.transmission, shape)
 
-    def test_grid_params_pytree_compatibility(self):
+    def test_grid_params_pytree_compatibility(self) -> None:
         """Test that GridParams is compatible with JAX transformations."""
         shape = (32, 32)
         X, Y = jnp.meshgrid(jnp.arange(shape[1]), jnp.arange(shape[0]))
@@ -166,7 +161,7 @@ class TestGridParams(chex.TestCase):
 class TestMakeGridParams(chex.TestCase):
     """Test the make_grid_params factory function."""
 
-    def test_make_grid_params_with_valid_types(self):
+    def test_make_grid_params_with_valid_types(self) -> None:
         """Test that make_grid_params works with valid types."""
         shape = (32, 32)
         X, Y = jnp.meshgrid(
@@ -192,7 +187,7 @@ class TestMakeGridParams(chex.TestCase):
         chex.assert_shape(grid_params.phase_profile, shape)
         chex.assert_shape(grid_params.transmission, shape)
 
-    def test_make_grid_params_with_invalid_types(self):
+    def test_make_grid_params_with_invalid_types(self) -> None:
         """Test that make_grid_params raises an error with invalid types."""
         shape = (32, 32)
         X, Y = jnp.meshgrid(jnp.arange(shape[1]), jnp.arange(shape[0]))
@@ -227,7 +222,7 @@ class TestMakeGridParams(chex.TestCase):
 class TestOpticalWavefront(chex.TestCase):
     """Test the OpticalWavefront class structure and PyTree compatibility."""
 
-    def test_wavefront_structure(self):
+    def test_wavefront_structure(self) -> None:
         """Test the structure of OpticalWavefront."""
         shape = (32, 32)
         field = jnp.ones(shape, dtype=jnp.complex128)
@@ -246,7 +241,7 @@ class TestOpticalWavefront(chex.TestCase):
 
         chex.assert_shape(wavefront.field, shape)
 
-    def test_wavefront_pytree_compatibility(self):
+    def test_wavefront_pytree_compatibility(self) -> None:
         """Test that OpticalWavefront is compatible with JAX transformations."""
         shape = (32, 32)
         field = jnp.ones(shape, dtype=jnp.complex128)
@@ -281,7 +276,7 @@ class TestOpticalWavefront(chex.TestCase):
 class TestMakeOpticalWavefront(chex.TestCase):
     """Test the make_optical_wavefront factory function."""
 
-    def test_make_optical_wavefront_with_valid_types(self):
+    def test_make_optical_wavefront_with_valid_types(self) -> None:
         """Test that make_optical_wavefront works with valid types."""
         shape = (32, 32)
         field = jnp.ones(shape, dtype=jnp.complex128)
@@ -303,7 +298,7 @@ class TestMakeOpticalWavefront(chex.TestCase):
         chex.assert_shape(wavefront.field, shape)
         assert wavefront.field.dtype == jnp.complex128
 
-    def test_make_optical_wavefront_with_invalid_types(self):
+    def test_make_optical_wavefront_with_invalid_types(self) -> None:
         """Test that make_optical_wavefront raises an error with invalid types."""
         shape = (32, 32)
         field = jnp.ones(shape, dtype=jnp.complex128)
@@ -347,7 +342,7 @@ class TestMakeOpticalWavefront(chex.TestCase):
 class TestMicroscopeData(chex.TestCase):
     """Test the MicroscopeData class structure and PyTree compatibility."""
 
-    def test_microscope_data_structure(self):
+    def test_microscope_data_structure(self) -> None:
         """Test the structure of MicroscopeData."""
         shape_3d = (5, 32, 32)
         image_data = jnp.ones(shape_3d, dtype=jnp.float64)
@@ -362,7 +357,7 @@ class TestMicroscopeData(chex.TestCase):
 
         chex.assert_shape(microscope_data.image_data, shape_3d)
 
-    def test_microscope_data_pytree_compatibility(self):
+    def test_microscope_data_pytree_compatibility(self) -> None:
         """Test that MicroscopeData is compatible with JAX transformations."""
         shape_3d = (5, 32, 32)
         image_data = jnp.ones(shape_3d, dtype=jnp.float64)
@@ -382,7 +377,7 @@ class TestMicroscopeData(chex.TestCase):
 class TestMakeMicroscopeData(chex.TestCase):
     """Test the make_microscope_data factory function."""
 
-    def test_make_microscope_data_3d_with_valid_types(self):
+    def test_make_microscope_data_3d_with_valid_types(self) -> None:
         """Test that make_microscope_data works with valid 3D types."""
         shape_3d = (5, 32, 32)
         image_data_3d = jnp.ones(shape_3d, dtype=jnp.float64)
@@ -402,7 +397,7 @@ class TestMakeMicroscopeData(chex.TestCase):
         chex.assert_shape(microscope_data.image_data, shape_3d)
         assert microscope_data.image_data.dtype == jnp.float64
 
-    def test_make_microscope_data_4d_with_valid_types(self):
+    def test_make_microscope_data_4d_with_valid_types(self) -> None:
         """Test that make_microscope_data works with valid 4D types."""
         shape_4d = (3, 3, 32, 32)
         image_data_4d = jnp.ones(shape_4d, dtype=jnp.float64)
@@ -422,7 +417,7 @@ class TestMakeMicroscopeData(chex.TestCase):
         chex.assert_shape(microscope_data.image_data, shape_4d)
         assert microscope_data.image_data.dtype == jnp.float64
 
-    def test_make_microscope_data_with_invalid_types(self):
+    def test_make_microscope_data_with_invalid_types(self) -> None:
         """Test that make_microscope_data raises an error with invalid types."""
         shape_3d = (5, 32, 32)
         image_data_3d = jnp.ones(shape_3d, dtype=jnp.float64)
@@ -461,7 +456,7 @@ class TestMakeMicroscopeData(chex.TestCase):
 class TestDiffractogram(chex.TestCase):
     """Test the Diffractogram class structure and PyTree compatibility."""
 
-    def test_diffractogram_structure(self):
+    def test_diffractogram_structure(self) -> None:
         """Test the structure of Diffractogram."""
         shape = (32, 32)
         image = jnp.ones(shape, dtype=jnp.float64)
@@ -476,7 +471,7 @@ class TestDiffractogram(chex.TestCase):
 
         chex.assert_shape(diffractogram.image, shape)
 
-    def test_diffractogram_pytree_compatibility(self):
+    def test_diffractogram_pytree_compatibility(self) -> None:
         """Test that Diffractogram is compatible with JAX transformations."""
         shape = (32, 32)
         image = jnp.ones(shape, dtype=jnp.float64)
@@ -496,7 +491,7 @@ class TestDiffractogram(chex.TestCase):
 class TestMakeDiffractogram(chex.TestCase):
     """Test the make_diffractogram factory function."""
 
-    def test_make_diffractogram_with_valid_types(self):
+    def test_make_diffractogram_with_valid_types(self) -> None:
         """Test that make_diffractogram works with valid types."""
         shape = (32, 32)
         image = jnp.ones(shape, dtype=jnp.float64)
@@ -514,7 +509,7 @@ class TestMakeDiffractogram(chex.TestCase):
         chex.assert_shape(diffractogram.image, shape)
         assert diffractogram.image.dtype == jnp.float64
 
-    def test_make_diffractogram_with_invalid_types(self):
+    def test_make_diffractogram_with_invalid_types(self) -> None:
         """Test that make_diffractogram raises an error with invalid types."""
         shape = (32, 32)
         image = jnp.ones(shape, dtype=jnp.float64)

@@ -26,7 +26,7 @@ Functions
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Callable, Optional, Union
+from beartype.typing import Callable, Optional, Tuple, Union
 from jaxtyping import Array, Bool, Float
 
 from ptyrodactyl._decorators import beartype, jaxtyped
@@ -41,7 +41,7 @@ from .photon_types import (
 jax.config.update("jax_enable_x64", True)
 
 @jaxtyped(typechecker=beartype)
-def _xy_grids(nx: int, ny: int, dx: float) -> tuple[Float[Array, " H W"], Float[Array, " H W"]]:
+def _xy_grids(nx: int, ny: int, dx: float) -> Tuple[Float[Array, " H W"], Float[Array, " H W"]]:
     """
     Internal helper to create centered spatial coordinate grids (in meters).
     
@@ -63,10 +63,10 @@ def _xy_grids(nx: int, ny: int, dx: float) -> tuple[Float[Array, " H W"], Float[
     """
     x: Float[Array, " W"] = jnp.arange(-nx // 2, nx // 2) * dx
     y: Float[Array, " H"] = jnp.arange(-ny // 2, ny // 2) * dx
-    X: Float[Array, "H W"]
-    Y: Float[Array, "H W"]
-    X, Y = jnp.meshgrid(x, y)
-    return X, Y
+    xx: Float[Array, "H W"]
+    yy: Float[Array, "H W"]
+    xx, yy = jnp.meshgrid(x, y)
+    return (xx, yy)
 
 
 @jaxtyped(typechecker=beartype)
@@ -119,10 +119,10 @@ def circular_aperture(
 
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
 
-    r: Float[Array, " H W"] = jnp.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
+    r: Float[Array, " H W"] = jnp.sqrt((xx - x0) ** 2 + (yy - y0) ** 2)
     inside: Bool[Array, " H W"] = r <= (diameter / 2.0)
     t = jnp.clip(jnp.asarray(transmittivity, dtype=float), 0.0, 1.0)
 

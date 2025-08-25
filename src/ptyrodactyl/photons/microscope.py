@@ -1,17 +1,14 @@
-"""
-Module: photons.microscope
---------------------------
-Codes for optical propagation through lenses and optical elements.
+"""Codes for optical propagation through lenses and optical elements.
 
 Functions
 ---------
-- `lens_propagation`:
+lens_propagation
     Propagates an optical wavefront through a lens
-- `linear_interaction`:
+linear_interaction
     Propagates an optical wavefront through a sample using linear interaction
-- `simple_diffractogram`:
+simple_diffractogram
     Calculates the diffractogram of a sample using a simple model
-- `simple_microscope`:
+simple_microscope
     Calculates the 3D diffractograms of the entire imaging done at
     every pixel positions. This cuts the sample, and then generates
     a diffractogram with the desired camera pixel size - all done
@@ -46,26 +43,26 @@ jax.config.update("jax_enable_x64", True)
 
 @jaxtyped(typechecker=beartype)
 def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Propagate an optical wavefront through a lens.
+    """Propagate an optical wavefront through a lens.
+    
     The lens is modeled as a thin lens with a given focal length and diameter.
 
     Parameters
     ----------
-    - `incoming` (OpticalWavefront):
+    incoming : OpticalWavefront
         The incoming optical wavefront
-    - `lens` (LensParams):
+    lens : LensParams
         The lens parameters including focal length and diameter
 
     Returns
     -------
-    - `outgoing` (OpticalWavefront):
+    OpticalWavefront
         The propagated optical wavefront after passing through the lens
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Create a meshgrid of coordinates based on the incoming wavefront's shape and pixel size.
     - Calculate the phase profile and transmission function of the lens.
     - Apply the phase screen to the incoming wavefront's field.
@@ -101,24 +98,21 @@ def linear_interaction(
     sample: SampleFunction,
     light: OpticalWavefront,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Propagate an optical wavefront through a sample using linear interaction.
+    """Propagate an optical wavefront through a sample using linear interaction.
+    
     The sample is modeled as a complex function that modifies the incoming wavefront.
 
     Parameters
     ----------
-    - `sample` (SampleFunction):
+    sample : SampleFunction
         The sample function representing the optical properties of the sample
-    - `light` (OpticalWavefront):
+    light : OpticalWavefront
         The incoming optical wavefront
 
     Returns
     -------
-    - `interacted` (OpticalWavefront):
+    OpticalWavefront
         The propagated optical wavefront after passing through the sample
-
     """
     new_field: Complex[Array, "H W"] = sample.sample * light.field
     interacted: OpticalWavefront = make_optical_wavefront(
@@ -140,10 +134,8 @@ def simple_diffractogram(
     camera_pixel_size: scalar_float,
     aperture_center: Optional[Float[Array, " 2"]] = None,
 ) -> Diffractogram:
-    """
-    Description
-    -----------
-    Calculate the diffractogram of a sample using a simple model.
+    """Calculate the diffractogram of a sample using a simple model.
+    
     The lightwave interacts with the sample linearly, and is then
     zoomed optically. Following this it interacts with a circular
     aperture before propagating to the camera plane.
@@ -152,28 +144,30 @@ def simple_diffractogram(
 
     Parameters
     ----------
-    - `sample_cut` (SampleFunction):
+    sample_cut : SampleFunction
         The sample function representing the optical properties of the sample
-    - `lightwave` (OpticalWavefront):
+    lightwave : OpticalWavefront
         The incoming optical wavefront
-    - `zoom_factor` (scalar_float):
+    zoom_factor : scalar_float
         The zoom factor for the optical system
-    - `aperture_diameter` (scalar_float):
+    aperture_diameter : scalar_float
         The diameter of the aperture in meters
-    - `travel_distance` (scalar_float):
+    travel_distance : scalar_float
         The distance traveled by the light in meters
-    - `camera_pixel_size` (scalar_float):
+    camera_pixel_size : scalar_float
         The pixel size of the camera in meters
-    - `aperture_center` (Optional[Float[Array, " 2"]]):
+    aperture_center : Optional[Float[Array, " 2"]], optional
         The center of the aperture in pixels
 
     Returns
     -------
-    - `diffractogram` (Diffractogram):
+    Diffractogram
         The calculated diffractogram of the sample
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Propagate the lightwave through the sample using linear interaction
     - Apply optical zoom to the wavefront
     - Apply a circular aperture to the zoomed wavefront
@@ -215,40 +209,39 @@ def simple_microscope(
     camera_pixel_size: scalar_float,
     aperture_center: Optional[Float[Array, " 2"]] = None,
 ) -> MicroscopeData:
-    """
-    Description
-    -----------
-    Calculate the 3D diffractograms of the entire imaging done at
-    every pixel positions. This cuts the sample, and then generates
-    a diffractogram with the desired camera pixel size - all done
-    in parallel.
+    """Calculate the 3D diffractograms of the entire imaging done at every pixel positions.
+    
+    This cuts the sample, and then generates a diffractogram with the desired camera 
+    pixel size - all done in parallel.
 
     Parameters
     ----------
-    - `sample` (SampleFunction):
+    sample : SampleFunction
         The sample function representing the optical properties of the sample
-    - `positions` (Num[Array, " n 2"]):
+    positions : Num[Array, " n 2"]
         The positions in the sample plane where the diffractograms are calculated
-    - `lightwave` (OpticalWavefront):
+    lightwave : OpticalWavefront
         The incoming optical wavefront
-    - `zoom_factor` (scalar_float):
+    zoom_factor : scalar_float
         The zoom factor for the optical system
-    - `aperture_diameter` (scalar_float):
+    aperture_diameter : scalar_float
         The diameter of the aperture in meters
-    - `travel_distance` (scalar_float):
+    travel_distance : scalar_float
         The distance traveled by the light in meters
-    - `camera_pixel_size` (scalar_float):
+    camera_pixel_size : scalar_float
         The pixel size of the camera in meters
-    - `aperture_center` (Optional[Float[Array, " 2"]]):
+    aperture_center : Optional[Float[Array, " 2"]], optional
         The center of the aperture in pixels
 
     Returns
     -------
-    - `combined_data` (MicroscopeData):
+    MicroscopeData
         The calculated diffractograms of the sample at the specified positions
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Get the size of the lightwave field
     - Calculate the pixel positions in the sample plane
     - For each position, cut out the sample and calculate the diffractogram
@@ -258,12 +251,18 @@ def simple_microscope(
     interaction_size: Tuple[int, int] = lightwave.field.shape
     pixel_positions: Float[Array, " n 2"] = positions / lightwave.dx
 
-    def diffractogram_at_position(sample: SampleFunction, this_position: Num[Array, " 2"]):
+    def diffractogram_at_position(
+        sample: SampleFunction, this_position: Num[Array, " 2"]
+    ):
         x: scalar_numeric
         y: scalar_numeric
         x, y = this_position
-        start_cut_x: Int[Array, ""] = jnp.floor(x - (0.5 * interaction_size[1])).astype(int)
-        start_cut_y: Int[Array, ""] = jnp.floor(y - (0.5 * interaction_size[0])).astype(int)
+        start_cut_x: Int[Array, ""] = jnp.floor(x - (0.5 * interaction_size[1])).astype(
+            int
+        )
+        start_cut_y: Int[Array, ""] = jnp.floor(y - (0.5 * interaction_size[0])).astype(
+            int
+        )
         cutout_sample: Complex[Array, "H W"] = jax.lax.dynamic_slice(
             sample.sample,
             (start_cut_y, start_cut_x),

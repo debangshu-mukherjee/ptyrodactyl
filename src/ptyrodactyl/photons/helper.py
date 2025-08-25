@@ -1,19 +1,16 @@
-"""
-Module: photons.helper
-----------------------
-Utility functions for optical propagation.
+"""Utility functions for optical propagation.
 
 Functions
 ---------
-- `create_spatial_grid`:
+create_spatial_grid
     Creates a 2D spatial grid for optical propagation
-- `normalize_field`:
+normalize_field
     Normalizes a complex field to unit power
-- `add_phase_screen`:
+add_phase_screen
     Adds a phase screen to a complex field
-- `field_intensity`:
+field_intensity
     Calculates intensity from a complex field
-- `scale_pixel`:
+scale_pixel
     Rescales OpticalWavefront pixel size while keeping array shape fixed
 """
 
@@ -33,24 +30,23 @@ def create_spatial_grid(
     diameter: Num[Array, " "],
     num_points: Int[Array, " "],
 ) -> Tuple[Float[Array, "N N"], Float[Array, "N N"]]:
-    """
-    Description
-    -----------
-    Create a 2D spatial grid for optical propagation.
+    """Create a 2D spatial grid for optical propagation.
 
     Parameters
     ----------
-    - `diameter` (Num[Array, " "]):
-        Physical size of the grid in meters
-    - `num_points` (Int[Array, " "]):
-        Number of points in each dimension
+    diameter : Num[Array, " "]
+        Physical size of the grid in meters.
+    num_points : Int[Array, " "]
+        Number of points in each dimension.
 
     Returns
     -------
-    - Tuple of meshgrid arrays (X, Y) representing spatial coordinates
+    Tuple[Float[Array, "N N"], Float[Array, "N N"]]
+        Tuple of meshgrid arrays (X, Y) representing spatial coordinates.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Create a linear space of points along the x-axis
     - Create a linear space of points along the y-axis
     - Create a meshgrid of spatial coordinates
@@ -66,23 +62,21 @@ def create_spatial_grid(
 
 @jaxtyped(typechecker=beartype)
 def normalize_field(field: Complex[Array, "H W"]) -> Complex[Array, "H W"]:
-    """
-    Description
-    -----------
-    Normalize complex field to unit power
+    """Normalize complex field to unit power.
 
     Parameters
     ----------
-    - `field` (Complex[Array, "H W"]):
-        Input complex field
+    field : Complex[Array, "H W"]
+        Input complex field.
 
     Returns
     -------
-    - `normalized_field` (Complex[Array, "H W"]):
-        Normalized complex field
+    Complex[Array, "H W"]
+        Normalized complex field.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Calculate the power of the field as the sum of the square of the absolute value of the field
     - Normalize the field by dividing by the square root of the power
     - Return the normalized field
@@ -97,26 +91,23 @@ def add_phase_screen(
     field: Num[Array, "H W"],
     phase: Float[Array, "H W"],
 ) -> Complex[Array, "H W"]:
-    """
-    Descriptiongit add . &&
-    -----------
-    Add a phase screen to a complex field,
-    as:
+    """Add a phase screen to a complex field.
 
     Parameters
     ----------
-    - `field` (Complex[Array, "H W"]):
-        Input complex field
-    - `phase` (Float[Array, "H W"]):
-        Phase screen to add
+    field : Num[Array, "H W"]
+        Input complex field.
+    phase : Float[Array, "H W"]
+        Phase screen to add.
 
     Returns
     -------
-    - `screened_field` (Complex[Array, "H W"]):
-        Field with phase screen added
+    Complex[Array, "H W"]
+        Field with phase screen added.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Multiply the input field by the exponential of the phase screen
     - Return the screened field
     """
@@ -126,23 +117,21 @@ def add_phase_screen(
 
 @jaxtyped(typechecker=beartype)
 def field_intensity(field: Complex[Array, "H W"]) -> Float[Array, "H W"]:
-    """
-    Description
-    -----------
-    Calculate intensity from complex field
+    """Calculate intensity from complex field.
 
     Parameters
     ----------
-    - `field` (Complex[Array, "H W"]):
-        Input complex field
+    field : Complex[Array, "H W"]
+        Input complex field.
 
     Returns
     -------
-    - `intensity` (Float[Array, "H W"]):
-        Intensity of the field
+    Float[Array, "H W"]
+        Intensity of the field.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Calculate the intensity as the square of the absolute value of the field
     - Return the intensity
     """
@@ -155,22 +144,20 @@ def scale_pixel(
     wavefront: OpticalWavefront,
     new_dx: scalar_float,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Rescale OpticalWavefront pixel size while keeping array shape fixed.
+    """Rescale OpticalWavefront pixel size while keeping array shape fixed.
+    
     JAX-compatible (jit/vmap-safe). Crops or pads to preserve shape.
 
     Parameters
     ----------
-    - `wavefront` (OpticalWavefront):
-        OpticalWavefront to be resized
-    - `new_dx` (scalar_float):
-        New pixel size (meters)
+    wavefront : OpticalWavefront
+        OpticalWavefront to be resized.
+    new_dx : scalar_float
+        New pixel size (meters).
 
     Returns
     -------
-    - `resized_wavefront` (OpticalWavefront):
+    OpticalWavefront
         Resized OpticalWavefront with updated pixel size
         and resized field, which is of the same size as
         the original field.
@@ -199,8 +186,12 @@ def scale_pixel(
         """
         new_H: Int[Array, " "] = jnp.floor(new_fov_h / old_dx).astype(int)
         new_W: Int[Array, " "] = jnp.floor(new_fov_w / old_dx).astype(int)
-        start_h: Int[Array, " "] = jnp.floor((current_fov_h - new_fov_h) / (2 * old_dx)).astype(int)
-        start_w: Int[Array, " "] = jnp.floor((current_fov_w - new_fov_w) / (2 * old_dx)).astype(int)
+        start_h: Int[Array, " "] = jnp.floor(
+            (current_fov_h - new_fov_h) / (2 * old_dx)
+        ).astype(int)
+        start_w: Int[Array, " "] = jnp.floor(
+            (current_fov_w - new_fov_w) / (2 * old_dx)
+        ).astype(int)
         cropped: Complex[Array, "new_H new_W"] = jax.lax.dynamic_slice(
             field, (start_h, start_w), (new_H, new_W)
         )
@@ -244,7 +235,9 @@ def scale_pixel(
         )
         return padded
 
-    resized_field = jax.lax.cond(scale > 1.0, larger_pixel_size, smaller_pixel_size, field)
+    resized_field = jax.lax.cond(
+        scale > 1.0, larger_pixel_size, smaller_pixel_size, field
+    )
     resized_wavefront = make_optical_wavefront(
         field=resized_field,
         dx=new_dx,

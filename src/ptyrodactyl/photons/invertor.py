@@ -1,13 +1,10 @@
-"""
-Module: photons.invertor
-------------------------
-Codes for optical propagation through lenses and optical elements.
+"""Codes for optical propagation through lenses and optical elements.
 
 Functions
 ---------
-- `get_optimizer`:
+get_optimizer
     Returns an optimizer object based on the specified name
-- `simple_microscope_ptychography`:
+simple_microscope_ptychography
     Performs ptychography reconstruction using a simple microscope model
 """
 
@@ -63,7 +60,9 @@ def simple_microscope_ptychography(
     zoom_factor_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
     aperture_diameter_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
     travel_distance_bounds: Optional[Tuple[scalar_float, scalar_float]] = None,
-    aperture_center_bounds: Optional[Tuple[Float[Array, " 2"], Float[Array, " 2"]]] = None,
+    aperture_center_bounds: Optional[
+        Tuple[Float[Array, " 2"], Float[Array, " 2"]]
+    ] = None,
 ) -> Tuple[
     Tuple[
         SampleFunction,  # final_sample
@@ -82,67 +81,75 @@ def simple_microscope_ptychography(
         Float[Array, " S"],  # intermediate_travel_distances
     ],
 ]:
-    """
-    Description
-    -----------
-    Solve the optical ptychography inverse problem where experimental
-    diffraction patterns are used to reconstruct a sample, lightwave,
-    and optical system parameters.
+    """Solve the optical ptychography inverse problem where experimental diffraction patterns are used to reconstruct a sample, lightwave, and optical system parameters.
 
     Parameters
     ----------
-    - `experimental_data` (MicroscopeData):
-        The experimental diffraction patterns collected at different positions
-    - `guess_sample` (SampleFunction):
-        Initial guess for the sample properties
-    - `guess_lightwave` (OpticalWavefront):
-        Initial guess for the lightwave
-    - `zoom_factor` (scalar_float):
-        Initial guess for the optical zoom factor
-    - `aperture_diameter` (scalar_float):
-        Initial guess for the aperture diameter in meters
-    - `travel_distance` (scalar_float):
-        Initial guess for the light propagation distance in meters
-    - `camera_pixel_size` (scalar_float):
-        The pixel size of the camera in meters (fixed parameter)
-    - `aperture_center` (Optional[Float[Array, " 2"]]):
-        Initial guess for the center of the aperture
-    - `learning_rate` (Optional[scalar_float]):
-        Learning rate for optimization (default: 0.01)
-    - `num_iterations` (Optional[scalar_integer]):
-        Number of optimization iterations (default: 1000)
-    - `save_every` (Optional[scalar_integer]):
-        Save intermediate results every n iterations (default: 10)
-    - `loss_type` (Optional[str]):
-        Type of loss function to use (default: "mse")
-    - `optimizer_name` (Optional[str]):
-        Name of the optimizer to use (default: "adam")
-    - `zoom_factor_bounds` (Optional[Tuple[scalar_float, scalar_float]]):
-        Lower and upper bounds for zoom factor optimization
-    - `aperture_diameter_bounds` (Optional[Tuple[scalar_float, scalar_float]]):
-        Lower and upper bounds for aperture diameter optimization
-    - `travel_distance_bounds` (Optional[Tuple[scalar_float, scalar_float]]):
-        Lower and upper bounds for travel distance optimization
-    - `aperture_center_bounds` (Optional[Tuple[Float[Array, " 2"], Float[Array, " 2"]]]):
-        Lower and upper bounds for aperture center optimization
+    experimental_data : MicroscopeData
+        The experimental diffraction patterns collected at different positions.
+    guess_sample : SampleFunction
+        Initial guess for the sample properties.
+    guess_lightwave : OpticalWavefront
+        Initial guess for the lightwave.
+    zoom_factor : scalar_float
+        Initial guess for the optical zoom factor.
+    aperture_diameter : scalar_float
+        Initial guess for the aperture diameter in meters.
+    travel_distance : scalar_float
+        Initial guess for the light propagation distance in meters.
+    camera_pixel_size : scalar_float
+        The pixel size of the camera in meters (fixed parameter).
+    aperture_center : Float[Array, " 2"], optional
+        Initial guess for the center of the aperture.
+    learning_rate : scalar_float, optional
+        Learning rate for optimization. Default is 0.01.
+    num_iterations : scalar_integer, optional
+        Number of optimization iterations. Default is 1000.
+    save_every : scalar_integer, optional
+        Save intermediate results every n iterations. Default is 10.
+    loss_type : str, optional
+        Type of loss function to use. Default is "mse".
+    optimizer_name : str, optional
+        Name of the optimizer to use. Default is "adam".
+    zoom_factor_bounds : Tuple[scalar_float, scalar_float], optional
+        Lower and upper bounds for zoom factor optimization.
+    aperture_diameter_bounds : Tuple[scalar_float, scalar_float], optional
+        Lower and upper bounds for aperture diameter optimization.
+    travel_distance_bounds : Tuple[scalar_float, scalar_float], optional
+        Lower and upper bounds for travel distance optimization.
+    aperture_center_bounds : Tuple[Float[Array, " 2"], Float[Array, " 2"]], optional
+        Lower and upper bounds for aperture center optimization.
 
     Returns
     -------
-    - Tuple containing:
-      - Final results tuple:
-          - `final_sample` (SampleFunction): Optimized sample properties
-          - `final_lightwave` (OpticalWavefront): Optimized lightwave
-          - `final_zoom_factor` (scalar_float): Optimized zoom factor
-          - `final_aperture_diameter` (scalar_float): Optimized aperture diameter
-          - `final_aperture_center` (Optional[Float[Array, " 2"]]): Optimized aperture center
-          - `final_travel_distance` (scalar_float): Optimized travel distance
-      - Intermediate results tuple:
-          - `intermediate_samples` (Complex[Array, "H W S"]): Intermediate samples during optimization
-          - `intermediate_lightwaves` (Complex[Array, "H W S"]): Intermediate lightwaves during optimization
-          - `intermediate_zoom_factors` (Float[Array, " S"]): Intermediate zoom factors during optimization
-          - `intermediate_aperture_diameters` (Float[Array, " S"]): Intermediate aperture diameters during optimization
-          - `intermediate_aperture_centers` (Float[Array, " 2 S"]): Intermediate aperture centers during optimization
-          - `intermediate_travel_distances` (Float[Array, " S"]): Intermediate travel distances during optimization
+    Tuple[Tuple[...], Tuple[...]]
+        Tuple containing:
+        - Final results tuple:
+            - final_sample : SampleFunction
+                Optimized sample properties.
+            - final_lightwave : OpticalWavefront
+                Optimized lightwave.
+            - final_zoom_factor : scalar_float
+                Optimized zoom factor.
+            - final_aperture_diameter : scalar_float
+                Optimized aperture diameter.
+            - final_aperture_center : Float[Array, " 2"] or None
+                Optimized aperture center.
+            - final_travel_distance : scalar_float
+                Optimized travel distance.
+        - Intermediate results tuple:
+            - intermediate_samples : Complex[Array, "H W S"]
+                Intermediate samples during optimization.
+            - intermediate_lightwaves : Complex[Array, "H W S"]
+                Intermediate lightwaves during optimization.
+            - intermediate_zoom_factors : Float[Array, " S"]
+                Intermediate zoom factors during optimization.
+            - intermediate_aperture_diameters : Float[Array, " S"]
+                Intermediate aperture diameters during optimization.
+            - intermediate_aperture_centers : Float[Array, " 2 S"]
+                Intermediate aperture centers during optimization.
+            - intermediate_travel_distances : Float[Array, " S"]
+                Intermediate travel distances during optimization.
     """
 
     # Define bound enforcement functions
@@ -192,7 +199,9 @@ def simple_microscope_ptychography(
         return simulated_data.image_data
 
     # Create loss function using the tools module
-    loss_func = ptt.create_loss_function(forward_fn, experimental_data.image_data, loss_type)
+    loss_func = ptt.create_loss_function(
+        forward_fn, experimental_data.image_data, loss_type
+    )
 
     # Define function to compute loss and gradients
     @jax.jit
@@ -214,9 +223,15 @@ def simple_microscope_ptychography(
         ):
             # Enforce bounds before calculating loss
             bounded_zoom_factor = enforce_bounds(zoom_factor, zoom_factor_bounds)
-            bounded_aperture_diameter = enforce_bounds(aperture_diameter, aperture_diameter_bounds)
-            bounded_travel_distance = enforce_bounds(travel_distance, travel_distance_bounds)
-            bounded_aperture_center = enforce_bounds_2d(aperture_center, aperture_center_bounds)
+            bounded_aperture_diameter = enforce_bounds(
+                aperture_diameter, aperture_diameter_bounds
+            )
+            bounded_travel_distance = enforce_bounds(
+                travel_distance, travel_distance_bounds
+            )
+            bounded_aperture_center = enforce_bounds_2d(
+                aperture_center, aperture_center_bounds
+            )
 
             return loss_func(
                 sample_field,
@@ -262,7 +277,9 @@ def simple_microscope_ptychography(
     current_zoom_factor = zoom_factor
     current_aperture_diameter = aperture_diameter
     current_travel_distance = travel_distance
-    current_aperture_center = jnp.zeros(2) if aperture_center is None else aperture_center
+    current_aperture_center = (
+        jnp.zeros(2) if aperture_center is None else aperture_center
+    )
 
     # Set up intermediate result storage
     num_saves = jnp.floor(num_iterations / save_every).astype(int)
@@ -401,22 +418,24 @@ def simple_microscope_ptychography(
             print(f"Iteration {ii}, Loss: {loss}")
             save_idx = ii // save_every
             if save_idx < num_saves:
-                intermediate_samples = intermediate_samples.at[:, :, save_idx].set(sample_field)
-                intermediate_lightwaves = intermediate_lightwaves.at[:, :, save_idx].set(
-                    lightwave_field
+                intermediate_samples = intermediate_samples.at[:, :, save_idx].set(
+                    sample_field
                 )
+                intermediate_lightwaves = intermediate_lightwaves.at[
+                    :, :, save_idx
+                ].set(lightwave_field)
                 intermediate_zoom_factors = intermediate_zoom_factors.at[save_idx].set(
                     current_zoom_factor
                 )
-                intermediate_aperture_diameters = intermediate_aperture_diameters.at[save_idx].set(
-                    current_aperture_diameter
-                )
-                intermediate_travel_distances = intermediate_travel_distances.at[save_idx].set(
-                    current_travel_distance
-                )
-                intermediate_aperture_centers = intermediate_aperture_centers.at[:, save_idx].set(
-                    current_aperture_center
-                )
+                intermediate_aperture_diameters = intermediate_aperture_diameters.at[
+                    save_idx
+                ].set(current_aperture_diameter)
+                intermediate_travel_distances = intermediate_travel_distances.at[
+                    save_idx
+                ].set(current_travel_distance)
+                intermediate_aperture_centers = intermediate_aperture_centers.at[
+                    :, save_idx
+                ].set(current_aperture_center)
 
     # Create final objects
     final_sample = make_sample_function(sample=sample_field, dx=guess_sample.dx)

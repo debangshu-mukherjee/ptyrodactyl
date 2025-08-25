@@ -1,34 +1,27 @@
-"""
-Module: photons.engine
-----------------------
-Extended Ptychographic Iterative Engine (ePIE) for optical ptychography.
+"""Extended Ptychographic Iterative Engine (ePIE) for optical ptychography.
+
 Local functions are prefixed with an underscore, and are not exported.
 
 Functions
 ---------
-- `epie_optical`:
+epie_optical
     Main ePIE reconstruction algorithm for optical ptychography
-- `single_pie_iteration`:
+single_pie_iteration
     Single iteration of the ePIE algorithm
-- `single_pie_vmap`:
+single_pie_vmap
     Parallel processing over positions using vmap for faster but approximate PIE.
-- `single_pie_sequential`:
+single_pie_sequential
     Sequential processing over positions for refinement.
 
-Local Functions
----------------
-- `_update_object_wavefront`:
-    Updates object wavefront using rPIE algorithm
-- `_update_surface_pattern`:
-    Updates surface pattern using modified PIE
-- `_apply_coherent_transfer_function`:
-    Applies coherent transfer function in Fourier domain
-- `_apply_position_shift`:
-    Applies position shift using phase multiplication
-- `_compute_sensor_intensity`:
-    Computes sensor plane intensity with pixel response
-- `_create_frequency_grids`:
-    Creates frequency grids for Fourier transforms
+Notes
+-----
+Local functions (not exported):
+- _update_object_wavefront: Updates object wavefront using rPIE algorithm
+- _update_surface_pattern: Updates surface pattern using modified PIE
+- _apply_coherent_transfer_function: Applies coherent transfer function in Fourier domain
+- _apply_position_shift: Applies position shift using phase multiplication
+- _compute_sensor_intensity: Computes sensor plane intensity with pixel response
+- _create_frequency_grids: Creates frequency grids for Fourier transforms
 """
 
 import jax
@@ -68,51 +61,51 @@ def epie_optical(
     gamma_surface: Optional[scalar_float] = 0.5,
     num_loops: Optional[scalar_integer] = 10,
 ) -> tuple[OpticalWavefront, SampleFunction]:
-    """
-    Description
-    -----------
-    Extended Ptychographic Iterative Engine for optical ptychography reconstruction.
+    """Extended Ptychographic Iterative Engine for optical ptychography reconstruction.
 
     Parameters
     ----------
-    - `microscope_data` (MicroscopeData):
-        Measured intensity data with positions
-    - `initial_object` (OpticalWavefront):
-        Initial guess for object wavefront
-    - `initial_surface` (SampleFunction):
-        Initial guess for surface pattern
-    - `pixel_mask` (Float[Array, "H W"]):
-        Pixel response mask for modeling sensor characteristics
-    - `propagation_distance_1` (scalar_float):
-        Distance from object to diffuser plane in meters
-    - `propagation_distance_2` (scalar_float):
-        Distance from diffuser to sensor plane in meters
-    - `magnification` (scalar_integer):
-        Magnification factor for downsampling
-    - `vmap_iterations` (scalar_integer):
-        Number of initial iterations to run in vmap mode for rapid convergence
-        If 0, use sequential mode for all iterations
-        If > 0, use vmap for first N iterations, then switch to sequential
-    - `alpha_object` (scalar_float):
-        Object update mixing parameter
-    - `gamma_object` (scalar_float):
-        Object update step size
-    - `alpha_surface` (scalar_float):
-        Surface update mixing parameter
-    - `gamma_surface` (scalar_float):
-        Surface update step size
-    - `num_loops` (scalar_integer):
-        Number of iteration loops
+    microscope_data : MicroscopeData
+        Measured intensity data with positions.
+    initial_object : OpticalWavefront
+        Initial guess for object wavefront.
+    initial_surface : SampleFunction
+        Initial guess for surface pattern.
+    pixel_mask : Float[Array, "H W"]
+        Pixel response mask for modeling sensor characteristics.
+    propagation_distance_1 : scalar_float
+        Distance from object to diffuser plane in meters.
+    propagation_distance_2 : scalar_float
+        Distance from diffuser to sensor plane in meters.
+    magnification : scalar_integer
+        Magnification factor for downsampling.
+    vmap_iterations : scalar_integer, optional
+        Number of initial iterations to run in vmap mode for rapid convergence.
+        If 0, use sequential mode for all iterations.
+        If > 0, use vmap for first N iterations, then switch to sequential.
+        Default is 0.
+    alpha_object : scalar_float, optional
+        Object update mixing parameter. Default is 0.1.
+    gamma_object : scalar_float, optional
+        Object update step size. Default is 0.5.
+    alpha_surface : scalar_float, optional
+        Surface update mixing parameter. Default is 0.1.
+    gamma_surface : scalar_float, optional
+        Surface update step size. Default is 0.5.
+    num_loops : scalar_integer, optional
+        Number of iteration loops. Default is 10.
 
     Returns
     -------
-    - `recovered_object` (OpticalWavefront):
-        Reconstructed object wavefront
-    - `recovered_surface` (SampleFunction):
-        Reconstructed surface pattern
+    tuple of (OpticalWavefront, SampleFunction)
+        - recovered_object : OpticalWavefront
+            Reconstructed object wavefront.
+        - recovered_surface : SampleFunction
+            Reconstructed surface pattern.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute image data
     - Compute positions
     - Compute frequency grids
@@ -149,22 +142,24 @@ def epie_optical(
         position_processor: Callable = jax.lax.cond(
             use_vmap, lambda: single_pie_vmap, lambda: single_pie_sequential
         )
-        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = position_processor(
-            object_prop_ft,
-            surface_pattern_current,
-            image_data,
-            positions,
-            frequency_x_grid,
-            frequency_y_grid,
-            pixel_mask,
-            propagation_distance_2,
-            magnification,
-            alpha_object,
-            gamma_object,
-            alpha_surface,
-            gamma_surface,
-            initial_object.wavelength,
-            initial_object.dx,
+        updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
+            position_processor(
+                object_prop_ft,
+                surface_pattern_current,
+                image_data,
+                positions,
+                frequency_x_grid,
+                frequency_y_grid,
+                pixel_mask,
+                propagation_distance_2,
+                magnification,
+                alpha_object,
+                gamma_object,
+                alpha_surface,
+                gamma_surface,
+                initial_object.wavelength,
+                initial_object.dx,
+            )
         )
         return updated_state
 
@@ -188,7 +183,9 @@ def epie_optical(
         initial_object.dx,
         initial_object.z_position,
     )
-    recovered_surface: SampleFunction = make_sample_function(final_surface, initial_surface.dx)
+    recovered_surface: SampleFunction = make_sample_function(
+        final_surface, initial_surface.dx
+    )
     return recovered_object, recovered_surface
 
 
@@ -210,53 +207,52 @@ def single_pie_iteration(
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
-    """
-    Description
-    -----------
-    Single iteration of the extended PIE algorithm.
+    """Single iteration of the extended PIE algorithm.
 
     Parameters
     ----------
-    - `object_prop_ft` (Complex[Array, "H W"]):
-        Object wavefront at diffuser plane in Fourier domain
-    - `surface_pattern` (Complex[Array, "H W"]):
-        Surface pattern function
-    - `measurement` (Float[Array, "H W"]):
-        Measured intensity at current position
-    - `position` (Float[Array, " 2"]):
-        Current scanning position [x, y]
-    - `frequency_x_grid` (Float[Array, "H W"]):
-        Frequency grid in x direction
-    - `frequency_y_grid` (Float[Array, "H W"]):
-        Frequency grid in y direction
-    - `pixel_mask` (Float[Array, "H W"]):
-        Pixel response mask for sensor modeling
-    - `propagation_distance_2` (scalar_float):
-        Distance from diffuser to sensor
-    - `magnification` (scalar_integer):
-        Downsampling magnification factor
-    - `alpha_object` (scalar_float):
-        Object update mixing parameter
-    - `gamma_object` (scalar_float):
-        Object update step size
-    - `alpha_surface` (scalar_float):
-        Surface update mixing parameter
-    - `gamma_surface` (scalar_float):
-        Surface update step size
-    - `wavelength` (scalar_float):
-        Wavelength of light in meters
-    - `dx` (scalar_float):
-        Pixel spacing in meters
+    object_prop_ft : Complex[Array, "H W"]
+        Object wavefront at diffuser plane in Fourier domain.
+    surface_pattern : Complex[Array, "H W"]
+        Surface pattern function.
+    measurement : Float[Array, "H W"]
+        Measured intensity at current position.
+    position : Float[Array, " 2"]
+        Current scanning position [x, y].
+    frequency_x_grid : Float[Array, "H W"]
+        Frequency grid in x direction.
+    frequency_y_grid : Float[Array, "H W"]
+        Frequency grid in y direction.
+    pixel_mask : Float[Array, "H W"]
+        Pixel response mask for sensor modeling.
+    propagation_distance_2 : scalar_float
+        Distance from diffuser to sensor.
+    magnification : scalar_integer
+        Downsampling magnification factor.
+    alpha_object : scalar_float
+        Object update mixing parameter.
+    gamma_object : scalar_float
+        Object update step size.
+    alpha_surface : scalar_float
+        Surface update mixing parameter.
+    gamma_surface : scalar_float
+        Surface update step size.
+    wavelength : scalar_float
+        Wavelength of light in meters.
+    dx : scalar_float
+        Pixel spacing in meters.
 
     Returns
     -------
-    - `updated_object_ft` (Complex[Array, "H W"]):
-        Updated object wavefront in Fourier domain
-    - `updated_surface` (Complex[Array, "H W"]):
-        Updated surface pattern
+    tuple of (Complex[Array, "H W"], Complex[Array, "H W"])
+        - updated_object_ft : Complex[Array, "H W"]
+            Updated object wavefront in Fourier domain.
+        - updated_surface : Complex[Array, "H W"]
+            Updated surface pattern.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute object shifted
     - Compute surface plane
     - Compute surface propagation kernel
@@ -280,18 +276,28 @@ def single_pie_iteration(
     surface_plane: Complex[Array, "H W"] = object_shifted * surface_pattern
     surface_prop_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
         jnp.fft.fft2(surface_plane)
-    ) * _get_propagation_kernel(surface_plane.shape, propagation_distance_2, wavelength, dx)
-    sensor_plane_ft: Complex[Array, "H W"] = _apply_coherent_transfer_function(surface_prop_ft)
-    sensor_plane: Complex[Array, "H W"] = jnp.fft.ifft2(jnp.fft.ifftshift(sensor_plane_ft))
+    ) * _get_propagation_kernel(
+        surface_plane.shape, propagation_distance_2, wavelength, dx
+    )
+    sensor_plane_ft: Complex[Array, "H W"] = _apply_coherent_transfer_function(
+        surface_prop_ft
+    )
+    sensor_plane: Complex[Array, "H W"] = jnp.fft.ifft2(
+        jnp.fft.ifftshift(sensor_plane_ft)
+    )
     sensor_intensity: Float[Array, "H W"] = _compute_sensor_intensity(
         sensor_plane, pixel_mask, magnification
     )
-    ratio_map: Float[Array, "H W"] = jnp.sqrt(measurement) / (jnp.sqrt(sensor_intensity) + 1e-10)
+    ratio_map: Float[Array, "H W"] = jnp.sqrt(measurement) / (
+        jnp.sqrt(sensor_intensity) + 1e-10
+    )
     ratio_map_upsampled: Float[Array, "H W"] = jnp.repeat(
         jnp.repeat(ratio_map, magnification, axis=0), magnification, axis=1
     )
     sensor_plane_new: Complex[Array, "H W"] = ratio_map_upsampled * sensor_plane
-    sensor_plane_new_ft: Complex[Array, "H W"] = jnp.fft.fftshift(jnp.fft.fft2(sensor_plane_new))
+    sensor_plane_new_ft: Complex[Array, "H W"] = jnp.fft.fftshift(
+        jnp.fft.fft2(sensor_plane_new)
+    )
     ctf_conj: Complex[Array, "H W"] = jnp.conj(_get_ctf())
     ctf_max_squared: Float[Array, ""] = jnp.max(jnp.abs(_get_ctf()) ** 2)
     surface_prop_ft_updated: Complex[Array, "H W"] = surface_prop_ft + (
@@ -348,51 +354,49 @@ def single_pie_sequential(
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
-    """
-    Description
-    -----------
-    Sequential processing over positions using fori_loop for proper PIE convergence.
+    """Sequential processing over positions using fori_loop for proper PIE convergence.
 
     Parameters
     ----------
-    - `object_prop_ft` (Complex[Array, "H W"]):
-        Current object wavefront in Fourier domain
-    - `surface_pattern` (Complex[Array, "H W"]):
-        Current surface pattern
-    - `image_data` (Float[Array, "P H W"]):
-        Measurement data for all positions
-    - `positions` (Float[Array, "P 2"]):
-        Position coordinates for all measurements
-    - `frequency_x_grid` (Float[Array, "H W"]):
-        Frequency grid in x direction
-    - `frequency_y_grid` (Float[Array, "H W"]):
-        Frequency grid in y direction
-    - `pixel_mask` (Float[Array, "H W"]):
-        Pixel response mask for sensor modeling
-    - `propagation_distance_2` (scalar_float):
-        Distance from diffuser to sensor
-    - `magnification` (scalar_integer):
-        Downsampling magnification factor
-    - `alpha_object` (scalar_float):
-        Object update mixing parameter
-    - `gamma_object` (scalar_float):
-        Object update step size
-    - `alpha_surface` (scalar_float):
-        Surface update mixing parameter
-    - `gamma_surface` (scalar_float):
-        Surface update step size
-    - `wavelength` (scalar_float):
-        Wavelength of light in meters
-    - `dx` (scalar_float):
-        Pixel spacing in meters
+    object_prop_ft : Complex[Array, "H W"]
+        Current object wavefront in Fourier domain.
+    surface_pattern : Complex[Array, "H W"]
+        Current surface pattern.
+    image_data : Float[Array, "P H W"]
+        Measurement data for all positions.
+    positions : Float[Array, "P 2"]
+        Position coordinates for all measurements.
+    frequency_x_grid : Float[Array, "H W"]
+        Frequency grid in x direction.
+    frequency_y_grid : Float[Array, "H W"]
+        Frequency grid in y direction.
+    pixel_mask : Float[Array, "H W"]
+        Pixel response mask for sensor modeling.
+    propagation_distance_2 : scalar_float
+        Distance from diffuser to sensor.
+    magnification : scalar_integer
+        Downsampling magnification factor.
+    alpha_object : scalar_float
+        Object update mixing parameter.
+    gamma_object : scalar_float
+        Object update step size.
+    alpha_surface : scalar_float
+        Surface update mixing parameter.
+    gamma_surface : scalar_float
+        Surface update step size.
+    wavelength : scalar_float
+        Wavelength of light in meters.
+    dx : scalar_float
+        Pixel spacing in meters.
 
     Returns
     -------
-    - `updated_state` (tuple[Complex[Array, "H W"], Complex[Array, "H W"]]):
-        Updated object and surface state after sequential processing
+    tuple of (Complex[Array, "H W"], Complex[Array, "H W"])
+        Updated object and surface state after sequential processing.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute number of positions
     - Define position body
     - Apply fori_loop over positions
@@ -422,8 +426,10 @@ def single_pie_sequential(
             dx,
         )
 
-    updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = jax.lax.fori_loop(
-        0, num_positions, position_body, (object_prop_ft, surface_pattern)
+    updated_state: tuple[Complex[Array, "H W"], Complex[Array, "H W"]] = (
+        jax.lax.fori_loop(
+            0, num_positions, position_body, (object_prop_ft, surface_pattern)
+        )
     )
     return updated_state
 
@@ -446,31 +452,51 @@ def single_pie_vmap(
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
-    """
-    Description
-    -----------
-    Parallel processing over positions using vmap for faster but approximate PIE.
+    """Parallel processing over positions using vmap for faster but approximate PIE.
+    
     All positions use the same initial state, then updates are averaged.
 
     Parameters
     ----------
-    - `object_prop_ft` (Complex[Array, "H W"]):
-        Current object wavefront in Fourier domain
-    - `surface_pattern` (Complex[Array, "H W"]):
-        Current surface pattern
-    - `image_data` (Float[Array, "P H W"]):
-        Measurement data for all positions
-    - `positions` (Float[Array, "P 2"]):
-        Position coordinates for all measurements
-    - Additional parameters for PIE algorithm
+    object_prop_ft : Complex[Array, "H W"]
+        Current object wavefront in Fourier domain.
+    surface_pattern : Complex[Array, "H W"]
+        Current surface pattern.
+    image_data : Float[Array, "P H W"]
+        Measurement data for all positions.
+    positions : Float[Array, "P 2"]
+        Position coordinates for all measurements.
+    frequency_x_grid : Float[Array, "H W"]
+        Frequency grid in x direction.
+    frequency_y_grid : Float[Array, "H W"]
+        Frequency grid in y direction.
+    pixel_mask : Float[Array, "H W"]
+        Pixel response mask for sensor modeling.
+    propagation_distance_2 : scalar_float
+        Distance from diffuser to sensor.
+    magnification : scalar_integer
+        Downsampling magnification factor.
+    alpha_object : scalar_float
+        Object update mixing parameter.
+    gamma_object : scalar_float
+        Object update step size.
+    alpha_surface : scalar_float
+        Surface update mixing parameter.
+    gamma_surface : scalar_float
+        Surface update step size.
+    wavelength : scalar_float
+        Wavelength of light in meters.
+    dx : scalar_float
+        Pixel spacing in meters.
 
     Returns
     -------
-    - `updated_state` (tuple[Complex[Array, "H W"], Complex[Array, "H W"]]):
-        Updated object and surface state after parallel processing and averaging
+    tuple of (Complex[Array, "H W"], Complex[Array, "H W"])
+        Updated object and surface state after parallel processing and averaging.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Apply vmap over all positions using same initial state
     - Compute average of all object updates
     - Compute average of all surface updates
@@ -532,33 +558,31 @@ def _update_object_wavefront(
     alpha_object: scalar_float,
     gamma_object: scalar_float,
 ) -> Complex[Array, "H W"]:
-    """
-    Description
-    -----------
-    Updates object wavefront using rPIE algorithm.
+    """Update object wavefront using rPIE algorithm.
 
     Parameters
     ----------
-    - `object_shift` (Complex[Array, "H W"]):
-        Current shifted object wavefront
-    - `surface_pattern` (Complex[Array, "H W"]):
-        Surface pattern function
-    - `surface_plane` (Complex[Array, "H W"]):
-        Current exit wave at surface
-    - `surface_plane_new` (Complex[Array, "H W"]):
-        Updated exit wave at surface
-    - `alpha_object` (scalar_float):
-        Mixing parameter for denominator
-    - `gamma_object` (scalar_float):
-        Update step size
+    object_shift : Complex[Array, "H W"]
+        Current shifted object wavefront.
+    surface_pattern : Complex[Array, "H W"]
+        Surface pattern function.
+    surface_plane : Complex[Array, "H W"]
+        Current exit wave at surface.
+    surface_plane_new : Complex[Array, "H W"]
+        Updated exit wave at surface.
+    alpha_object : scalar_float
+        Mixing parameter for denominator.
+    gamma_object : scalar_float
+        Update step size.
 
     Returns
     -------
-    - `updated_object` (Complex[Array, "H W"]):
-        Updated object wavefront
+    Complex[Array, "H W"]
+        Updated object wavefront.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute surface conjugate
     - Compute difference between current and updated surface plane
     - Compute surface absolute squared
@@ -590,37 +614,31 @@ def _update_surface_pattern(
     alpha_surface: scalar_float,
     gamma_surface: scalar_float,
 ) -> Complex[Array, "H W"]:
-    """
-    Description
-    -----------
-    Updates surface pattern using modified PIE algorithm.
+    """Update surface pattern using modified PIE algorithm.
 
     Parameters
     ----------
-    - `surface_pattern` (Complex[Array, "H W"]):
-        Current surface pattern
-    - `object_shift` (Complex[Array, "H W"]):
-        Shifted object wavefront
-    - `surface_plane` (Complex[Array, "H W"]):
-        Current exit wave at surface
-    - `surface_plane_new` (Complex[Array, "H W"]):
-        Updated exit wave at surface
-    - `alpha_surface` (scalar_float):
-        Mixing parameter for denominator
-    - `gamma_surface` (scalar_float):
-        Update step size
-    - `wavelength` (scalar_float):
-        Wavelength of light in meters
-    - `dx` (scalar_float):
-        Pixel spacing in meters
+    surface_pattern : Complex[Array, "H W"]
+        Current surface pattern.
+    object_shift : Complex[Array, "H W"]
+        Shifted object wavefront.
+    surface_plane : Complex[Array, "H W"]
+        Current exit wave at surface.
+    surface_plane_new : Complex[Array, "H W"]
+        Updated exit wave at surface.
+    alpha_surface : scalar_float
+        Mixing parameter for denominator.
+    gamma_surface : scalar_float
+        Update step size.
 
     Returns
     -------
-    - `updated_surface` (Complex[Array, "H W"]):
-        Updated surface pattern
+    Complex[Array, "H W"]
+        Updated surface pattern.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute object conjugate
     - Compute difference between current and updated surface plane
     - Compute object absolute squared
@@ -647,23 +665,21 @@ def _update_surface_pattern(
 def _apply_coherent_transfer_function(
     field_ft: Complex[Array, "H W"],
 ) -> Complex[Array, "H W"]:
-    """
-    Description
-    -----------
-    Applies coherent transfer function in Fourier domain.
+    """Apply coherent transfer function in Fourier domain.
 
     Parameters
     ----------
-    - `field_ft` (Complex[Array, "H W"]):
-        Field in Fourier domain
+    field_ft : Complex[Array, "H W"]
+        Field in Fourier domain.
 
     Returns
     -------
-    - `result` (Complex[Array, "H W"]):
-        Field after CTF application
+    Complex[Array, "H W"]
+        Field after CTF application.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute CTF
     - Apply CTF to field
     - Return result
@@ -680,30 +696,29 @@ def _apply_position_shift(
     frequency_x_grid: Float[Array, "H W"],
     frequency_y_grid: Float[Array, "H W"],
 ) -> Complex[Array, "H W"]:
-    """
-    Description
-    -----------
-    Applies position shift using phase multiplication in Fourier domain.
+    """Apply position shift using phase multiplication in Fourier domain.
+    
     Implements MATLAB: Hs = exp(-1j*2*pi.*(FX.*xlocation(tt)/imSize+FY.*ylocation(tt)/imSize))
 
     Parameters
     ----------
-    - `field_ft` (Complex[Array, "H W"]):
-        Field in Fourier domain
-    - `position` (Float[Array, " 2"]):
-        Position shift [x, y]
-    - `frequency_x_grid` (Float[Array, "H W"]):
-        Frequency grid in x direction
-    - `frequency_y_grid` (Float[Array, "H W"]):
-        Frequency grid in y direction
+    field_ft : Complex[Array, "H W"]
+        Field in Fourier domain.
+    position : Float[Array, " 2"]
+        Position shift [x, y].
+    frequency_x_grid : Float[Array, "H W"]
+        Frequency grid in x direction.
+    frequency_y_grid : Float[Array, "H W"]
+        Frequency grid in y direction.
 
     Returns
     -------
-    - `shifted_field` (Complex[Array, "H W"]):
-        Position-shifted field in real space
+    Complex[Array, "H W"]
+        Position-shifted field in real space.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute image size
     - Compute phase factor
     - Compute position-shifted field in Fourier domain
@@ -721,7 +736,9 @@ def _apply_position_shift(
         )
     )
     shifted_field_ft: Complex[Array, "H W"] = field_ft * phase_factor
-    shifted_field: Complex[Array, "H W"] = jnp.fft.ifft2(jnp.fft.ifftshift(shifted_field_ft))
+    shifted_field: Complex[Array, "H W"] = jnp.fft.ifft2(
+        jnp.fft.ifftshift(shifted_field_ft)
+    )
     return shifted_field
 
 
@@ -732,29 +749,27 @@ def _get_propagation_kernel(
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> Complex[Array, "H W"]:
-    """
-    Description
-    -----------
-    Returns propagation kernel H_d for free space propagation.
+    """Return propagation kernel H_d for free space propagation.
 
     Parameters
     ----------
-    - `field_shape` (Tuple[int, int]):
-        Shape of the field (height, width)
-    - `distance` (scalar_float):
-        Propagation distance in meters
-    - `wavelength` (scalar_float):
-        Wavelength in meters
-    - `dx` (scalar_float):
-        Pixel spacing in meters
+    field_shape : Tuple[int, int]
+        Shape of the field (height, width).
+    distance : scalar_float
+        Propagation distance in meters.
+    wavelength : scalar_float
+        Wavelength in meters.
+    dx : scalar_float
+        Pixel spacing in meters.
 
     Returns
     -------
-    - `kernel` (Complex[Array, "H W"]):
-        Propagation kernel for angular spectrum method
+    Complex[Array, "H W"]
+        Propagation kernel for angular spectrum method.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute height and width of field
     - Compute frequency grid in x direction
     - Compute frequency grid in y direction
@@ -775,7 +790,9 @@ def _get_propagation_kernel(
     frequency_x_grid, frequency_y_grid = jnp.meshgrid(frequency_x, frequency_y)
     frequency_squared: Float[Array, "H W"] = frequency_x_grid**2 + frequency_y_grid**2
     k_0: scalar_float = 2 * jnp.pi / wavelength
-    k_z: Complex[Array, "H W"] = jnp.sqrt(k_0**2 - (2 * jnp.pi) ** 2 * frequency_squared + 0j)
+    k_z: Complex[Array, "H W"] = jnp.sqrt(
+        k_0**2 - (2 * jnp.pi) ** 2 * frequency_squared + 0j
+    )
     kernel: Complex[Array, "H W"] = jnp.exp(1j * k_z * distance)
     return kernel
 
@@ -786,28 +803,27 @@ def _compute_sensor_intensity(
     pixel_mask: Float[Array, "H W"],
     magnification: scalar_integer,
 ) -> Float[Array, "H W"]:
-    """
-    Description
-    -----------
-    Computes sensor plane intensity with pixel response mask and downsampling.
+    """Compute sensor plane intensity with pixel response mask and downsampling.
+    
     Implements the MATLAB: conv2(pixelMask.*abs(sensorPlane).^2, ones(mag,mag))
 
     Parameters
     ----------
-    - `sensor_field` (Complex[Array, "H W"]):
-        Complex field at sensor plane
-    - `pixel_mask` (Float[Array, "H W"]):
-        Pixel response mask modeling sensor characteristics
-    - `magnification` (scalar_integer):
-        Downsampling magnification factor
+    sensor_field : Complex[Array, "H W"]
+        Complex field at sensor plane.
+    pixel_mask : Float[Array, "H W"]
+        Pixel response mask modeling sensor characteristics.
+    magnification : scalar_integer
+        Downsampling magnification factor.
 
     Returns
     -------
-    - `downsampled_intensity` (Float[Array, "H W"]):
-        Downsampled intensity pattern
+    Float[Array, "H W"]
+        Downsampled intensity pattern.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute intensity
     - Apply pixel mask
     - Compute kernel
@@ -830,27 +846,26 @@ def _compute_sensor_intensity(
 def _create_frequency_grids(
     field: Complex[Array, "H W"], dx: scalar_float
 ) -> Tuple[Float[Array, "H W"], Float[Array, "H W"]]:
-    """
-    Description
-    -----------
-    Creates frequency grids for Fourier transforms.
+    """Create frequency grids for Fourier transforms.
 
     Parameters
     ----------
-    - `field` (Complex[Array, "H W"]):
-        Input field to determine grid size
-    - `dx` (scalar_float):
-        Spatial sampling interval
+    field : Complex[Array, "H W"]
+        Input field to determine grid size.
+    dx : scalar_float
+        Spatial sampling interval.
 
     Returns
     -------
-    - `frequency_x_grid` (Float[Array, "H W"]):
-        Frequency grid in x direction
-    - `frequency_y_grid` (Float[Array, "H W"]):
-        Frequency grid in y direction
+    tuple of (Float[Array, "H W"], Float[Array, "H W"])
+        - frequency_x_grid : Float[Array, "H W"]
+            Frequency grid in x direction.
+        - frequency_y_grid : Float[Array, "H W"]
+            Frequency grid in y direction.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Compute height and width of field
     - Compute frequency grid in x direction
     - Compute frequency grid in y direction
@@ -868,22 +883,20 @@ def _create_frequency_grids(
 
 
 @jaxtyped(typechecker=beartype)
-def _get_ctf(field_shape: Optional[Tuple[int, int]] = (256, 256)) -> Complex[Array, "H W"]:
-    """
-    Description
-    -----------
-    Returns a placeholder coherent transfer function.
+def _get_ctf(
+    field_shape: Optional[Tuple[int, int]] = (256, 256)
+) -> Complex[Array, "H W"]:
+    """Return a placeholder coherent transfer function.
 
     Parameters
     ----------
-    - `field_shape` (Optional[Tuple[int, int]]):
-        Shape of the field (height, width)
-        Default is (256, 256)
+    field_shape : Tuple[int, int], optional
+        Shape of the field (height, width). Default is (256, 256).
 
     Returns
     -------
-    - `ctf` (Complex[Array, "H W"]):
-        Coherent transfer function
+    Complex[Array, "H W"]
+        Coherent transfer function.
     """
     ctf: Complex[Array, "H W"] = jnp.ones(field_shape, dtype=complex)
     return ctf

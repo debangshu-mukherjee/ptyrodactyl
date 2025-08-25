@@ -1,21 +1,16 @@
-"""
-Module: photons.lens_optics
----------------------------
-Codes for optical propgation steps.
+"""Codes for optical propgation steps.
 
 Functions
 ---------
-- `angular_spectrum_prop`:
+angular_spectrum_prop
     Propagates a complex optical field using the angular spectrum method
-- `fresnel_prop`:
+fresnel_prop
     Propagates a complex optical field using the Fresnel approximation
-- `fraunhofer_prop`:
+fraunhofer_prop
     Propagates a complex optical field using the Fraunhofer approximation
-- `circular_aperture`:
-    Applies a circular aperture to an incoming wavefront
-- `digital_zoom`:
+digital_zoom
     Zooms an optical wavefront by a specified factor
-- `optical_zoom`:
+optical_zoom
     Modifies the calibration of an optical wavefront without changing its field
 """
 
@@ -43,37 +38,36 @@ def angular_spectrum_prop(
     z_move: scalar_numeric,
     refractive_index: Optional[scalar_numeric] = 1.0,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Propagate a complex field using the angular spectrum method.
+    """Propagate a complex field using the angular spectrum method.
 
     Parameters
     ----------
-    - `incoming` (OpticalWavefront)
+    incoming : OpticalWavefront
         PyTree with the following parameters:
-        - `field` (Complex[Array, "H W"]):
+        
+        field : Complex[Array, "H W"]
             Input complex field
-        - `wavelength` (Float[Array, ""]):
+        wavelength : Float[Array, ""]
             Wavelength of light in meters
-        - `dx` (Float[Array, ""]):
+        dx : Float[Array, ""]
             Grid spacing in meters
-        - `z_position` (Float[Array, ""]):
+        z_position : Float[Array, ""]
             Wave front position in meters
-    - `z_move` (scalar_numeric):
+    z_move : scalar_numeric
         Propagation distance in meters
         This is in free space.
-    - `refractive_index` (Optional[scalar_numeric]):
+    refractive_index : Optional[scalar_numeric], optional
         Index of refraction of the medium. Default is 1.0 (vacuum).
-
 
     Returns
     -------
-    - `propagated` (OpticalWavefront):
+    OpticalWavefront
         Propagated wave front
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Get the shape of the input field
     - Calculate the wavenumber
     - Compute the path length
@@ -119,36 +113,36 @@ def fresnel_prop(
     z_move: scalar_numeric,
     refractive_index: Optional[scalar_numeric] = 1.0,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Propagate a complex field using the Fresnel approximation.
+    """Propagate a complex field using the Fresnel approximation.
 
     Parameters
     ----------
-    - `incoming` (OpticalWavefront)
+    incoming : OpticalWavefront
         PyTree with the following parameters:
-        - `field` (Complex[Array, "H W"]):
+        
+        field : Complex[Array, "H W"]
             Input complex field
-        - `wavelength` (Float[Array, ""]):
+        wavelength : Float[Array, ""]
             Wavelength of light in meters
-        - `dx` (Float[Array, ""]):
+        dx : Float[Array, ""]
             Grid spacing in meters
-        - `z_position` (Float[Array, ""]):
+        z_position : Float[Array, ""]
             Wave front position in meters
-    - `z_move` (scalar_numeric):
+    z_move : scalar_numeric
         Propagation distance in meters
         This is in free space.
-    - `refractive_index` (Optional[scalar_numeric]):
+    refractive_index : Optional[scalar_numeric], optional
         Index of refraction of the medium. Default is 1.0 (vacuum).
 
     Returns
     -------
-    - `propagated` (OpticalWavefront):
+    OpticalWavefront
         Propagated wave front
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Calculate the wavenumber
     - Create spatial coordinates
     - Quadratic phase factor for Fresnel approximation (pre-free-space propagation)
@@ -210,36 +204,36 @@ def fraunhofer_prop(
     z_move: scalar_float,
     refractive_index: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Propagate a complex field using the Fraunhofer approximation.
+    """Propagate a complex field using the Fraunhofer approximation.
 
     Parameters
     ----------
-    - `incoming` (OpticalWavefront)
+    incoming : OpticalWavefront
         PyTree with the following parameters:
-        - `field` (Complex[Array, "H W"]):
+        
+        field : Complex[Array, "H W"]
             Input complex field
-        - `wavelength` (Float[Array, ""]):
+        wavelength : Float[Array, ""]
             Wavelength of light in meters
-        - `dx` (Float[Array, ""]):
+        dx : Float[Array, ""]
             Grid spacing in meters
-        - `z_position` (Float[Array, ""]):
+        z_position : Float[Array, ""]
             Wave front position in meters
-    - `z_move` (scalar_float):
+    z_move : scalar_float
         Propagation distance in meters.
         This is in free space.
-    - `refractive_index` (scalar_float, optional):
+    refractive_index : scalar_float, optional
         Index of refraction of the medium. Default is 1.0 (vacuum).
 
     Returns
     -------
-    - `propagated` (OpticalWavefront):
+    OpticalWavefront
         Propagated wave front
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Get the shape of the input field
     - Calculate the spatial frequency coordinates
     - Create the meshgrid of spatial frequencies
@@ -273,110 +267,35 @@ def fraunhofer_prop(
 
 
 @jaxtyped(typechecker=beartype)
-def circular_aperture(
-    incoming: OpticalWavefront,
-    diameter: scalar_float,
-    center: Optional[Float[Array, " 2"]] = None,
-    transmittivity: Optional[scalar_float] = 1.0,
-) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Apply a circular aperture to the incoming wave front.
-    The aperture is defined by its diameter and center position.
-
-    Parameters
-    ----------
-    - `incoming` (OpticalWavefront):
-        PyTree with the following parameters:
-        - `field` (Complex[Array, "H W"]):
-            Input complex field
-        - `wavelength` (Float[Array, ""]):
-            Wavelength of light in meters
-        - `dx` (Float[Array, ""]):
-            Grid spacing in meters
-        - `z_position` (Float[Array, ""]):
-            Wave front position in meters
-    - `diameter` (scalar_float):
-        Diameter of the circular aperture in meters
-    - `center` (Optional[Float[Array, " 2"]]):
-        Center position of the circular aperture in meters.
-        Default is the center of the input field.
-    - `transmittivity` (Optional[scalar_float]):
-        How much light is transmitted through the aperture.
-        Default is 1.0 (100% transmittivity).
-
-    Returns
-    -------
-    - `apertured` (OpticalWavefront):
-        Wave front after applying the circular aperture.
-
-    Flow
-    ----
-    - Get the shape of the input field
-    - Create spatial coordinates
-    - Create a meshgrid of spatial coordinates
-    - Create the circular aperture mask
-    - Create the transmission mask
-    - Apply the aperture and transmission masks to the input field
-    - Return the apertured wave front
-    """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-    center_pixels: Float[Array, 2] = center / incoming.dx
-    diameter_pixels: scalar_float = diameter / incoming.dx
-    ny: scalar_integer = incoming.field.shape[0]
-    nx: scalar_integer = incoming.field.shape[1]
-    x: Float[Array, " W"] = jnp.arange(-nx // 2, nx // 2)
-    y: Float[Array, " H"] = jnp.arange(-ny // 2, ny // 2)
-    Y: Float[Array, "H W"]
-    X: Float[Array, "H W"]
-    X, Y = jnp.meshgrid(x, y)
-    aperture_mask: Bool[Array, " H W"] = (
-        (X - center_pixels[0]) ** 2 + (Y - center_pixels[1]) ** 2
-    ) <= ((diameter_pixels / 2) ** 2)
-    transmission: Float[Array, "H W"] = jnp.ones_like(aperture_mask, dtype=float) * transmittivity
-    float_aperture = aperture_mask.astype(float) * transmission
-    apertured: OpticalWavefront = make_optical_wavefront(
-        field=incoming.field * float_aperture,
-        wavelength=incoming.wavelength,
-        dx=incoming.dx,
-        z_position=incoming.z_position,
-    )
-    return apertured
-
-
-@jaxtyped(typechecker=beartype)
 def digital_zoom(
     wavefront: OpticalWavefront,
     zoom_factor: scalar_numeric,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    Zoom an optical wavefront by a specified factor.
-    Key is this returns the same sized array as the
-    original wavefront.
+    """Zoom an optical wavefront by a specified factor.
+    
+    Key is this returns the same sized array as the original wavefront.
 
     Parameters
     ----------
-    - `wavefront` (OpticalWavefront):
+    wavefront : OpticalWavefront
         Incoming optical wavefront.
-    - `zoom_factor` (scalar_numeric):
+    zoom_factor : scalar_numeric
         Zoom factor (greater than 1 to zoom in, less than 1 to zoom out).
 
     Returns
     -------
-    - `zoomed_wavefront` (OpticalWavefront):
+    OpticalWavefront
         Zoomed optical wavefront of the same spatial dimensions.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Calculate the new dimensions of the zoomed wavefront.
     - Resize the wavefront field using cubic interpolation.
     - Crop the resized field to match the original dimensions.
     - Return the new optical wavefront with the updated field, wavelength,
-    and pixel size.
+      and pixel size.
     """
     H: int
     W: int
@@ -409,23 +328,18 @@ def optical_zoom(
     wavefront: OpticalWavefront,
     zoom_factor: scalar_numeric,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    This is the optical zoom function that only
-    modifies the calibration and leaves everything
-    else the same.
+    """This is the optical zoom function that only modifies the calibration and leaves everything else the same.
 
     Parameters
     ----------
-    - `wavefront` (OpticalWavefront):
+    wavefront : OpticalWavefront
         Incoming optical wavefront.
-    - `zoom_factor` (scalar_numeric):
+    zoom_factor : scalar_numeric
         Zoom factor (greater than 1 to zoom in, less than 1 to zoom out).
 
     Returns
     -------
-    - `zoomed_wavefront` (OpticalWavefront):
+    OpticalWavefront
         Zoomed optical wavefront of the same spatial dimensions.
     """
     new_dx = wavefront.dx * zoom_factor

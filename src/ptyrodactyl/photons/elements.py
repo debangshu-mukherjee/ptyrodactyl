@@ -50,26 +50,26 @@ from jaxtyping import Array, Bool, Float
 from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (
-    OpticalWavefront,
-    make_optical_wavefront,
-    scalar_float,
-)
+from .photon_types import OpticalWavefront, make_optical_wavefront, scalar_float
 
 jax.config.update("jax_enable_x64", True)
 
 
-def _xy_grids(nx: int, ny: int, dx: float) -> Tuple[Float[Array, " H W"], Float[Array, " H W"]]:
+def _xy_grids(
+    nx: int, ny: int, dx: float
+) -> Tuple[Float[Array, " H W"], Float[Array, " H W"]]:
     x: Float[Array, " W"] = jnp.arange(-nx // 2, nx // 2) * dx
     y: Float[Array, " H"] = jnp.arange(-ny // 2, ny // 2) * dx
-    X: Float[Array, "H W"]; Y: Float[Array, "H W"]
+    X: Float[Array, "H W"]
+    Y: Float[Array, "H W"]
     X, Y = jnp.meshgrid(x, y)
     return X, Y
 
 
 def _rotate_coords(X: Array, Y: Array, theta: float) -> Tuple[Array, Array]:
-    ct = jnp.cos(theta); st = jnp.sin(theta)
-    U =  ct * X + st * Y
+    ct = jnp.cos(theta)
+    st = jnp.sin(theta)
+    U = ct * X + st * Y
     V = -st * X + ct * Y
     return U, V
 
@@ -132,9 +132,9 @@ def prism_phase_ramp(
 @jaxtyped(typechecker=beartype)
 def apply_beam_splitter(
     incoming: OpticalWavefront,
-    t: scalar_float = jnp.sqrt(0.5),
-    r: scalar_float = 1j * jnp.sqrt(0.5),
-    normalize: bool = True,
+    t2: Optional[scalar_float] = 0.5,
+    r2: Optional[scalar_float] = 0.5,
+    normalize: Optional[bool] = True,
 ) -> Tuple[OpticalWavefront, OpticalWavefront]:
     """
     Split an input field into transmitted and reflected components.
@@ -143,9 +143,9 @@ def apply_beam_splitter(
     ----------
     incoming : OpticalWavefront
         Input wavefront (scalar field)
-    t : scalar_float, optional
+    t2 : scalar_float, optional
         Complex transmission amplitude, by default jnp.sqrt(0.5)
-    r : scalar_float, optional
+    r2 : scalar_float, optional
         Complex reflection amplitude, by default 1j * jnp.sqrt(0.5) for 50/50 convention
     normalize : bool, optional
         If True, scale (t, r) so that |t|^2 + |r|^2 = 1, by default True
@@ -163,27 +163,30 @@ def apply_beam_splitter(
     - Multiply field by t and r
     - Return two wavefronts sharing same metadata
     """
+    t = jnp.sqrt(t2)
+    r = 1j * jnp.sqrt(r2)
     t_val = jnp.asarray(t, dtype=incoming.field.dtype)
     r_val = jnp.asarray(r, dtype=incoming.field.dtype)
     if normalize:
-        power = (jnp.abs(t_val) ** 2 + jnp.abs(r_val) ** 2)
+        power = jnp.abs(t_val) ** 2 + jnp.abs(r_val) ** 2
         # Avoid division by zero
         t_val = t_val / jnp.sqrt(jnp.maximum(power, 1e-20))
         r_val = r_val / jnp.sqrt(jnp.maximum(power, 1e-20))
 
-    wf_T = make_optical_wavefront(
+    wf_t = make_optical_wavefront(
         field=incoming.field * t_val,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
         z_position=incoming.z_position,
     )
-    wf_R = make_optical_wavefront(
+    wf_r = make_optical_wavefront(
         field=incoming.field * r_val,
         wavelength=incoming.wavelength,
         dx=incoming.dx,
         z_position=incoming.z_position,
     )
-    return wf_T, wf_R
+    return (wf_t, wf_r)
+
 
 @jaxtyped(typechecker=beartype)
 def mirror_reflect(
@@ -471,11 +474,14 @@ def polarizer_jones(
     - Apply P to [Ex, Ey] at each pixel
     """
     field = incoming.field
-    assert field.ndim == 3 and field.shape[-1] == 2, "polarizer_jones expects field[...,2]"
-    ct = jnp.cos(theta); st = jnp.sin(theta)
+    assert (
+        field.ndim == 3 and field.shape[-1] == 2
+    ), "polarizer_jones expects field[...,2]"
+    ct = jnp.cos(theta)
+    st = jnp.sin(theta)
     # Projection onto axis θ: [ct, st]^T [ct, st]
     Ex, Ey = field[..., 0], field[..., 1]
-    E_par  = Ex * ct + Ey * st
+    E_par = Ex * ct + Ey * st
     Ex_out = E_par * ct
     Ey_out = E_par * st
     field_out = jnp.stack([Ex_out, Ey_out], axis=-1)
@@ -495,7 +501,7 @@ def waveplate_jones(
 ) -> OpticalWavefront:
     """
     Waveplate/retarder with retardance `delta` (radians) and fast-axis angle `theta`.
-    
+
     Special cases: quarter-wave (delta=π/2), half-wave (delta=π).
 
     Parameters
@@ -518,9 +524,12 @@ def waveplate_jones(
     - Apply J to [Ex, Ey] per pixel
     """
     field = incoming.field
-    assert field.ndim == 3 and field.shape[-1] == 2, "waveplate_jones expects field[...,2]"
+    assert (
+        field.ndim == 3 and field.shape[-1] == 2
+    ), "waveplate_jones expects field[...,2]"
 
-    ct = jnp.cos(theta); st = jnp.sin(theta)
+    ct = jnp.cos(theta)
+    st = jnp.sin(theta)
     e = jnp.exp(1j * delta)
 
     # Expanded multiplication of J with [Ex, Ey]
@@ -576,7 +585,9 @@ def nd_filter(
     if optical_density is not None:
         T = jnp.power(10.0, -jnp.asarray(optical_density))
     else:
-        T = jnp.clip(jnp.asarray(transmittance if transmittance is not None else 1.0), 0.0, 1.0)
+        T = jnp.clip(
+            jnp.asarray(transmittance if transmittance is not None else 1.0), 0.0, 1.0
+        )
 
     a = jnp.sqrt(T).astype(incoming.field.real.dtype)
     field_out = incoming.field * a
@@ -587,6 +598,7 @@ def nd_filter(
         dx=incoming.dx,
         z_position=incoming.z_position,
     )
+
 
 @jaxtyped(typechecker=beartype)
 def quarter_waveplate(
@@ -653,7 +665,7 @@ def phase_grating_blazed_elliptical(
 ) -> OpticalWavefront:
     """
     Orientation-aware elliptical blazed grating.
-    
+
     Supports anisotropic periods along rotated axes (x', y') and optional 2D blaze.
 
     Parameters

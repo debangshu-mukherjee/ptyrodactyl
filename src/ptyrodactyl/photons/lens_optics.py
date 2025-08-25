@@ -48,7 +48,7 @@ def angular_spectrum_prop(
     ----------
     incoming : OpticalWavefront
         PyTree with the following parameters:
-        
+
         field : Complex[Array, "H W"]
             Input complex field
         wavelength : Float[Array, ""]
@@ -71,7 +71,7 @@ def angular_spectrum_prop(
     Notes
     -----
     Algorithm:
-    
+
     - Get the shape of the input field
     - Calculate the wavenumber
     - Compute the path length
@@ -123,7 +123,7 @@ def fresnel_prop(
     ----------
     incoming : OpticalWavefront
         PyTree with the following parameters:
-        
+
         field : Complex[Array, "H W"]
             Input complex field
         wavelength : Float[Array, ""]
@@ -146,7 +146,7 @@ def fresnel_prop(
     Notes
     -----
     Algorithm:
-    
+
     - Calculate the wavenumber
     - Create spatial coordinates
     - Quadratic phase factor for Fresnel approximation (pre-free-space propagation)
@@ -214,7 +214,7 @@ def fraunhofer_prop(
     ----------
     incoming : OpticalWavefront
         PyTree with the following parameters:
-        
+
         field : Complex[Array, "H W"]
             Input complex field
         wavelength : Float[Array, ""]
@@ -237,7 +237,7 @@ def fraunhofer_prop(
     Notes
     -----
     Algorithm:
-    
+
     - Get the shape of the input field
     - Calculate the spatial frequency coordinates
     - Create the meshgrid of spatial frequencies
@@ -276,7 +276,7 @@ def digital_zoom(
     zoom_factor: scalar_numeric,
 ) -> OpticalWavefront:
     """Zoom an optical wavefront by a specified factor.
-    
+
     Key is this returns the same sized array as the original wavefront.
 
     Parameters
@@ -294,7 +294,7 @@ def digital_zoom(
     Notes
     -----
     Algorithm:
-    
+
     - Calculate the new dimensions of the zoomed wavefront.
     - Resize the wavefront field using cubic interpolation.
     - Crop the resized field to match the original dimensions.

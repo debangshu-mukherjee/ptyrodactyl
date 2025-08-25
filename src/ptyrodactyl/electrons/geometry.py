@@ -47,7 +47,7 @@ def rotmatrix_vectors(
     -----
     Uses the Rodrigues rotation formula. Handles special cases where vectors are
     parallel or anti-parallel.
-    
+
     Algorithm:
     ---------
     - Normalize input vectors:
@@ -150,7 +150,7 @@ def rotmatrix_axis(
     -----
     Uses the Rodrigues rotation formula. This creates a right-handed rotation
     when looking along the axis direction.
-    
+
     Algorithm:
     ---------
     - Normalize the rotation axis:
@@ -236,9 +236,9 @@ def rotate_structure(
 
     Notes
     -----
-    Applies rotation transformations to both atomic coordinates and unit cell vectors. 
+    Applies rotation transformations to both atomic coordinates and unit cell vectors.
     Supports an optional additional in-plane rotation around the z-axis after the primary rotation.
-    
+
     Algorithm:
     ---------
     - Extract atomic positions:
@@ -302,7 +302,7 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
     Notes
     -----
     The reciprocal lattice is fundamental for crystallography and diffraction calculations.
-    
+
     Algorithm:
     ---------
     - Extract lattice vectors:

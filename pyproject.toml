@@ -125,6 +125,19 @@ ignore = [
     "COM812",  # Disabled to avoid conflicts with formatter
 ]
 
+[tool.ruff.lint.flake8-bugbear]
+# Allow immutable JAX array creation functions in defaults
+extend-immutable-calls = [
+    "jax.numpy.zeros",
+    "jax.numpy.ones", 
+    "jax.numpy.array",
+    "jax.numpy.asarray",
+    "jnp.zeros",
+    "jnp.ones",
+    "jnp.array",
+    "jnp.asarray",
+]
+
 [tool.ruff.lint.pylint]
 max-args = 10  # Allow up to 10 arguments in function definitions
 

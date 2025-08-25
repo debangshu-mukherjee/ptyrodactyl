@@ -26,25 +26,23 @@ Functions
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Callable, Optional, Tuple, Union
+from beartype.typing import Optional, Tuple, Union
 from jaxtyping import Array, Bool, Float
 
 from ptyrodactyl._decorators import beartype, jaxtyped
 
-from .photon_types import (
-    OpticalWavefront,
-    make_optical_wavefront,
-    scalar_float,
-    scalar_numeric,
-)
+from .photon_types import OpticalWavefront, make_optical_wavefront, scalar_float, scalar_numeric
 
 jax.config.update("jax_enable_x64", True)
 
+
 @jaxtyped(typechecker=beartype)
-def _xy_grids(nx: int, ny: int, dx: float) -> Tuple[Float[Array, " H W"], Float[Array, " H W"]]:
+def _xy_grids(
+    nx: int, ny: int, dx: float
+) -> Tuple[Float[Array, " H W"], Float[Array, " H W"]]:
     """
     Internal helper to create centered spatial coordinate grids (in meters).
-    
+
     Parameters
     ----------
     nx : int
@@ -53,7 +51,7 @@ def _xy_grids(nx: int, ny: int, dx: float) -> Tuple[Float[Array, " H W"], Float[
         Number of grid points along y-axis
     dx : float
         Grid spacing in meters
-    
+
     Returns
     -------
     X : Float[Array, "H W"]
@@ -73,19 +71,18 @@ def _xy_grids(nx: int, ny: int, dx: float) -> Tuple[Float[Array, " H W"], Float[
 def circular_aperture(
     incoming: OpticalWavefront,
     diameter: scalar_float,
-    center: Optional[Float[Array, " 2"]] = None,
+    center: Optional[Float[Array, " 2"]] = jnp.zeros(2),
     transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
     Apply a circular aperture to the incoming wavefront.
-    
     The aperture is defined by its physical diameter and (optional) center.
 
     Parameters
     ----------
     incoming : OpticalWavefront
         PyTree with:
-        
+
         - field : Complex[Array, "H W"]
             Complex input field
         - wavelength : Float[Array, ""]
@@ -114,18 +111,13 @@ def circular_aperture(
     - Multiply by transmittivity (clipped to [0, 1])
     - Apply to the complex field and return
     """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
     xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
-
     r: Float[Array, " H W"] = jnp.sqrt((xx - x0) ** 2 + (yy - y0) ** 2)
     inside: Bool[Array, " H W"] = r <= (diameter / 2.0)
     t = jnp.clip(jnp.asarray(transmittivity, dtype=float), 0.0, 1.0)
-
     transmission: Float[Array, " H W"] = inside.astype(float) * t
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * transmission,
@@ -141,7 +133,7 @@ def rectangular_aperture(
     incoming: OpticalWavefront,
     width: scalar_float,
     height: scalar_float,
-    center: Optional[Float[Array, " 2"]] = None,
+    center: Optional[Float[Array, " 2"]] = jnp.zeros(2),
     transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
@@ -172,21 +164,16 @@ def rectangular_aperture(
     - Multiply by transmittivity (clipped)
     - Apply to the complex field and return
     """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
     hx = width / 2.0
     hy = height / 2.0
-
-    inside_x: Bool[Array, " H W"] = ((x0 - hx) <= X) & ((x0 + hx) >= X)
-    inside_y: Bool[Array, " H W"] = ((y0 - hy) <= Y) & ((y0 + hy) >= Y)
+    inside_x: Bool[Array, " H W"] = ((x0 - hx) <= xx) & ((x0 + hx) >= xx)
+    inside_y: Bool[Array, " H W"] = ((y0 - hy) <= yy) & ((y0 + hy) >= yy)
     inside: Bool[Array, " H W"] = inside_x & inside_y
     t = jnp.clip(jnp.asarray(transmittivity, dtype=float), 0.0, 1.0)
-
     transmission: Float[Array, " H W"] = inside.astype(float) * t
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * transmission,
@@ -202,7 +189,7 @@ def annular_aperture(
     incoming: OpticalWavefront,
     inner_diameter: scalar_float,
     outer_diameter: scalar_float,
-    center: Optional[Float[Array, " 2"]] = None,
+    center: Optional[Float[Array, " 2"]] = jnp.zeros(2),
     transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
@@ -233,21 +220,15 @@ def annular_aperture(
     - Create mask for inner_radius < r <= outer_radius
     - Multiply by transmittivity (clipped), apply, and return
     """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
-
-    r: Float[Array, " H W"] = jnp.sqrt((X - x0) ** 2 + (Y - y0) ** 2)
+    r: Float[Array, " H W"] = jnp.sqrt((xx - x0) ** 2 + (yy - y0) ** 2)
     r_in = inner_diameter / 2.0
     r_out = outer_diameter / 2.0
-
     ring: Bool[Array, " H W"] = (r > r_in) & (r <= r_out)
     t = jnp.clip(jnp.asarray(transmittivity, dtype=float), 0.0, 1.0)
-
     transmission: Float[Array, " H W"] = ring.astype(float) * t
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * transmission,
@@ -261,90 +242,70 @@ def annular_aperture(
 @jaxtyped(typechecker=beartype)
 def variable_transmission_aperture(
     incoming: OpticalWavefront,
-    transmission: Union[Float[Array, " H W"], scalar_numeric, None] = None,
-    transmission_fn: Optional[
-        Callable[[Float[Array, " H W"], Float[Array, " H W"]], Float[Array, " H W"]]
-    ] = None,
+    transmission: Union[scalar_float, Float[Array, " ..."]],
 ) -> OpticalWavefront:
     """
     Apply an arbitrary (spatially varying) transmission to the wavefront.
-    
-    You may provide either:
-    
-    1. A precomputed transmission map with shape "H W", or a scalar
-    2. A callable `transmission_fn(X, Y) -> transmission` that receives
-       centered coordinate grids X, Y in meters and returns a map in [0, 1]
 
     Parameters
     ----------
     incoming : OpticalWavefront
-        Input wavefront PyTree (see `circular_aperture`)
-    transmission : Union[Float[Array, " H W"], scalar_numeric, None], optional
-        Precomputed transmission map (0..1), or a scalar attenuation factor.
-        If None, `transmission_fn` must be provided
-    transmission_fn : Optional[Callable[[Float[Array, " H W"], Float[Array, " H W"]], Float[Array, " H W"]]], optional
-        Function producing a transmission map given X, Y grids in meters
+        Input wavefront PyTree
+    transmission : Union[scalar_float, Float[Array, " H W"]]
+        Precomputed transmission map (0..1) with shape "H W", or a scalar
+        attenuation factor for uniform transmission
 
     Returns
     -------
     OpticalWavefront
-        Wavefront after applying the variable transmission
+        Wavefront after applying the transmission
 
     Examples
     --------
-    Gaussian apodizer::
-    
-        def gauss(X, Y, sigma):
-            R2 = X**2 + Y**2
-            return jnp.exp(-R2 / (2*sigma**2))
-        
-        wf2 = variable_transmission_aperture(wf, transmission_fn=lambda X,Y: gauss(X,Y, 1e-3))
-    
-    Super-Gaussian::
-    
-        lambda X, Y: jnp.exp(-((X**2 + Y**2)/(sigma**2))**m)
+    Uniform attenuation::
+    >>> wf2 = variable_transmission_aperture(wf, 0.5)  # 50% transmission
+
+    Spatially varying transmission::
+    >>> tmap = create_transmission_map(...)  # Shape (H, W)
+    >>> wf2 = variable_transmission_aperture(wf, tmap)
 
     Notes
     -----
-    - Build centered (x, y) grids in meters
-    - Obtain the transmission map:
-      * use provided map/scalar, or
-      * evaluate the callable on (X, Y)
-    - Clip transmission to [0, 1]
-    - Apply to the complex field and return
+    - For scalar transmission: applies uniform attenuation
+    - For array transmission: applies spatially varying transmission map
+    - Transmission values are clipped to [0, 1]
+    - This function is fully JAX-compatible and uses jax.lax.cond
     """
-    ny: int = incoming.field.shape[0]
-    nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    trans = jnp.asarray(transmission, dtype=float)
 
-    if transmission_fn is not None:
-        tmap: Float[Array, " H W"] = transmission_fn(X, Y)
-    elif transmission is None:
-        # Default to pass-through if neither is given
-        tmap = jnp.ones_like(incoming.field.real, dtype=float)
-    elif jnp.ndim(jnp.asarray(transmission)) == 0:
-        # Scalar attenuation
-        scalar_t = jnp.asarray(transmission, dtype=float)
-        tmap = jnp.ones((ny, nx), dtype=float) * scalar_t
-    else:
-        # Array map
-        tmap = jnp.asarray(transmission, dtype=float)
+    def apply_scalar_transmission() -> OpticalWavefront:
+        t = jnp.clip(trans, 0.0, 1.0)
+        return make_optical_wavefront(
+            field=incoming.field * t,
+            wavelength=incoming.wavelength,
+            dx=incoming.dx,
+            z_position=incoming.z_position,
+        )
 
-    tmap = jnp.clip(tmap, 0.0, 1.0)
+    def apply_array_transmission() -> OpticalWavefront:
+        tmap = jnp.clip(trans, 0.0, 1.0)
+        return make_optical_wavefront(
+            field=incoming.field * tmap,
+            wavelength=incoming.wavelength,
+            dx=incoming.dx,
+            z_position=incoming.z_position,
+        )
 
-    apertured: OpticalWavefront = make_optical_wavefront(
-        field=incoming.field * tmap,
-        wavelength=incoming.wavelength,
-        dx=incoming.dx,
-        z_position=incoming.z_position,
+    return jax.lax.cond(
+        trans.ndim == 0, apply_scalar_transmission, apply_array_transmission
     )
-    return apertured
+
 
 @jaxtyped(typechecker=beartype)
 def gaussian_apodizer(
     incoming: OpticalWavefront,
     sigma: scalar_float,
-    center: Optional[Float[Array, " 2"]] = None,
+    center: Optional[Float[Array, " 2"]] = jnp.zeros(2),
     peak_transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
@@ -374,18 +335,13 @@ def gaussian_apodizer(
     - Scale by peak transmittivity, clip to [0,1]
     - Multiply with incoming field and return
     """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
-
-    r2: Float[Array, " H W"] = (X - x0) ** 2 + (Y - y0) ** 2
+    r2: Float[Array, " H W"] = (xx - x0) ** 2 + (yy - y0) ** 2
     gauss: Float[Array, " H W"] = jnp.exp(-r2 / (2.0 * sigma**2))
     tmap: Float[Array, " H W"] = jnp.clip(gauss * peak_transmittivity, 0.0, 1.0)
-
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * tmap,
         wavelength=incoming.wavelength,
@@ -400,12 +356,11 @@ def supergaussian_apodizer(
     incoming: OpticalWavefront,
     sigma: scalar_float,
     m: scalar_numeric,
-    center: Optional[Float[Array, " 2"]] = None,
+    center: Optional[Float[Array, " 2"]] = jnp.zeros(2),
     peak_transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
     Apply a super-Gaussian apodizer to the wavefront.
-    
     Transmission profile: exp(- (r^2 / sigma^2)^m ).
 
     Parameters
@@ -434,18 +389,13 @@ def supergaussian_apodizer(
     - Scale by peak transmittivity, clip to [0,1]
     - Multiply with incoming field and return
     """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
-
-    r2: Float[Array, " H W"] = (X - x0) ** 2 + (Y - y0) ** 2
+    r2: Float[Array, " H W"] = (xx - x0) ** 2 + (yy - y0) ** 2
     super_gauss: Float[Array, " H W"] = jnp.exp(-((r2 / (sigma**2)) ** m))
     tmap: Float[Array, " H W"] = jnp.clip(super_gauss * peak_transmittivity, 0.0, 1.0)
-
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * tmap,
         wavelength=incoming.wavelength,
@@ -454,13 +404,14 @@ def supergaussian_apodizer(
     )
     return apertured
 
+
 @jaxtyped(typechecker=beartype)
 def gaussian_apodizer_elliptical(
     incoming: OpticalWavefront,
     sigma_x: scalar_float,
     sigma_y: scalar_float,
     theta: Optional[scalar_float] = 0.0,
-    center: Optional[Float[Array, " 2"]] = None,
+    center: Optional[Float[Array, " 2"]] = jnp.zeros(2),
     peak_transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
@@ -494,28 +445,19 @@ def gaussian_apodizer_elliptical(
     - Scale by `peak_transmittivity`, clip to [0, 1]
     - Multiply with incoming field and return
     """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
-
-    # Translate
-    Xc = X - x0
-    Yc = Y - y0
-
-    # Rotate by theta: [x'; y'] = R(theta) @ [Xc; Yc]
+    xc = xx - x0
+    yc = yy - y0
     ct = jnp.cos(theta)
     st = jnp.sin(theta)
-    Xp =  ct * Xc + st * Yc
-    Yp = -st * Xc + ct * Yc
-
-    arg = (Xp / sigma_x) ** 2 + (Yp / sigma_y) ** 2
+    xp = ct * xc + st * yc
+    yp = -st * xc + ct * yc
+    arg = (xp / sigma_x) ** 2 + (yp / sigma_y) ** 2
     gauss = jnp.exp(-0.5 * arg)
     tmap = jnp.clip(gauss * peak_transmittivity, 0.0, 1.0)
-
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * tmap,
         wavelength=incoming.wavelength,
@@ -532,12 +474,11 @@ def supergaussian_apodizer_elliptical(
     sigma_y: scalar_float,
     m: scalar_numeric,
     theta: Optional[scalar_float] = 0.0,
-    center: Optional[Float[Array, " 2"]] = None,
+    center: Optional[Float[Array, " 2"]] = jnp.zeros(2),
     peak_transmittivity: Optional[scalar_float] = 1.0,
 ) -> OpticalWavefront:
     """
     Apply an elliptical super-Gaussian apodizer with optional rotation.
-    
     Transmission profile: exp( - ( (x'/sigma_x)^2 + (y'/sigma_y)^2 )^m ).
 
     Parameters
@@ -570,28 +511,19 @@ def supergaussian_apodizer_elliptical(
     - Scale by `peak_transmittivity`, clip to [0, 1]
     - Multiply with incoming field and return
     """
-    if center is None:
-        center = jnp.array([0.0, 0.0])
-
     ny: int = incoming.field.shape[0]
     nx: int = incoming.field.shape[1]
-    X, Y = _xy_grids(nx, ny, float(incoming.dx))
+    xx, yy = _xy_grids(nx, ny, float(incoming.dx))
     x0, y0 = center[0], center[1]
-
-    # Translate
-    Xc = X - x0
-    Yc = Y - y0
-
-    # Rotate by theta
+    xc = xx - x0
+    yc = yy - y0
     ct = jnp.cos(theta)
     st = jnp.sin(theta)
-    Xp =  ct * Xc + st * Yc
-    Yp = -st * Xc + ct * Yc
-
-    base = (Xp / sigma_x) ** 2 + (Yp / sigma_y) ** 2
-    super_gauss = jnp.exp(-(base ** m))
+    xp = ct * xc + st * yc
+    yp = -st * xc + ct * yc
+    base = (xp / sigma_x) ** 2 + (yp / sigma_y) ** 2
+    super_gauss = jnp.exp(-(base**m))
     tmap = jnp.clip(super_gauss * peak_transmittivity, 0.0, 1.0)
-
     apertured: OpticalWavefront = make_optical_wavefront(
         field=incoming.field * tmap,
         wavelength=incoming.wavelength,

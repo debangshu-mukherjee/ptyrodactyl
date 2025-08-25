@@ -54,16 +54,7 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, NamedSharding
 from jax.sharding import PartitionSpec as P
-from jaxtyping import (
-    Array,
-    Bool,
-    Complex,
-    Complex128,
-    Float,
-    Int,
-    Num,
-    PRNGKeyArray,
-)
+from jaxtyping import Array, Bool, Complex, Complex128, Float, Int, Num, PRNGKeyArray
 
 from ptyrodactyl._decorators import beartype as typechecker
 from ptyrodactyl._decorators import jaxtyped
@@ -416,7 +407,7 @@ def wavelength_ang(voltage_kv: scalar_numeric) -> Float[Array, " "]:
     Algorithm:
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms
-    
+
     Because this is JAX - you assume that the input is clean, and you don't need to check for negative
     or NaN values. Your preprocessing steps should check for them - not the function itself.
     """

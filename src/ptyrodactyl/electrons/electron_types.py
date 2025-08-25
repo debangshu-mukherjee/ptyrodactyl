@@ -55,16 +55,7 @@ NamedTuple classes to ensure proper runtime type checking of the contents.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import (
-    Any,
-    Dict,
-    List,
-    NamedTuple,
-    Optional,
-    Tuple,
-    TypeAlias,
-    Union,
-)
+from beartype.typing import Any, Dict, List, NamedTuple, Optional, Tuple, TypeAlias, Union
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num
 

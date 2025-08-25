@@ -56,7 +56,6 @@ if BUILDING_DOCS:
         """
         return func
 
-
 else:
     # Normal runtime - use actual decorators
     try:
@@ -97,7 +96,6 @@ else:
                 The input function unchanged
             """
             return func
-
 
 
 __all__ = ["jaxtyped", "beartype", "BUILDING_DOCS"]

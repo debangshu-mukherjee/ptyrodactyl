@@ -107,7 +107,7 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
     Notes
     -----
     Uses preloaded atomic number mapping for fast lookup.
-    
+
     Algorithm:
     - Validate input is string
     - Strip whitespace and ensure proper case
@@ -182,7 +182,7 @@ def kirkland_potentials() -> Float[Array, "103 12"]:
     Notes
     -----
     Data is loaded once at module import for optimal performance.
-    
+
     Algorithm:
     - Return preloaded JAX array from module-level cache
     - No file I/O operations for fast access
@@ -262,7 +262,7 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     -------
     XYZData
         Validated JAX-compatible structure with all contents from the XYZ file.
-        
+
     Raises
     ------
     ValueError

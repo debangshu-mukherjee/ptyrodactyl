@@ -114,7 +114,7 @@ def contrast_stretch(
     -----
     Uses pure JAX operations to rescale intensity values. Handles both 2D single
     images and 3D image stacks.
-    
+
     Algorithm:
         - Handle dimension expansion for 2D inputs
         - Compute percentiles for each image independently
@@ -332,7 +332,7 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
     -----
     Computes K_v(x) for real order v >= 0 and x > 0, using a numerically stable
     and differentiable JAX-compatible approximation.
-    
+
     - Valid for v >= 0 and x > 0
     - Supports broadcasting and autodiff
     - JIT-safe and VMAP-safe
@@ -344,7 +344,7 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
     - Special exact formula for v = 0.5: K_{1/2}(x) = sqrt(π/(2x)) * exp(-x)
     - The transition point between small and large x approximations is set
       at x = 2.0
-    
+
     Algorithm:
         - For integer orders n > 1, uses recurrence relations with masked updates
           to only update values within the target range
@@ -482,7 +482,7 @@ def single_atom_potential(
     Notes
     -----
     The potential can be centered at arbitrary coordinates within a custom grid.
-    
+
     Algorithm:
         - Initialize physical constants:
             - a0 = 0.5292 Å (Bohr radius)
@@ -622,7 +622,7 @@ def _compute_min_repeats(
     along each lattice vector direction such that the resulting supercell
     dimensions exceed a specified threshold distance. This is used to ensure
     periodic images are included for accurate potential calculations.
-    
+
     Algorithm:
         - Calculate lattice vector lengths:
             - Compute the norm of each row in the cell matrix
@@ -1301,7 +1301,7 @@ def kirkland_potentials_xyz(
     -----
     Calculates atomic potentials and assembles them into slices using FFT
     shifts for precise positioning.
-    
+
     Algorithm:
         - Extract atomic positions, atomic numbers, and lattice from the input
           XYZData structure

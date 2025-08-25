@@ -346,7 +346,7 @@ def make_lens_params(
     Notes
     -----
     Algorithm:
-    
+
     - Convert inputs to JAX arrays
     - Validate parameters:
         - Check focal_length is positive
@@ -458,7 +458,7 @@ def make_grid_params(
     Notes
     -----
     Algorithm:
-    
+
     - Convert inputs to JAX arrays
     - Validate array shapes:
         - Check all arrays are 2D
@@ -587,7 +587,7 @@ def make_optical_wavefront(
     Notes
     -----
     Algorithm:
-    
+
     - Convert inputs to JAX arrays
     - Validate field array:
         - Check it's 2D
@@ -696,7 +696,7 @@ def make_microscope_data(
     Notes
     -----
     Algorithm:
-    
+
     - Convert inputs to JAX arrays
     - Validate image_data:
         - Check it's 3D or 4D
@@ -711,8 +711,8 @@ def make_microscope_data(
         - Check P matches between image_data and positions
     - Create and return MicroscopeData instance
     """
-    image_data: Union[Float[Array, " pp hh ww"], Float[Array, " xx yy hh ww"]] = jnp.asarray(
-        image_data, dtype=jnp.float64
+    image_data: Union[Float[Array, " pp hh ww"], Float[Array, " xx yy hh ww"]] = (
+        jnp.asarray(image_data, dtype=jnp.float64)
     )
     positions: Num[Array, " pp 2"] = jnp.asarray(positions, dtype=jnp.float64)
     wavelength: Float[Array, " "] = jnp.asarray(wavelength, dtype=jnp.float64)
@@ -885,7 +885,7 @@ def make_diffractogram(
     Notes
     -----
     Algorithm:
-    
+
     - Convert inputs to JAX arrays
     - Validate image array:
         - Check it's 2D
@@ -986,7 +986,7 @@ def make_sample_function(
     Notes
     -----
     Algorithm:
-    
+
     - Convert inputs to JAX arrays
     - Validate sample array:
         - Check it's 2D

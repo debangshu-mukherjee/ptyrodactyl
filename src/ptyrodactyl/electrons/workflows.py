@@ -88,7 +88,7 @@ def xyz_to_4d_stem(
     This function loads the structure, calculates appropriate repeats based
     on thickness and lateral extents, generates Kirkland potentials, creates
     a probe, and simulates CBED patterns at multiple scan positions.
-    
+
     Algorithm:
     - Load XYZ structure from file
     - Calculate repeats needed:

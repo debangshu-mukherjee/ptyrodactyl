@@ -149,7 +149,7 @@ def scale_pixel(
     new_dx: scalar_float,
 ) -> OpticalWavefront:
     """Rescale OpticalWavefront pixel size while keeping array shape fixed.
-    
+
     JAX-compatible (jit/vmap-safe). Crops or pads to preserve shape.
 
     Parameters

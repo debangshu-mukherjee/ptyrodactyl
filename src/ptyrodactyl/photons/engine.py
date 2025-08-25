@@ -460,7 +460,7 @@ def single_pie_vmap(
     dx: scalar_float,
 ) -> tuple[Complex[Array, "H W"], Complex[Array, "H W"]]:
     """Parallel processing over positions using vmap for faster but approximate PIE.
-    
+
     All positions use the same initial state, then updates are averaged.
 
     Parameters
@@ -704,7 +704,7 @@ def _apply_position_shift(
     frequency_y_grid: Float[Array, "H W"],
 ) -> Complex[Array, "H W"]:
     """Apply position shift using phase multiplication in Fourier domain.
-    
+
     Implements MATLAB: Hs = exp(-1j*2*pi.*(FX.*xlocation(tt)/imSize+FY.*ylocation(tt)/imSize))
 
     Parameters
@@ -811,7 +811,7 @@ def _compute_sensor_intensity(
     magnification: scalar_integer,
 ) -> Float[Array, "H W"]:
     """Compute sensor plane intensity with pixel response mask and downsampling.
-    
+
     Implements the MATLAB: conv2(pixelMask.*abs(sensorPlane).^2, ones(mag,mag))
 
     Parameters

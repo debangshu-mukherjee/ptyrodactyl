@@ -49,7 +49,7 @@ jax.config.update("jax_enable_x64", True)
 @jaxtyped(typechecker=beartype)
 def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWavefront:
     """Propagate an optical wavefront through a lens.
-    
+
     The lens is modeled as a thin lens with a given focal length and diameter.
 
     Parameters
@@ -67,7 +67,7 @@ def lens_propagation(incoming: OpticalWavefront, lens: LensParams) -> OpticalWav
     Notes
     -----
     Algorithm:
-    
+
     - Create a meshgrid of coordinates based on the incoming wavefront's shape and pixel size.
     - Calculate the phase profile and transmission function of the lens.
     - Apply the phase screen to the incoming wavefront's field.
@@ -104,7 +104,7 @@ def linear_interaction(
     light: OpticalWavefront,
 ) -> OpticalWavefront:
     """Propagate an optical wavefront through a sample using linear interaction.
-    
+
     The sample is modeled as a complex function that modifies the incoming wavefront.
 
     Parameters
@@ -140,7 +140,7 @@ def simple_diffractogram(
     aperture_center: Optional[Float[Array, " 2"]] = None,
 ) -> Diffractogram:
     """Calculate the diffractogram of a sample using a simple model.
-    
+
     The lightwave interacts with the sample linearly, and is then
     zoomed optically. Following this it interacts with a circular
     aperture before propagating to the camera plane.
@@ -172,7 +172,7 @@ def simple_diffractogram(
     Notes
     -----
     Algorithm:
-    
+
     - Propagate the lightwave through the sample using linear interaction
     - Apply optical zoom to the wavefront
     - Apply a circular aperture to the zoomed wavefront
@@ -215,8 +215,8 @@ def simple_microscope(
     aperture_center: Optional[Float[Array, " 2"]] = None,
 ) -> MicroscopeData:
     """Calculate the 3D diffractograms of the entire imaging done at every pixel positions.
-    
-    This cuts the sample, and then generates a diffractogram with the desired camera 
+
+    This cuts the sample, and then generates a diffractogram with the desired camera
     pixel size - all done in parallel.
 
     Parameters
@@ -246,7 +246,7 @@ def simple_microscope(
     Notes
     -----
     Algorithm:
-    
+
     - Get the size of the lightwave field
     - Calculate the pixel positions in the sample plane
     - For each position, cut out the sample and calculate the diffractogram

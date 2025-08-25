@@ -4,7 +4,6 @@ import jax.numpy as jnp
 import pytest
 from absl.testing import parameterized
 from beartype.typing import Tuple
-from jaxtyping import Array, Complex, Float, jaxtyped
 
 from ptyrodactyl.photons.lenses import (
     LensParams,
@@ -13,7 +12,6 @@ from ptyrodactyl.photons.lenses import (
     lens_focal_length,
     lens_thickness_profile,
     meniscus_lens,
-    plano_concave_lens,
     plano_convex_lens,
 )
 
@@ -21,7 +19,7 @@ jax.config.update("jax_enable_x64", True)
 
 
 class TestLensParams(chex.TestCase):
-    def test_lens_params_creation(self):
+    def test_lens_params_creation(self) -> None:
         """Test creation of LensParams with valid values."""
         params = LensParams(
             focal_length=jnp.array(0.1),
@@ -39,7 +37,7 @@ class TestLensParams(chex.TestCase):
         assert isinstance(params.R1, jnp.ndarray)
         assert isinstance(params.R2, jnp.ndarray)
 
-    def test_lens_params_tree_flatten(self):
+    def test_lens_params_tree_flatten(self) -> None:
         """Test PyTree flattening of LensParams."""
         params = LensParams(
             focal_length=jnp.array(0.1),
@@ -63,7 +61,7 @@ class TestLensThicknessProfile(chex.TestCase):
         {"shape": (60, 20)},
         {"shape": (30, 90)},
     )
-    def test_thickness_profile_shape(self, shape: Tuple[int, int]):
+    def test_thickness_profile_shape(self, shape: Tuple[int, int]) -> None:
         """Test that thickness profile returns correct shape."""
         x = jnp.asarray(jnp.linspace(-0.1, 0.1, shape[1]))
         y = jnp.asarray(jnp.linspace(-0.1, 0.1, shape[0]))
@@ -82,7 +80,7 @@ class TestLensThicknessProfile(chex.TestCase):
         chex.assert_shape(thickness, shape)
 
     @chex.all_variants()
-    def test_thickness_profile_center(self):
+    def test_thickness_profile_center(self) -> None:
         """Test that thickness at center matches center_thickness."""
         shape = (40, 40)
         x = jnp.asarray(jnp.linspace(-0.1, 0.1, shape[1]))
@@ -111,7 +109,7 @@ class TestLensFocalLength(chex.TestCase):
         {"n": 1.5, "R1": 0.1, "R2": 0.3, "expected": 0.15},  # Asymmetric lens
         {"n": 2.0, "R1": 0.2, "R2": 0.2, "expected": 0.1},  # Different n
     )
-    def test_focal_length_calculation(self, n, R1, R2, expected):
+    def test_focal_length_calculation(self, n, R1, R2, expected) -> None:
         """Test focal length calculation for various lens parameters."""
         var_lens_focal_length = self.variant(lens_focal_length)
         f = var_lens_focal_length(
@@ -125,7 +123,7 @@ class TestLensFocalLength(chex.TestCase):
 
 class TestLensCreation(chex.TestCase):
     @chex.all_variants()
-    def test_double_convex_lens(self):
+    def test_double_convex_lens(self) -> None:
         """Test creation of double convex lens."""
         params = double_convex_lens(
             focal_length=jnp.array(0.1),
@@ -141,7 +139,7 @@ class TestLensCreation(chex.TestCase):
         chex.assert_trees_all_close(calculated_f, params.focal_length, atol=1e-6)
 
     @chex.all_variants()
-    def test_double_concave_lens(self):
+    def test_double_concave_lens(self) -> None:
         """Test creation of double concave lens."""
         params = double_concave_lens(
             focal_length=jnp.array(0.1),
@@ -161,7 +159,7 @@ class TestLensCreation(chex.TestCase):
         {"convex_first": True},
         {"convex_first": False},
     )
-    def test_plano_convex_lens(self, convex_first):
+    def test_plano_convex_lens(self, convex_first) -> None:
         """Test creation of plano-convex lens."""
         var_plano_convex_lens = self.variant(plano_convex_lens)
         params = var_plano_convex_lens(
@@ -180,7 +178,7 @@ class TestLensCreation(chex.TestCase):
             assert jnp.isfinite(params.R2)
 
     @chex.all_variants()
-    def test_meniscus_lens(self):
+    def test_meniscus_lens(self) -> None:
         """Test creation of meniscus lens."""
         params = meniscus_lens(
             focal_length=jnp.array(0.1),

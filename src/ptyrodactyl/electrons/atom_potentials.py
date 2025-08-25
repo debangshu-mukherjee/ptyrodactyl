@@ -69,9 +69,10 @@ _build_potential_lookup
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Optional, Tuple, Union
-from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
+from jaxtyping import Array, Bool, Complex, Float, Int, Real
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .electron_types import (
     PotentialSlices,
@@ -93,9 +94,6 @@ def contrast_stretch(
     p2: float,
 ) -> Union[Float[Array, " H W"], Float[Array, " N H W"]]:
     """Rescales intensity values of image series between specified percentiles.
-    
-    Uses pure JAX operations to rescale intensity values. Handles both 2D single
-    images and 3D image stacks.
 
     Parameters
     ----------
@@ -114,6 +112,9 @@ def contrast_stretch(
 
     Notes
     -----
+    Uses pure JAX operations to rescale intensity values. Handles both 2D single
+    images and 3D image stacks.
+    
     Algorithm:
         - Handle dimension expansion for 2D inputs
         - Compute percentiles for each image independently
@@ -315,9 +316,6 @@ def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
     """Computes the modified Bessel function of the second kind K_v(x).
 
-    Computes K_v(x) for real order v >= 0 and x > 0, using a numerically stable
-    and differentiable JAX-compatible approximation.
-
     Parameters
     ----------
     v : scalar_float
@@ -332,6 +330,9 @@ def bessel_kv(v: scalar_float, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 
     Notes
     -----
+    Computes K_v(x) for real order v >= 0 and x > 0, using a numerically stable
+    and differentiable JAX-compatible approximation.
+    
     - Valid for v >= 0 and x > 0
     - Supports broadcasting and autodiff
     - JIT-safe and VMAP-safe
@@ -455,8 +456,6 @@ def single_atom_potential(
 ) -> Float[Array, " h w"]:
     """Calculate the projected potential of a single atom using Kirkland scattering factors.
 
-    The potential can be centered at arbitrary coordinates within a custom grid.
-
     Parameters
     ----------
     atom_no : scalar_int
@@ -482,6 +481,8 @@ def single_atom_potential(
 
     Notes
     -----
+    The potential can be centered at arbitrary coordinates within a custom grid.
+    
     Algorithm:
         - Initialize physical constants:
             - a0 = 0.5292 Å (Bohr radius)
@@ -600,11 +601,6 @@ def _compute_min_repeats(
 ) -> Tuple[int, int, int]:
     """Compute minimal unit cell repeats to exceed threshold distance.
 
-    Internal function to compute the minimal number of unit cell repeats
-    along each lattice vector direction such that the resulting supercell
-    dimensions exceed a specified threshold distance. This is used to ensure
-    periodic images are included for accurate potential calculations.
-
     Parameters
     ----------
     cell : Float[Array, " 3 3"]
@@ -622,6 +618,11 @@ def _compute_min_repeats(
 
     Notes
     -----
+    Internal function to compute the minimal number of unit cell repeats
+    along each lattice vector direction such that the resulting supercell
+    dimensions exceed a specified threshold distance. This is used to ensure
+    periodic images are included for accurate potential calculations.
+    
     Algorithm:
         - Calculate lattice vector lengths:
             - Compute the norm of each row in the cell matrix
@@ -1274,9 +1275,6 @@ def kirkland_potentials_xyz(
 ) -> PotentialSlices:
     """Converts XYZData structure to PotentialSlices.
 
-    Calculates atomic potentials and assembles them into slices using FFT
-    shifts for precise positioning.
-
     Parameters
     ----------
     xyz_data : XYZData
@@ -1301,6 +1299,9 @@ def kirkland_potentials_xyz(
 
     Notes
     -----
+    Calculates atomic potentials and assembles them into slices using FFT
+    shifts for precise positioning.
+    
     Algorithm:
         - Extract atomic positions, atomic numbers, and lattice from the input
           XYZData structure

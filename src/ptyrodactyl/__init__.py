@@ -1,6 +1,6 @@
 """
 Module: ptyrodactyl
-==================
+-------------------
 Ptychography through differentiable programming in JAX.
 
 A comprehensive toolkit for ptychography simulations and reconstructions

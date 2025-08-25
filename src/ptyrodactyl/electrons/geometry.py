@@ -1,22 +1,26 @@
-"""Geometric transformations and operations for crystal structures.
+"""
+Module: ptyrodactyl.electrons.geometry
+--------------------------------------
+Geometric transformations and operations for crystal structures.
 
 Functions
 ---------
-rotmatrix_vectors
+- `rotmatrix_vectors`:
     Compute a rotation matrix that rotates one vector to align with another
-rotmatrix_axis
+- `rotmatrix_axis`:
     Generate a rotation matrix for rotation around an arbitrary axis
-rotate_structure
+- `rotate_structure`:
     Apply rotation transformations to crystal structures
-reciprocal_lattice
+- `reciprocal_lattice`:
     Compute reciprocal lattice vectors from real-space unit cell
 """
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Optional, Tuple
-from jaxtyping import Array, Bool, Float, Real, jaxtyped
+from jaxtyping import Array, Bool, Float, Real
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .electron_types import scalar_float, scalar_numeric
 
@@ -26,9 +30,6 @@ def rotmatrix_vectors(
     v1: Real[Array, " 3"], v2: Real[Array, " 3"]
 ) -> Float[Array, "3 3"]:
     """Compute a proper rotation matrix that rotates vector v1 to align with vector v2.
-    
-    Uses the Rodrigues rotation formula. Handles special cases where vectors are
-    parallel or anti-parallel.
 
     Parameters
     ----------
@@ -44,7 +45,11 @@ def rotmatrix_vectors(
 
     Notes
     -----
+    Uses the Rodrigues rotation formula. Handles special cases where vectors are
+    parallel or anti-parallel.
+    
     Algorithm:
+    ---------
     - Normalize input vectors:
         - Divide v1 and v2 by their respective norms to get unit vectors
         - This ensures the rotation is purely rotational without scaling
@@ -127,9 +132,6 @@ def rotmatrix_axis(
     axis: Real[Array, " 3"], theta: scalar_numeric
 ) -> Float[Array, "3 3"]:
     """Generate a 3D rotation matrix for rotation around an arbitrary axis by a specified angle.
-    
-    Uses the Rodrigues rotation formula. This creates a right-handed rotation
-    when looking along the axis direction.
 
     Parameters
     ----------
@@ -146,7 +148,11 @@ def rotmatrix_axis(
 
     Notes
     -----
+    Uses the Rodrigues rotation formula. This creates a right-handed rotation
+    when looking along the axis direction.
+    
     Algorithm:
+    ---------
     - Normalize the rotation axis:
         - Divide axis vector by its norm to ensure unit length
         - This guarantees the rotation matrix is orthogonal
@@ -206,35 +212,35 @@ def rotate_structure(
     rotation_matrix: Real[Array, "3 3"],
     theta: Optional[scalar_numeric] = 0,
 ) -> Tuple[Float[Array, " N 4"], Float[Array, "3 3"]]:
-    """
-    Description
-    -----------
-    Apply rotation transformations to a crystal structure, including both atomic
-    coordinates and unit cell vectors. Supports an optional additional in-plane
-    rotation around the z-axis after the primary rotation.
+    """Apply rotation transformations to a crystal structure.
 
     Parameters
     ----------
-    - `coords` (Real[Array, " N 4"]):
+    coords : Real[Array, " N 4"]
         Atomic coordinates array where each row contains [atom_id, x, y, z].
         First column is the atom identifier, remaining columns are 3D positions
-    - `cell` (Real[Array, "3 3"]):
+    cell : Real[Array, "3 3"]
         Unit cell matrix where rows represent the three lattice vectors a, b, c
-    - `rotation_matrix` (Real[Array, "3 3"]):
+    rotation_matrix : Real[Array, "3 3"]
         Primary rotation matrix to apply to the structure
-    - `theta` (scalar_numeric, optional):
+    theta : scalar_numeric, optional
         Additional rotation angle in radians for in-plane (z-axis) rotation.
         Default is 0 (no additional rotation)
 
     Returns
     -------
-    - `rotated_coords` (Float[Array, " N 4"]):
+    rotated_coords : Float[Array, " N 4"]
         Rotated atomic coordinates maintaining the same format as input
-    - `rotated_cell` (Float[Array, "3 3"]):
+    rotated_cell : Float[Array, "3 3"]
         Rotated unit cell matrix
 
-    Flow
-    ----
+    Notes
+    -----
+    Applies rotation transformations to both atomic coordinates and unit cell vectors. 
+    Supports an optional additional in-plane rotation around the z-axis after the primary rotation.
+    
+    Algorithm:
+    ---------
     - Extract atomic positions:
         - Separate atom IDs (first column) from position vectors (columns 1-3)
         - This reserves atom type information during rotation
@@ -281,24 +287,24 @@ def rotate_structure(
 
 @jaxtyped(typechecker=beartype)
 def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
-    """
-    Description
-    -----------
-    Compute the reciprocal lattice vectors from a real-space unit cell matrix.
-    The reciprocal lattice is fundamental for crystallography and diffraction calculations.
+    """Compute the reciprocal lattice vectors from a real-space unit cell matrix.
 
     Parameters
     ----------
-    - `cell` (Real[Array, "3 3"]):
+    cell : Real[Array, "3 3"]
         Real-space unit cell matrix where rows are lattice vectors a1, a2, a3
 
     Returns
     -------
-    - `reciprocal_cell` (Float[Array, "3 3"]):
+    Float[Array, "3 3"]
         Reciprocal lattice matrix where rows are reciprocal vectors b1, b2, b3
 
-    Flow
-    ----
+    Notes
+    -----
+    The reciprocal lattice is fundamental for crystallography and diffraction calculations.
+    
+    Algorithm:
+    ---------
     - Extract lattice vectors:
         - Unpack rows of cell matrix as individual lattice vectors a1, a2, a3
         - These represent the fundamental periodicity of the crystal

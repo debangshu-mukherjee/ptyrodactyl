@@ -74,5 +74,4 @@ def shard_array(
     pspec = PartitionSpec(*pspec)
     sharding = NamedSharding(mesh, pspec)
     with mesh:
-        sharded_array = jax.device_put(input_array, sharding)
-    return sharded_array
+        return jax.device_put(input_array, sharding)

@@ -1,4 +1,7 @@
-"""JAX-based electron microscopy simulation toolkit for ptychography and 4D-STEM.
+"""
+Module: ptyrodactyl.electrons
+------------------------------
+JAX-based electron microscopy simulation toolkit for ptychography and 4D-STEM.
 
 This package implements various electron microscopy components and propagation models
 with JAX for automatic differentiation and acceleration. All functions
@@ -6,22 +9,22 @@ are fully differentiable and JIT-compilable.
 
 Submodules
 ----------
-atom_potentials
+- `atom_potentials`:
     Functions for generating atomic potentials and slices from atomic coordinates
-geometry
+- `geometry`:
     Geometric transformations and operations for crystal structures
-electron_types
+- `electron_types`:
     Data structures and type definitions for electron microscopy including
     CalibratedArray, ProbeModes, and PotentialSlices
-phase_recon
+- `phase_recon`:
     Inverse algorithms for ptychography reconstruction including single-slice,
     position-corrected, and multi-modal reconstruction methods
-preprocessing
+- `preprocessing`:
     Data preprocessing utilities and type definitions for electron microscopy data
-simulations
+- `simulations`:
     Forward simulation functions for electron beam propagation, CBED patterns,
     and 4D-STEM data generation including aberration calculations and probe creation
-workflows
+- `workflows`:
     High-level workflows that combine multiple simulation steps for common use cases
     such as simulating 4D-STEM data from XYZ structure files
 """

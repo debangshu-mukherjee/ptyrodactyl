@@ -1,4 +1,7 @@
-"""JAX-based optical simulation toolkit for light microscopes and ptychography.
+"""
+Module: ptyrodactyl.photons
+---------------------------
+JAX-based optical simulation toolkit for light microscopes and ptychography.
 
 This package implements various optical components and propagation models
 with JAX for automatic differentiation and acceleration. All functions
@@ -6,23 +9,23 @@ are fully differentiable and JIT-compilable.
 
 Submodules
 ----------
-apertures
+- `apertures`:
     Aperture functions for creating and manipulating optical wavefronts.
-elements
+- `elements`:
     Common optical elements beyond lenses and basic apertures.
-engine
+- `engine`:
    Ptychographic Iterative Engine (PIE) based codes.
-helper
+- `helper`:
     Utility functions for creating grids, phase manipulation, and field calculations
-invertor
+- `invertor`:
     Inversion algorithms for phase retrieval and ptychography.
-lens_optics
+- `lens_optics`:
     Optical propagation functions including angular spectrum, Fresnel, and Fraunhofer methods
-lenses
+- `lenses`:
     Models for various lens types and their optical properties
-microscope
+- `microscope`:
     Forward propagation of light through optical elements
-photon_types
+- `photon_types`:
     Data structures and type definitions for optical propagation
 """
 

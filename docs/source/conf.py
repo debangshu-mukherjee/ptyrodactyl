@@ -3,7 +3,6 @@ import sys
 from datetime import datetime
 
 import tomllib
-from beartype.typing import Tuple
 from sphinx.application import Sphinx
 
 os.environ["JAX_PLATFORM_NAME"] = "cpu"
@@ -171,7 +170,8 @@ html_css_files = ["custom.css"]
 html_js_files = ["custom.js"]
 
 
-def skip_member(name: str, skip: bool) -> bool:
+def skip_member(app, what, name, obj, skip, options):
+    """Skip specific members in documentation."""
     skip_names = [
         "Float",
         "Array",
@@ -185,10 +185,12 @@ def skip_member(name: str, skip: bool) -> bool:
     ]
     if name in skip_names:
         return True
+    if name.startswith("_") and not name.startswith("__"):
+        return True
     return skip
 
 
-def process_signature(signature: str, return_annotation: str) -> Tuple[str, str]:
+def process_signature(app, what, name, obj, options, signature, return_annotation):
     """Process signatures to handle jaxtyping annotations."""
     if signature:
         signature = signature.replace('Float[Array, " ', "FloatArray[")

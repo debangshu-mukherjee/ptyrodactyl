@@ -1,4 +1,7 @@
-"""Forward simulation functions for electron microscopy and ptychography.
+"""
+Module: ptyrodactyl.electrons.simulations
+------------------------------------------
+Forward simulation functions for electron microscopy and ptychography.
 
 This module contains functions for simulating electron beam propagation,
 creating probes, calculating aberrations, and generating CBED patterns
@@ -7,33 +10,33 @@ differentiation.
 
 Functions
 ---------
-transmission_func
+- `transmission_func`:
     Calculates transmission function for a given potential
-propagation_func
+- `propagation_func`:
     Propagates electron wave through free space
-fourier_coords
+- `fourier_coords`:
     Generates Fourier space coordinates for diffraction calculations
-fourier_calib
+- `fourier_calib`:
     Calculates Fourier space calibration from real space parameters
-make_probe
+- `make_probe`:
     Creates electron probe with specified parameters and aberrations
-aberration
+- `aberration`:
     Applies aberration phase to electron wave
-wavelength_ang
+- `wavelength_ang`:
     Calculates electron wavelength from accelerating voltage
-cbed
+- `cbed`:
     Simulates convergent beam electron diffraction patterns
-shift_beam_fourier
+- `shift_beam_fourier`:
     Shifts electron beam in Fourier space for scanning
-stem_4d
+- `stem_4d`:
     Generates 4D-STEM data with multiple probe positions
-stem_4d_sharded
+- `stem_4d_sharded`:
     Sharded version using JAX's automatic sharding API
-stem_4d_parallel
+- `stem_4d_parallel`:
     Parallel version with explicit device control using shard_map
-decompose_beam_to_modes
+- `decompose_beam_to_modes`:
     Decomposes electron beam into orthogonal modes
-annular_detector
+- `annular_detector`:
     Simulates annular detector for STEM imaging from 4D data
 
 Notes
@@ -45,7 +48,6 @@ using the factory functions from electron_types module.
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype as typechecker
 from beartype.typing import Any, Optional, Tuple, Union
 from jax import lax
 from jax.experimental import mesh_utils
@@ -61,8 +63,10 @@ from jaxtyping import (
     Int,
     Num,
     PRNGKeyArray,
-    jaxtyped,
 )
+
+from ptyrodactyl._decorators import beartype as typechecker
+from ptyrodactyl._decorators import jaxtyped
 
 from .electron_types import (
     STEM4D,
@@ -84,7 +88,7 @@ jax.config.update("jax_enable_x64", True)
 def transmission_func(
     pot_slice: Float[Array, " a b"], voltage_kv: scalar_numeric
 ) -> Complex[Array, " a b"]:
-    """Calculate the complex transmission function from a single potential slice at a given electron accelerating voltage.
+    """Calculate the complex transmission function from a single potential slice.
 
     Parameters
     ----------
@@ -132,7 +136,7 @@ def propagation_func(
     voltage_kv: scalar_numeric,
     calib_ang: scalar_float,
 ) -> Complex[Array, " h w"]:
-    """Calculate the complex propagation function that results in the phase shift of the exit wave when it travels from one slice to the next in the multislice algorithm.
+    """Calculate the complex propagation function for multislice algorithm.
 
     Parameters
     ----------
@@ -280,7 +284,7 @@ def make_probe(
     c3: Optional[scalar_numeric] = 0.0,
     c5: Optional[scalar_numeric] = 0.0,
 ) -> Complex[Array, " h w"]:
-    """Calculate an electron probe based on the size and the estimated Fourier coordinates with the option of adding spherical aberration.
+    """Calculate an electron probe with spherical aberrations.
 
     Parameters
     ----------
@@ -395,10 +399,7 @@ def aberration(
 
 @jaxtyped(typechecker=typechecker)
 def wavelength_ang(voltage_kv: scalar_numeric) -> Float[Array, " "]:
-    """Calculate the relativistic electron wavelength in angstroms based on the microscope accelerating voltage.
-
-    Because this is JAX - you assume that the input is clean, and you don't need to check for negative
-    or NaN values. Your preprocessing steps should check for them - not the function itself.
+    """Calculate the relativistic electron wavelength in angstroms.
 
     Parameters
     ----------
@@ -415,6 +416,9 @@ def wavelength_ang(voltage_kv: scalar_numeric) -> Float[Array, " "]:
     Algorithm:
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms
+    
+    Because this is JAX - you assume that the input is clean, and you don't need to check for negative
+    or NaN values. Your preprocessing steps should check for them - not the function itself.
     """
     m: Float[Array, " "] = jnp.asarray(9.109383e-31)
     e: Float[Array, " "] = jnp.asarray(1.602177e-19)

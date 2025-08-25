@@ -8,7 +8,6 @@ from pathlib import Path
 import chex
 import jax
 import jax.numpy as jnp
-import numpy as np
 import pytest
 
 from ptyrodactyl.electrons.preprocessing import (
@@ -24,7 +23,7 @@ from ptyrodactyl.electrons.preprocessing import (
 class TestAtomicSymbol(chex.TestCase):
     """Test atomic_symbol function and related functionality."""
 
-    def test_atomic_symbol_basic(self):
+    def test_atomic_symbol_basic(self) -> None:
         """Test basic atomic symbol lookups."""
         assert atomic_symbol("H") == 1
         assert atomic_symbol("He") == 2
@@ -36,20 +35,20 @@ class TestAtomicSymbol(chex.TestCase):
         assert atomic_symbol("Au") == 79
         assert atomic_symbol("Og") == 118
 
-    def test_atomic_symbol_case_insensitive(self):
+    def test_atomic_symbol_case_insensitive(self) -> None:
         """Test that atomic symbols are case-insensitive."""
         assert atomic_symbol("he") == 2
         assert atomic_symbol("HE") == 2
         assert atomic_symbol("He") == 2
         assert atomic_symbol("hE") == 2
 
-    def test_atomic_symbol_whitespace_handling(self):
+    def test_atomic_symbol_whitespace_handling(self) -> None:
         """Test that whitespace is properly handled."""
         assert atomic_symbol(" He ") == 2
         assert atomic_symbol("\tC\n") == 6
         assert atomic_symbol("  Au  ") == 79
 
-    def test_atomic_symbol_invalid(self):
+    def test_atomic_symbol_invalid(self) -> None:
         """Test error handling for invalid symbols."""
         with pytest.raises(KeyError, match="Atomic symbol 'Xx' not found"):
             atomic_symbol("Xx")
@@ -63,7 +62,7 @@ class TestAtomicSymbol(chex.TestCase):
         with pytest.raises(ValueError, match="Atomic symbol cannot be empty"):
             atomic_symbol("   ")
 
-    def test_atomic_numbers_preloaded(self):
+    def test_atomic_numbers_preloaded(self) -> None:
         """Test that atomic numbers are preloaded into memory."""
         # Verify that _ATOMIC_NUMBERS is a dictionary
         assert isinstance(_ATOMIC_NUMBERS, dict)
@@ -77,13 +76,13 @@ class TestAtomicSymbol(chex.TestCase):
         assert _ATOMIC_NUMBERS["Og"] == 118
 
     @chex.variants(with_jit=True, without_jit=True)
-    def test_atomic_symbol_jax_compatible(self):
+    def test_atomic_symbol_jax_compatible(self) -> None:
         """Test that atomic_symbol can be used in JAX-compatible contexts."""
         # The function itself returns scalar_int which should be JAX-compatible
         result = atomic_symbol("C")
 
         # Verify the result is a scalar integer
-        assert isinstance(result, (int, jnp.integer))
+        assert isinstance(result, int | jnp.integer)
         assert result == 6
 
         # Test that we can use the result in JAX operations
@@ -103,7 +102,7 @@ class TestAtomicSymbol(chex.TestCase):
         sum_result = self.variant(add_atomic_numbers)()
         assert sum_result == 3
 
-    def test_atomic_symbol_all_elements(self):
+    def test_atomic_symbol_all_elements(self) -> None:
         """Test that all 118 elements work correctly."""
         # Sample test of first 20 elements
         elements = [
@@ -136,22 +135,22 @@ class TestAtomicSymbol(chex.TestCase):
 class TestKirklandPotentials(chex.TestCase):
     """Test kirkland_potentials function and related functionality."""
 
-    def test_kirkland_potentials_shape(self):
+    def test_kirkland_potentials_shape(self) -> None:
         """Test that kirkland_potentials returns correct shape."""
         kp = kirkland_potentials()
         assert kp.shape == (103, 12)
 
-    def test_kirkland_potentials_dtype(self):
+    def test_kirkland_potentials_dtype(self) -> None:
         """Test that kirkland_potentials returns float64 JAX array."""
         kp = kirkland_potentials()
         assert kp.dtype == jnp.float64
 
-    def test_kirkland_potentials_is_jax_array(self):
+    def test_kirkland_potentials_is_jax_array(self) -> None:
         """Test that kirkland_potentials returns a JAX array."""
         kp = kirkland_potentials()
         assert isinstance(kp, jnp.ndarray)
 
-    def test_kirkland_potentials_preloaded(self):
+    def test_kirkland_potentials_preloaded(self) -> None:
         """Test that Kirkland potentials are preloaded into memory."""
         # Verify that _KIRKLAND_POTENTIALS exists and has correct properties
         assert isinstance(_KIRKLAND_POTENTIALS, jnp.ndarray)
@@ -162,7 +161,7 @@ class TestKirklandPotentials(chex.TestCase):
         kp = kirkland_potentials()
         assert kp is _KIRKLAND_POTENTIALS
 
-    def test_kirkland_potentials_values(self):
+    def test_kirkland_potentials_values(self) -> None:
         """Test that kirkland potentials contain reasonable values."""
         kp = kirkland_potentials()
 
@@ -182,7 +181,7 @@ class TestKirklandPotentials(chex.TestCase):
         assert jnp.allclose(kp[0, :4], expected_h_first_four, rtol=1e-9)
 
     @chex.variants(with_jit=True, without_jit=True)
-    def test_kirkland_potentials_jax_operations(self):
+    def test_kirkland_potentials_jax_operations(self) -> None:
         """Test that kirkland potentials work with JAX operations."""
         kp = kirkland_potentials()
 
@@ -213,7 +212,7 @@ class TestKirklandPotentials(chex.TestCase):
         assert jnp.allclose(gradient, kp[5])  # Gradient should equal the potentials
 
     @chex.variants(with_jit=True, without_jit=True)
-    def test_kirkland_potentials_indexing(self):
+    def test_kirkland_potentials_indexing(self) -> None:
         """Test various indexing operations on kirkland potentials."""
         kp = kirkland_potentials()
 
@@ -244,7 +243,7 @@ class TestKirklandPotentials(chex.TestCase):
         first_param = self.variant(get_first_param)()
         assert first_param.shape == (103,)
 
-    def test_kirkland_potentials_immutability(self):
+    def test_kirkland_potentials_immutability(self) -> None:
         """Test that the returned array reference maintains data integrity."""
         kp1 = kirkland_potentials()
         kp2 = kirkland_potentials()
@@ -265,7 +264,7 @@ class TestParseXYZ(chex.TestCase):
             f.write(content)
             return Path(f.name)
 
-    def test_parse_xyz_basic(self):
+    def test_parse_xyz_basic(self) -> None:
         """Test parsing a basic XYZ file with just atoms."""
         xyz_content = """3
 Water molecule
@@ -301,7 +300,7 @@ H  -0.7570   0.5860   0.0000
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_with_lattice(self):
+    def test_parse_xyz_with_lattice(self) -> None:
         """Test parsing XYZ file with lattice information."""
         xyz_content = """2
         Lattice="5.0 0.0 0.0 0.0 5.0 0.0 0.0 0.0 5.0"
@@ -325,7 +324,7 @@ H  -0.7570   0.5860   0.0000
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_with_stress(self):
+    def test_parse_xyz_with_stress(self) -> None:
         """Test parsing XYZ file with stress tensor."""
         xyz_content = """1
 stress="1.0 0.5 0.3 0.5 2.0 0.1 0.3 0.1 1.5"
@@ -347,7 +346,7 @@ Fe   0.0   0.0   0.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_with_energy(self):
+    def test_parse_xyz_with_energy(self) -> None:
         """Test parsing XYZ file with energy."""
         xyz_content = """2
 energy=-125.5
@@ -369,7 +368,7 @@ H   0.74  0.0   0.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_with_properties(self):
+    def test_parse_xyz_with_properties(self) -> None:
         """Test parsing XYZ file with properties metadata."""
         xyz_content = """2
 Properties=species:S:1:pos:R:3:force:R:3
@@ -399,7 +398,7 @@ N   1.0   1.0   1.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_all_features(self):
+    def test_parse_xyz_all_features(self) -> None:
         """Test parsing XYZ file with all optional features."""
         xyz_content = """3
 Lattice="10.0 0.0 0.0 0.0 10.0 0.0 0.0 0.0 10.0" stress="1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0" energy=-100.5 Properties=species:S:1:pos:R:3
@@ -425,7 +424,7 @@ Ge  2.5   2.5   2.5
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_extended_xyz_format(self):
+    def test_parse_xyz_extended_xyz_format(self) -> None:
         """Test parsing extended XYZ format with atom indices."""
         xyz_content = """2
 Comment line
@@ -444,7 +443,7 @@ Comment line
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_extra_columns(self):
+    def test_parse_xyz_extra_columns(self) -> None:
         """Test parsing XYZ with extra columns (ignored)."""
         xyz_content = """2
 Extended format with extra data
@@ -463,7 +462,7 @@ N   1.0   1.0   1.0   -0.1  -0.2  -0.3
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_scientific_notation(self):
+    def test_parse_xyz_scientific_notation(self) -> None:
         """Test parsing XYZ with scientific notation coordinates."""
         xyz_content = """2
 Scientific notation test
@@ -480,7 +479,7 @@ He  -1.5e+2   3.7e+1    4.2e+0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_case_sensitive_elements(self):
+    def test_parse_xyz_case_sensitive_elements(self) -> None:
         """Test that element symbols are case-sensitive."""
         xyz_content = """3
 Mixed case elements
@@ -500,7 +499,7 @@ co  2.0   0.0   0.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_empty_file(self):
+    def test_parse_xyz_empty_file(self) -> None:
         """Test error handling for empty XYZ file."""
         xyz_content = ""
         xyz_path = self.create_temp_xyz_file(xyz_content)
@@ -511,7 +510,7 @@ co  2.0   0.0   0.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_invalid_atom_count(self):
+    def test_parse_xyz_invalid_atom_count(self) -> None:
         """Test error handling for invalid atom count."""
         xyz_content = """not_a_number
 Comment line
@@ -525,7 +524,7 @@ C   0.0   0.0   0.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_too_few_atoms(self):
+    def test_parse_xyz_too_few_atoms(self) -> None:
         """Test error handling when file has fewer atoms than declared."""
         xyz_content = """5
 Declared 5 atoms but only have 2
@@ -540,7 +539,7 @@ N   1.0   1.0   1.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_invalid_format(self):
+    def test_parse_xyz_invalid_format(self) -> None:
         """Test error handling for lines with wrong number of columns."""
         xyz_content = """2
 Invalid format
@@ -555,7 +554,7 @@ N   1.0   1.0   1.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_invalid_element(self):
+    def test_parse_xyz_invalid_element(self) -> None:
         """Test error handling for invalid element symbols."""
         xyz_content = """2
 Invalid element
@@ -570,7 +569,7 @@ Xx   1.0   1.0   1.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_with_atomic_numbers(self):
+    def test_parse_xyz_with_atomic_numbers(self) -> None:
         """Test parsing XYZ file with atomic numbers instead of symbols."""
         xyz_content = """3
 Water molecule with atomic numbers
@@ -600,7 +599,7 @@ Water molecule with atomic numbers
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_mixed_symbols_and_numbers(self):
+    def test_parse_xyz_mixed_symbols_and_numbers(self) -> None:
         """Test parsing XYZ file with mixed atomic symbols and numbers."""
         xyz_content = """4
 Mixed format test
@@ -623,7 +622,7 @@ Fe   2.0   2.0   2.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_large_atomic_numbers(self):
+    def test_parse_xyz_large_atomic_numbers(self) -> None:
         """Test parsing XYZ file with large atomic numbers."""
         xyz_content = """3
 Heavy elements
@@ -643,7 +642,7 @@ Heavy elements
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_invalid_atomic_number(self):
+    def test_parse_xyz_invalid_atomic_number(self) -> None:
         """Test error handling for invalid atomic numbers."""
         xyz_content = """2
 Invalid atomic number
@@ -660,7 +659,7 @@ Invalid atomic number
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_zero_atomic_number(self):
+    def test_parse_xyz_zero_atomic_number(self) -> None:
         """Test parsing XYZ file with zero as atomic number."""
         xyz_content = """2
 Zero test
@@ -676,7 +675,7 @@ Zero test
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_negative_atomic_number(self):
+    def test_parse_xyz_negative_atomic_number(self) -> None:
         """Test parsing XYZ file with negative atomic number."""
         xyz_content = """2
 Negative test
@@ -691,7 +690,7 @@ Negative test
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_invalid_coordinates(self):
+    def test_parse_xyz_invalid_coordinates(self) -> None:
         """Test error handling for non-numeric coordinates."""
         xyz_content = """2
 Invalid coordinates
@@ -706,7 +705,7 @@ N   1.0   NaN   1.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_path_types(self):
+    def test_parse_xyz_path_types(self) -> None:
         """Test that parse_xyz accepts both str and Path objects."""
         xyz_content = """1
 Path type test
@@ -730,7 +729,7 @@ H   0.0   0.0   0.0
             xyz_path.unlink()
 
     @chex.variants(with_jit=True, without_jit=True)
-    def test_parse_xyz_jax_compatible(self):
+    def test_parse_xyz_jax_compatible(self) -> None:
         """Test that parsed XYZ data works with JAX transformations."""
         xyz_content = """3
 JAX compatibility test
@@ -761,7 +760,7 @@ O   0.0   1.0   0.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_dtypes(self):
+    def test_parse_xyz_dtypes(self) -> None:
         """Test that parsed data has correct dtypes."""
         xyz_content = """2
 Dtype test
@@ -791,7 +790,7 @@ C   0.0   0.0   0.0
         finally:
             xyz_path.unlink()
 
-    def test_parse_xyz_metadata_regex(self):
+    def test_parse_xyz_metadata_regex(self) -> None:
         """Test the internal metadata parsing function."""
         # Test lattice parsing
         metadata = _parse_xyz_metadata('Lattice="1.0 0.0 0.0 0.0 2.0 0.0 0.0 0.0 3.0"')
@@ -819,7 +818,7 @@ C   0.0   0.0   0.0
         assert "properties" in metadata
         assert len(metadata["properties"]) == 2
 
-    def test_parse_xyz_metadata_errors(self):
+    def test_parse_xyz_metadata_errors(self) -> None:
         """Test error handling in metadata parsing."""
         # Invalid lattice dimensions
         with pytest.raises(ValueError, match="Lattice must contain 9 values"):

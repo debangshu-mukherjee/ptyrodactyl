@@ -18,7 +18,7 @@ class CustomNumpyDocstring(NumpyDocstring):
         return items
 
 
-def process_docstring(app, what, name, obj, options, lines):
+def process_docstring(app, what, name, obj, options, lines) -> None:
     docstring = "\n".join(lines)
     custom_doc = CustomNumpyDocstring(docstring)
     lines[:] = str(custom_doc).splitlines()

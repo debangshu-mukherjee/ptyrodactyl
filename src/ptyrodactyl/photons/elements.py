@@ -1,6 +1,6 @@
 """
-Module: photons.general_optical_elements
----------------------------------------
+Module: ptyrodactyl.photons.elements
+------------------------------------
 Common optical elements beyond lenses and basic apertures.
 
 Functions
@@ -44,16 +44,16 @@ Internal utilities
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Optional, Tuple
-from jaxtyping import Array, Bool, Complex, Float, jaxtyped
+from jaxtyping import Array, Bool, Float
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .helper import add_phase_screen
 from .photon_types import (
     OpticalWavefront,
     make_optical_wavefront,
     scalar_float,
-    scalar_numeric,
 )
 
 jax.config.update("jax_enable_x64", True)
@@ -77,8 +77,8 @@ def _rotate_coords(X: Array, Y: Array, theta: float) -> Tuple[Array, Array]:
 @jaxtyped(typechecker=beartype)
 def prism_phase_ramp(
     incoming: OpticalWavefront,
-    deflect_x: scalar_float = 0.0,
-    deflect_y: scalar_float = 0.0,
+    deflect_x: Optional[scalar_float] = 0.0,
+    deflect_y: Optional[scalar_float] = 0.0,
     use_small_angle: bool = True,
 ) -> OpticalWavefront:
     """

@@ -1,6 +1,6 @@
 """
-Module: photons.lenses
----------------------------
+Module: ptyrodactyl.photons.lenses
+----------------------------------
 Optics model for simulation of optical lenses.
 
 Functions
@@ -27,9 +27,10 @@ Functions
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Optional, Tuple
-from jaxtyping import Array, Bool, Complex, Float, jaxtyped
+from jaxtyping import Array, Bool, Complex, Float
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .helper import add_phase_screen
 from .photon_types import LensParams, make_lens_params, scalar_float, scalar_numeric

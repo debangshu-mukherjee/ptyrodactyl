@@ -14,7 +14,7 @@ from ptyrodactyl.photons.lens_optics import (
     fresnel_prop,
     optical_zoom,
 )
-from ptyrodactyl.photons.photon_types import OpticalWavefront, scalar_numeric
+from ptyrodactyl.photons.photon_types import OpticalWavefront
 
 jax.config.update("jax_enable_x64", True)
 
@@ -25,7 +25,7 @@ class TestAngularSpectrumProp(chex.TestCase):
         {"shape": (64, 64), "wavelength": 500e-9, "z_move": 0.01},
         {"shape": (128, 128), "wavelength": 600e-9, "z_move": 0.05},
     )
-    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float):
+    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float) -> None:
         """Test that the propagated field has the correct shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -54,7 +54,7 @@ class TestAngularSpectrumProp(chex.TestCase):
         )
 
     @chex.all_variants()
-    def test_zero_propagation(self):
+    def test_zero_propagation(self) -> None:
         """Test that propagating by zero distance returns the original field."""
         shape = (64, 64)
         wavelength = 500e-9
@@ -87,7 +87,7 @@ class TestFresnelProp(chex.TestCase):
         {"shape": (64, 64), "wavelength": 500e-9, "z_move": 0.01},
         {"shape": (128, 128), "wavelength": 600e-9, "z_move": 0.05},
     )
-    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float):
+    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float) -> None:
         """Test that the propagated field has the correct shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -122,7 +122,7 @@ class TestFraunhoferProp(chex.TestCase):
         {"shape": (64, 64), "wavelength": 500e-9, "z_move": 0.1},
         {"shape": (128, 128), "wavelength": 600e-9, "z_move": 0.2},
     )
-    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float):
+    def test_propagation_shape(self, shape: Tuple[int, int], wavelength: float, z_move: float) -> None:
         """Test that the propagated field has the correct shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -157,7 +157,7 @@ class TestCircularAperture(chex.TestCase):
         {"shape": (64, 64), "diameter": 20e-6, "center": None},
         {"shape": (128, 128), "diameter": 40e-6, "center": jnp.array([10e-6, -5e-6])},
     )
-    def test_aperture_shape(self, shape: Tuple[int, int], diameter: float, center):
+    def test_aperture_shape(self, shape: Tuple[int, int], diameter: float, center) -> None:
         """Test that the aperture application preserves shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -191,7 +191,7 @@ class TestDigitalZoom(chex.TestCase):
         {"shape": (64, 64), "zoom_factor": 2.0},
         {"shape": (128, 128), "zoom_factor": 0.5},
     )
-    def test_zoom_shape(self, shape: Tuple[int, int], zoom_factor: float):
+    def test_zoom_shape(self, shape: Tuple[int, int], zoom_factor: float) -> None:
         """Test that digital zooming preserves the wavefront shape."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -230,7 +230,7 @@ class TestOpticalZoom(chex.TestCase):
         {"shape": (64, 64), "zoom_factor": 2.0},
         {"shape": (128, 128), "zoom_factor": 0.5},
     )
-    def test_optical_zoom(self, shape: Tuple[int, int], zoom_factor: float):
+    def test_optical_zoom(self, shape: Tuple[int, int], zoom_factor: float) -> None:
         """Test that optical zooming preserves the field but updates the calibration."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)

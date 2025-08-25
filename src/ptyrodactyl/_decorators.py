@@ -56,26 +56,6 @@ if BUILDING_DOCS:
         """
         return func
 
-    # Mock jax.jit decorator for documentation builds
-    def jit(func: F = None, **kwargs: Any) -> Any:
-        """No-op decorator mimicking jax.jit for documentation builds.
-
-        Parameters
-        ----------
-        func : F, optional
-            Function to decorate
-        **kwargs : Any
-            Additional arguments (ignored)
-
-        Returns
-        -------
-        Any
-            The input function unchanged or a decorator
-        """
-        if func is None:
-            # Return a decorator that returns the function unchanged
-            return lambda f: f
-        return func
 
 else:
     # Normal runtime - use actual decorators
@@ -118,29 +98,6 @@ else:
             """
             return func
 
-    # Import jax.jit normally when not building docs
-    try:
-        from jax import jit
-    except ImportError:
-        # If JAX is not installed, create a fallback no-op decorator
-        def jit(func: F = None, **kwargs: Any) -> Any:
-            """Fallback no-op decorator when JAX is not installed.
-
-            Parameters
-            ----------
-            func : F, optional
-                Function to decorate
-            **kwargs : Any
-                Additional arguments (ignored)
-
-            Returns
-            -------
-            Any
-                The input function unchanged or a decorator
-            """
-            if func is None:
-                return lambda f: f
-            return func
 
 
-__all__ = ["jaxtyped", "beartype", "jit", "BUILDING_DOCS"]
+__all__ = ["jaxtyped", "beartype", "BUILDING_DOCS"]

@@ -1,14 +1,17 @@
-"""Codes for optical propagation through lenses and optical elements.
+"""
+Module: ptyrodactyl.photons.microscope
+--------------------------------------
+Codes for optical propagation through lenses and optical elements.
 
 Functions
 ---------
-lens_propagation
+- `lens_propagation`:
     Propagates an optical wavefront through a lens
-linear_interaction
+- `linear_interaction`:
     Propagates an optical wavefront through a sample using linear interaction
-simple_diffractogram
+- `simple_diffractogram`:
     Calculates the diffractogram of a sample using a simple model
-simple_microscope
+- `simple_microscope`:
     Calculates the 3D diffractograms of the entire imaging done at
     every pixel positions. This cuts the sample, and then generates
     a diffractogram with the desired camera pixel size - all done
@@ -17,12 +20,14 @@ simple_microscope
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Optional, Tuple
-from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
+from jaxtyping import Array, Complex, Float, Int, Num
 
+from ptyrodactyl._decorators import beartype, jaxtyped
+
+from .apertures import circular_aperture
 from .helper import add_phase_screen, field_intensity, scale_pixel
-from .lens_optics import circular_aperture, fraunhofer_prop, optical_zoom
+from .lens_optics import fraunhofer_prop, optical_zoom
 from .lenses import create_lens_phase
 from .photon_types import (
     Diffractogram,

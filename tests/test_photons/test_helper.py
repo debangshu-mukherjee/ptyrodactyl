@@ -23,7 +23,7 @@ class TestAddPhaseScreen(chex.TestCase):
         {"shape": (60, 20), "offset": 0.1},
         {"shape": (30, 90), "offset": 45678},
     )
-    def test_add_phase_screen_values(self, shape: Tuple[int, int], offset: float):
+    def test_add_phase_screen_values(self, shape: Tuple[int, int], offset: float) -> None:
         """Check that add_phase_screen produces expected values."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -47,7 +47,7 @@ class TestAddPhaseScreen(chex.TestCase):
         {"field_shape": (40, 40), "phase_shape": (60, 40)},
         {"field_shape": (60, 20), "phase_shape": (20, 60)},
     )
-    def test_shape_mismatch(self, field_shape: Tuple[int, int], phase_shape: Tuple[int, int]):
+    def test_shape_mismatch(self, field_shape: Tuple[int, int], phase_shape: Tuple[int, int]) -> None:
         """Check that shape mismatch raises an error."""
         key = jax.random.PRNGKey(123)
         key1, key2 = jax.random.split(key)
@@ -67,7 +67,7 @@ class TestAddPhaseScreen(chex.TestCase):
         {"shape": (60, 20)},
         {"shape": (30, 90)},
     )
-    def test_zero_phase(self, shape: Tuple[int, int]):
+    def test_zero_phase(self, shape: Tuple[int, int]) -> None:
         """Check that a zero phase does not change the field."""
         key = jax.random.PRNGKey(999)
         key1, key2 = jax.random.split(key)
@@ -90,7 +90,7 @@ class TestCreateSpatialGrid(chex.TestCase):
         {"diameter": 0.01, "num_points": 64},
         {"diameter": 0.1, "num_points": 128},
     )
-    def test_grid_shape(self, diameter: float, num_points: int):
+    def test_grid_shape(self, diameter: float, num_points: int) -> None:
         """Test that create_spatial_grid returns correct shape."""
         var_create_spatial_grid = self.variant(create_spatial_grid)
         xx, yy = var_create_spatial_grid(
@@ -103,7 +103,7 @@ class TestCreateSpatialGrid(chex.TestCase):
         chex.assert_shape(yy, expected_shape)
 
     @chex.all_variants()
-    def test_grid_values(self):
+    def test_grid_values(self) -> None:
         """Test that the grid has correct values."""
         diameter = 0.001  # 1mm
         num_points = 32
@@ -127,7 +127,7 @@ class TestNormalizeField(chex.TestCase):
         {"shape": (64, 64)},
         {"shape": (128, 128)},
     )
-    def test_normalization(self, shape: Tuple[int, int]):
+    def test_normalization(self, shape: Tuple[int, int]) -> None:
         """Test that normalized field has unit power."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)
@@ -151,7 +151,7 @@ class TestFieldIntensity(chex.TestCase):
         {"shape": (64, 64)},
         {"shape": (128, 128)},
     )
-    def test_intensity_calculation(self, shape: Tuple[int, int]):
+    def test_intensity_calculation(self, shape: Tuple[int, int]) -> None:
         """Test that field_intensity returns |field|^2."""
         key = jax.random.PRNGKey(42)
         key1, key2 = jax.random.split(key)

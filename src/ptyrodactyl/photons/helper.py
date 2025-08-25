@@ -1,24 +1,28 @@
-"""Utility functions for optical propagation.
+"""
+Module: ptyrodactyl.photons.helper
+----------------------------------
+Utility functions for optical propagation.
 
 Functions
 ---------
-create_spatial_grid
+- `create_spatial_grid`:
     Creates a 2D spatial grid for optical propagation
-normalize_field
+- `normalize_field`:
     Normalizes a complex field to unit power
-add_phase_screen
+- `add_phase_screen`:
     Adds a phase screen to a complex field
-field_intensity
+- `field_intensity`:
     Calculates intensity from a complex field
-scale_pixel
+- `scale_pixel`:
     Rescales OpticalWavefront pixel size while keeping array shape fixed
 """
 
 import jax
 import jax.numpy as jnp
-from beartype import beartype
 from beartype.typing import Tuple
-from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
+from jaxtyping import Array, Complex, Float, Int, Num
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .photon_types import OpticalWavefront, make_optical_wavefront, scalar_float
 
@@ -227,21 +231,19 @@ def scale_pixel(
         pad_h_1: Int[Array, " "] = H - (new_H + pad_h_0)
         pad_w_0: Int[Array, " "] = jnp.floor((W - new_W) / 2).astype(int)
         pad_w_1: Int[Array, " "] = W - (new_W + pad_w_0)
-        padded = jnp.pad(
+        return jnp.pad(
             resized,
             ((pad_h_0, pad_h_1), (pad_w_0, pad_w_1)),
             mode="constant",
             constant_values=data_minimia_h,
         )
-        return padded
 
     resized_field = jax.lax.cond(
         scale > 1.0, larger_pixel_size, smaller_pixel_size, field
     )
-    resized_wavefront = make_optical_wavefront(
+    return make_optical_wavefront(
         field=resized_field,
         dx=new_dx,
         wavelength=wavefront.wavelength,
         z=wavefront.z,
     )
-    return resized_wavefront

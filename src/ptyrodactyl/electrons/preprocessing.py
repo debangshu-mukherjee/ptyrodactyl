@@ -1,4 +1,7 @@
-"""Data preprocessing utilities for electron microscopy and ptychography.
+"""
+Module: ptyrodactyl.electrons.preprocessing
+--------------------------------------------
+Data preprocessing utilities for electron microscopy and ptychography.
 
 This module contains utilities for preprocessing electron microscopy data
 before analysis or reconstruction. Currently includes type definitions
@@ -6,11 +9,11 @@ for scalar numeric types used throughout the electrons module.
 
 Functions
 ---------
-atomic_symbol
+- `atomic_symbol`:
     Returns atomic number for given atomic symbol string.
-kirkland_potentials
+- `kirkland_potentials`:
     Loads Kirkland scattering factors from CSV file.
-parse_xyz
+- `parse_xyz`:
     Parses an XYZ file and returns a list of atoms with their
     element symbols and 3D coordinates.
 
@@ -29,9 +32,10 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
-from beartype import beartype
 from beartype.typing import Any, Dict, List, Optional, Union
-from jaxtyping import Array, Float, Int, jaxtyped
+from jaxtyping import Array, Float, Int
+
+from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .electron_types import XYZData, make_xyz_data, scalar_int
 
@@ -46,8 +50,6 @@ jax.config.update("jax_enable_x64", True)
 @beartype
 def _load_atomic_numbers(json_path: Optional[Path] = _ATOMS_PATH) -> Dict[str, int]:
     """Load atomic number mapping from JSON file in manifest folder.
-    
-    Uses pathlib for OS-independent path handling.
 
     Parameters
     ----------
@@ -65,6 +67,10 @@ def _load_atomic_numbers(json_path: Optional[Path] = _ATOMS_PATH) -> Dict[str, i
         If JSON file is not found.
     json.JSONDecodeError
         If JSON file is malformed.
+
+    Notes
+    -----
+    Uses pathlib for OS-independent path handling.
     """
     file_path: Path = json_path if json_path is not None else _ATOMS_PATH
     with open(file_path, encoding="utf-8") as file:
@@ -78,8 +84,6 @@ _ATOMIC_NUMBERS: Dict[str, int] = _load_atomic_numbers()
 @jaxtyped(typechecker=beartype)
 def atomic_symbol(symbol_string: str) -> scalar_int:
     """Return atomic number for given atomic symbol string.
-    
-    Uses preloaded atomic number mapping for fast lookup.
 
     Parameters
     ----------
@@ -102,6 +106,8 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
 
     Notes
     -----
+    Uses preloaded atomic number mapping for fast lookup.
+    
     Algorithm:
     - Validate input is string
     - Strip whitespace and ensure proper case
@@ -129,8 +135,6 @@ def _load_kirkland_csv(
     file_path: Optional[Path] = _KIRKLAND_PATH,
 ) -> Float[Array, "103 12"]:
     """Load Kirkland potential parameters from CSV file.
-    
-    Uses numpy to load CSV then converts to JAX array for performance.
 
     Parameters
     ----------
@@ -148,6 +152,10 @@ def _load_kirkland_csv(
         If CSV file is not found.
     ValueError
         If CSV dimensions are incorrect.
+
+    Notes
+    -----
+    Uses numpy to load CSV then converts to JAX array for performance.
     """
 
     kirkland_numpy: np.ndarray = np.loadtxt(file_path, delimiter=",", dtype=np.float64)
@@ -165,8 +173,6 @@ _KIRKLAND_POTENTIALS: Float[Array, "103 12"] = _load_kirkland_csv()
 @jaxtyped(typechecker=beartype)
 def kirkland_potentials() -> Float[Array, "103 12"]:
     """Return preloaded Kirkland potential parameters as JAX array.
-    
-    Data is loaded once at module import for optimal performance.
 
     Returns
     -------
@@ -175,6 +181,8 @@ def kirkland_potentials() -> Float[Array, "103 12"]:
 
     Notes
     -----
+    Data is loaded once at module import for optimal performance.
+    
     Algorithm:
     - Return preloaded JAX array from module-level cache
     - No file I/O operations for fast access
@@ -245,9 +253,6 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
 def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     """Parse an XYZ file and return a validated XYZData PyTree.
 
-    Supports both atomic symbols (e.g., "H", "Fe") and atomic numbers (e.g., "1", "26")
-    in the first column of atom data.
-
     Parameters
     ----------
     file_path : str or Path
@@ -264,6 +269,11 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
         If file format is invalid or contains inconsistent data.
     FileNotFoundError
         If the specified file does not exist.
+
+    Notes
+    -----
+    Supports both atomic symbols (e.g., "H", "Fe") and atomic numbers (e.g., "1", "26")
+    in the first column of atom data.
     """
     with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()

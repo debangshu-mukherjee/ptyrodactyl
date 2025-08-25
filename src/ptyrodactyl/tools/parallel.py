@@ -1,7 +1,4 @@
-"""
-Module: tools.parallel
----------------------
-Parallel processing utilities for distributed computing in ptychography.
+"""Parallel processing utilities for distributed computing in ptychography.
 
 This module provides utilities for sharding arrays across multiple devices
 for parallel processing and distributed computing in ptychography workflows.
@@ -9,7 +6,7 @@ All functions are JAX-compatible and support automatic differentiation.
 
 Functions
 ---------
-- `shard_array`:
+shard_array
     Shards an array across specified axes and devices for parallel processing
 
 Notes
@@ -20,7 +17,7 @@ work with JAX's device mesh system and can be used with various JAX
 transformations including jit, grad, and vmap.
 """
 
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import jax
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
@@ -29,13 +26,10 @@ from jaxtyping import Array
 
 def shard_array(
     input_array: Array,
-    shard_axes: Union[int, Sequence[int]],
+    shard_axes: int | Sequence[int],
     devices: Sequence[jax.Device] = None,
 ) -> Array:
-    """
-    Description
-    -----------
-    Shards an array across specified axes and devices.
+    """Shards an array across specified axes and devices.
 
     This function distributes an array across multiple devices for parallel
     processing. It creates a mesh of devices and applies appropriate
@@ -43,22 +37,23 @@ def shard_array(
 
     Parameters
     ----------
-    - `input_array` (Array):
+    input_array : Array
         The input array to be sharded
-    - `shard_axes` (Union[int, Sequence[int]]):
+    shard_axes : int | Sequence[int]
         The axis or axes to shard along.
         Use -1 or sequence of -1s to not shard along any axis
-    - `devices` (Sequence[jax.Device], optional):
+    devices : Sequence[jax.Device], optional
         The devices to shard across.
         If None, uses all available devices
 
     Returns
     -------
-    - `sharded_array` (Array):
+    Array
         The sharded array distributed across the specified devices
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Get all available devices if none specified
     - Ensure shard_axes is a sequence (convert single int to list)
     - Create a mesh with the specified devices

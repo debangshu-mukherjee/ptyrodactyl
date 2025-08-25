@@ -70,7 +70,13 @@ test = [
     "pytest-xdist>=3.0.0",
     "chex>=0.1.89",
 ]
+notebooks = [
+    "ipywidgets>=8.1.0",
+    "ipykernel>=6.29.5",
+    "nbconvert>=7.16.6",
+]
 dev = [
+    "ptyrodactyl[docs,test,notebooks]",
     "black[all]>=25.1.0",
     "ipykernel>=6.29.5",
     "isort>=6.0.1",
@@ -82,14 +88,6 @@ dev = [
     "sphinx-rtd-theme>=3.0.2",
     "sphinxcontrib-napoleon>=0.7",
     "twine>=6.1.0",
-]
-notebooks = [
-    "ipywidgets>=8.1.0",
-    "ipykernel>=6.29.5",
-    "nbconvert>=7.16.6",
-]
-all = [
-    "ptyrodactyl[docs,test,dev,notebooks]",
 ]
 
 [project.urls]

@@ -1,7 +1,4 @@
-"""
-Module: electrons.preprocessing
--------------------------------
-Data preprocessing utilities for electron microscopy and ptychography.
+"""Data preprocessing utilities for electron microscopy and ptychography.
 
 This module contains utilities for preprocessing electron microscopy data
 before analysis or reconstruction. Currently includes type definitions
@@ -9,24 +6,20 @@ for scalar numeric types used throughout the electrons module.
 
 Functions
 ---------
-- `atomic_symbol`:
+atomic_symbol
     Returns atomic number for given atomic symbol string.
-- `kirkland_potentials`:
+kirkland_potentials
     Loads Kirkland scattering factors from CSV file.
-- `parse_xyz`:
+parse_xyz
     Parses an XYZ file and returns a list of atoms with their
     element symbols and 3D coordinates.
 
-Internal Functions
-------------------
-These functions are not exported and are used internally by the module.
-
-- `_load_atomic_numbers`:
-    Loads atomic number mapping from JSON file in manifest folder.
-- `_load_kirkland_potentials`:
-    Loads Kirkland scattering factors from CSV file.
-- `_parse_xyz_metadata`:
-    Internal function to extract metadata from the XYZ comment line.
+Notes
+-----
+Internal functions (not exported):
+- _load_atomic_numbers: Loads atomic number mapping from JSON file in manifest folder.
+- _load_kirkland_potentials: Loads Kirkland scattering factors from CSV file.
+- _parse_xyz_metadata: Internal function to extract metadata from the XYZ comment line.
 """
 
 import json
@@ -42,7 +35,9 @@ from jaxtyping import Array, Float, Int, jaxtyped
 
 from .electron_types import XYZData, make_xyz_data, scalar_int
 
-_KIRKLAND_PATH: Path = Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
+_KIRKLAND_PATH: Path = (
+    Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
+)
 _ATOMS_PATH: Path = Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
 
 jax.config.update("jax_enable_x64", True)
@@ -50,28 +45,26 @@ jax.config.update("jax_enable_x64", True)
 
 @beartype
 def _load_atomic_numbers(json_path: Optional[Path] = _ATOMS_PATH) -> Dict[str, int]:
-    """
-    Description
-    -----------
-    Loads atomic number mapping from JSON file in manifest folder.
+    """Load atomic number mapping from JSON file in manifest folder.
+    
     Uses pathlib for OS-independent path handling.
 
     Parameters
     ----------
-    - `json_path` (Optional[Path]):
-        Custom path to JSON file, defaults to module path
+    json_path : Path, optional
+        Custom path to JSON file, defaults to module path.
 
     Returns
     -------
-    - `atomic_data` (Dict[str, int]):
-        Dictionary mapping atomic symbols to atomic numbers
+    Dict[str, int]
+        Dictionary mapping atomic symbols to atomic numbers.
 
     Raises
     ------
-    - FileNotFoundError:
-        If JSON file is not found
-    - json.JSONDecodeError:
-        If JSON file is malformed
+    FileNotFoundError
+        If JSON file is not found.
+    json.JSONDecodeError
+        If JSON file is malformed.
     """
     file_path: Path = json_path if json_path is not None else _ATOMS_PATH
     with open(file_path, encoding="utf-8") as file:
@@ -84,31 +77,32 @@ _ATOMIC_NUMBERS: Dict[str, int] = _load_atomic_numbers()
 
 @jaxtyped(typechecker=beartype)
 def atomic_symbol(symbol_string: str) -> scalar_int:
-    """
-    Description
-    -----------
-    Returns atomic number for given atomic symbol string.
+    """Return atomic number for given atomic symbol string.
+    
     Uses preloaded atomic number mapping for fast lookup.
 
     Parameters
     ----------
-    - `symbol_string` (str):
-        Chemical symbol for the element (e.g., "H", "He", "Li")
+    symbol_string : str
+        Chemical symbol for the element (e.g., "H", "He", "Li").
 
     Returns
     -------
-    - `atomic_number` (scalar_int):
-        Atomic number corresponding to the symbol
+    scalar_int
+        Atomic number corresponding to the symbol.
 
     Raises
     ------
-    - KeyError:
-        If atomic symbol is not found in the mapping
-    - TypeError:
-        If input is not a string
+    KeyError
+        If atomic symbol is not found in the mapping.
+    TypeError
+        If input is not a string.
+    ValueError
+        If atomic symbol is empty.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Validate input is string
     - Strip whitespace and ensure proper case
     - Look up atomic number in preloaded mapping
@@ -134,34 +128,34 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
 def _load_kirkland_csv(
     file_path: Optional[Path] = _KIRKLAND_PATH,
 ) -> Float[Array, "103 12"]:
-    """
-    Description
-    -----------
-    Loads Kirkland potential parameters from CSV file.
+    """Load Kirkland potential parameters from CSV file.
+    
     Uses numpy to load CSV then converts to JAX array for performance.
 
     Parameters
     ----------
-    - `csv_path` (Optional[Path]):
-        Custom path to CSV file, defaults to module path
+    file_path : Path, optional
+        Custom path to CSV file, defaults to module path.
 
     Returns
     -------
-    - `kirkland_data` (Float[Array, "103 12"]):
-        Kirkland potential parameters as JAX array
+    Float[Array, "103 12"]
+        Kirkland potential parameters as JAX array.
 
     Raises
     ------
-    - FileNotFoundError:
-        If CSV file is not found
-    - ValueError:
-        If CSV dimensions are incorrect
+    FileNotFoundError
+        If CSV file is not found.
+    ValueError
+        If CSV dimensions are incorrect.
     """
 
     kirkland_numpy: np.ndarray = np.loadtxt(file_path, delimiter=",", dtype=np.float64)
     if kirkland_numpy.shape != (103, 12):
         raise ValueError(f"Expected CSV shape (103, 12), got {kirkland_numpy.shape}")
-    kirkland_data: Float[Array, "103 12"] = jnp.asarray(kirkland_numpy, dtype=jnp.float64)
+    kirkland_data: Float[Array, "103 12"] = jnp.asarray(
+        kirkland_numpy, dtype=jnp.float64
+    )
     return kirkland_data
 
 
@@ -170,19 +164,18 @@ _KIRKLAND_POTENTIALS: Float[Array, "103 12"] = _load_kirkland_csv()
 
 @jaxtyped(typechecker=beartype)
 def kirkland_potentials() -> Float[Array, "103 12"]:
-    """
-    Description
-    -----------
-    Returns preloaded Kirkland potential parameters as JAX array.
+    """Return preloaded Kirkland potential parameters as JAX array.
+    
     Data is loaded once at module import for optimal performance.
 
     Returns
     -------
-    - `kirkland_potentials` (Float[Array, "103 12"]):
-        Kirkland potential parameters for elements 1-103
+    Float[Array, "103 12"]
+        Kirkland potential parameters for elements 1-103.
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Return preloaded JAX array from module-level cache
     - No file I/O operations for fast access
     """
@@ -191,23 +184,22 @@ def kirkland_potentials() -> Float[Array, "103 12"]:
 
 @beartype
 def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
-    """
-    Internal function to extract metadata from the XYZ comment line.
+    """Extract metadata from the XYZ comment line.
 
     Parameters
     ----------
-    - `line` (str):
+    line : str
         Second line of the XYZ file (comment/metadata).
 
     Returns
     -------
-    - `metadata` (dict):
+    Dict[str, Any]
         Parsed metadata with optional keys: lattice, stress, energy, properties.
 
     Raises
     ------
-    - ValueError:
-        If lattice or stress tensor dimensions are incorrect
+    ValueError
+        If lattice or stress tensor dimensions are incorrect.
     """
     metadata: Dict[str, Any] = {}
     max_xyz_columns: int = 9
@@ -251,21 +243,27 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
 
 @jaxtyped(typechecker=beartype)
 def parse_xyz(file_path: Union[str, Path]) -> XYZData:
-    """
-    Parses an XYZ file and returns a validated XYZData PyTree.
+    """Parse an XYZ file and return a validated XYZData PyTree.
 
     Supports both atomic symbols (e.g., "H", "Fe") and atomic numbers (e.g., "1", "26")
     in the first column of atom data.
 
     Parameters
     ----------
-    - `file_path` (str or Path):
+    file_path : str or Path
         Path to the XYZ file.
 
     Returns
     -------
-    - `XYZData`:
+    XYZData
         Validated JAX-compatible structure with all contents from the XYZ file.
+        
+    Raises
+    ------
+    ValueError
+        If file format is invalid or contains inconsistent data.
+    FileNotFoundError
+        If the specified file does not exist.
     """
     with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()
@@ -291,7 +289,9 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     for ii in range(2, 2 + num_atoms):
         parts: List[str] = lines[ii].split()
         if len(parts) not in {4, 5, 6, 7}:
-            raise ValueError(f"Line {ii + 1} has unexpected format: {lines[ii].strip()}")
+            raise ValueError(
+                f"Line {ii + 1} has unexpected format: {lines[ii].strip()}"
+            )
 
         if len(parts) == columns_normal:
             symbol: str

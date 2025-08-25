@@ -1,7 +1,4 @@
-"""
-Module: tools.optimizers
------------------------
-Complex-valued optimizers with Wirtinger derivatives for ptychography.
+"""Complex-valued optimizers with Wirtinger derivatives for ptychography.
 
 This module implements complex-valued optimization algorithms including Adam,
 Adagrad, and RMSprop using Wirtinger calculus. It also provides learning rate
@@ -10,51 +7,51 @@ support automatic differentiation.
 
 Classes
 -------
-- `LRSchedulerState`:
+LRSchedulerState
     State maintained by learning rate schedulers
-- `OptimizerState`:
+OptimizerState
     State maintained by optimizers (moments, step count)
-- `Optimizer`:
+Optimizer
     Optimizer configuration with init and update functions
 
 Scheduler Functions
-------------------
-- `create_cosine_scheduler`:
+-------------------
+create_cosine_scheduler
     Creates a cosine learning rate scheduler with smooth decay
-- `create_step_scheduler`:
+create_step_scheduler
     Creates a step decay scheduler with periodic learning rate drops
-- `create_warmup_cosine_scheduler`:
+create_warmup_cosine_scheduler
     Creates a scheduler with linear warmup followed by cosine decay
-- `init_scheduler_state`:
+init_scheduler_state
     Initialize scheduler state with given learning rate
 
 Optimizer Functions
-------------------
-- `wirtinger_grad`:
+-------------------
+wirtinger_grad
     Compute the Wirtinger gradient of a complex-valued function
-- `complex_adam`:
+complex_adam
     Complex-valued Adam optimizer based on Wirtinger derivatives
-- `complex_adagrad`:
+complex_adagrad
     Complex-valued Adagrad optimizer based on Wirtinger derivatives
-- `complex_rmsprop`:
+complex_rmsprop
     Complex-valued RMSprop optimizer based on Wirtinger derivatives
 
 Initialization Functions
------------------------
-- `init_adam`:
+------------------------
+init_adam
     Initialize Adam optimizer state
-- `init_adagrad`:
+init_adagrad
     Initialize Adagrad optimizer state
-- `init_rmsprop`:
+init_rmsprop
     Initialize RMSprop optimizer state
 
 Update Functions
----------------
-- `adam_update`:
+----------------
+adam_update
     Update parameters using Adam optimizer with Wirtinger derivatives
-- `adagrad_update`:
+adagrad_update
     Update parameters using Adagrad optimizer with Wirtinger derivatives
-- `rmsprop_update`:
+rmsprop_update
     Update parameters using RMSprop optimizer with Wirtinger derivatives
 
 Notes
@@ -72,18 +69,15 @@ from jaxtyping import Array, Complex, Float
 
 
 class LRSchedulerState(NamedTuple):
-    """
-    Description
-    -----------
-    State maintained by learning rate schedulers.
+    """State maintained by learning rate schedulers.
 
     Attributes
     ----------
-    - `step` (int):
+    step : int
         Current optimization step
-    - `learning_rate` (float):
+    learning_rate : float
         Current learning rate
-    - `initial_lr` (float):
+    initial_lr : float
         Initial learning rate value
     """
 
@@ -239,7 +233,9 @@ def create_warmup_cosine_scheduler(
         decay_progress = jnp.maximum(0.0, state.step - warmup_steps) / remaining_steps
         decay_progress = jnp.minimum(decay_progress, 1.0)
         cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * decay_progress))
-        decay_lr = state.initial_lr * (final_lr_factor + (1 - final_lr_factor) * cosine_decay)
+        decay_lr = state.initial_lr * (
+            final_lr_factor + (1 - final_lr_factor) * cosine_decay
+        )
 
         # Choose between warmup and decay
         lr = jnp.where(state.step < warmup_steps, warmup_lr, decay_lr)
@@ -344,13 +340,17 @@ def wirtinger_grad(
         *args: Any,
     ) -> Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]:
         def split_complex(args):
-            return tuple(jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args) + tuple(
-                jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg) for arg in args
+            return tuple(
+                jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args
+            ) + tuple(
+                jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg)
+                for arg in args
             )
 
         def combine_complex(r, i):
             return tuple(
-                rr + 1j * ii if jnp.iscomplexobj(arg) else rr for rr, ii, arg in zip(r, i, args)
+                rr + 1j * ii if jnp.iscomplexobj(arg) else rr
+                for rr, ii, arg in zip(r, i, args, strict=False)
             )
 
         split_args = split_complex(args)
@@ -367,8 +367,7 @@ def wirtinger_grad(
 
         if isinstance(argnums, int):
             return 0.5 * (gr - 1j * gi)
-        else:
-            return tuple(0.5 * (grr - 1j * gii) for grr, gii in zip(gr, gi))
+        return tuple(0.5 * (grr - 1j * gii) for grr, gii in zip(gr, gi, strict=False))
 
     return grad_f
 
@@ -381,7 +380,9 @@ def complex_adam(
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
-) -> Tuple[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]]:
+) -> Tuple[
+    Complex[Array, " ..."], Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]
+]:
     """
     Description
     -----------
@@ -761,5 +762,7 @@ def rmsprop_update(
     - Return updated parameters and state
     """
     m, v, step = state
-    new_params, new_v = complex_rmsprop(params, grads, v, learning_rate, decay_rate, eps)
+    new_params, new_v = complex_rmsprop(
+        params, grads, v, learning_rate, decay_rate, eps
+    )
     return new_params, OptimizerState(m=m, v=new_v, step=step + 1)

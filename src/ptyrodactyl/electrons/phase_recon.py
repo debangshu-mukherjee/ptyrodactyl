@@ -1,7 +1,4 @@
-"""
-Module: electrons.phase_recon
------------------------------
-Inverse reconstruction algorithms for electron ptychography.
+"""Inverse reconstruction algorithms for electron ptychography.
 
 This module contains functions for reconstructing sample potentials from
 experimental ptychography data using various optimization algorithms.
@@ -10,22 +7,14 @@ with options for position correction and multi-modal probe handling.
 
 Functions
 ---------
-- `single_slice_ptychography`:
+single_slice_ptychography
     Performs single-slice ptychography reconstruction
-- `single_slice_poscorrected`:
+single_slice_poscorrected
     Performs single-slice reconstruction with position correction
-- `single_slice_multi_modal`:
+single_slice_multi_modal
     Performs single-slice reconstruction with multi-modal probe
-- `multi_slice_multi_modal`:
+multi_slice_multi_modal
     Performs multi-slice reconstruction with multi-modal probe
-
-Internal Functions
-------------------
-These functions are not exported and are used internally by the module.
-
-- `_get_optimizer`:
-    Returns an optimizer instance for the specified optimization algorithm
-
 
 Notes
 -----
@@ -34,6 +23,9 @@ automatic differentiation. The functions are designed to work with
 experimental data and can handle various noise levels and experimental
 conditions. Input data should be properly preprocessed and validated
 using the factory functions from electron_types module.
+
+Internal functions (not exported):
+- _get_optimizer: Returns an optimizer instance for the specified optimization algorithm
 """
 
 import jax
@@ -41,7 +33,9 @@ import jax.numpy as jnp
 from beartype import beartype as typechecker
 from beartype.typing import Any, Dict, Optional, Tuple, Union
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
+
 import ptyrodactyl.tools as ptt
+
 from .electron_types import (
     STEM4D,
     CalibratedArray,
@@ -86,49 +80,41 @@ def single_slice_ptychography(
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
 ]:
-    """
-    Description
-    -----------
-    Single Slice Ptychography where the electrostatic potential
-    slice and the beam guess are of the same size.
+    """Single Slice Ptychography where the electrostatic potential slice and the beam guess are of the same size.
 
     Parameters
     ----------
-    - `experimental_stem4d` (STEM4D):
+    experimental_data : STEM4D
         Experimental 4D-STEM data PyTree containing diffraction patterns,
         scan positions, and calibration information.
-    - `initial_potential` (pte.CalibratedArray):
+    initial_potential : CalibratedArray
         Initial guess for potential slice.
-    - `initial_beam` (pte.CalibratedArray):
+    initial_beam : CalibratedArray
         Initial guess for electron beam.
-    - `slice_thickness` (scalar_numeric):
+    slice_thickness : scalar_numeric
         Thickness of each slice.
-    - `save_every` (scalar_int):
-        Save every nth iteration.
-        Optional, default is 10.
-    - `num_iterations` (scalar_int):
-        Number of optimization iterations.
-        Optional, default is 1000.
-    - `learning_rate` (scalar_float):
-        Learning rate for optimization.
-        Optional, default is 0.001.
-    - `loss_type` (str):
-        Type of loss function to use.
-        Optional, default is "mse".
-    - `optimizer_name` (str):
-        Name of optimizer to use.
-        Optional, default is "adam".
+    save_every : scalar_int, optional
+        Save every nth iteration. Default is 10.
+    num_iterations : scalar_int, optional
+        Number of optimization iterations. Default is 1000.
+    learning_rate : scalar_float, optional
+        Learning rate for optimization. Default is 0.001.
+    loss_type : str, optional
+        Type of loss function to use. Default is "mse".
+    optimizer_name : str, optional
+        Name of optimizer to use. Default is "adam".
 
     Returns
     -------
-    - `pot_slice` (pte.CalibratedArray):
-        Optimized potential slice.
-    - `beam` (pte.CalibratedArray):
-        Optimized electron beam.
-    - `intermediate_potslice` (Complex[Array, "H W S"]):
-        Intermediate potential slices.
-    - `intermediate_beam` (Complex[Array, "H W S"]):
-        Intermediate electron beams.
+    tuple of (CalibratedArray, CalibratedArray, Complex[Array, "H W S"], Complex[Array, "H W S"])
+        - pot_slice : CalibratedArray
+            Optimized potential slice.
+        - beam : CalibratedArray
+            Optimized electron beam.
+        - intermediate_potslice : Complex[Array, "H W S"]
+            Intermediate potential slices.
+        - intermediate_beam : Complex[Array, "H W S"]
+            Intermediate electron beams.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
@@ -148,7 +134,9 @@ def single_slice_ptychography(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(
+        _forward_fn, experimental_4dstem, loss_type
+    )
 
     @jax.jit
     def _loss_and_grad(
@@ -174,14 +162,18 @@ def single_slice_ptychography(
         beam: Complex[Array, "H W"],
         pot_slice_state: Any,
         beam_state: Any,
-    ) -> Tuple[Complex[Array, "H W"], Complex[Array, "H W"], Any, Any, Float[Array, " "]]:
+    ) -> Tuple[
+        Complex[Array, "H W"], Complex[Array, "H W"], Any, Any, Float[Array, " "]
+    ]:
         loss: Float[Array, " "]
         grads: Dict[str, Complex[Array, "H W"]]
         loss, grads = _loss_and_grad(pot_slice, beam)
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
-        beam, beam_state = optimizer.update(beam, grads["beam"], beam_state, learning_rate)
+        beam, beam_state = optimizer.update(
+            beam, grads["beam"], beam_state, learning_rate
+        )
         return pot_slice, beam, pot_slice_state, beam_state, loss
 
     intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
@@ -248,56 +240,50 @@ def single_slice_poscorrected(
     Complex[Array, "H W S"],
     Float[Array, "P 2 S"],
 ]:
-    """
-    Description
-    -----------
-    Create and run an optimization routine for 4D-STEM reconstruction with position correction.
+    """Create and run an optimization routine for 4D-STEM reconstruction with position correction.
 
     Parameters
     ----------
-    - `experimental_stem4d` (STEM4D):
+    experimental_data : STEM4D
         Experimental 4D-STEM data PyTree containing diffraction patterns,
         scan positions, and calibration information.
-    - `initial_potential` (pte.CalibratedArray):
+    initial_potential : CalibratedArray
         Initial guess for potential slice.
-    - `initial_beam` (pte.CalibratedArray):
+    initial_beam : CalibratedArray
         Initial guess for electron beam.
-    - `slice_thickness` (scalar_numeric):
+    slice_thickness : scalar_numeric
         Thickness of each slice.
-    - `save_every` (scalar_int):
-        Save every nth iteration.
-        Optional, default is 10.
-    - `num_iterations` (scalar_int):
-        Number of optimization iterations.
-        Optional, default is 1000.
-    - `learning_rate` (Optional[Union[scalar_float, Float[Array, "2"]]]):
+    save_every : scalar_int, optional
+        Save every nth iteration. Default is 10.
+    num_iterations : scalar_int, optional
+        Number of optimization iterations. Default is 1000.
+    learning_rate : scalar_float or Float[Array, "2"], optional
         Learning rate for potential slice and beam optimization.
         If the learning rate is a scalar, it is used for both
         potential slice and position optimization. If it is an array,
         the first element is used for potential slice and beam optimization,
         and the second element is used for position optimization.
-        Optional, default is 0.01.
-    - `loss_type` (str):
-        Type of loss function to use.
-        Optional, default is "mse".
-    - `optimizer_name` (str):
-        Name of optimizer to use.
-        Optional, default is "adam".
+        Default is 0.01.
+    loss_type : str, optional
+        Type of loss function to use. Default is "mse".
+    optimizer_name : str, optional
+        Name of optimizer to use. Default is "adam".
 
     Returns
     -------
-    - `final_potential` (pte.CalibratedArray):
-        Optimized potential slice.
-    - `final_beam` (pte.CalibratedArray):
-        Optimized electron beam.
-    - `pos_guess` (Float[Array, "P 2"]):
-        Optimized list of probe positions.
-    - `intermediate_potslices` (Complex[Array, "H W S"]):
-        Intermediate potential slices.
-    - `intermediate_beams` (Complex[Array, "H W S"]):
-        Intermediate electron beams.
-    - `intermediate_positions` (Float[Array, "P 2 S"]):
-        Intermediate probe positions.
+    tuple of (CalibratedArray, CalibratedArray, Float[Array, "P 2"], Complex[Array, "H W S"], Complex[Array, "H W S"], Float[Array, "P 2 S"])
+        - final_potential : CalibratedArray
+            Optimized potential slice.
+        - final_beam : CalibratedArray
+            Optimized electron beam.
+        - pos_guess : Float[Array, "P 2"]
+            Optimized list of probe positions.
+        - intermediate_potslices : Complex[Array, "H W S"]
+            Intermediate potential slices.
+        - intermediate_beams : Complex[Array, "H W S"]
+            Intermediate electron beams.
+        - intermediate_positions : Float[Array, "P 2 S"]
+            Intermediate probe positions.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
@@ -319,7 +305,9 @@ def single_slice_poscorrected(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(
+        _forward_fn, experimental_4dstem, loss_type
+    )
 
     @jax.jit
     def _loss_and_grad(
@@ -327,7 +315,9 @@ def single_slice_poscorrected(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
-        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(pot_slice, beam, pos_list)
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
+            pot_slice, beam, pos_list
+        )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
     optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
@@ -335,7 +325,7 @@ def single_slice_poscorrected(
     beam_state: Any = optimizer.init(initial_beam.data_array.shape)
     pos_state: Any = optimizer.init(initial_pos_list.shape)
 
-    learning_rate: Float[Array, "..."] = jnp.array(learning_rate)
+    learning_rate: Float[Array, ...] = jnp.array(learning_rate)
 
     if len(learning_rate) == 1:
         learning_rate = jnp.array([learning_rate, learning_rate])
@@ -363,7 +353,9 @@ def single_slice_poscorrected(
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
-        beam, beam_state = optimizer.update(beam, grads["beam"], beam_state, learning_rate)
+        beam, beam_state = optimizer.update(
+            beam, grads["beam"], beam_state, learning_rate
+        )
         pos_list, pos_state = optimizer.update(
             pos_list, grads["pos_list"], pos_state, learning_rate[1]
         )
@@ -407,14 +399,20 @@ def single_slice_poscorrected(
             beam_state,
             pos_state,
             loss,
-        ) = _update_step(pot_guess, beam_guess, pos_guess, pot_slice_state, beam_state, pos_state)
+        ) = _update_step(
+            pot_guess, beam_guess, pos_guess, pot_slice_state, beam_state, pos_state
+        )
 
         if ii % save_every == 0:
             print(f"Iteration {ii}, Loss: {loss}")
             saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(jnp.int32)
-            intermediate_potslices = intermediate_potslices.at[:, :, saver].set(pot_guess)
+            intermediate_potslices = intermediate_potslices.at[:, :, saver].set(
+                pot_guess
+            )
             intermediate_beams = intermediate_beams.at[:, :, saver].set(beam_guess)
-            intermediate_positions = intermediate_positions.at[:, :, saver].set(pos_guess)
+            intermediate_positions = intermediate_positions.at[:, :, saver].set(
+                pos_guess
+            )
 
     final_potential: CalibratedArray = make_calibrated_array(
         data_array=pot_guess,
@@ -456,57 +454,48 @@ def single_slice_multi_modal(
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
 ]:
-    """
-    Description
-    -----------
-    Create and run an optimization routine for 4D-STEM reconstruction with position correction.
+    """Create and run an optimization routine for 4D-STEM reconstruction with multi-modal probe.
 
     Parameters
     ----------
-    - `experimental_stem4d` (STEM4D):
+    experimental_data : STEM4D
         Experimental 4D-STEM data PyTree containing diffraction patterns,
         scan positions, and calibration information.
-    - `initial_pot_slice` (Complex[Array, "H W"]):
+    initial_pot_slice : Complex[Array, "H W"]
         Initial guess for potential slice.
-    - `initial_beam` (pte.ProbeModes):
+    initial_beam : ProbeModes
         Initial guess for electron beam with multiple probe modes.
-    - `slice_thickness` (scalar_numeric):
+    slice_thickness : scalar_numeric
         Thickness of each slice.
-    - `initial_pos_list` (Optional[Float[Array, "P 2"]]):
-        Initial list of probe positions. If None, uses positions from STEM4D.
-        Optional, default is None.
-    - `save_every` (scalar_int):
-        Save every nth iteration.
-        Optional, default is 10.
-    - `num_iterations` (scalar_int):
-        Number of optimization iterations.
-        Optional, default is 1000.
-    - `learning_rate` (Optional[Union[scalar_float, Float[Array, "2"]]]):
+    save_every : scalar_int, optional
+        Save every nth iteration. Default is 10.
+    num_iterations : scalar_int, optional
+        Number of optimization iterations. Default is 1000.
+    learning_rate : scalar_float or Float[Array, "2"], optional
         Learning rate for potential slice and beam optimization.
         If the learning rate is a scalar, it is used for both
         potential slice and position optimization. If it is an array,
         the first element is used for potential slice and beam optimization,
         and the second element is used for position optimization.
-        Optional, default is 0.01.
-    - `loss_type` (str):
-        Type of loss function to use.
-        Optional, default is "mse".
-    - `optimizer_name` (str):
-        Name of optimizer to use.
-        Optional, default is "adam".
+        Default is 0.01.
+    loss_type : str, optional
+        Type of loss function to use. Default is "mse".
+    optimizer_name : str, optional
+        Name of optimizer to use. Default is "adam".
 
     Returns
     -------
-    - `pot_slice` (Complex[Array, "H W"]):
-        Optimized potential slice.
-    - `beam` (pte.ProbeModes):
-        Optimized electron beam.
-    - `pos_list` (Float[Array, "P 2"]):
-        Optimized list of probe positions.
-    - `intermediate_potslice` (Complex[Array, "H W S"]):
-        Intermediate potential slices.
-    - `intermediate_beam` (Complex[Array, "H W S"]):
-        Intermediate electron beams.
+    tuple of (Complex[Array, "H W"], ProbeModes, Float[Array, "P 2"], Complex[Array, "H W S"], Complex[Array, "H W S"])
+        - pot_slice : Complex[Array, "H W"]
+            Optimized potential slice.
+        - beam : ProbeModes
+            Optimized electron beam.
+        - pos_list : Float[Array, "P 2"]
+            Optimized list of probe positions.
+        - intermediate_potslice : Complex[Array, "H W S"]
+            Intermediate potential slices.
+        - intermediate_beam : Complex[Array, "H W S"]
+            Intermediate electron beams.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
@@ -528,7 +517,9 @@ def single_slice_multi_modal(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(
+        _forward_fn, experimental_4dstem, loss_type
+    )
 
     @jax.jit
     def _loss_and_grad(
@@ -536,7 +527,9 @@ def single_slice_multi_modal(
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Any]]:
-        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(pot_slice, beam, pos_list)
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
+            pot_slice, beam, pos_list
+        )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
     optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
@@ -544,7 +537,7 @@ def single_slice_multi_modal(
     beam_state: Any = optimizer.init(initial_beam.modes.shape)
     pos_state: Any = optimizer.init(initial_pos_list.shape)
 
-    learning_rate: Float[Array, "..."] = jnp.array(learning_rate)
+    learning_rate: Float[Array, ...] = jnp.array(learning_rate)
     if len(learning_rate.shape) == 0:
         learning_rate = jnp.array([learning_rate, learning_rate])
 
@@ -605,8 +598,10 @@ def single_slice_multi_modal(
 
     for ii in range(num_iterations):
         loss: Float[Array, " "]
-        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = update_step(
-            pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
+        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = (
+            _update_step(
+                pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
+            )
         )
 
         if ii % save_every == 0:
@@ -637,56 +632,45 @@ def multi_slice_multi_modal(
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
 ]:
-    """
-    Description
-    -----------
-    Create and run an optimization routine for 4D-STEM reconstruction with position correction.
+    """Create and run an optimization routine for multi-slice 4D-STEM reconstruction with position correction.
 
     Parameters
     ----------
-    - `experimental_stem4d` (STEM4D):
+    experimental_data : STEM4D
         Experimental 4D-STEM data PyTree containing diffraction patterns,
         scan positions, and calibration information.
-    - `initial_pot_slice` (Complex[Array, "H W"]):
+    initial_pot_slice : Complex[Array, "H W"]
         Initial guess for potential slice.
-    - `initial_beam` (Complex[Array, "H W"]):
+    initial_beam : Complex[Array, "H W"]
         Initial guess for electron beam.
-    - `slice_thickness` (scalar_numeric):
+    slice_thickness : scalar_numeric
         Thickness of each slice.
-    - `initial_pos_list` (Optional[Float[Array, "P 2"]]):
-        Initial list of probe positions. If None, uses positions from STEM4D.
-        Optional, default is None.
-    - `save_every` (scalar_int):
-        Save every nth iteration.
-        Optional, default is 10.
-    - `num_iterations` (scalar_int):
-        Number of optimization iterations.
-        Optional, default is 1000.
-    - `learning_rate` (scalar_float):
-        Learning rate for potential slice and beam optimization.
-        Optional, default is 0.001.
-    - `pos_learning_rate` (scalar_float):
-        Learning rate for position optimization.
-        Optional, default is 0.01.
-    - `loss_type` (str):
-        Type of loss function to use.
-        Optional, default is "mse".
-    - `optimizer_name` (str):
-        Name of optimizer to use.
-        Optional, default is "adam".
+    save_every : scalar_int, optional
+        Save every nth iteration. Default is 10.
+    num_iterations : scalar_int, optional
+        Number of optimization iterations. Default is 1000.
+    learning_rate : scalar_float, optional
+        Learning rate for potential slice and beam optimization. Default is 0.001.
+    pos_learning_rate : scalar_float, optional
+        Learning rate for position optimization. Default is 0.01.
+    loss_type : str, optional
+        Type of loss function to use. Default is "mse".
+    optimizer_name : str, optional
+        Name of optimizer to use. Default is "adam".
 
     Returns
     -------
-    - `pot_slice` (Complex[Array, "H W"]):
-        Optimized potential slice.
-    - `beam` (Complex[Array, "H W"]):
-        Optimized electron beam.
-    - `pos_list` (Float[Array, "P 2"]):
-        Optimized list of probe positions.
-    - `intermediate_potslice` (Complex[Array, "H W S"]):
-        Intermediate potential slices.
-    - `intermediate_beam` (Complex[Array, "H W S"]):
-        Intermediate electron beams.
+    tuple of (Complex[Array, "H W"], Complex[Array, "H W"], Float[Array, "P 2"], Complex[Array, "H W S"], Complex[Array, "H W S"])
+        - pot_slice : Complex[Array, "H W"]
+            Optimized potential slice.
+        - beam : Complex[Array, "H W"]
+            Optimized electron beam.
+        - pos_list : Float[Array, "P 2"]
+            Optimized list of probe positions.
+        - intermediate_potslice : Complex[Array, "H W S"]
+            Intermediate potential slices.
+        - intermediate_beam : Complex[Array, "H W S"]
+            Intermediate electron beams.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
@@ -708,7 +692,9 @@ def multi_slice_multi_modal(
         )
         return stem4d_result.data
 
-    loss_func: Any = ptt.create_loss_function(_forward_fn, experimental_4dstem, loss_type)
+    loss_func: Any = ptt.create_loss_function(
+        _forward_fn, experimental_4dstem, loss_type
+    )
 
     @jax.jit
     def _loss_and_grad(
@@ -716,7 +702,9 @@ def multi_slice_multi_modal(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
-        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(pot_slice, beam, pos_list)
+        loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
+            pot_slice, beam, pos_list
+        )
         return loss, {"pot_slice": grads[0], "beam": grads[1], "pos_list": grads[2]}
 
     optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
@@ -747,7 +735,9 @@ def multi_slice_multi_modal(
         pot_slice, pot_slice_state = optimizer.update(
             pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
         )
-        beam, beam_state = optimizer.update(beam, grads["beam"], beam_state, learning_rate)
+        beam, beam_state = optimizer.update(
+            beam, grads["beam"], beam_state, learning_rate
+        )
         pos_list, pos_state = optimizer.update(
             pos_list, grads["pos_list"], pos_state, pos_learning_rate
         )
@@ -776,8 +766,10 @@ def multi_slice_multi_modal(
 
     for ii in range(num_iterations):
         loss: Float[Array, " "]
-        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = update_step(
-            pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
+        pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state, loss = (
+            _update_step(
+                pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
+            )
         )
 
         if ii % save_every == 0:

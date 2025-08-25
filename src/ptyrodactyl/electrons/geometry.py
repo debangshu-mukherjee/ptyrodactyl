@@ -1,17 +1,14 @@
-"""
-Module: electrons.geometry
---------------------------
-Geometric transformations and operations for crystal structures.
+"""Geometric transformations and operations for crystal structures.
 
 Functions
 ---------
-- `rotmatrix_vectors`:
+rotmatrix_vectors
     Compute a rotation matrix that rotates one vector to align with another
-- `rotmatrix_axis`:
+rotmatrix_axis
     Generate a rotation matrix for rotation around an arbitrary axis
-- `rotate_structure`:
+rotate_structure
     Apply rotation transformations to crystal structures
-- `reciprocal_lattice`:
+reciprocal_lattice
     Compute reciprocal lattice vectors from real-space unit cell
 """
 
@@ -25,28 +22,29 @@ from .electron_types import scalar_float, scalar_numeric
 
 
 @jaxtyped(typechecker=beartype)
-def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Array, "3 3"]:
-    """
-    Description
-    -----------
-    Compute a proper rotation matrix that rotates vector v1 to align with vector v2
-    using the Rodrigues rotation formula. Handles special cases where vectors are
+def rotmatrix_vectors(
+    v1: Real[Array, " 3"], v2: Real[Array, " 3"]
+) -> Float[Array, "3 3"]:
+    """Compute a proper rotation matrix that rotates vector v1 to align with vector v2.
+    
+    Uses the Rodrigues rotation formula. Handles special cases where vectors are
     parallel or anti-parallel.
 
     Parameters
     ----------
-    - `v1` (Real[Array, " 3"]):
+    v1 : Real[Array, " 3"]
         Initial 3D vector to be rotated
-    - `v2` (Real[Array, " 3"]):
+    v2 : Real[Array, " 3"]
         Target 3D vector that v1 should be rotated to align with
 
     Returns
     -------
-    - `rotation_matrix` (Float[Array, "3 3"]):
-        3x3 rotation matrix rotation_matrix such that rotation_matrix @ v1 is parallel to v2
+    Float[Array, "3 3"]
+        3x3 rotation matrix such that rotation_matrix @ v1 is parallel to v2
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Normalize input vectors:
         - Divide v1 and v2 by their respective norms to get unit vectors
         - This ensures the rotation is purely rotational without scaling
@@ -90,7 +88,9 @@ def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Arr
         """
         magic_number: scalar_float = 0.9
         ortho: Float[Array, " 3"] = jnp.where(
-            jnp.abs(v1[0]) < magic_number, jnp.array([1.0, 0.0, 0.0]), jnp.array([0.0, 1.0, 0.0])
+            jnp.abs(v1[0]) < magic_number,
+            jnp.array([1.0, 0.0, 0.0]),
+            jnp.array([0.0, 1.0, 0.0]),
         )
         axis: Float[Array, " 3"] = jnp.cross(v1, ortho)
         axis: Float[Array, " 3"] = axis / jnp.linalg.norm(axis)
@@ -123,29 +123,30 @@ def rotmatrix_vectors(v1: Real[Array, " 3"], v2: Real[Array, " 3"]) -> Float[Arr
 
 
 @jaxtyped(typechecker=beartype)
-def rotmatrix_axis(axis: Real[Array, " 3"], theta: scalar_numeric) -> Float[Array, "3 3"]:
-    """
-    Description
-    -----------
-    Generate a 3D rotation matrix for rotation around an arbitrary axis by a specified
-    angle using the Rodrigues rotation formula. This creates a right-handed rotation
+def rotmatrix_axis(
+    axis: Real[Array, " 3"], theta: scalar_numeric
+) -> Float[Array, "3 3"]:
+    """Generate a 3D rotation matrix for rotation around an arbitrary axis by a specified angle.
+    
+    Uses the Rodrigues rotation formula. This creates a right-handed rotation
     when looking along the axis direction.
 
     Parameters
     ----------
-    - `axis` (Real[Array, " 3"]):
+    axis : Real[Array, " 3"]
         3D vector defining the axis of rotation (will be normalized)
-    - `theta` (scalar_numeric):
+    theta : scalar_numeric
         Rotation angle in radians (positive for counter-clockwise rotation
         when looking along the axis)
 
     Returns
     -------
-    - `rot_matrix` (Float[Array, "3 3"]):
+    Float[Array, "3 3"]
         3x3 rotation matrix that rotates vectors by theta radians around the axis
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Normalize the rotation axis:
         - Divide axis vector by its norm to ensure unit length
         - This guarantees the rotation matrix is orthogonal
@@ -255,11 +256,15 @@ def rotate_structure(
         - Crystal symmetry and relative positions are preserved
     """
     rotated_coords: Real[Array, " N 3"] = coords[:, 1:4] @ rotation_matrix.T
-    rotated_coords_with_ids: Float[Array, " N 4"] = jnp.hstack((coords[:, 0:1], rotated_coords))
+    rotated_coords_with_ids: Float[Array, " N 4"] = jnp.hstack(
+        (coords[:, 0:1], rotated_coords)
+    )
     rotated_cell: Real[Array, "3 3"] = cell @ rotation_matrix.T
 
     def _apply_inplane_rotation() -> Float[Array, " N 4"]:
-        in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(jnp.array([0.0, 0.0, 1.0]), theta)
+        in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(
+            jnp.array([0.0, 0.0, 1.0]), theta
+        )
         rotated_coords_in_plane: Float[Array, " N 3"] = (
             rotated_coords_with_ids[:, 1:4] @ in_plane_rotation.T
         )

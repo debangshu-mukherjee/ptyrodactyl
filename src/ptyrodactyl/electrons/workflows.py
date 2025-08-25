@@ -1,14 +1,11 @@
-"""
-Module: electrons.workflows
----------------------------
-High-level workflows for electron microscopy simulations.
+"""High-level workflows for electron microscopy simulations.
 
 This module provides complete workflows that combine multiple simulation
 steps into convenient functions for common use cases.
 
 Functions
 ---------
-- `xyz_to_4d_stem`:
+xyz_to_4d_stem
     Simulates 4D-STEM data from an XYZ structure file
 """
 
@@ -47,49 +44,48 @@ def xyz_to_4d_stem(
     probe_c3: Optional[scalar_numeric] = 0.0,
     probe_c5: Optional[scalar_numeric] = 0.0,
 ) -> STEM4D:
-    """
-    Description
-    -----------
-    Complete workflow to simulate 4D-STEM data from an XYZ structure file.
+    """Complete workflow to simulate 4D-STEM data from an XYZ structure file.
+    
     This function loads the structure, calculates appropriate repeats based
     on thickness and lateral extents, generates Kirkland potentials, creates
     a probe, and simulates CBED patterns at multiple scan positions.
 
     Parameters
     ----------
-    - `xyz_filepath` (str):
-        Path to the XYZ file containing atomic structure
-    - `slice_thickness` (scalar_float):
-        Thickness of each slice in Angstroms for multislice calculation
-    - `lateral_extent` (scalar_float):
+    xyz_filepath : str
+        Path to the XYZ file containing atomic structure.
+    slice_thickness : scalar_float
+        Thickness of each slice in Angstroms for multislice calculation.
+    lateral_extent : scalar_float
         Minimum lateral extent in Angstroms for periodic boundaries.
         The structure will be repeated to ensure at least this extent.
-    - `cbed_aperture_mrad` (scalar_numeric):
-        Probe aperture size in milliradians
-    - `voltage_kv` (scalar_numeric):
-        Accelerating voltage in kilovolts
-    - `scan_positions` (Float[Array, "P 2"]):
-        Array of (y, x) scan positions in Angstroms where P is number of positions
-    - `cbed_pixel_size_ang` (scalar_float):
-        Real space pixel size in Angstroms for the calculation
-    - `probe_defocus` (Optional[scalar_numeric]):
-        Probe defocus in Angstroms. Default is 0.0
-    - `probe_c3` (Optional[scalar_numeric]):
-        Third-order spherical aberration in Angstroms. Default is 0.0
-    - `probe_c5` (Optional[scalar_numeric]):
-        Fifth-order spherical aberration in Angstroms. Default is 0.0
+    cbed_aperture_mrad : scalar_numeric
+        Probe aperture size in milliradians.
+    voltage_kv : scalar_numeric
+        Accelerating voltage in kilovolts.
+    scan_positions : Float[Array, "P 2"]
+        Array of (y, x) scan positions in Angstroms where P is number of positions.
+    cbed_pixel_size_ang : scalar_float
+        Real space pixel size in Angstroms for the calculation.
+    probe_defocus : scalar_numeric, optional
+        Probe defocus in Angstroms. Default is 0.0.
+    probe_c3 : scalar_numeric, optional
+        Third-order spherical aberration in Angstroms. Default is 0.0.
+    probe_c5 : scalar_numeric, optional
+        Fifth-order spherical aberration in Angstroms. Default is 0.0.
 
     Returns
     -------
-    - `stem4d_data` (STEM4D):
+    STEM4D
         Complete 4D-STEM dataset containing:
         - Diffraction patterns for each scan position
         - Real and Fourier space calibrations
         - Scan positions in Angstroms
         - Accelerating voltage
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
     - Load XYZ structure from file
     - Calculate repeats needed:
         - Z repeats based on total thickness / lattice c parameter
@@ -105,14 +101,22 @@ def xyz_to_4d_stem(
         a_length: Float[Array, " "] = jnp.linalg.norm(xyz_data.lattice[0])
         b_length: Float[Array, " "] = jnp.linalg.norm(xyz_data.lattice[1])
         c_length: Float[Array, " "] = jnp.linalg.norm(xyz_data.lattice[2])
-        repeat_x: Int[Array, " "] = jnp.ceil(lateral_extent / a_length).astype(jnp.int32)
-        repeat_y: Int[Array, " "] = jnp.ceil(lateral_extent / b_length).astype(jnp.int32)
+        repeat_x: Int[Array, " "] = jnp.ceil(lateral_extent / a_length).astype(
+            jnp.int32
+        )
+        repeat_y: Int[Array, " "] = jnp.ceil(lateral_extent / b_length).astype(
+            jnp.int32
+        )
         z_coords: Float[Array, " N"] = xyz_data.positions[:, 2]
         z_min: Float[Array, " "] = jnp.min(z_coords)
         z_max: Float[Array, " "] = jnp.max(z_coords)
         structure_thickness: Float[Array, " "] = z_max - z_min
-        total_thickness_needed: Float[Array, " "] = structure_thickness + slice_thickness
-        repeat_z: Int[Array, " "] = jnp.ceil(total_thickness_needed / c_length).astype(jnp.int32)
+        total_thickness_needed: Float[Array, " "] = (
+            structure_thickness + slice_thickness
+        )
+        repeat_z: Int[Array, " "] = jnp.ceil(total_thickness_needed / c_length).astype(
+            jnp.int32
+        )
         repeats: Int[Array, " 3"] = jnp.array([repeat_x, repeat_y, repeat_z])
     else:
         repeats: Int[Array, " 3"] = jnp.array([1, 1, 1])
@@ -124,8 +128,12 @@ def xyz_to_4d_stem(
         repeats=repeats,
         padding=4.0,
     )
-    image_height: Int[Array, ""] = jnp.asarray(potential_slices.slices.shape[0], dtype=jnp.int32)
-    image_width: Int[Array, ""] = jnp.asarray(potential_slices.slices.shape[1], dtype=jnp.int32)
+    image_height: Int[Array, ""] = jnp.asarray(
+        potential_slices.slices.shape[0], dtype=jnp.int32
+    )
+    image_width: Int[Array, ""] = jnp.asarray(
+        potential_slices.slices.shape[1], dtype=jnp.int32
+    )
     image_size: Int[Array, " 2"] = jnp.array([image_height, image_width])
     probe: Complex[Array, "H W"] = make_probe(
         aperture=cbed_aperture_mrad,

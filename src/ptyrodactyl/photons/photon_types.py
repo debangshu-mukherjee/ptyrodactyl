@@ -1,59 +1,58 @@
-"""
-Module: photons.photon_types
-----------------------------
-Data structures and type definitions for optical ptychography.
+"""Data structures and type definitions for optical ptychography.
 
 Type Aliases
 ------------
-- `scalar_float`:
+scalar_float
     A type alias for float or Float[Array, " "]
-- `scalar_integer`:
+scalar_integer
     A type alias for int or Int[Array, " "]
-- `scalar_complex`:
+scalar_complex
     A type alias for complex or Complex[Array, " "]
-- `scalar_numeric`:
+scalar_numeric
     A type alias for int, float, complex or Num[Array, " "]
-- `non_jax_number`:
+non_jax_number
     A type alias for int, float or complex
 
 Classes
 -------
-- `LensParams`:
+LensParams
     A named tuple for lens parameters
-- `GridParams`:
+GridParams
     A named tuple for computational grid parameters
-- `OpticalWavefront`:
+OpticalWavefront
     A named tuple for representing an optical wavefront
-- `MicroscopeData`:
+MicroscopeData
     A named tuple for storing 3D or 4D microscope image data
-- `SampleFunction`:
+SampleFunction
     A named tuple for representing a sample function
-- `Diffractogram`:
+Diffractogram
     A named tuple for storing a single diffraction pattern
 
 Factory Functions
-----------------
-- `make_lens_params`:
+-----------------
+make_lens_params
     Creates a LensParams instance with runtime type checking
-- `make_grid_params`:
+make_grid_params
     Creates a GridParams instance with runtime type checking
-- `make_optical_wavefront`:
+make_optical_wavefront
     Creates an OpticalWavefront instance with runtime type checking
-- `make_microscope_data`:
+make_microscope_data
     Creates a MicroscopeData instance with runtime type checking
-- `make_diffractogram`:
+make_diffractogram
     Creates a Diffractogram instance with runtime type checking
-- `make_sample_function`:
+make_sample_function
     Creates a SampleFunction instance with runtime type checking
 
-    Note: Always use these factory functions instead of directly instantiating the
-    NamedTuple classes to ensure proper runtime type checking of the contents.
+Notes
+-----
+Always use these factory functions instead of directly instantiating the
+NamedTuple classes to ensure proper runtime type checking of the contents.
 """
 
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import NamedTuple, TypeAlias, Union
+from beartype.typing import NamedTuple, Tuple, TypeAlias, Union
 from jax import lax
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
@@ -70,24 +69,21 @@ non_jax_number: TypeAlias = Union[int, float, complex]
 @jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class LensParams(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for lens parameters
+    """PyTree structure for lens parameters.
 
     Attributes
     ----------
-    - `focal_length` (scalar_float):
+    focal_length : scalar_float
         Focal length of the lens in meters
-    - `diameter` (scalar_float):
+    diameter : scalar_float
         Diameter of the lens in meters
-    - `n` (scalar_float):
+    n : scalar_float
         Refractive index of the lens material
-    - `center_thickness` (scalar_float):
+    center_thickness : scalar_float
         Thickness at the center of the lens in meters
-    - `r1` (scalar_float):
+    r1 : scalar_float
         Radius of curvature of the first surface in meters (positive for convex)
-    - `r2` (scalar_float):
+    r2 : scalar_float
         Radius of curvature of the second surface in meters (positive for convex)
 
     Notes
@@ -125,20 +121,17 @@ class LensParams(NamedTuple):
 @jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class GridParams(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for computational grid parameters
+    """PyTree structure for computational grid parameters.
 
     Attributes
     ----------
-    - `xx` (Float[Array, "H W"]):
+    xx : Float[Array, "H W"]
         Spatial grid in the x-direction
-    - `yy` (Float[Array, "H W"]):
+    yy : Float[Array, "H W"]
         Spatial grid in the y-direction
-    - `phase_profile` (Float[Array, "H W"]):
+    phase_profile : Float[Array, "H W"]
         Phase profile of the optical field
-    - `transmission` (Float[Array, "H W"]):
+    transmission : Float[Array, "H W"]
         Transmission profile of the optical field
 
     Notes
@@ -173,20 +166,17 @@ class GridParams(NamedTuple):
 @jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class OpticalWavefront(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for representing an optical wavefront.
+    """PyTree structure for representing an optical wavefront.
 
     Attributes
     ----------
-    - `field` (Complex[Array, "H W"]):
+    field : Complex[Array, "H W"]
         Complex amplitude of the optical field.
-    - `wavelength` (scalar_float):
+    wavelength : scalar_float
         Wavelength of the optical wavefront in meters.
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters.
-    - `z_position` (scalar_float):
+    z_position : scalar_float
         Axial position of the wavefront along the propagation direction in meters.
     """
 
@@ -214,20 +204,17 @@ class OpticalWavefront(NamedTuple):
 @jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class MicroscopeData(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for representing an 3D or 4D microscope image.
+    """PyTree structure for representing an 3D or 4D microscope image.
 
     Attributes
     ----------
-    - `image_data` (Float[Array, "P H W"] | Float[Array, "X Y H W"]):
+    image_data : Float[Array, "P H W"] | Float[Array, "X Y H W"]
         3D or 4D image data representing the optical field.
-    - `positions` (Num[Array, " P 2"]):
+    positions : Num[Array, " P 2"]
         Positions of the images during collection.
-    - `wavelength` (scalar_float):
+    wavelength : scalar_float
         Wavelength of the optical wavefront in meters.
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters.
     """
 
@@ -255,16 +242,13 @@ class MicroscopeData(NamedTuple):
 @jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class SampleFunction(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for representing an 3D or 4D microscope image.
+    """PyTree structure for representing a sample function.
 
     Attributes
     ----------
-    - `sample` (Complex[Array, "H W"]):
+    sample : Complex[Array, "H W"]
         The sample function.
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters.
     """
 
@@ -288,18 +272,15 @@ class SampleFunction(NamedTuple):
 @jaxtyped(typechecker=beartype)
 @register_pytree_node_class
 class Diffractogram(NamedTuple):
-    """
-    Description
-    -----------
-    PyTree structure for representing a single diffractogram.
+    """PyTree structure for representing a single diffractogram.
 
     Attributes
     ----------
-    - `image` (Float[Array, "H W"]):
+    image : Float[Array, "H W"]
         Image data.
-    - `wavelength` (scalar_float):
+    wavelength : scalar_float
         Wavelength of the optical wavefront in meters.
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters.
     """
 
@@ -331,38 +312,37 @@ def make_lens_params(
     r1: scalar_float,
     r2: scalar_float,
 ) -> LensParams:
-    """
-    Description
-    -----------
-    JAX-safe factory function for LensParams with data validation.
+    """JAX-safe factory function for LensParams with data validation.
 
     Parameters
     ----------
-    - `focal_length` (scalar_float):
+    focal_length : scalar_float
         Focal length of the lens in meters
-    - `diameter` (scalar_float):
+    diameter : scalar_float
         Diameter of the lens in meters
-    - `n` (scalar_float):
+    n : scalar_float
         Refractive index of the lens material
-    - `center_thickness` (scalar_float):
+    center_thickness : scalar_float
         Thickness at the center of the lens in meters
-    - `r1` (scalar_float):
+    r1 : scalar_float
         Radius of curvature of the first surface in meters (positive for convex)
-    - `r2` (scalar_float):
+    r2 : scalar_float
         Radius of curvature of the second surface in meters (positive for convex)
 
     Returns
     -------
-    - `lens_params` (LensParams):
+    LensParams
         Validated lens parameters instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If parameters are invalid or out of valid ranges
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Convert inputs to JAX arrays
     - Validate parameters:
         - Check focal_length is positive
@@ -393,7 +373,9 @@ def make_lens_params(
             return lax.cond(
                 diameter > 0,
                 lambda: diameter,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: diameter, lambda: diameter)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: diameter, lambda: diameter)
+                ),
             )
 
         def check_refractive_index():
@@ -416,7 +398,9 @@ def make_lens_params(
             return lax.cond(
                 jnp.logical_and(jnp.isfinite(r1), jnp.isfinite(r2)),
                 lambda: (r1, r2),
-                lambda: lax.stop_gradient(lax.cond(False, lambda: (r1, r2), lambda: (r1, r2))),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: (r1, r2), lambda: (r1, r2))
+                ),
             )
 
         check_focal_length()
@@ -444,34 +428,33 @@ def make_grid_params(
     phase_profile: Float[Array, "H W"],
     transmission: Float[Array, "H W"],
 ) -> GridParams:
-    """
-    Description
-    -----------
-    JAX-safe factory function for GridParams with data validation.
+    """JAX-safe factory function for GridParams with data validation.
 
     Parameters
     ----------
-    - `xx` (Float[Array, "H W"]):
+    xx : Float[Array, "H W"]
         Spatial grid in the x-direction
-    - `yy` (Float[Array, "H W"]):
+    yy : Float[Array, "H W"]
         Spatial grid in the y-direction
-    - `phase_profile` (Float[Array, "H W"]):
+    phase_profile : Float[Array, "H W"]
         Phase profile of the optical field
-    - `transmission` (Float[Array, "H W"]):
+    transmission : Float[Array, "H W"]
         Transmission profile of the optical field
 
     Returns
     -------
-    - `grid_params` (GridParams):
+    GridParams
         Validated grid parameters instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If array shapes are inconsistent or data is invalid
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Convert inputs to JAX arrays
     - Validate array shapes:
         - Check all arrays are 2D
@@ -510,7 +493,9 @@ def make_grid_params(
             return lax.cond(
                 jnp.logical_and(
                     jnp.logical_and(xx.shape == (H, W), yy.shape == (H, W)),
-                    jnp.logical_and(phase_profile.shape == (H, W), transmission.shape == (H, W)),
+                    jnp.logical_and(
+                        phase_profile.shape == (H, W), transmission.shape == (H, W)
+                    ),
                 ),
                 lambda: (xx, yy, phase_profile, transmission),
                 lambda: lax.stop_gradient(
@@ -544,7 +529,9 @@ def make_grid_params(
             return lax.cond(
                 jnp.logical_and(jnp.all(jnp.isfinite(xx)), jnp.all(jnp.isfinite(yy))),
                 lambda: (xx, yy),
-                lambda: lax.stop_gradient(lax.cond(False, lambda: (xx, yy), lambda: (xx, yy))),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: (xx, yy), lambda: (xx, yy))
+                ),
             )
 
         check_2d_arrays()
@@ -565,39 +552,38 @@ def make_grid_params(
 
 @jaxtyped(typechecker=beartype)
 def make_optical_wavefront(
-    field: Complex[Array, "H W"],
+    field: Complex[Array, " hh ww"],
     wavelength: scalar_float,
     dx: scalar_float,
     z_position: scalar_float,
 ) -> OpticalWavefront:
-    """
-    Description
-    -----------
-    JAX-safe factory function for OpticalWavefront with data validation.
+    """JAX-safe factory function for OpticalWavefront with data validation.
 
     Parameters
     ----------
-    - `field` (Complex[Array, "H W"]):
+    field : Complex[Array, " hh ww"]
         Complex amplitude of the optical field
-    - `wavelength` (scalar_float):
+    wavelength : scalar_float
         Wavelength of the optical wavefront in meters
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters
-    - `z_position` (scalar_float):
+    z_position : scalar_float
         Axial position of the wavefront along the propagation direction in meters
 
     Returns
     -------
-    - `wavefront` (OpticalWavefront):
+    OpticalWavefront
         Validated optical wavefront instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If data is invalid or parameters are out of valid ranges
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Convert inputs to JAX arrays
     - Validate field array:
         - Check it's 2D
@@ -608,31 +594,37 @@ def make_optical_wavefront(
         - Check z_position is finite
     - Create and return OpticalWavefront instance
     """
-    field = jnp.asarray(field, dtype=jnp.complex128)
-    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
-    dx = jnp.asarray(dx, dtype=jnp.float64)
-    z_position = jnp.asarray(z_position, dtype=jnp.float64)
+    field: Complex[Array, " hh ww"] = jnp.asarray(field, dtype=jnp.complex128)
+    wavelength: Float[Array, " "] = jnp.asarray(wavelength, dtype=jnp.float64)
+    dx: Float[Array, " "] = jnp.asarray(dx, dtype=jnp.float64)
+    z_position: Float[Array, " "] = jnp.asarray(z_position, dtype=jnp.float64)
 
     def validate_and_create():
         def check_2d_field():
             return lax.cond(
                 field.ndim == 2,
                 lambda: field,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: field, lambda: field)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: field, lambda: field)
+                ),
             )
 
         def check_field_finite():
             return lax.cond(
                 jnp.all(jnp.isfinite(field)),
                 lambda: field,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: field, lambda: field)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: field, lambda: field)
+                ),
             )
 
         def check_wavelength():
             return lax.cond(
                 wavelength > 0,
                 lambda: wavelength,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: wavelength, lambda: wavelength)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: wavelength, lambda: wavelength)
+                ),
             )
 
         def check_dx():
@@ -646,7 +638,9 @@ def make_optical_wavefront(
             return lax.cond(
                 jnp.isfinite(z_position),
                 lambda: z_position,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: z_position, lambda: z_position)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: z_position, lambda: z_position)
+                ),
             )
 
         check_2d_field()
@@ -667,45 +661,44 @@ def make_optical_wavefront(
 
 @jaxtyped(typechecker=beartype)
 def make_microscope_data(
-    image_data: Union[Float[Array, "P H W"], Float[Array, "X Y H W"]],
-    positions: Num[Array, " P 2"],
+    image_data: Union[Float[Array, " pp hh ww"], Float[Array, " xx yy hh ww"]],
+    positions: Num[Array, " pp 2"],
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> MicroscopeData:
-    """
-    Description
-    -----------
-    JAX-safe factory function for MicroscopeData with data validation.
+    """JAX-safe factory function for MicroscopeData with data validation.
 
     Parameters
     ----------
-    - `image_data` (Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]):
+    image_data : Union[Float[Array, " pp hh ww"], Float[Array, " xx yy hh ww"]]
         3D or 4D image data representing the optical field
-    - `positions` (Num[Array, " P 2"]):
+    positions : Num[Array, " pp 2"]
         Positions of the images during collection
-    - `wavelength` (scalar_float):
+    wavelength : scalar_float
         Wavelength of the optical wavefront in meters
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters
 
     Returns
     -------
-    - `microscope_data` (MicroscopeData):
+    MicroscopeData
         Validated microscope data instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If data is invalid or parameters are out of valid ranges
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Convert inputs to JAX arrays
     - Validate image_data:
         - Check it's 3D or 4D
         - Ensure all values are finite and non-negative
     - Validate positions:
-        - Check it's 2D with shape (P, 2)
+        - Check it's 2D with shape (pp, 2)
         - Ensure all values are finite
     - Validate parameters:
         - Check wavelength is positive
@@ -714,67 +707,99 @@ def make_microscope_data(
         - Check P matches between image_data and positions
     - Create and return MicroscopeData instance
     """
-    image_data = jnp.asarray(image_data, dtype=jnp.float64)
-    positions = jnp.asarray(positions, dtype=jnp.float64)
-    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
-    dx = jnp.asarray(dx, dtype=jnp.float64)
+    image_data: Union[Float[Array, " pp hh ww"], Float[Array, " xx yy hh ww"]] = jnp.asarray(
+        image_data, dtype=jnp.float64
+    )
+    positions: Num[Array, " pp 2"] = jnp.asarray(positions, dtype=jnp.float64)
+    wavelength: Float[Array, " "] = jnp.asarray(wavelength, dtype=jnp.float64)
+    dx: Float[Array, " "] = jnp.asarray(dx, dtype=jnp.float64)
+    expected_image_dim = 2
+    expected_diffractogram_dim_3d: int = 3
+    expected_diffractogram_dim_4d: int = 4
 
-    def validate_and_create():
-        def check_image_dimensions():
+    def validate_and_create() -> MicroscopeData:
+        def check_image_dimensions() -> (
+            Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
+        ):
             return lax.cond(
-                jnp.logical_or(image_data.ndim == 3, image_data.ndim == 4),
+                jnp.logical_or(
+                    image_data.ndim == expected_diffractogram_dim_3d,
+                    image_data.ndim == expected_diffractogram_dim_4d,
+                ),
                 lambda: image_data,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: image_data, lambda: image_data)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image_data, lambda: image_data)
+                ),
             )
 
-        def check_image_finite():
+        def check_image_finite() -> (
+            Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
+        ):
             return lax.cond(
                 jnp.all(jnp.isfinite(image_data)),
                 lambda: image_data,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: image_data, lambda: image_data)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image_data, lambda: image_data)
+                ),
             )
 
-        def check_image_nonnegative():
+        def check_image_nonnegative() -> (
+            Union[Float[Array, "P H W"], Float[Array, "X Y H W"]]
+        ):
             return lax.cond(
                 jnp.all(image_data >= 0),
                 lambda: image_data,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: image_data, lambda: image_data)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image_data, lambda: image_data)
+                ),
             )
 
-        def check_positions_shape():
+        def check_positions_shape() -> Num[Array, " P 2"]:
             return lax.cond(
-                positions.shape[1] == 2,
+                positions.shape[1] == expected_image_dim,
                 lambda: positions,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: positions, lambda: positions)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: positions, lambda: positions)
+                ),
             )
 
-        def check_positions_finite():
+        def check_positions_finite() -> Num[Array, " P 2"]:
             return lax.cond(
                 jnp.all(jnp.isfinite(positions)),
                 lambda: positions,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: positions, lambda: positions)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: positions, lambda: positions)
+                ),
             )
 
-        def check_wavelength():
+        def check_wavelength() -> Float[Array, " "]:
             return lax.cond(
                 wavelength > 0,
                 lambda: wavelength,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: wavelength, lambda: wavelength)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: wavelength, lambda: wavelength)
+                ),
             )
 
-        def check_dx():
+        def check_dx() -> Float[Array, " "]:
             return lax.cond(
                 dx > 0,
                 lambda: dx,
                 lambda: lax.stop_gradient(lax.cond(False, lambda: dx, lambda: dx)),
             )
 
-        def check_consistency():
-            P = positions.shape[0]
+        def check_consistency() -> Tuple[
+            Union[Float[Array, "P H W"], Float[Array, "X Y H W"]],
+            Num[Array, " P 2"],
+        ]:
+            pp = positions.shape[0]
 
-            def check_3d_consistency():
+            def check_3d_consistency() -> Tuple[
+                Union[Float[Array, "pp H W"], Float[Array, "X Y H W"]],
+                Num[Array, " pp 2"],
+            ]:
                 return lax.cond(
-                    image_data.shape[0] == P,
+                    image_data.shape[0] == pp,
                     lambda: (image_data, positions),
                     lambda: lax.stop_gradient(
                         lax.cond(
@@ -785,9 +810,12 @@ def make_microscope_data(
                     ),
                 )
 
-            def check_4d_consistency():
+            def check_4d_consistency() -> Tuple[
+                Union[Float[Array, "P H W"], Float[Array, "X Y H W"]],
+                Num[Array, " P 2"],
+            ]:
                 return lax.cond(
-                    image_data.shape[0] * image_data.shape[1] == P,
+                    image_data.shape[0] * image_data.shape[1] == pp,
                     lambda: (image_data, positions),
                     lambda: lax.stop_gradient(
                         lax.cond(
@@ -798,7 +826,11 @@ def make_microscope_data(
                     ),
                 )
 
-            return lax.cond(image_data.ndim == 3, check_3d_consistency, check_4d_consistency)
+            return lax.cond(
+                image_data.ndim == expected_image_dim,
+                check_3d_consistency,
+                check_4d_consistency,
+            )
 
         check_image_dimensions()
         check_image_finite()
@@ -825,32 +857,31 @@ def make_diffractogram(
     wavelength: scalar_float,
     dx: scalar_float,
 ) -> Diffractogram:
-    """
-    Description
-    -----------
-    JAX-safe factory function for Diffractogram with data validation.
+    """JAX-safe factory function for Diffractogram with data validation.
 
     Parameters
     ----------
-    - `image` (Float[Array, "H W"]):
+    image : Float[Array, "H W"]
         Image data
-    - `wavelength` (scalar_float):
+    wavelength : scalar_float
         Wavelength of the optical wavefront in meters
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters
 
     Returns
     -------
-    - `diffractogram` (Diffractogram):
+    Diffractogram
         Validated diffractogram instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If data is invalid or parameters are out of valid ranges
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Convert inputs to JAX arrays
     - Validate image array:
         - Check it's 2D
@@ -860,40 +891,49 @@ def make_diffractogram(
         - Check dx is positive
     - Create and return Diffractogram instance
     """
-    image = jnp.asarray(image, dtype=jnp.float64)
-    wavelength = jnp.asarray(wavelength, dtype=jnp.float64)
-    dx = jnp.asarray(dx, dtype=jnp.float64)
+    image: Float[Array, " H W"] = jnp.asarray(image, dtype=jnp.float64)
+    wavelength: Float[Array, " "] = jnp.asarray(wavelength, dtype=jnp.float64)
+    dx: Float[Array, " "] = jnp.asarray(dx, dtype=jnp.float64)
+    expected_sample_dim: int = 2
 
-    def validate_and_create():
-        def check_2d_image():
+    def validate_and_create() -> Diffractogram:
+        def check_2d_image() -> Float[Array, " H W"]:
             return lax.cond(
-                image.ndim == 2,
+                image.ndim == expected_sample_dim,
                 lambda: image,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: image, lambda: image)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image, lambda: image)
+                ),
             )
 
-        def check_image_finite():
+        def check_image_finite() -> Float[Array, " H W"]:
             return lax.cond(
                 jnp.all(jnp.isfinite(image)),
                 lambda: image,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: image, lambda: image)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image, lambda: image)
+                ),
             )
 
-        def check_image_nonnegative():
+        def check_image_nonnegative() -> Float[Array, " H W"]:
             return lax.cond(
                 jnp.all(image >= 0),
                 lambda: image,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: image, lambda: image)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: image, lambda: image)
+                ),
             )
 
-        def check_wavelength():
+        def check_wavelength() -> Float[Array, " "]:
             return lax.cond(
                 wavelength > 0,
                 lambda: wavelength,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: wavelength, lambda: wavelength)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: wavelength, lambda: wavelength)
+                ),
             )
 
-        def check_dx():
+        def check_dx() -> Float[Array, " "]:
             return lax.cond(
                 dx > 0,
                 lambda: dx,
@@ -920,30 +960,29 @@ def make_sample_function(
     sample: Complex[Array, "H W"],
     dx: scalar_float,
 ) -> SampleFunction:
-    """
-    Description
-    -----------
-    JAX-safe factory function for SampleFunction with data validation.
+    """JAX-safe factory function for SampleFunction with data validation.
 
     Parameters
     ----------
-    - `sample` (Complex[Array, "H W"]):
+    sample : Complex[Array, "H W"]
         The sample function
-    - `dx` (scalar_float):
+    dx : scalar_float
         Spatial sampling interval (grid spacing) in meters
 
     Returns
     -------
-    - `sample_function` (SampleFunction):
+    SampleFunction
         Validated sample function instance
 
     Raises
     ------
-    - ValueError:
+    ValueError
         If data is invalid or parameters are out of valid ranges
 
-    Flow
-    ----
+    Notes
+    -----
+    Algorithm:
+    
     - Convert inputs to JAX arrays
     - Validate sample array:
         - Check it's 2D
@@ -952,25 +991,30 @@ def make_sample_function(
         - Check dx is positive
     - Create and return SampleFunction instance
     """
-    sample = jnp.asarray(sample, dtype=jnp.complex128)
-    dx = jnp.asarray(dx, dtype=jnp.float64)
+    sample: Complex[Array, "H W"] = jnp.asarray(sample, dtype=jnp.complex128)
+    dx: Float[Array, " "] = jnp.asarray(dx, dtype=jnp.float64)
+    expected_sample_dim: int = 2
 
-    def validate_and_create():
-        def check_2d_sample():
+    def validate_and_create() -> SampleFunction:
+        def check_2d_sample() -> Complex[Array, "H W"]:
             return lax.cond(
-                sample.ndim == 2,
+                sample.ndim == expected_sample_dim,
                 lambda: sample,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: sample, lambda: sample)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: sample, lambda: sample)
+                ),
             )
 
-        def check_sample_finite():
+        def check_sample_finite() -> Complex[Array, "H W"]:
             return lax.cond(
                 jnp.all(jnp.isfinite(sample)),
                 lambda: sample,
-                lambda: lax.stop_gradient(lax.cond(False, lambda: sample, lambda: sample)),
+                lambda: lax.stop_gradient(
+                    lax.cond(False, lambda: sample, lambda: sample)
+                ),
             )
 
-        def check_dx():
+        def check_dx() -> scalar_float:
             return lax.cond(
                 dx > 0,
                 lambda: dx,

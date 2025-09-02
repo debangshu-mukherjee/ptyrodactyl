@@ -40,15 +40,9 @@ import ptyrodactyl.tools as ptt
 from ptyrodactyl._decorators import beartype as typechecker
 from ptyrodactyl._decorators import jaxtyped
 
-from .electron_types import (
-    STEM4D,
-    CalibratedArray,
-    ProbeModes,
-    make_calibrated_array,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
-)
+from .electron_types import (STEM4D, CalibratedArray, ProbeModes,
+                             make_calibrated_array, scalar_float, scalar_int,
+                             scalar_numeric)
 from .simulations import stem_4d
 
 jax.config.update("jax_enable_x64", True)

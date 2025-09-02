@@ -54,23 +54,16 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, NamedSharding
 from jax.sharding import PartitionSpec as P
-from jaxtyping import Array, Bool, Complex, Complex128, Float, Int, Num, PRNGKeyArray
+from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
+                       PRNGKeyArray)
 
 from ptyrodactyl._decorators import beartype as typechecker
 from ptyrodactyl._decorators import jaxtyped
 
-from .electron_types import (
-    STEM4D,
-    CalibratedArray,
-    PotentialSlices,
-    ProbeModes,
-    make_calibrated_array,
-    make_probe_modes,
-    make_stem4d,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
-)
+from .electron_types import (STEM4D, CalibratedArray, PotentialSlices,
+                             ProbeModes, make_calibrated_array,
+                             make_probe_modes, make_stem4d, scalar_float,
+                             scalar_int, scalar_numeric)
 
 jax.config.update("jax_enable_x64", True)
 

@@ -2018,7 +2018,6 @@ dependencies = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "scipy" },
-    { name = "sphinx-autodoc-typehints" },
     { name = "tqdm" },
 ]
 
@@ -2107,7 +2106,6 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.0.0" },
     { name = "sphinx", marker = "extra == 'dev'", specifier = ">=8.1.3" },
     { name = "sphinx", marker = "extra == 'docs'", specifier = ">=8.1.3" },
-    { name = "sphinx-autodoc-typehints", specifier = ">=3.0.1" },
     { name = "sphinx-autodoc-typehints", marker = "extra == 'docs'", specifier = ">=3.0.1" },
     { name = "sphinx-rtd-theme", marker = "extra == 'dev'", specifier = ">=3.0.2" },
     { name = "sphinx-rtd-theme", marker = "extra == 'docs'", specifier = ">=3.0.2" },

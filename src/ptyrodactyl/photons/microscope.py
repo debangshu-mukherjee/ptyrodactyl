@@ -29,19 +29,11 @@ from .apertures import circular_aperture
 from .helper import add_phase_screen, field_intensity, scale_pixel
 from .lens_optics import fraunhofer_prop, optical_zoom
 from .lenses import create_lens_phase
-from .photon_types import (
-    Diffractogram,
-    LensParams,
-    MicroscopeData,
-    OpticalWavefront,
-    SampleFunction,
-    make_diffractogram,
-    make_microscope_data,
-    make_optical_wavefront,
-    make_sample_function,
-    scalar_float,
-    scalar_numeric,
-)
+from .photon_types import (Diffractogram, LensParams, MicroscopeData,
+                           OpticalWavefront, SampleFunction,
+                           make_diffractogram, make_microscope_data,
+                           make_optical_wavefront, make_sample_function,
+                           scalar_float, scalar_numeric)
 
 jax.config.update("jax_enable_x64", True)
 

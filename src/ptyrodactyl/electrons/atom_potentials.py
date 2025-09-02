@@ -74,14 +74,8 @@ from jaxtyping import Array, Bool, Complex, Float, Int, Real
 
 from ptyrodactyl._decorators import beartype, jaxtyped
 
-from .electron_types import (
-    PotentialSlices,
-    XYZData,
-    make_potential_slices,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
-)
+from .electron_types import (PotentialSlices, XYZData, make_potential_slices,
+                             scalar_float, scalar_int, scalar_numeric)
 from .preprocessing import kirkland_potentials
 
 jax.config.update("jax_enable_x64", True)

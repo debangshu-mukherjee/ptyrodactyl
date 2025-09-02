@@ -64,7 +64,8 @@ grad, and vmap.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Any, Callable, NamedTuple, Optional, Sequence, Tuple, Union
+from beartype.typing import (Any, Callable, NamedTuple, Optional, Sequence,
+                             Tuple, Union)
 from jaxtyping import Array, Complex, Float
 
 

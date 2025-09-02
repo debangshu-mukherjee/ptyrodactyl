@@ -20,15 +20,9 @@ import ptyrodactyl.tools as ptt
 from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .microscope import simple_microscope
-from .photon_types import (
-    MicroscopeData,
-    OpticalWavefront,
-    SampleFunction,
-    make_optical_wavefront,
-    make_sample_function,
-    scalar_float,
-    scalar_integer,
-)
+from .photon_types import (MicroscopeData, OpticalWavefront, SampleFunction,
+                           make_optical_wavefront, make_sample_function,
+                           scalar_float, scalar_integer)
 
 jax.config.update("jax_enable_x64", True)
 

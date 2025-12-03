@@ -33,9 +33,12 @@ from ptyrodactyl.tools import (
     make_probe_modes,
 )
 
-from .atom_potentials import kirkland_potentials_xyz
-from .preprocessing import parse_xyz
-from .simulations import make_probe, stem_4d
+from ptyrodactyl.simul import (
+    kirkland_potentials_xyz, 
+    make_probe, 
+    parse_xyz, 
+    stem_4d,
+)
 
 jax.config.update("jax_enable_x64", True)
 

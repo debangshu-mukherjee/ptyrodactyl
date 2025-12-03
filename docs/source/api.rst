@@ -13,3 +13,4 @@ Submodules
    api/simul
    api/invert
    api/tools
+   api/workflows

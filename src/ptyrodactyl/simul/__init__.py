@@ -17,9 +17,6 @@ preprocessing
 simulations
     Forward simulation functions for electron beam propagation, CBED
     patterns, and 4D-STEM data generation with aberration calculations.
-workflows
-    High-level workflows combining simulation steps for common use cases
-    such as simulating 4D-STEM data from XYZ structure files.
 
 Routine Listings
 ----------------
@@ -75,7 +72,6 @@ from .simulations import (
     transmission_func,
     wavelength_ang,
 )
-from .workflows import xyz_to_4d_stem
 
 __all__: list[str] = [
     "bessel_kv",
@@ -103,6 +99,4 @@ __all__: list[str] = [
     "stem_4d_sharded",
     "transmission_func",
     "wavelength_ang",
-    # workflows
-    "xyz_to_4d_stem",
 ]

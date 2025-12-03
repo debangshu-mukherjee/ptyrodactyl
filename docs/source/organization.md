@@ -2,7 +2,7 @@
 
 ## Overview
 
-Ptyrodactyl is a typed and tested JAX-based library for electron microscopy and ptychography, utilizing JAX's capabilities for multi-device computation and autodifferentiation. The package is organized into three main modules: `simul` for electron microscopy simulations, `invert` for reconstruction algorithms, and `tools` for common utilities including optimizers and loss functions.
+Ptyrodactyl is a typed and tested JAX-based library for electron microscopy and ptychography, utilizing JAX's capabilities for multi-device computation and autodifferentiation. The package is organized into four main modules: `simul` for electron microscopy simulations, `invert` for reconstruction algorithms, `tools` for common utilities including optimizers and loss functions, and `workflows` for high-level meta-functions that orchestrate complete simulation pipelines.
 
 ## Module Structure
 
@@ -18,6 +18,9 @@ Inverse reconstruction algorithms for electron ptychography including single-sli
 
 Common utilities and shared data structures used throughout the package, including complex-valued optimizers with Wirtinger derivatives.
 
+### **ptyrodactyl.workflows**
+
+High-level workflow functions that combine primitives from `simul` and data structures from `tools` into complete end-to-end pipelines. These meta-functions provide convenient interfaces for common tasks like running full 4D-STEM simulations from structure files.
 
 ## Design Principles
 
@@ -45,17 +48,19 @@ src/ptyrodactyl/
 │   ├── atom_potentials.py # Atomic potential calculations
 │   ├── geometry.py       # Geometric transformations
 │   ├── preprocessing.py  # Data preprocessing utilities
-│   ├── simulations.py    # Forward simulation functions
-│   └── workflows.py      # High-level simulation workflows
+│   └── simulations.py    # Forward simulation functions
 ├── invert/
 │   ├── __init__.py       # Invert module exports
 │   └── phase_recon.py    # Phase reconstruction algorithms
-└── tools/
-    ├── __init__.py       # Tools module exports
-    ├── electron_types.py # Data structures and type definitions
-    ├── loss_functions.py # Loss function definitions
-    ├── optimizers.py     # Complex-valued optimizers
-    └── parallel.py       # Parallel processing utilities
+├── tools/
+│   ├── __init__.py       # Tools module exports
+│   ├── electron_types.py # Data structures and type definitions
+│   ├── loss_functions.py # Loss function definitions
+│   ├── optimizers.py     # Complex-valued optimizers
+│   └── parallel.py       # Parallel processing utilities
+└── workflows/
+    ├── __init__.py       # Workflows module exports
+    └── stem_4d.py        # End-to-end 4D-STEM workflows
 ```
 
 ## Extension Points

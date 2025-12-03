@@ -31,8 +31,7 @@ from jaxtyping import Array, Bool, Float
 
 from ptyrodactyl._decorators import beartype, jaxtyped
 
-from .photon_types import (OpticalWavefront, make_optical_wavefront,
-                           scalar_float, scalar_numeric)
+from .photon_types import OpticalWavefront, make_optical_wavefront, scalar_float, scalar_numeric
 
 jax.config.update("jax_enable_x64", True)
 

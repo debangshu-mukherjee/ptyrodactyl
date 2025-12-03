@@ -829,7 +829,7 @@ def make_xyz_data(
     atomic_numbers: Int[Array, " N"],
     lattice: Optional[Float[Array, "3 3"]] = None,
     stress: Optional[Float[Array, "3 3"]] = None,
-    energy: Optional[scalar_float] = None,
+    energy: Optional[ScalarFloat] = None,
     properties: Optional[List[Dict[str, Union[str, int]]]] = None,
     comment: Optional[str] = None,
 ) -> XYZData:

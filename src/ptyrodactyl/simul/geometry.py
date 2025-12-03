@@ -155,7 +155,7 @@ def rotmatrix_axis(
     ----------
     axis : Real[Array, " 3"]
         3D vector defining the axis of rotation (will be normalized)
-    theta : scalar_numeric
+    theta : ScalarNumeric
         Rotation angle in radians (positive for counter-clockwise rotation
         when looking along the axis)
 
@@ -241,7 +241,7 @@ def rotate_structure(
         Unit cell matrix where rows represent the three lattice vectors a, b, c
     rotation_matrix : Real[Array, "3 3"]
         Primary rotation matrix to apply to the structure
-    theta : scalar_numeric, optional
+    theta : ScalarNumeric, optional
         Additional rotation angle in radians for in-plane (z-axis) rotation.
         Default is 0 (no additional rotation)
 

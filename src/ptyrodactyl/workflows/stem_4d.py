@@ -62,24 +62,24 @@ def xyz_to_4d_stem(
     ----------
     xyz_filepath : str
         Path to the XYZ file containing atomic structure.
-    slice_thickness : scalar_float
+    slice_thickness : ScalarFloat
         Thickness of each slice in Angstroms for multislice calculation.
-    lateral_extent : scalar_float
+    lateral_extent : ScalarFloat
         Minimum lateral extent in Angstroms for periodic boundaries.
         The structure will be repeated to ensure at least this extent.
-    cbed_aperture_mrad : scalar_numeric
+    cbed_aperture_mrad : ScalarNumeric
         Probe aperture size in milliradians.
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         Accelerating voltage in kilovolts.
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms where P is number of positions.
-    cbed_pixel_size_ang : scalar_float
+    cbed_pixel_size_ang : ScalarFloat
         Real space pixel size in Angstroms for the calculation.
-    probe_defocus : scalar_numeric, optional
+    probe_defocus : ScalarNumeric, optional
         Probe defocus in Angstroms. Default is 0.0.
-    probe_c3 : scalar_numeric, optional
+    probe_c3 : ScalarNumeric, optional
         Third-order spherical aberration in Angstroms. Default is 0.0.
-    probe_c5 : scalar_numeric, optional
+    probe_c5 : ScalarNumeric, optional
         Fifth-order spherical aberration in Angstroms. Default is 0.0.
 
     Returns

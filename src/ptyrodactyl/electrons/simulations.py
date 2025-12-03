@@ -54,16 +54,23 @@ from jax.experimental import mesh_utils
 from jax.experimental.shard_map import shard_map
 from jax.sharding import Mesh, NamedSharding
 from jax.sharding import PartitionSpec as P
-from jaxtyping import (Array, Bool, Complex, Complex128, Float, Int, Num,
-                       PRNGKeyArray)
+from jaxtyping import Array, Bool, Complex, Complex128, Float, Int, Num, PRNGKeyArray
 
 from ptyrodactyl._decorators import beartype as typechecker
 from ptyrodactyl._decorators import jaxtyped
 
-from .electron_types import (STEM4D, CalibratedArray, PotentialSlices,
-                             ProbeModes, make_calibrated_array,
-                             make_probe_modes, make_stem4d, scalar_float,
-                             scalar_int, scalar_numeric)
+from .electron_types import (
+    STEM4D,
+    CalibratedArray,
+    PotentialSlices,
+    ProbeModes,
+    make_calibrated_array,
+    make_probe_modes,
+    make_stem4d,
+    scalar_float,
+    scalar_int,
+    scalar_numeric,
+)
 
 jax.config.update("jax_enable_x64", True)
 
@@ -388,7 +395,8 @@ def wavelength_ang(voltage_kv: scalar_numeric) -> Float[Array, " "]:
     Parameters
     ----------
     voltage_kv : scalar_numeric
-        The microscope accelerating voltage in kiloelectronvolts. Can be a scalar or array.
+        The microscope accelerating voltage in kiloelectronvolts. 
+        Can be a scalar or array.
 
     Returns
     -------
@@ -401,8 +409,9 @@ def wavelength_ang(voltage_kv: scalar_numeric) -> Float[Array, " "]:
     - Calculate the electron wavelength in meters
     - Convert the wavelength to angstroms
 
-    Because this is JAX - you assume that the input is clean, and you don't need to check for negative
-    or NaN values. Your preprocessing steps should check for them - not the function itself.
+    Because this is JAX - you assume that the input is clean, and you 
+    don't need to check for negative or NaN values. Your preprocessing 
+    steps should check for them - not the function itself.
     """
     m: Float[Array, " "] = jnp.asarray(9.109383e-31)
     e: Float[Array, " "] = jnp.asarray(1.602177e-19)
@@ -602,7 +611,8 @@ def stem_4d(
     voltage_kv: scalar_numeric,
     calib_ang: scalar_float,
 ) -> STEM4D:
-    """Simulate CBED patterns for multiple beam positions by shifting the beam and running CBED simulations.
+    """Simulate CBED patterns for multiple beam positions by shifting the beam and 
+    running CBED simulations.
 
     Parameters
     ----------
@@ -681,7 +691,8 @@ def decompose_beam_to_modes(
     num_modes: scalar_int,
     first_mode_weight: scalar_float = 0.6,
 ) -> ProbeModes:
-    """Decompose a single electron beam into multiple orthogonal modes while preserving the total intensity.
+    """Decompose a single electron beam into multiple orthogonal modes while 
+    preserving the total intensity.
 
     Parameters
     ----------
@@ -947,7 +958,8 @@ def annular_detector(
     stem4d_data: STEM4D,
     collection_angles: Float[Array, " 2"],
 ) -> CalibratedArray:
-    """Simulate an annular detector that integrates the CBED signal between inner and outer collection angles to generate a STEM image.
+    """Simulate an annular detector that integrates the CBED signal between 
+    inner and outer collection angles to generate a STEM image.
 
     Parameters
     ----------

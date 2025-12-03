@@ -14,9 +14,9 @@ Functions
     Performs single-slice ptychography reconstruction
 - `single_slice_poscorrected`:
     Performs single-slice reconstruction with position correction
-single_slice_multi_modal
+- `single_slice_multi_modal`:
     Performs single-slice reconstruction with multi-modal probe
-multi_slice_multi_modal
+- `multi_slice_multi_modal`:
     Performs multi-slice reconstruction with multi-modal probe
 
 Notes
@@ -40,9 +40,15 @@ import ptyrodactyl.tools as ptt
 from ptyrodactyl._decorators import beartype as typechecker
 from ptyrodactyl._decorators import jaxtyped
 
-from .electron_types import (STEM4D, CalibratedArray, ProbeModes,
-                             make_calibrated_array, scalar_float, scalar_int,
-                             scalar_numeric)
+from .electron_types import (
+    STEM4D,
+    CalibratedArray,
+    ProbeModes,
+    make_calibrated_array,
+    scalar_float,
+    scalar_int,
+    scalar_numeric,
+)
 from .simulations import stem_4d
 
 jax.config.update("jax_enable_x64", True)

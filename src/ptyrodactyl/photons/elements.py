@@ -50,8 +50,7 @@ from jaxtyping import Array, Bool, Complex, Float, Num
 from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .helper import add_phase_screen
-from .photon_types import (OpticalWavefront, make_optical_wavefront,
-                           scalar_float)
+from .photon_types import OpticalWavefront, make_optical_wavefront, scalar_float
 
 jax.config.update("jax_enable_x64", True)
 

@@ -20,8 +20,15 @@ from jaxtyping import Array, Complex, Float, Int
 from ptyrodactyl._decorators import beartype, jaxtyped
 
 from .atom_potentials import kirkland_potentials_xyz
-from .electron_types import (STEM4D, PotentialSlices, ProbeModes, XYZData,
-                             make_probe_modes, scalar_float, scalar_numeric)
+from .electron_types import (
+    STEM4D,
+    PotentialSlices,
+    ProbeModes,
+    XYZData,
+    make_probe_modes,
+    scalar_float,
+    scalar_numeric,
+)
 from .preprocessing import parse_xyz
 from .simulations import make_probe, stem_4d
 

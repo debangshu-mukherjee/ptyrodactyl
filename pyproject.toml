@@ -119,14 +119,13 @@ target-version = "py310"
 [tool.ruff.lint]
 select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4", "PIE", "PT", "RET", "SIM", "ARG", "ERA", "PL"]
 ignore = [
-    "ANN401",  # Ignore "Any" type hint errors - useful for jaxtyping
-    "PYI021",  # Ignore errors related to jaxtyping Array imports/usages
-    "F722",    # Ignore forward annotation error with jaxtyping Array
-    "COM812",  # Disabled to avoid conflicts with formatter
+    "ANN401",
+    "PYI021",
+    "F722",
+    "COM812",
 ]
 
 [tool.ruff.lint.flake8-bugbear]
-# Allow immutable JAX array creation functions in defaults
 extend-immutable-calls = [
     "jax.numpy.zeros",
     "jax.numpy.ones", 
@@ -139,10 +138,10 @@ extend-immutable-calls = [
 ]
 
 [tool.ruff.lint.pylint]
-max-args = 10  # Allow up to 10 arguments in function definitions
+max-args = 10
 
 [tool.ruff.lint.per-file-ignores]
-"**/*.py" = ["F821"]  # Ignore undefined name errors which often occur with jaxtyping
+"**/*.py" = ["F821"]
 
 [tool.ruff.lint.isort]
 known-third-party = ["jax", "jaxtyping"]

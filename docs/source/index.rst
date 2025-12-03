@@ -1,5 +1,5 @@
 Welcome to ptyrodactyl's documentation!
-=========================================
+=======================================
 
 .. include:: ../../README.md
    :parser: myst_parser.sphinx_
@@ -9,7 +9,6 @@ Welcome to ptyrodactyl's documentation!
    :caption: Contents:
 
    organization
-   installation
    api
    tutorials/index
 

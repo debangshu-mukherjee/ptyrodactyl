@@ -28,11 +28,9 @@ expansion, Bessel function calculations, and potential lookup tables.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Optional, Tuple, Union
-from jaxtyping import Array, Bool, Complex, Float, Int, Real
-
 from beartype import beartype
-from jaxtyping import jaxtyped
+from beartype.typing import Optional, Tuple, Union
+from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
 from ptyrodactyl.tools import (
     PotentialSlices,
@@ -299,7 +297,7 @@ def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 def bessel_kv(
     v: ScalarFloat, x: Float[Array, " ..."]
 ) -> Float[Array, " ..."]:
-    """Computes the modified Bessel function of the second kind K_v(x).
+    """Compute the modified Bessel function of the second kind K_v(x).
 
     Parameters
     ----------

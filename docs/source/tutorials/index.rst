@@ -1,21 +1,21 @@
-.. include:: ../../README.md
-   :parser: myst_parser.sphinx_
-   
 Tutorials
 =========
 
-Here you'll find tutorials demonstrating how to use ptyrodactyl for both electron and optical ptychography.
+This section contains interactive Jupyter notebooks demonstrating how to use ptyrodactyl for electron ptychography applications.
 
-Electron Ptychography
---------------------
+.. toctree::
+   :maxdepth: 1
+   :caption: Tutorial Notebooks
 
-* `CBED Simulations <../../tutorials/electron_ptycho/CBED_Simulations.ipynb>`_
-
-Optical Ptychography
--------------------
-
-* `Optical ePIE <../../tutorials/optical_ptycho/Optical_ePIE.ipynb>`_
-* `USAF 1951 Synthetic <../../tutorials/optical_ptycho/USAF_1951_Synthetic.ipynb>`_
+   ../../../tutorials/CBEDs/CBED_MoS2
+   ../../../tutorials/CBEDs/CBED_Speed
 
 .. note::
-   To run these tutorials locally, navigate to the tutorials directory and open the Jupyter notebooks.
+
+   These notebooks are rendered automatically from the ``tutorials/`` directory.
+   To run them interactively:
+
+   1. Clone the repository
+   2. Navigate to the ``tutorials/`` directory
+   3. Launch Jupyter: ``jupyter notebook`` or ``jupyter lab``
+   4. Open any notebook to explore the examples

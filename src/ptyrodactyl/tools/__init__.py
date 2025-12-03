@@ -22,6 +22,24 @@ Submodules
     and distributed computing in ptychography workflows
 """
 
+from .electron_types import (
+    STEM4D,
+    CalibratedArray,
+    CrystalStructure,
+    PotentialSlices,
+    ProbeModes,
+    XYZData,
+    make_calibrated_array,
+    make_crystal_structure,
+    make_potential_slices,
+    make_probe_modes,
+    make_stem4d,
+    make_xyz_data,
+    NonJaxNumber,
+    ScalarFloat,
+    ScalarInt,
+    ScalarNumeric,
+)
 from .loss_functions import create_loss_function
 from .optimizers import (
     LRSchedulerState,
@@ -45,6 +63,22 @@ from .optimizers import (
 from .parallel import shard_array
 
 __all__: list[str] = [
+    "STEM4D",
+    "CalibratedArray",
+    "CrystalStructure",
+    "PotentialSlices",
+    "ProbeModes",
+    "XYZData",
+    "make_calibrated_array",
+    "make_crystal_structure",
+    "make_potential_slices",
+    "make_probe_modes",
+    "make_stem4d",
+    "make_xyz_data",
+    "NonJaxNumber",
+    "ScalarFloat",
+    "ScalarInt",
+    "ScalarNumeric",
     "create_loss_function",
     "LRSchedulerState",
     "Optimizer",

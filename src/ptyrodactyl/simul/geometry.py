@@ -20,9 +20,10 @@ import jax.numpy as jnp
 from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Float, Real
 
-from ptyrodactyl._decorators import beartype, jaxtyped
+from beartype import beartype
+from jaxtyping import jaxtyped
 
-from .electron_types import scalar_float, scalar_numeric
+from ptyrodactyl.tools import ScalarFloat, ScalarNumeric
 
 
 @jaxtyped(typechecker=beartype)
@@ -91,7 +92,7 @@ def rotmatrix_vectors(
         Compute a rotation matrix for a 180° rotation around an arbitrary axis.
         This handles the case where the vectors are nearly opposite.
         """
-        magic_number: scalar_float = 0.9
+        magic_number: ScalarFloat = 0.9
         ortho: Float[Array, " 3"] = jnp.where(
             jnp.abs(v1[0]) < magic_number,
             jnp.array([1.0, 0.0, 0.0]),
@@ -125,9 +126,9 @@ def rotmatrix_vectors(
         )
         return rotation_matrix_general
 
-    close_to_zero: scalar_float = 1e-8
+    close_to_zero: ScalarFloat = 1e-8
     almost_parallel: Bool[Array, " "] = sin_theta < close_to_zero
-    close_to_one: scalar_float = 0.999999
+    close_to_one: ScalarFloat = 0.999999
     almost_opposite: Bool[Array, " "] = dot < -close_to_one
     rotation_matrix: Float[Array, "3 3"] = jax.lax.cond(
         almost_parallel,
@@ -141,7 +142,7 @@ def rotmatrix_vectors(
 
 @jaxtyped(typechecker=beartype)
 def rotmatrix_axis(
-    axis: Real[Array, " 3"], theta: scalar_numeric
+    axis: Real[Array, " 3"], theta: ScalarNumeric
 ) -> Float[Array, "3 3"]:
     """Generate a 3D rotation matrix for rotation around an arbitrary axis by a specified angle.
 
@@ -222,7 +223,7 @@ def rotate_structure(
     coords: Real[Array, " N 4"],
     cell: Real[Array, "3 3"],
     rotation_matrix: Real[Array, "3 3"],
-    theta: Optional[scalar_numeric] = 0,
+    theta: Optional[ScalarNumeric] = 0,
 ) -> Tuple[Float[Array, " N 4"], Float[Array, "3 3"]]:
     """Apply rotation transformations to a crystal structure.
 

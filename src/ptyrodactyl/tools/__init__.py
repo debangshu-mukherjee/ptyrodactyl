@@ -48,8 +48,12 @@ from .electron_types import (
     STEM4D,
     CalibratedArray,
     CrystalStructure,
+    NonJaxNumber,
     PotentialSlices,
     ProbeModes,
+    ScalarFloat,
+    ScalarInt,
+    ScalarNumeric,
     XYZData,
     make_calibrated_array,
     make_crystal_structure,
@@ -57,10 +61,6 @@ from .electron_types import (
     make_probe_modes,
     make_stem4d,
     make_xyz_data,
-    NonJaxNumber,
-    ScalarFloat,
-    ScalarInt,
-    ScalarNumeric,
 )
 from .loss_functions import create_loss_function
 from .optimizers import (

@@ -34,12 +34,13 @@ from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
 from ptyrodactyl.tools import (
     PotentialSlices,
-    XYZData,
-    make_potential_slices,
     ScalarFloat,
     ScalarInt,
     ScalarNumeric,
+    XYZData,
+    make_potential_slices,
 )
+
 from .preprocessing import kirkland_potentials
 
 jax.config.update("jax_enable_x64", True)
@@ -70,8 +71,8 @@ def contrast_stretch(
 
     Notes
     -----
-    Uses pure JAX operations to rescale intensity values. Handles both 2D single
-    images and 3D image stacks.
+    Uses pure JAX operations to rescale intensity values. Handles both
+    2D single images and 3D image stacks.
 
     Algorithm:
         - Handle dimension expansion for 2D inputs
@@ -323,14 +324,13 @@ def bessel_kv(
       for large x
     - For non-integer v, uses the reflection formula:
       K_v = π/(2sin(πv)) * (I_{-v} - I_v)
-    - For integer v, uses specialized series expansions and recurrence relations
+    - For integer v, uses specialized series expansions and recurrence
     - Special exact formula for v = 0.5: K_{1/2}(x) = sqrt(π/(2x)) * exp(-x)
-    - The transition point between small and large x approximations is set
-      at x = 2.0
+    - Transition between small/large x approximations is at x = 2.0
 
     Algorithm:
-        - For integer orders n > 1, uses recurrence relations with masked updates
-          to only update values within the target range
+        - For integer orders n > 1, uses recurrence relations with masked
+          updates to only update values within the target range
     """
     v: Float[Array, ""] = jnp.asarray(v)
     x: Float[Array, " ..."] = jnp.asarray(x)
@@ -445,7 +445,7 @@ def single_atom_potential(
     supersampling: Optional[ScalarInt] = 4,
     potential_extent: Optional[ScalarFloat] = 4.0,
 ) -> Float[Array, " h w"]:
-    """Calculate the projected potential of a single atom using Kirkland scattering factors.
+    """Calculate projected potential of a single atom using Kirkland factors.
 
     Parameters
     ----------
@@ -472,7 +472,7 @@ def single_atom_potential(
 
     Notes
     -----
-    The potential can be centered at arbitrary coordinates within a custom grid.
+    The potential can be centered at arbitrary coordinates within a grid.
 
     Algorithm:
         - Initialize physical constants:
@@ -483,9 +483,9 @@ def single_atom_potential(
         - Load Kirkland scattering parameters:
             - Extract 12 parameters for the specified atom from preloaded
               Kirkland data
-            - Parameters alternate between amplitudes and reciprocal space widths
+            - Parameters alternate between amplitudes and reciprocal widths
         - Determine grid dimensions:
-            - If grid_shape provided: use it directly, multiplied by supersampling
+            - If grid_shape provided: use directly, multiplied by supersampling
             - If grid_shape is None: calculate from potential_extent to ensure
               full coverage
             - Calculate step size as pixel_size divided by supersampling factor
@@ -493,19 +493,19 @@ def single_atom_potential(
             - If center_coords provided: use (x, y) coordinates directly
             - If center_coords is None: place atom at origin (0, 0)
         - Generate coordinate grids:
-            - Create x and y coordinate arrays centered around the atom position
+            - Create x and y coordinate arrays centered around atom position
             - Account for supersampling in coordinate spacing
             - Use meshgrid to create 2D coordinate arrays
         - Calculate radial distances:
             - Compute distance from each grid point to the atom center
             - r = sqrt((x - center_x)² + (y - center_y)²)
-            - Add small epsilon (1e-10) to avoid r=0 which causes NaN in Bessel K_0(0)
+            - Add small epsilon (1e-10) to avoid r=0 causing NaN in K_0(0)
         - Evaluate Bessel function contributions:
-            - Calculate three Bessel K₀ terms using the first 6 Kirkland parameters
+            - Calculate three Bessel K₀ terms using first 6 Kirkland params
             - Each term: amplitude * K₀(2π * sqrt(width) * r)
             - Sum all three terms and multiply by term1 prefactor
         - Evaluate Gaussian contributions:
-            - Calculate three Gaussian terms using the last 6 Kirkland parameters
+            - Calculate three Gaussian terms using last 6 Kirkland params
             - Each term: (amplitude/width) * exp(-π²/width * r²)
             - Sum all three terms and multiply by term2 prefactor
         - Combine contributions:
@@ -707,17 +707,17 @@ def _slice_atoms(
 ) -> Float[Array, " N 4"]:
     """Partitions atoms into slices along the z-axis.
 
-    This internal function is used to organize atomic positions for slice-by-slice
-    potential calculations in electron microscopy simulations. Returns atoms sorted
+    This internal function organizes atomic positions for slice-by-slice
+    potential calculations in electron microscopy. Returns atoms sorted
     by slice number.
 
     Args:
-        coords: Atomic positions with shape (N, 3) where columns represent x, y, z
+        coords: Atomic positions with shape (N, 3) where columns are x, y, z
             coordinates in Angstroms. Float[Array, "N 3"].
-        atom_numbers: Atomic numbers for each of the N atoms, used to identify
-            element types. Int[Array, "N"].
-        slice_thickness: Thickness of each slice in Angstroms. Can be float, int, or
-            0-dimensional JAX array.
+        atom_numbers: Atomic numbers for each of the N atoms, used to
+            identify element types. Int[Array, "N"].
+        slice_thickness: Thickness of each slice in Angstroms. Can be
+            float, int, or 0-dimensional JAX array.
 
     Returns:
         Array with shape (N, 4) containing [x, y, slice_num, atom_number]
@@ -725,7 +725,7 @@ def _slice_atoms(
         from 0. Float[Array, "N 4"].
 
     Note:
-        - The number of slices is implicitly ceil((z_max - z_min) / slice_thickness)
+        - Number of slices is ceil((z_max - z_min) / slice_thickness)
         - Atoms exactly at slice boundaries are assigned to the lower slice
         - All arrays are JAX arrays for compatibility with JIT compilation
 
@@ -737,7 +737,7 @@ def _slice_atoms(
             - This ensures atoms at z_min are in slice 0
         - Construct output array with x, y positions, slice numbers, and atom
           numbers
-        - Sort atoms by their slice indices to group atoms within the same slice
+        - Sort atoms by slice indices to group atoms within the same slice
         - Return the sorted array for efficient slice-by-slice processing
     """
     z_coords: Float[Array, " N"] = coords[:, 2]
@@ -832,7 +832,7 @@ def _apply_periodic_repeats(
 def _return_positions_unchanged(
     positions: Float[Array, " N 3"], atomic_numbers: Int[Array, " N"]
 ) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, " max_n^3*N"]]:
-    """Return positions and atomic numbers unchanged but in the same shape as apply_repeats."""
+    """Return positions/atomic numbers unchanged with apply_repeats shape."""
     n_atoms: int = positions.shape[0]
     max_n: int = 20
     max_shifts: int = max_n * max_n * max_n
@@ -1306,7 +1306,7 @@ def kirkland_potentials_xyz(
     padding: Optional[ScalarFloat] = 4.0,
     supersampling: Optional[ScalarInt] = 4,
 ) -> PotentialSlices:
-    """Converts XYZData structure to PotentialSlices.
+    """Convert XYZData structure to PotentialSlices.
 
     Parameters
     ----------
@@ -1346,13 +1346,13 @@ def kirkland_potentials_xyz(
         - Compute the minimum and maximum x and y coordinates of all atoms, add
           padding, and determine the grid size (width, height) in pixels
         - Identify all unique atomic numbers present in the structure
-            - Use size parameter (118) for JIT compatibility - max 118 elements in periodic table
+            - Use size=118 for JIT compatibility (max elements in table)
             - Create mask for valid (non-fill) atoms
         - Convert height and width to Python integers for use in the function
         - For each unique atomic number, precompute a single-atom projected
-          potential using single_atom_potential (centered at the origin, with the
+          potential using single_atom_potential (centered at origin, with
           correct grid size and pixel size)
-            - Calculate potential only for valid atoms, return zeros for padding
+            - Calculate potential only for valid atoms, zeros for padding
             - Return potential if valid, zeros otherwise
         - Calculate potentials for all 118 slots (padded with zeros)
         - Build a lookup array to map atomic numbers to their corresponding
@@ -1368,9 +1368,9 @@ def kirkland_potentials_xyz(
                 - Place the corresponding atomic potential at the atom (x, y)
                   position using FFT-based shifting for subpixel accuracy
                 - Accumulate all atomic contributions for the slice
-        - Remove the extra padding from the edges of the grid to obtain the
+        - Remove extra padding from the edges of the grid to obtain the
           final region of interest
-        - Return a PotentialSlices object containing the three-dimensional array of potential
+        - Return a PotentialSlices object containing the 3D array of potential
           slices, the slice thickness, and the pixel size
     """
     positions: Float[Array, " N 3"] = xyz_data.positions

@@ -28,13 +28,11 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import numpy as np
-from beartype.typing import Any, Dict, List, Optional, Union
-from jaxtyping import Array, Float, Int
-
 from beartype import beartype
-from jaxtyping import jaxtyped
+from beartype.typing import Any, Dict, List, Optional, Union
+from jaxtyping import Array, Float, Int, jaxtyped
 
-from ptyrodactyl.tools import XYZData, make_xyz_data, ScalarInt
+from ptyrodactyl.tools import ScalarInt, XYZData, make_xyz_data
 
 _KIRKLAND_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"

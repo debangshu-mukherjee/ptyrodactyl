@@ -1,23 +1,22 @@
-"""
-Module: ptyrodactyl.electrons.phase_recon
-------------------------------------------
-Inverse reconstruction algorithms for electron ptychography.
+"""Inverse reconstruction algorithms for electron ptychography.
 
+Extended Summary
+----------------
 This module contains functions for reconstructing sample potentials from
 experimental ptychography data using various optimization algorithms.
 All functions support both single-slice and multi-slice reconstructions,
 with options for position correction and multi-modal probe handling.
 
-Functions
----------
-- `single_slice_ptychography`:
-    Performs single-slice ptychography reconstruction
-- `single_slice_poscorrected`:
-    Performs single-slice reconstruction with position correction
-- `single_slice_multi_modal`:
-    Performs single-slice reconstruction with multi-modal probe
-- `multi_slice_multi_modal`:
-    Performs multi-slice reconstruction with multi-modal probe
+Routine Listings
+----------------
+single_slice_ptychography : function
+    Performs single-slice ptychography reconstruction.
+single_slice_poscorrected : function
+    Performs single-slice reconstruction with position correction.
+single_slice_multi_modal : function
+    Performs single-slice reconstruction with multi-modal probe.
+multi_slice_multi_modal : function
+    Performs multi-slice reconstruction with multi-modal probe.
 
 Notes
 -----
@@ -25,10 +24,7 @@ All reconstruction functions use JAX-compatible optimizers and support
 automatic differentiation. The functions are designed to work with
 experimental data and can handle various noise levels and experimental
 conditions. Input data should be properly preprocessed and validated
-using the factory functions from electron_types module.
-
-Internal functions (not exported):
-- _get_optimizer: Returns an optimizer instance for the specified optimization algorithm
+using the factory functions from the tools module.
 """
 
 import jax

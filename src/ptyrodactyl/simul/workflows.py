@@ -1,15 +1,20 @@
-"""
-Module: ptyrodactyl.electrons.workflows
----------------------------------------
-High-level workflows for electron microscopy simulations.
+"""High-level workflows for electron microscopy simulations.
 
+Extended Summary
+----------------
 This module provides complete workflows that combine multiple simulation
 steps into convenient functions for common use cases.
 
-Functions
----------
-- `xyz_to_4d_stem`:
-    Simulates 4D-STEM data from an XYZ structure file
+Routine Listings
+----------------
+xyz_to_4d_stem : function
+    Simulates 4D-STEM data from an XYZ structure file.
+
+Notes
+-----
+Workflows are designed as convenience functions that chain together
+lower-level simulation functions from the simulations and atom_potentials
+modules.
 """
 
 import jax

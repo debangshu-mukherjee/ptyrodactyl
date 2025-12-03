@@ -1,8 +1,7 @@
-"""
-Module: ptyrodactyl.tools
--------------------------
-Utility tools for JAX ptychography - supporting light, electrons and X-rays.
+"""Utility tools for JAX ptychography.
 
+Extended Summary
+----------------
 This package contains essential utilities for complex-valued optimization,
 loss functions, and parallel processing in ptychography applications.
 All functions are JAX-compatible and support automatic differentiation.
@@ -11,15 +10,38 @@ are used for creating complex valued Adam, Adagrad and RMSprop optimizers.
 
 Submodules
 ----------
-- `loss_functions`:
+electron_types
+    Data structures and type definitions for electron microscopy including
+    CalibratedArray, ProbeModes, PotentialSlices, and XYZData PyTrees.
+loss_functions
     Loss function implementations for ptychography including MAE, MSE, and RMSE
-    with support for complex-valued data and custom loss function creation
-- `optimizers`:
+    with support for complex-valued data and custom loss function creation.
+optimizers
     Complex-valued optimizers with Wirtinger derivatives including Adam,
-    Adagrad, and RMSprop, plus learning rate schedulers for training
-- `parallel`:
+    Adagrad, and RMSprop, plus learning rate schedulers for training.
+parallel
     Parallel processing utilities for sharding arrays across multiple devices
-    and distributed computing in ptychography workflows
+    and distributed computing in ptychography workflows.
+
+Routine Listings
+----------------
+create_loss_function : function
+    Factory function to create custom loss functions.
+wirtinger_grad : function
+    Compute Wirtinger gradients for complex-valued optimization.
+complex_adam : function
+    Adam optimizer with Wirtinger derivatives for complex parameters.
+complex_adagrad : function
+    Adagrad optimizer with Wirtinger derivatives for complex parameters.
+complex_rmsprop : function
+    RMSprop optimizer with Wirtinger derivatives for complex parameters.
+shard_array : function
+    Shard arrays across multiple devices for parallel processing.
+
+Notes
+-----
+All optimizers and loss functions support JAX transformations including
+jit compilation, automatic differentiation, and vectorized mapping.
 """
 
 from .electron_types import (

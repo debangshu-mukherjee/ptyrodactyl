@@ -1,56 +1,56 @@
-"""
-Module: ptyrodactyl.electrons.electron_types
----------------------------------------------
-Data structures and type definitions for electron microscopy and ptychography.
+"""Data structures and type definitions for electron microscopy.
+
+Extended Summary
+----------------
+Provides JAX-compatible PyTree structures for electron ptychography data
+including calibrated arrays, probe modes, potential slices, and 4D-STEM
+datasets. All structures support JAX transformations.
 
 Type Aliases
 ------------
-- `ScalarNumeric`:
-    Type alias for numeric types (int, float or Num array)
-    Num Array has 0 dimensions
-- `ScalarFloat`:
-    Type alias for float or Float array of 0 dimensions
-- `ScalarInt`:
-    Type alias for int or Integer array of 0 dimensions
-- `NonJaxNumber`:
-    Type alias for non-JAX numeric types (int, float)
+ScalarNumeric : TypeAlias
+    Numeric types (int, float, or 0-dimensional Num array).
+ScalarFloat : TypeAlias
+    Float or 0-dimensional Float array.
+ScalarInt : TypeAlias
+    Int or 0-dimensional Int array.
+NonJaxNumber : TypeAlias
+    Non-JAX numeric types (int, float).
 
 PyTrees
 -------
-- `CalibratedArray`:
-    A PyTree for calibrated array data with spatial calibration
-- `ProbeModes`:
-    A PyTree for multimodal electron probe state
-- `PotentialSlices`:
-    A PyTree for potential slices in multi-slice simulations
-- `CrystalStructure`:
-    A PyTree for crystal structure with fractional and Cartesian coordinates
-- `XYZData`:
-    A PyTree for XYZ file data with atomic positions, lattice vectors,
-    stress tensor, energy, properties, and comment
-- `STEM4D`:
-    A PyTree for 4D-STEM data containing diffraction patterns, calibrations,
-    scan positions, and experimental parameters
+CalibratedArray : NamedTuple
+    Calibrated array data with spatial calibration.
+ProbeModes : NamedTuple
+    Multimodal electron probe state.
+PotentialSlices : NamedTuple
+    Potential slices for multi-slice simulations.
+CrystalStructure : NamedTuple
+    Crystal structure with fractional and Cartesian coordinates.
+XYZData : NamedTuple
+    XYZ file data with atomic positions, lattice vectors, and metadata.
+STEM4D : NamedTuple
+    4D-STEM data with diffraction patterns, calibrations, and parameters.
 
-Factory Functions
------------------
-- `make_calibrated_array`:
-    Creates a CalibratedArray instance with runtime type checking
-- `make_probe_modes`:
-    Creates a ProbeModes instance with runtime type checking
-- `make_potential_slices`:
-    Creates a PotentialSlices instance with runtime type checking
-- `make_crystal_structure`:
-    Creates a CrystalStructure instance with runtime type checking
-- `make_xyz_data`:
-    Creates a XYZData instance with runtime type checking
-- `make_stem4d`:
-    Creates a STEM4D instance with runtime type checking
+Routine Listings
+----------------
+make_calibrated_array : function
+    Creates a CalibratedArray instance with runtime type checking.
+make_probe_modes : function
+    Creates a ProbeModes instance with runtime type checking.
+make_potential_slices : function
+    Creates a PotentialSlices instance with runtime type checking.
+make_crystal_structure : function
+    Creates a CrystalStructure instance with runtime type checking.
+make_xyz_data : function
+    Creates an XYZData instance with runtime type checking.
+make_stem4d : function
+    Creates a STEM4D instance with runtime type checking.
 
 Notes
 -----
-Always use these factory functions instead of directly instantiating the
-NamedTuple classes to ensure proper runtime type checking of the contents.
+Always use factory functions instead of directly instantiating NamedTuple
+classes to ensure proper runtime type checking of the contents.
 """
 
 import jax

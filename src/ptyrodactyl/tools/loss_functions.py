@@ -1,22 +1,16 @@
-"""
-Module: tools.loss_functions
----------------------------
-Loss function implementations for ptychography optimization.
+"""Loss function implementations for ptychography optimization.
 
+Extended Summary
+----------------
 This module provides loss functions for comparing model outputs with experimental
 data in ptychography applications. All functions are JAX-compatible and support
 automatic differentiation for optimization.
 
-Functions
----------
-- `create_loss_function`:
-    Creates a JIT-compatible loss function for comparing model output with experimental data
-- `mae_loss`:
-    Mean Absolute Error loss function (internal)
-- `mse_loss`:
-    Mean Squared Error loss function (internal)
-- `rmse_loss`:
-    Root Mean Squared Error loss function (internal)
+Routine Listings
+----------------
+create_loss_function : function
+    Creates a JIT-compatible loss function for comparing model output with
+    experimental data. Supports MAE, MSE, and RMSE loss types.
 
 Notes
 -----

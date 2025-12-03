@@ -1,5 +1,7 @@
 """Differentiable electron microscopy forward and inverse problems.
 
+Extended Summary
+----------------
 A comprehensive toolkit for electron ptychography simulations and reconstructions
 using JAX for automatic differentiation and acceleration. All functions are
 fully differentiable and JIT-compilable.
@@ -7,31 +9,27 @@ fully differentiable and JIT-compilable.
 Submodules
 ----------
 invert
-    Electron microscopy reconstructions, ptychography and focal series
+    Electron microscopy reconstructions, ptychography and focal series.
 simul
-    Electron microscopy simulations including 4D-STEM, CBED, and multislice
+    Electron microscopy simulations including 4D-STEM, CBED, and multislice.
 tools
     Utility tools for optimization, loss functions, and parallel processing
-    including complex-valued optimizers with Wirtinger derivatives
+    including complex-valued optimizers with Wirtinger derivatives.
 
 Key Features
 ------------
-- JAX-compatible: All functions support jit, grad, vmap, and other JAX transformations
-- Automatic differentiation: Full support for gradient-based optimization
-- Complex-valued optimization: Wirtinger calculus for complex parameters
-- Multi-modal support: Handles both single and multi-modal probes
-- Parallel processing: Device mesh support for distributed computing
-- Type safety: Comprehensive type checking with jaxtyping and beartype
-
-Examples
---------
-Basic usage for electron ptychography:
-    >>> from ptyrodactyl.simul import stem_4d, make_probe
-    >>> from ptyrodactyl.invert import single_slice_ptychography
-    >>> # Generate 4D-STEM data
-    >>> data = stem_4d(potential, probe, positions, voltage_kv, calib_ang)
-    >>> # Reconstruct sample
-    >>> reconstructed = single_slice_ptychography(data, initial_guess, positions)
+- JAX-compatible:
+    All functions support jit, grad, vmap, and other JAX transformations.
+- Automatic differentiation:
+    Full support for gradient-based optimization.
+- Complex-valued optimization:
+    Wirtinger calculus for complex parameters.
+- Multi-modal support:
+    Handles both single and multi-modal probes.
+- Parallel processing:
+    Device mesh support for distributed computing.
+- Type safety:
+    Comprehensive type checking with jaxtyping and beartype.
 
 Notes
 -----

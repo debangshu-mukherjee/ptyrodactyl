@@ -1,49 +1,48 @@
-"""
-Module: ptyrodactyl.electrons.simulations
-------------------------------------------
-Forward simulation functions for electron microscopy and ptychography.
+"""Forward simulation functions for electron microscopy and ptychography.
 
+Extended Summary
+----------------
 This module contains functions for simulating electron beam propagation,
 creating probes, calculating aberrations, and generating CBED patterns
 and 4D-STEM data. All functions are JAX-compatible and support automatic
 differentiation.
 
-Functions
----------
-- `transmission_func`:
-    Calculates transmission function for a given potential
-- `propagation_func`:
-    Propagates electron wave through free space
-- `fourier_coords`:
-    Generates Fourier space coordinates for diffraction calculations
-- `fourier_calib`:
-    Calculates Fourier space calibration from real space parameters
-- `make_probe`:
-    Creates electron probe with specified parameters and aberrations
-- `aberration`:
-    Applies aberration phase to electron wave
-- `wavelength_ang`:
-    Calculates electron wavelength from accelerating voltage
-- `cbed`:
-    Simulates convergent beam electron diffraction patterns
-- `shift_beam_fourier`:
-    Shifts electron beam in Fourier space for scanning
-- `stem_4d`:
-    Generates 4D-STEM data with multiple probe positions
-- `stem_4d_sharded`:
-    Sharded version using JAX's automatic sharding API
-- `stem_4d_parallel`:
-    Parallel version with explicit device control using shard_map
-- `decompose_beam_to_modes`:
-    Decomposes electron beam into orthogonal modes
-- `annular_detector`:
-    Simulates annular detector for STEM imaging from 4D data
+Routine Listings
+----------------
+transmission_func : function
+    Calculates transmission function for a given potential.
+propagation_func : function
+    Propagates electron wave through free space.
+fourier_coords : function
+    Generates Fourier space coordinates for diffraction calculations.
+fourier_calib : function
+    Calculates Fourier space calibration from real space parameters.
+make_probe : function
+    Creates electron probe with specified parameters and aberrations.
+aberration : function
+    Applies aberration phase to electron wave.
+wavelength_ang : function
+    Calculates electron wavelength from accelerating voltage.
+cbed : function
+    Simulates convergent beam electron diffraction patterns.
+shift_beam_fourier : function
+    Shifts electron beam in Fourier space for scanning.
+stem_4d : function
+    Generates 4D-STEM data with multiple probe positions.
+stem_4d_sharded : function
+    Sharded version using JAX's automatic sharding API.
+stem_4d_parallel : function
+    Parallel version with explicit device control using shard_map.
+decompose_beam_to_modes : function
+    Decomposes electron beam into orthogonal modes.
+annular_detector : function
+    Simulates annular detector for STEM imaging from 4D data.
 
 Notes
 -----
 All functions are designed to work with JAX transformations including
 jit, grad, and vmap. Input arrays should be properly typed and validated
-using the factory functions from electron_types module.
+using the factory functions from the tools module.
 """
 
 import jax

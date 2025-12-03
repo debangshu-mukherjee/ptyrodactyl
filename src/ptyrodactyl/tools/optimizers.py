@@ -1,5 +1,7 @@
 """Complex-valued optimizers with Wirtinger derivatives for ptychography.
 
+Extended Summary
+----------------
 This module implements complex-valued optimization algorithms including Adam,
 Adagrad, and RMSprop using Wirtinger calculus. It also provides learning rate
 schedulers for training optimization. All functions are JAX-compatible and
@@ -7,52 +9,43 @@ support automatic differentiation.
 
 Classes
 -------
-LRSchedulerState
-    State maintained by learning rate schedulers
-OptimizerState
-    State maintained by optimizers (moments, step count)
-Optimizer
-    Optimizer configuration with init and update functions
+LRSchedulerState : NamedTuple
+    State maintained by learning rate schedulers.
+OptimizerState : NamedTuple
+    State maintained by optimizers (moments, step count).
+Optimizer : NamedTuple
+    Optimizer configuration with init and update functions.
 
-Scheduler Functions
--------------------
-create_cosine_scheduler
-    Creates a cosine learning rate scheduler with smooth decay
-create_step_scheduler
-    Creates a step decay scheduler with periodic learning rate drops
-create_warmup_cosine_scheduler
-    Creates a scheduler with linear warmup followed by cosine decay
-init_scheduler_state
-    Initialize scheduler state with given learning rate
-
-Optimizer Functions
--------------------
-wirtinger_grad
-    Compute the Wirtinger gradient of a complex-valued function
-complex_adam
-    Complex-valued Adam optimizer based on Wirtinger derivatives
-complex_adagrad
-    Complex-valued Adagrad optimizer based on Wirtinger derivatives
-complex_rmsprop
-    Complex-valued RMSprop optimizer based on Wirtinger derivatives
-
-Initialization Functions
-------------------------
-init_adam
-    Initialize Adam optimizer state
-init_adagrad
-    Initialize Adagrad optimizer state
-init_rmsprop
-    Initialize RMSprop optimizer state
-
-Update Functions
+Routine Listings
 ----------------
-adam_update
-    Update parameters using Adam optimizer with Wirtinger derivatives
-adagrad_update
-    Update parameters using Adagrad optimizer with Wirtinger derivatives
-rmsprop_update
-    Update parameters using RMSprop optimizer with Wirtinger derivatives
+wirtinger_grad : function
+    Compute the Wirtinger gradient of a complex-valued function.
+complex_adam : function
+    Complex-valued Adam optimizer based on Wirtinger derivatives.
+complex_adagrad : function
+    Complex-valued Adagrad optimizer based on Wirtinger derivatives.
+complex_rmsprop : function
+    Complex-valued RMSprop optimizer based on Wirtinger derivatives.
+init_adam : function
+    Initialize Adam optimizer state.
+init_adagrad : function
+    Initialize Adagrad optimizer state.
+init_rmsprop : function
+    Initialize RMSprop optimizer state.
+adam_update : function
+    Update parameters using Adam optimizer with Wirtinger derivatives.
+adagrad_update : function
+    Update parameters using Adagrad optimizer with Wirtinger derivatives.
+rmsprop_update : function
+    Update parameters using RMSprop optimizer with Wirtinger derivatives.
+create_cosine_scheduler : function
+    Creates a cosine learning rate scheduler with smooth decay.
+create_step_scheduler : function
+    Creates a step decay scheduler with periodic learning rate drops.
+create_warmup_cosine_scheduler : function
+    Creates a scheduler with linear warmup followed by cosine decay.
+init_scheduler_state : function
+    Initialize scheduler state with given learning rate.
 
 Notes
 -----

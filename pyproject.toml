@@ -1,12 +1,12 @@
 [project]
 name = "ptyrodactyl"
-version = "2025.09.01"
+version = "2025.09.15"
 description = "Ptychography through differentiable programming in JAX"
-authors = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
-license = {file = "LICENSE.md"}
-maintainers = [{name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov"}]
+authors = [{ name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov" }]
+license = { file = "LICENSE.md" }
+maintainers = [{ name = "Debangshu Mukherjee", email = "mukherjeed@ornl.gov" }]
 keywords = [
-    "electron microscopy", 
+    "electron microscopy",
     "optical microscopy",
     "4D-STEM",
     "JAX",
@@ -35,9 +35,9 @@ dependencies = [
     "optax >= 0.1.8",
     "pytest >= 8.0.0",
     "beartype>=0.19.0",
-    "jax[cuda12]>=0.4.30 ; sys_platform == 'linux'",
-    "jax>=0.4.30 ; sys_platform == 'win64'",
-    "jax>=0.4.30 ; sys_platform == 'darwin'",
+    "jax>=0.7.0 ; sys_platform == 'win64'",
+    "jax>=0.7.0 ; sys_platform == 'darwin'",
+    "jax>=0.7.0 ; sys_platform == 'linux'",
     "pytest-cov>=6.2.1",
     "jupyterlab>=4.4.5",
     "jupyter>=1.1.1",
@@ -53,6 +53,10 @@ namespaces = true
 where = ["src"]
 
 [project.optional-dependencies]
+cuda = [
+    "jax[cuda12]>=0.7.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'",
+    "nvidia-cudnn-cu12>=9.5.0 ; platform_machine == 'x86_64' and sys_platform == 'linux'",
+]
 docs = [
     "furo>=2025.7.19",
     "ipykernel>=6.29.5",
@@ -70,11 +74,7 @@ test = [
     "pytest-xdist>=3.0.0",
     "chex>=0.1.89",
 ]
-notebooks = [
-    "ipywidgets>=8.1.0",
-    "ipykernel>=6.29.5",
-    "nbconvert>=7.16.6",
-]
+notebooks = ["ipywidgets>=8.1.0", "ipykernel>=6.29.5", "nbconvert>=7.16.6"]
 dev = [
     "ptyrodactyl[docs,test,notebooks]",
     "black[all]>=25.1.0",
@@ -89,6 +89,7 @@ dev = [
     "sphinxcontrib-napoleon>=0.7",
     "twine>=6.1.0",
 ]
+dev_cuda = ["ptyrodactyl[cuda,dev]"]
 
 [project.urls]
 Homepage = "https://github.com/debangshu-mukherjee/ptyrodactyl"
@@ -112,23 +113,99 @@ python_functions = "test_*"
 source = ["ptyrodactyl"]
 omit = ["*/tests/*", "*/site-packages/*"]
 
+[tool.pydoclint]
+style = "numpy"
+check-return-types = true
+check-yield-types = true
+check-arg-order = true
+require-return-section-when-returning = true
+require-yield-section-when-yielding = true
+
+[tool.interrogate]
+fail-under = 90
+style = "sphinx"
+exclude = ["tests", "build", "dist"]
+ignore-init-module = true
+quiet = true
+
 [tool.ruff]
-line-length = 100
-target-version = "py310"
+include = ["pyproject.toml", "src/**/*.py"]
+line-length = 79
+target-version = "py312"
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = 79
+
 
 [tool.ruff.lint]
-select = ["E", "F", "B", "I", "N", "UP", "ANN", "S", "A", "C4", "PIE", "PT", "RET", "SIM", "ARG", "ERA", "PL"]
+select = [
+    "D",
+    "E",
+    "F",
+    "B",
+    "I",
+    "N",
+    "UP",
+    "ANN",
+    "S",
+    "A",
+    "C4",
+    "PIE",
+    "PT",
+    "RET",
+    "SIM",
+    "ARG",
+    "ERA",
+    "PL",
+]
 ignore = [
     "ANN401",
     "PYI021",
     "F722",
     "COM812",
+    "D205",
+    "D212",
+    "UP037",  # Don't remove quotes from jaxtyping annotations
+    "F821",   # jaxtyping dimension variables (N, M, etc.) are intentionally "undefined"
 ]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = [
     "jax.numpy.zeros",
-    "jax.numpy.ones", 
+    "jax.numpy.ones",
     "jax.numpy.array",
     "jax.numpy.asarray",
     "jnp.zeros",
@@ -140,14 +217,48 @@ extend-immutable-calls = [
 [tool.ruff.lint.pylint]
 max-args = 10
 
-[tool.ruff.lint.per-file-ignores]
-"**/*.py" = ["F821"]
-
 [tool.ruff.lint.isort]
 known-third-party = ["jax", "jaxtyping"]
 
 [tool.ruff.lint.pydocstyle]
-convention = "google"
+convention = "numpy"
 
-[tool.ruff.format]
-quote-style = "preserve"
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "D",       # Ignore all docstring issues
+    "ANN",     # Ignore type annotations (tests often use Any)
+    "S",       # Ignore security issues (tests may use assert, random, etc.)
+    "PLR",     # Ignore refactoring suggestions
+    "ARG",     # Ignore unused arguments
+    "ERA",     # Ignore commented code
+    "B",       # Ignore bugbear warnings
+    "A",       # Ignore shadowing builtins
+    "C4",      # Ignore comprehension issues
+    "PIE",     # Ignore misc lints
+    "PT",      # Ignore pytest style (we use unittest style)
+    "RET",     # Ignore return issues
+    "SIM",     # Ignore simplification suggestions
+    "N",       # Ignore naming conventions
+    "UP",      # Ignore upgrade suggestions
+    "F401",    # Ignore unused imports (tests may import for side effects)
+    "F841",    # Ignore unused variables
+    "PLR2004", # Ignore magic value comparisons
+]
+
+[tool.black]
+line-length = 79
+target-version = ["py311", "py312", "py313"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''

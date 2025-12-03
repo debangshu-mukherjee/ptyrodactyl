@@ -53,7 +53,9 @@ class TestAtomicSymbol(chex.TestCase):
         with pytest.raises(KeyError, match="Atomic symbol 'Xx' not found"):
             atomic_symbol("Xx")
 
-        with pytest.raises(KeyError, match="Atomic symbol 'InvalidElement' not found"):
+        with pytest.raises(
+            KeyError, match="Atomic symbol 'InvalidElement' not found"
+        ):
             atomic_symbol("InvalidElement")
 
         with pytest.raises(ValueError, match="Atomic symbol cannot be empty"):
@@ -177,7 +179,9 @@ class TestKirklandPotentials(chex.TestCase):
 
         # Check specific known values (first element - Hydrogen)
         # These are from the actual CSV file
-        expected_h_first_four = jnp.array([0.0355221981, 0.225354459, 0.0262782423, 0.225354636])
+        expected_h_first_four = jnp.array(
+            [0.0355221981, 0.225354459, 0.0262782423, 0.225354636]
+        )
         assert jnp.allclose(kp[0, :4], expected_h_first_four, rtol=1e-9)
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -209,7 +213,9 @@ class TestKirklandPotentials(chex.TestCase):
         params = jnp.ones(12)
         gradient = self.variant(grad_fn)(params, 5)  # Carbon
         assert gradient.shape == (12,)
-        assert jnp.allclose(gradient, kp[5])  # Gradient should equal the potentials
+        assert jnp.allclose(
+            gradient, kp[5]
+        )  # Gradient should equal the potentials
 
     @chex.variants(with_jit=True, without_jit=True)
     def test_kirkland_potentials_indexing(self) -> None:
@@ -260,7 +266,9 @@ class TestParseXYZ(chex.TestCase):
 
     def create_temp_xyz_file(self, content: str) -> Path:
         """Helper to create temporary XYZ files for testing."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".xyz", delete=False) as f:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".xyz", delete=False
+        ) as f:
             f.write(content)
             return Path(f.name)
 
@@ -279,9 +287,15 @@ H  -0.7570   0.5860   0.0000
 
             # Check positions shape and values
             assert result.positions.shape == (3, 3)
-            assert jnp.allclose(result.positions[0], jnp.array([0.0, 0.0, 0.0]))
-            assert jnp.allclose(result.positions[1], jnp.array([0.7570, 0.5860, 0.0]))
-            assert jnp.allclose(result.positions[2], jnp.array([-0.7570, 0.5860, 0.0]))
+            assert jnp.allclose(
+                result.positions[0], jnp.array([0.0, 0.0, 0.0])
+            )
+            assert jnp.allclose(
+                result.positions[1], jnp.array([0.7570, 0.5860, 0.0])
+            )
+            assert jnp.allclose(
+                result.positions[2], jnp.array([-0.7570, 0.5860, 0.0])
+            )
 
             # Check atomic numbers
             assert result.atomic_numbers.shape == (3,)
@@ -315,7 +329,9 @@ H  -0.7570   0.5860   0.0000
             # Check lattice
             assert result.lattice is not None
             assert result.lattice.shape == (3, 3)
-            expected_lattice = jnp.array([[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]])
+            expected_lattice = jnp.array(
+                [[5.0, 0.0, 0.0], [0.0, 5.0, 0.0], [0.0, 0.0, 5.0]]
+            )
             assert jnp.allclose(result.lattice, expected_lattice)
 
             # Check atoms
@@ -338,7 +354,9 @@ Fe   0.0   0.0   0.0
             # Check stress tensor
             assert result.stress is not None
             assert result.stress.shape == (3, 3)
-            expected_stress = jnp.array([[1.0, 0.5, 0.3], [0.5, 2.0, 0.1], [0.3, 0.1, 1.5]])
+            expected_stress = jnp.array(
+                [[1.0, 0.5, 0.3], [0.5, 2.0, 0.1], [0.3, 0.1, 1.5]]
+            )
             assert jnp.allclose(result.stress, expected_stress)
 
             # Check atom
@@ -457,8 +475,12 @@ N   1.0   1.0   1.0   -0.1  -0.2  -0.3
 
             # Should only read first 4 columns
             assert result.positions.shape == (2, 3)
-            assert jnp.allclose(result.positions[0], jnp.array([0.0, 0.0, 0.0]))
-            assert jnp.allclose(result.positions[1], jnp.array([1.0, 1.0, 1.0]))
+            assert jnp.allclose(
+                result.positions[0], jnp.array([0.0, 0.0, 0.0])
+            )
+            assert jnp.allclose(
+                result.positions[1], jnp.array([1.0, 1.0, 1.0])
+            )
         finally:
             xyz_path.unlink()
 
@@ -474,8 +496,12 @@ He  -1.5e+2   3.7e+1    4.2e+0
         try:
             result = parse_xyz(xyz_path)
 
-            assert jnp.allclose(result.positions[0], jnp.array([1.0e-10, 2.5e-9, -3.0e-8]))
-            assert jnp.allclose(result.positions[1], jnp.array([-1.5e2, 3.7e1, 4.2e0]))
+            assert jnp.allclose(
+                result.positions[0], jnp.array([1.0e-10, 2.5e-9, -3.0e-8])
+            )
+            assert jnp.allclose(
+                result.positions[1], jnp.array([-1.5e2, 3.7e1, 4.2e0])
+            )
         finally:
             xyz_path.unlink()
 
@@ -505,7 +531,9 @@ co  2.0   0.0   0.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(ValueError, match="Invalid XYZ file: fewer than 2 lines"):
+            with pytest.raises(
+                ValueError, match="Invalid XYZ file: fewer than 2 lines"
+            ):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()
@@ -519,7 +547,9 @@ C   0.0   0.0   0.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(ValueError, match="First line must be the number of atoms"):
+            with pytest.raises(
+                ValueError, match="First line must be the number of atoms"
+            ):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()
@@ -534,7 +564,9 @@ N   1.0   1.0   1.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(ValueError, match="Expected 5 atoms, found only 2"):
+            with pytest.raises(
+                ValueError, match="Expected 5 atoms, found only 2"
+            ):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()
@@ -549,7 +581,9 @@ N   1.0   1.0   1.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(ValueError, match="Line 3 has unexpected format"):
+            with pytest.raises(
+                ValueError, match="Line 3 has unexpected format"
+            ):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()
@@ -584,9 +618,15 @@ Water molecule with atomic numbers
 
             # Check positions shape and values
             assert result.positions.shape == (3, 3)
-            assert jnp.allclose(result.positions[0], jnp.array([0.0, 0.0, 0.0]))
-            assert jnp.allclose(result.positions[1], jnp.array([0.7570, 0.5860, 0.0]))
-            assert jnp.allclose(result.positions[2], jnp.array([-0.7570, 0.5860, 0.0]))
+            assert jnp.allclose(
+                result.positions[0], jnp.array([0.0, 0.0, 0.0])
+            )
+            assert jnp.allclose(
+                result.positions[1], jnp.array([0.7570, 0.5860, 0.0])
+            )
+            assert jnp.allclose(
+                result.positions[2], jnp.array([-0.7570, 0.5860, 0.0])
+            )
 
             # Check atomic numbers
             assert result.atomic_numbers.shape == (3,)
@@ -685,7 +725,9 @@ Negative test
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(ValueError, match="atomic_numbers must be non-negative"):
+            with pytest.raises(
+                ValueError, match="atomic_numbers must be non-negative"
+            ):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()
@@ -724,7 +766,9 @@ H   0.0   0.0   0.0
 
             # Results should be equivalent
             assert jnp.array_equal(result_path.positions, result_str.positions)
-            assert jnp.array_equal(result_path.atomic_numbers, result_str.atomic_numbers)
+            assert jnp.array_equal(
+                result_path.atomic_numbers, result_str.atomic_numbers
+            )
         finally:
             xyz_path.unlink()
 
@@ -793,13 +837,19 @@ C   0.0   0.0   0.0
     def test_parse_xyz_metadata_regex(self) -> None:
         """Test the internal metadata parsing function."""
         # Test lattice parsing
-        metadata = _parse_xyz_metadata('Lattice="1.0 0.0 0.0 0.0 2.0 0.0 0.0 0.0 3.0"')
+        metadata = _parse_xyz_metadata(
+            'Lattice="1.0 0.0 0.0 0.0 2.0 0.0 0.0 0.0 3.0"'
+        )
         assert "lattice" in metadata
         assert metadata["lattice"].shape == (3, 3)
-        assert jnp.allclose(metadata["lattice"], jnp.diag(jnp.array([1.0, 2.0, 3.0])))
+        assert jnp.allclose(
+            metadata["lattice"], jnp.diag(jnp.array([1.0, 2.0, 3.0]))
+        )
 
         # Test stress parsing
-        metadata = _parse_xyz_metadata('stress="1.0 0.5 0.3 0.5 2.0 0.1 0.3 0.1 1.5"')
+        metadata = _parse_xyz_metadata(
+            'stress="1.0 0.5 0.3 0.5 2.0 0.1 0.3 0.1 1.5"'
+        )
         assert "stress" in metadata
         assert metadata["stress"].shape == (3, 3)
 
@@ -825,5 +875,7 @@ C   0.0   0.0   0.0
             _parse_xyz_metadata('Lattice="1.0 2.0 3.0"')
 
         # Invalid stress dimensions
-        with pytest.raises(ValueError, match="Stress tensor must contain 9 values"):
+        with pytest.raises(
+            ValueError, match="Stress tensor must contain 9 values"
+        ):
             _parse_xyz_metadata('stress="1.0 2.0"')

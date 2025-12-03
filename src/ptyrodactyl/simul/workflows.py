@@ -118,9 +118,9 @@ def xyz_to_4d_stem(
         total_thickness_needed: Float[Array, " "] = (
             structure_thickness + slice_thickness
         )
-        repeat_z: Int[Array, " "] = jnp.ceil(total_thickness_needed / c_length).astype(
-            jnp.int32
-        )
+        repeat_z: Int[Array, " "] = jnp.ceil(
+            total_thickness_needed / c_length
+        ).astype(jnp.int32)
         repeats: Int[Array, " 3"] = jnp.array([repeat_x, repeat_y, repeat_z])
     else:
         repeats: Int[Array, " 3"] = jnp.array([1, 1, 1])
@@ -153,7 +153,9 @@ def xyz_to_4d_stem(
         weights=jnp.array([1.0]),
         calib=cbed_pixel_size_ang,
     )
-    scan_positions_pixels: Float[Array, "P 2"] = scan_positions / cbed_pixel_size_ang
+    scan_positions_pixels: Float[Array, "P 2"] = (
+        scan_positions / cbed_pixel_size_ang
+    )
     stem4d_data: STEM4D = stem_4d(
         pot_slice=potential_slices,
         beam=probe_modes,

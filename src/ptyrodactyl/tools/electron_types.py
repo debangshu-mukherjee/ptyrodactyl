@@ -55,7 +55,16 @@ NamedTuple classes to ensure proper runtime type checking of the contents.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Any, Dict, List, NamedTuple, Optional, Tuple, TypeAlias, Union
+from beartype.typing import (
+    Any,
+    Dict,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+    TypeAlias,
+    Union,
+)
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num
 
@@ -86,7 +95,9 @@ class CalibratedArray(NamedTuple):
         If False, it is in reciprocal space.
     """
 
-    data_array: Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]
+    data_array: Union[
+        Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]
+    ]
     calib_y: Float[Array, " "]
     calib_x: Float[Array, " "]
     real_space: Bool[Array, " "]
@@ -138,7 +149,9 @@ class ProbeModes(NamedTuple):
         )
 
     @classmethod
-    def tree_unflatten(cls, _aux_data: None, children: Tuple[Any, ...]) -> "ProbeModes":
+    def tree_unflatten(
+        cls, _aux_data: None, children: Tuple[Any, ...]
+    ) -> "ProbeModes":
         return cls(*children)
 
 
@@ -338,13 +351,17 @@ class STEM4D(NamedTuple):
         )
 
     @classmethod
-    def tree_unflatten(cls, _aux_data: None, children: Tuple[Any, ...]) -> "STEM4D":
+    def tree_unflatten(
+        cls, _aux_data: None, children: Tuple[Any, ...]
+    ) -> "STEM4D":
         return cls(*children)
 
 
 @jaxtyped(typechecker=beartype)
 def make_calibrated_array(
-    data_array: Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]],
+    data_array: Union[
+        Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]
+    ],
     calib_y: scalar_float,
     calib_x: scalar_float,
     real_space: Union[bool, Bool[Array, " "]],
@@ -504,7 +521,9 @@ def make_probe_modes(
             lambda w: jnp.ones_like(w) / w.shape[0],
             normalized_weights,
         )
-        positive_calib: Float[Array, " "] = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
+        positive_calib: Float[Array, " "] = (
+            jnp.abs(calib) + jnp.finfo(jnp.float64).eps
+        )
 
         return ProbeModes(
             modes=modes,
@@ -529,14 +548,19 @@ def make_probe_modes(
                 _check_weights_shape(),
                 jnp.logical_and(
                     _check_weights_nonnegative(),
-                    jnp.logical_and(_check_weights_sum(), _check_calib_positive()),
+                    jnp.logical_and(
+                        _check_weights_sum(), _check_calib_positive()
+                    ),
                 ),
             ),
         ),
     )
 
     return jax.lax.cond(
-        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
+        all_valid,
+        lambda _: _valid_processing(),
+        lambda _: _invalid_processing(),
+        None,
     )
 
 
@@ -586,7 +610,9 @@ def make_potential_slices(
        - If invalid: Return PotentialSlices with NaN values to signal validation failure
     """
     slices: Float[Array, " H W S"] = jnp.asarray(slices, dtype=jnp.float64)
-    slice_thickness: Float[Array, " "] = jnp.asarray(slice_thickness, dtype=jnp.float64)
+    slice_thickness: Float[Array, " "] = jnp.asarray(
+        slice_thickness, dtype=jnp.float64
+    )
     calib: Float[Array, " "] = jnp.asarray(calib, dtype=jnp.float64)
 
     expected_dims: int = 3
@@ -607,7 +633,9 @@ def make_potential_slices(
         positive_thickness: Float[Array, " "] = (
             jnp.abs(slice_thickness) + jnp.finfo(jnp.float64).eps
         )
-        positive_calib: Float[Array, " "] = jnp.abs(calib) + jnp.finfo(jnp.float64).eps
+        positive_calib: Float[Array, " "] = (
+            jnp.abs(calib) + jnp.finfo(jnp.float64).eps
+        )
 
         return PotentialSlices(
             slices=slices,
@@ -616,7 +644,9 @@ def make_potential_slices(
         )
 
     def _invalid_processing() -> PotentialSlices:
-        nan_thickness: Float[Array, " "] = jnp.array(jnp.nan, dtype=jnp.float64)
+        nan_thickness: Float[Array, " "] = jnp.array(
+            jnp.nan, dtype=jnp.float64
+        )
         nan_calib: Float[Array, " "] = jnp.array(jnp.nan, dtype=jnp.float64)
         return PotentialSlices(
             slices=slices,
@@ -628,12 +658,17 @@ def make_potential_slices(
         _check_3d_slices(),
         jnp.logical_and(
             _check_slices_finite(),
-            jnp.logical_and(_check_slice_thickness_positive(), _check_calib_positive()),
+            jnp.logical_and(
+                _check_slice_thickness_positive(), _check_calib_positive()
+            ),
         ),
     )
 
     return jax.lax.cond(
-        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
+        all_valid,
+        lambda _: _valid_processing(),
+        lambda _: _invalid_processing(),
+        None,
     )
 
 
@@ -736,7 +771,9 @@ def make_crystal_structure(
         positive_lengths: Num[Array, " 3"] = (
             jnp.abs(cell_lengths) + jnp.finfo(jnp.float64).eps
         )
-        valid_angles: Num[Array, " 3"] = jnp.clip(cell_angles, min_angle, max_angle)
+        valid_angles: Num[Array, " 3"] = jnp.clip(
+            cell_angles, min_angle, max_angle
+        )
 
         return CrystalStructure(
             frac_positions=frac_positions,
@@ -780,7 +817,10 @@ def make_crystal_structure(
     )
 
     return jax.lax.cond(
-        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
+        all_valid,
+        lambda _: _valid_processing(),
+        lambda _: _invalid_processing(),
+        None,
     )
 
 
@@ -1048,5 +1088,8 @@ def make_stem4d(
     )
 
     return jax.lax.cond(
-        all_valid, lambda _: _valid_processing(), lambda _: _invalid_processing(), None
+        all_valid,
+        lambda _: _valid_processing(),
+        lambda _: _invalid_processing(),
+        None,
     )

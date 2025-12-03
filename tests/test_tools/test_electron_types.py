@@ -38,7 +38,9 @@ class TestCalibratedArray(chex.TestCase):
 
     def test_factory_function_valid_int(self) -> None:
         """Test factory function with valid integer data."""
-        arr = make_calibrated_array(self.int_data, self.calib_y, self.calib_x, self.real_space)
+        arr = make_calibrated_array(
+            self.int_data, self.calib_y, self.calib_x, self.real_space
+        )
         assert isinstance(arr, CalibratedArray)
         assert arr.data_array.shape == (self.h, self.w)
         assert arr.data_array.dtype == jnp.int32
@@ -48,19 +50,25 @@ class TestCalibratedArray(chex.TestCase):
 
     def test_factory_function_valid_float(self) -> None:
         """Test factory function with valid float data."""
-        arr = make_calibrated_array(self.float_data, self.calib_y, self.calib_x, self.real_space)
+        arr = make_calibrated_array(
+            self.float_data, self.calib_y, self.calib_x, self.real_space
+        )
         assert isinstance(arr, CalibratedArray)
         assert arr.data_array.dtype == jnp.float64
 
     def test_factory_function_valid_complex(self) -> None:
         """Test factory function with valid complex data."""
-        arr = make_calibrated_array(self.complex_data, self.calib_y, self.calib_x, self.real_space)
+        arr = make_calibrated_array(
+            self.complex_data, self.calib_y, self.calib_x, self.real_space
+        )
         assert isinstance(arr, CalibratedArray)
         assert arr.data_array.dtype == jnp.complex128
 
     def test_pytree_flatten_unflatten(self) -> None:
         """Test PyTree flatten and unflatten operations."""
-        arr = make_calibrated_array(self.float_data, self.calib_y, self.calib_x, self.real_space)
+        arr = make_calibrated_array(
+            self.float_data, self.calib_y, self.calib_x, self.real_space
+        )
 
         leaves, treedef = jax.tree_util.tree_flatten(arr)
         assert len(leaves) == 4
@@ -80,7 +88,9 @@ class TestCalibratedArray(chex.TestCase):
                 real_space=arr.real_space,
             )
 
-        arr = make_calibrated_array(self.float_data, self.calib_y, self.calib_x, self.real_space)
+        arr = make_calibrated_array(
+            self.float_data, self.calib_y, self.calib_x, self.real_space
+        )
 
         processed = self.variant(process_array)(arr)
         assert jnp.allclose(processed.data_array, self.float_data * 2)
@@ -88,15 +98,21 @@ class TestCalibratedArray(chex.TestCase):
     def test_invalid_inputs(self) -> None:
         """Test factory function with invalid inputs."""
         with pytest.raises(Exception):
-            make_calibrated_array(jnp.ones(10), self.calib_y, self.calib_x, self.real_space)
+            make_calibrated_array(
+                jnp.ones(10), self.calib_y, self.calib_x, self.real_space
+            )
 
     def test_jax_compliant_adjustments(self) -> None:
         """Test JAX-compliant adjustments for invalid values."""
-        arr = make_calibrated_array(self.float_data, -0.1, -0.2, self.real_space)
+        arr = make_calibrated_array(
+            self.float_data, -0.1, -0.2, self.real_space
+        )
         assert arr.calib_y > 0
         assert arr.calib_x > 0
 
-        arr = make_calibrated_array(self.float_data, jnp.nan, self.calib_x, self.real_space)
+        arr = make_calibrated_array(
+            self.float_data, jnp.nan, self.calib_x, self.real_space
+        )
         assert jnp.isnan(arr.calib_y)
 
 
@@ -154,7 +170,9 @@ class TestProbeModes(chex.TestCase):
 
     def test_jax_compliant_adjustments(self) -> None:
         """Test JAX-compliant adjustments for invalid values."""
-        probe = make_probe_modes(self.modes, jnp.array([-0.5, -0.3, -0.2]), self.calib)
+        probe = make_probe_modes(
+            self.modes, jnp.array([-0.5, -0.3, -0.2]), self.calib
+        )
         assert jnp.all(probe.weights >= 0)
         self.assertAlmostEqual(jnp.sum(probe.weights), 1.0, places=6)
 
@@ -178,7 +196,9 @@ class TestPotentialSlices(chex.TestCase):
 
     def test_factory_function_valid(self) -> None:
         """Test factory function with valid data."""
-        pot = make_potential_slices(self.slices, self.slice_thickness, self.calib)
+        pot = make_potential_slices(
+            self.slices, self.slice_thickness, self.calib
+        )
         assert isinstance(pot, PotentialSlices)
         assert pot.slices.shape == (self.h, self.w, self.s)
         assert pot.slices.dtype == jnp.complex128
@@ -187,7 +207,9 @@ class TestPotentialSlices(chex.TestCase):
 
     def test_pytree_flatten_unflatten(self) -> None:
         """Test PyTree flatten and unflatten operations."""
-        pot = make_potential_slices(self.slices, self.slice_thickness, self.calib)
+        pot = make_potential_slices(
+            self.slices, self.slice_thickness, self.calib
+        )
 
         leaves, treedef = jax.tree_util.tree_flatten(pot)
         assert len(leaves) == 3
@@ -206,14 +228,18 @@ class TestPotentialSlices(chex.TestCase):
                 calib=pot.calib,
             )
 
-        pot = make_potential_slices(self.slices, self.slice_thickness, self.calib)
+        pot = make_potential_slices(
+            self.slices, self.slice_thickness, self.calib
+        )
         scaled = self.variant(lambda p: scale_slices(p, 2.0))(pot)
         assert jnp.allclose(scaled.slices, self.slices * 2.0)
 
     def test_invalid_inputs(self) -> None:
         """Test factory function with invalid inputs."""
         with pytest.raises(Exception):
-            make_potential_slices(jnp.ones((10, 10)), self.slice_thickness, self.calib)
+            make_potential_slices(
+                jnp.ones((10, 10)), self.slice_thickness, self.calib
+            )
 
     def test_jax_compliant_adjustments(self) -> None:
         """Test JAX-compliant adjustments for invalid values."""
@@ -280,7 +306,9 @@ class TestCrystalStructure(chex.TestCase):
         def translate_crystal(crystal, translation):
             return CrystalStructure(
                 frac_positions=crystal.frac_positions,
-                cart_positions=crystal.cart_positions.at[:, :3].add(translation),
+                cart_positions=crystal.cart_positions.at[:, :3].add(
+                    translation
+                ),
                 cell_lengths=crystal.cell_lengths,
                 cell_angles=crystal.cell_angles,
             )
@@ -292,7 +320,9 @@ class TestCrystalStructure(chex.TestCase):
             self.cell_angles,
         )
         translation = jnp.array([1.0, 0.0, 0.0])
-        translated = self.variant(lambda c: translate_crystal(c, translation))(crystal)
+        translated = self.variant(lambda c: translate_crystal(c, translation))(
+            crystal
+        )
 
         expected_cart = self.cart_positions.copy()
         expected_cart = expected_cart.at[:, 0].add(1.0)
@@ -346,7 +376,11 @@ class TestXYZData(chex.TestCase):
         self.lattice = jnp.eye(3, dtype=jnp.float64) * 10.0
         self.stress = jnp.eye(3, dtype=jnp.float64) * 0.1
         self.energy = -76.4
-        self.properties = [{"species": "H"}, {"species": "H"}, {"species": "O"}]
+        self.properties = [
+            {"species": "H"},
+            {"species": "H"},
+            {"species": "O"},
+        ]
         self.comment = "Water molecule"
 
     def test_factory_function_minimal(self) -> None:
@@ -451,7 +485,9 @@ class TestXYZData(chex.TestCase):
             make_xyz_data(self.positions, jnp.array([-1, 1, 8]))
 
         with pytest.raises(Exception):
-            make_xyz_data(self.positions, self.atomic_numbers, lattice=jnp.ones((2, 3)))
+            make_xyz_data(
+                self.positions, self.atomic_numbers, lattice=jnp.ones((2, 3))
+            )
 
 
 class TestJAXCompliance(chex.TestCase):
@@ -465,11 +501,17 @@ class TestJAXCompliance(chex.TestCase):
         assert arr.data_array.shape == (5, 5)
 
         jitted_probe = self.variant(make_probe_modes)
-        probe = jitted_probe(jnp.ones((5, 5, 2), dtype=jnp.complex128), jnp.array([0.5, 0.5]), 0.1)
+        probe = jitted_probe(
+            jnp.ones((5, 5, 2), dtype=jnp.complex128),
+            jnp.array([0.5, 0.5]),
+            0.1,
+        )
         assert probe.modes.shape == (5, 5, 2)
 
         jitted_potential = self.variant(make_potential_slices)
-        pot = jitted_potential(jnp.ones((5, 5, 3), dtype=jnp.complex128), 1.0, 0.1)
+        pot = jitted_potential(
+            jnp.ones((5, 5, 3), dtype=jnp.complex128), 1.0, 0.1
+        )
         assert pot.slices.shape == (5, 5, 3)
 
         jitted_crystal = self.variant(make_crystal_structure)
@@ -486,7 +528,11 @@ class TestJAXCompliance(chex.TestCase):
         batch_calib_y = jnp.array([0.1, 0.2, 0.3])
         batch_calib_x = jnp.array([0.15, 0.25, 0.35])
 
-        vmapped_fn = jax.vmap(lambda cy, cx: make_calibrated_array(jnp.ones((5, 5)), cy, cx, True))
+        vmapped_fn = jax.vmap(
+            lambda cy, cx: make_calibrated_array(
+                jnp.ones((5, 5)), cy, cx, True
+            )
+        )
 
         arrays = vmapped_fn(batch_calib_y, batch_calib_x)
         assert arrays.calib_y.shape == (3,)
@@ -513,7 +559,9 @@ class TestPyTreeOperations(chex.TestCase):
     def test_tree_leaves_on_probe_modes(self) -> None:
         """Test jax.tree_leaves on ProbeModes."""
         probe = make_probe_modes(
-            jnp.ones((10, 10, 2), dtype=jnp.complex128), jnp.array([0.6, 0.4]), 0.1
+            jnp.ones((10, 10, 2), dtype=jnp.complex128),
+            jnp.array([0.6, 0.4]),
+            0.1,
         )
 
         leaves = jax.tree_leaves(probe)
@@ -523,11 +571,19 @@ class TestPyTreeOperations(chex.TestCase):
         assert leaves[2].shape == ()
 
     @parameterized.parameters(
-        (CalibratedArray, make_calibrated_array, (jnp.ones((5, 5)), 0.1, 0.2, True)),
+        (
+            CalibratedArray,
+            make_calibrated_array,
+            (jnp.ones((5, 5)), 0.1, 0.2, True),
+        ),
         (
             ProbeModes,
             make_probe_modes,
-            (jnp.ones((5, 5, 2), dtype=jnp.complex128), jnp.array([0.5, 0.5]), 0.1),
+            (
+                jnp.ones((5, 5, 2), dtype=jnp.complex128),
+                jnp.array([0.5, 0.5]),
+                0.1,
+            ),
         ),
         (
             PotentialSlices,

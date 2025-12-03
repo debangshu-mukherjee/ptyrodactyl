@@ -7,14 +7,20 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.electrons.atom_potentials import _slice_atoms, bessel_kv, kirkland_potentials_XYZ
+from ptyrodactyl.electrons.atom_potentials import (
+    _slice_atoms,
+    bessel_kv,
+    kirkland_potentials_XYZ,
+)
 from ptyrodactyl.electrons.electron_types import make_xyz_data
 
 
 class TestBesselKv(chex.TestCase):
     """Test suite for the bessel_kv function."""
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     @parameterized.parameters(
         (0.1, 2.4270690, 1e-5),
         (0.2, 1.7527038, 1e-5),
@@ -39,7 +45,9 @@ class TestBesselKv(chex.TestCase):
             msg=f"K_0({x}) = {k0_computed:.8f}, expected {expected:.8f}",
         )
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     @parameterized.parameters(
         (0.01,),
         (0.1,),
@@ -65,7 +73,9 @@ class TestBesselKv(chex.TestCase):
             k0_x_plus = self.variant(bessel_kv)(v_scalar, x_array + eps)
             assert k0_x_plus < k0_x, f"K_0 should be decreasing at x={x}"
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_bessel_k0_vectorization(self) -> None:
         """Test that bessel_kv properly handles vector inputs."""
         x_1d = jnp.array([0.1, 0.5, 1.0, 2.0, 5.0], dtype=jnp.float64)
@@ -73,7 +83,9 @@ class TestBesselKv(chex.TestCase):
         k0_1d = self.variant(bessel_kv)(v_scalar, x_1d)
         assert k0_1d.shape == x_1d.shape
 
-        x_2d = jnp.array([[0.1, 0.5], [1.0, 2.0], [3.0, 5.0]], dtype=jnp.float64)
+        x_2d = jnp.array(
+            [[0.1, 0.5], [1.0, 2.0], [3.0, 5.0]], dtype=jnp.float64
+        )
         k0_2d = self.variant(bessel_kv)(v_scalar, x_2d)
         assert k0_2d.shape == x_2d.shape
 
@@ -81,7 +93,9 @@ class TestBesselKv(chex.TestCase):
         k0_3d = self.variant(bessel_kv)(v_scalar, x_3d)
         assert k0_3d.shape == x_3d.shape
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_bessel_k0_small_x_behavior(self) -> None:
         """Test K_0(x) behavior for small x: K_0(x) ~ -log(x/2) - gamma."""
         gamma_euler = 0.5772156649015329
@@ -91,22 +105,36 @@ class TestBesselKv(chex.TestCase):
         k0_values = self.variant(bessel_kv)(v_scalar, x_small)
         expected_approx = -jnp.log(x_small / 2.0) - gamma_euler
 
-        relative_errors = jnp.abs((k0_values - expected_approx) / expected_approx)
-        assert jnp.all(relative_errors < 0.01), f"Small x approximation failed: max error = {jnp.max(relative_errors):.6f}"
+        relative_errors = jnp.abs(
+            (k0_values - expected_approx) / expected_approx
+        )
+        assert jnp.all(
+            relative_errors < 0.01
+        ), f"Small x approximation failed: max error = {jnp.max(relative_errors):.6f}"
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_bessel_k0_large_x_behavior(self) -> None:
         """Test K_0(x) asymptotic behavior for large x: K_0(x) ~ sqrt(pi/(2x)) * exp(-x)."""
         x_large = jnp.array([10.0, 20.0, 50.0, 100.0], dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
 
         k0_values = self.variant(bessel_kv)(v_scalar, x_large)
-        expected_asymptotic = jnp.sqrt(jnp.pi / (2 * x_large)) * jnp.exp(-x_large)
+        expected_asymptotic = jnp.sqrt(jnp.pi / (2 * x_large)) * jnp.exp(
+            -x_large
+        )
 
-        relative_errors = jnp.abs((k0_values - expected_asymptotic) / expected_asymptotic)
-        assert jnp.all(relative_errors < 0.1), f"Large x asymptotic failed: max error = {jnp.max(relative_errors):.6f}"
+        relative_errors = jnp.abs(
+            (k0_values - expected_asymptotic) / expected_asymptotic
+        )
+        assert jnp.all(
+            relative_errors < 0.1
+        ), f"Large x asymptotic failed: max error = {jnp.max(relative_errors):.6f}"
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_bessel_k0_positivity(self) -> None:
         """Test that K_0(x) is always positive for x > 0."""
         x_test = jnp.logspace(-3, 2, 50, dtype=jnp.float64)
@@ -115,7 +143,9 @@ class TestBesselKv(chex.TestCase):
 
         assert jnp.all(k0_values > 0), "K_0(x) must be positive for all x > 0"
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_bessel_k0_monotonicity(self) -> None:
         """Test that K_0(x) is strictly decreasing."""
         x_test = jnp.linspace(0.1, 10.0, 50, dtype=jnp.float64)
@@ -125,7 +155,9 @@ class TestBesselKv(chex.TestCase):
         differences = jnp.diff(k0_values)
         assert jnp.all(differences < 0), "K_0(x) must be strictly decreasing"
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     @parameterized.parameters(
         (jnp.float32,),
         (jnp.float64,) if jax.config.x64_enabled else (jnp.float32,),
@@ -138,7 +170,9 @@ class TestBesselKv(chex.TestCase):
 
         assert k0_values.dtype == dtype
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     @parameterized.parameters(
         (0.5, 0.5, 1.2417432, 2e-1),
         (0.5, 1.0, 0.4610685, 1e-5),
@@ -165,7 +199,9 @@ class TestBesselKv(chex.TestCase):
             msg=f"K_{v}({x}) = {kv_computed:.8f}, expected {expected:.8f}",
         )
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_bessel_k0_continuity_at_transition(self) -> None:
         """Test continuity at the transition point x=1.0."""
         x_before = 0.999
@@ -173,9 +209,15 @@ class TestBesselKv(chex.TestCase):
         x_after = 1.001
 
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
-        k0_before = self.variant(bessel_kv)(v_scalar, jnp.asarray(x_before, dtype=jnp.float64))
-        k0_at = self.variant(bessel_kv)(v_scalar, jnp.asarray(x_at, dtype=jnp.float64))
-        k0_after = self.variant(bessel_kv)(v_scalar, jnp.asarray(x_after, dtype=jnp.float64))
+        k0_before = self.variant(bessel_kv)(
+            v_scalar, jnp.asarray(x_before, dtype=jnp.float64)
+        )
+        k0_at = self.variant(bessel_kv)(
+            v_scalar, jnp.asarray(x_at, dtype=jnp.float64)
+        )
+        k0_after = self.variant(bessel_kv)(
+            v_scalar, jnp.asarray(x_after, dtype=jnp.float64)
+        )
 
         self.assertAlmostEqual(k0_before, k0_at, delta=2e-2)
         self.assertAlmostEqual(k0_at, k0_after, delta=2e-2)
@@ -189,7 +231,9 @@ class TestBesselKv(chex.TestCase):
 class TestSliceAtoms(chex.TestCase):
     """Test suite for the _slice_atoms function."""
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_simple_slicing(self) -> None:
         """Test basic slicing with evenly spaced atoms."""
         # Create 3 atoms at z = 0, 1, 2 Angstroms
@@ -203,7 +247,9 @@ class TestSliceAtoms(chex.TestCase):
         atom_numbers = jnp.array([6, 8, 14])  # C, O, Si
         slice_thickness = 1.0
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         # Check shape
         assert result.shape == (3, 4)
@@ -219,7 +265,9 @@ class TestSliceAtoms(chex.TestCase):
         # Check atom numbers are preserved
         chex.assert_trees_all_equal(result[:, 3], jnp.array([6.0, 8.0, 14.0]))
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_multiple_atoms_per_slice(self) -> None:
         """Test slicing when multiple atoms fall in the same slice."""
         coords = jnp.array(
@@ -234,7 +282,9 @@ class TestSliceAtoms(chex.TestCase):
         atom_numbers = jnp.array([1, 2, 3, 4, 5])
         slice_thickness = 1.0
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         # Check that atoms are grouped by slice
         slice_nums = result[:, 2]
@@ -243,9 +293,13 @@ class TestSliceAtoms(chex.TestCase):
 
         # Verify atoms within same slice maintain their relative order
         slice_0_atoms = result[result[:, 2] == 0]
-        chex.assert_trees_all_equal(slice_0_atoms[:, 3], jnp.array([1.0, 2.0, 4.0]))
+        chex.assert_trees_all_equal(
+            slice_0_atoms[:, 3], jnp.array([1.0, 2.0, 4.0])
+        )
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_non_uniform_z_distribution(self) -> None:
         """Test slicing with non-uniformly distributed z coordinates."""
         coords = jnp.array(
@@ -260,13 +314,17 @@ class TestSliceAtoms(chex.TestCase):
         atom_numbers = jnp.array([79, 79, 79, 79, 79])  # All gold atoms
         slice_thickness = 1.0
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         # Expected slices: 0, 0, 2, 2, 5
         expected_slices = jnp.array([0.0, 0.0, 2.0, 2.0, 5.0])
         chex.assert_trees_all_equal(result[:, 2], expected_slices)
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     @parameterized.parameters(
         (0.5,),
         (1.0,),
@@ -288,7 +346,9 @@ class TestSliceAtoms(chex.TestCase):
         )
         atom_numbers = jnp.ones(n_atoms, dtype=jnp.int32) * 6  # All carbon
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         # Check that slice numbers are monotonically increasing
         slice_nums = result[:, 2]
@@ -299,19 +359,25 @@ class TestSliceAtoms(chex.TestCase):
         actual_max_slice = jnp.max(slice_nums)
         chex.assert_trees_all_equal(actual_max_slice, expected_max_slice)
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_single_atom(self) -> None:
         """Test slicing with a single atom."""
         coords = jnp.array([[1.5, 2.5, 3.5]])
         atom_numbers = jnp.array([26])  # Iron
         slice_thickness = 1.0
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         assert result.shape == (1, 4)
         chex.assert_trees_all_equal(result, jnp.array([[1.5, 2.5, 0.0, 26.0]]))
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_atoms_at_slice_boundaries(self) -> None:
         """Test that atoms exactly at slice boundaries are assigned correctly."""
         coords = jnp.array(
@@ -326,13 +392,17 @@ class TestSliceAtoms(chex.TestCase):
         atom_numbers = jnp.array([1, 2, 3, 4, 5])
         slice_thickness = 1.0
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         # Atoms at boundaries should be assigned to lower slice
         expected_slices = jnp.array([0.0, 0.0, 1.0, 1.0, 2.0])
         chex.assert_trees_all_equal(result[:, 2], expected_slices)
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_negative_z_coordinates(self) -> None:
         """Test slicing with negative z coordinates."""
         coords = jnp.array(
@@ -347,33 +417,47 @@ class TestSliceAtoms(chex.TestCase):
         atom_numbers = jnp.array([6, 7, 8, 9, 10])
         slice_thickness = 1.0
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         # Slices should start from 0 regardless of actual z values
         expected_slices = jnp.array([0.0, 1.0, 2.0, 3.0, 4.0])
         chex.assert_trees_all_equal(result[:, 2], expected_slices)
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_dtype_consistency(self) -> None:
         """Test that output dtype is always float32."""
         # Test with float32 input
-        coords_f32 = jnp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float32)
+        coords_f32 = jnp.array(
+            [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float32
+        )
         atom_numbers = jnp.array([1, 2], dtype=jnp.int32)
         slice_thickness_f32 = jnp.array(1.0, dtype=jnp.float32)
 
-        result_f32 = self.variant(_slice_atoms)(coords_f32, atom_numbers, slice_thickness_f32)
+        result_f32 = self.variant(_slice_atoms)(
+            coords_f32, atom_numbers, slice_thickness_f32
+        )
         assert result_f32.dtype == jnp.float32
 
         # Test with float64 input if x64 is enabled
         if jax.config.x64_enabled:
-            coords_f64 = jnp.array([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float64)
+            coords_f64 = jnp.array(
+                [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float64
+            )
             slice_thickness_f64 = jnp.array(1.0, dtype=jnp.float64)
 
-            result_f64 = self.variant(_slice_atoms)(coords_f64, atom_numbers, slice_thickness_f64)
+            result_f64 = self.variant(_slice_atoms)(
+                coords_f64, atom_numbers, slice_thickness_f64
+            )
             # Note: When x64 is enabled, JAX preserves float64 precision
             assert result_f64.dtype == jnp.float64
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_scalar_numeric_slice_thickness(self) -> None:
         """Test that slice_thickness works with different scalar types."""
         coords = jnp.array([[1.0, 2.0, 0.0], [3.0, 4.0, 2.5]])
@@ -386,13 +470,17 @@ class TestSliceAtoms(chex.TestCase):
         result_int = self.variant(_slice_atoms)(coords, atom_numbers, 1)
 
         # Test with JAX scalar
-        result_jax = self.variant(_slice_atoms)(coords, atom_numbers, jnp.array(1.0))
+        result_jax = self.variant(_slice_atoms)(
+            coords, atom_numbers, jnp.array(1.0)
+        )
 
         # All should give same result
         chex.assert_trees_all_equal(result_float, result_int)
         chex.assert_trees_all_equal(result_float, result_jax)
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_large_atom_count(self) -> None:
         """Test slicing with a large number of atoms."""
         n_atoms = 1000
@@ -407,10 +495,14 @@ class TestSliceAtoms(chex.TestCase):
                 jax.random.uniform(z_key, (n_atoms,), minval=0, maxval=5),
             ]
         )
-        atom_numbers = jax.random.randint(jax.random.PRNGKey(43), (n_atoms,), minval=1, maxval=100)
+        atom_numbers = jax.random.randint(
+            jax.random.PRNGKey(43), (n_atoms,), minval=1, maxval=100
+        )
         slice_thickness = 0.5
 
-        result = self.variant(_slice_atoms)(coords, atom_numbers, slice_thickness)
+        result = self.variant(_slice_atoms)(
+            coords, atom_numbers, slice_thickness
+        )
 
         # Check shape
         assert result.shape == (n_atoms, 4)
@@ -427,7 +519,9 @@ class TestSliceAtoms(chex.TestCase):
 class TestKirklandPotentialsXYZ(chex.TestCase):
     """Test suite for the kirkland_potentials_XYZ function."""
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_single_atom_centered(self) -> None:
         """Test potential generation for a single atom at the center."""
 
@@ -463,11 +557,15 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         potential_slice = result.slices[:, :, 0]
 
         # Maximum should be at center
-        max_idx = jnp.unravel_index(jnp.argmax(potential_slice), potential_slice.shape)
+        max_idx = jnp.unravel_index(
+            jnp.argmax(potential_slice), potential_slice.shape
+        )
         self.assertAlmostEqual(max_idx[0], center_h, delta=1)
         self.assertAlmostEqual(max_idx[1], center_w, delta=1)
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_multiple_atoms_different_slices(self) -> None:
         """Test potential generation for atoms in different slices."""
         positions = jnp.array(
@@ -491,7 +589,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.2
         slice_thickness = 1.0
 
-        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, slice_thickness)
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, slice_thickness
+        )
 
         # Should have 4 slices (z from 0 to 3)
         assert result.slices.shape[2] == 4
@@ -502,7 +602,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
             if i < 3:  # First three slices should have atoms
                 assert slice_sum > 0.0
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_same_atoms_same_slice(self) -> None:
         """Test multiple atoms of same type in same slice."""
         positions = jnp.array(
@@ -526,7 +628,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.1
         slice_thickness = 1.0
 
-        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, slice_thickness)
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, slice_thickness
+        )
 
         # Should have 1 slice
         assert result.slices.shape[2] == 1
@@ -556,7 +660,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
                 # Value at atom position should be local maximum
                 assert all(local_value >= n for n in neighbors)
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_padding_removal(self) -> None:
         """Test that padding is correctly removed from final result."""
         positions = jnp.array([[2.0, 2.0, 0.0]])
@@ -574,7 +680,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.5
         padding = 3.0
 
-        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, padding=padding)
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, padding=padding
+        )
 
         # Expected size after padding removal
         x_range = 0.0  # Single atom has no x range
@@ -586,7 +694,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         assert result.slices.shape[0] >= 1
         assert result.slices.shape[1] >= 1
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_different_atomic_numbers(self) -> None:
         """Test that different atomic species produce different potentials."""
         # Test with single atoms of different types at same position
@@ -607,14 +717,18 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
                 comment=None,
             )
 
-            result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, slice_thickness)
+            result = self.variant(kirkland_potentials_XYZ)(
+                xyz_data, pixel_size, slice_thickness
+            )
             potentials.append(jnp.max(result.slices[:, :, 0]))
 
         # Heavier atoms should have stronger potentials
         for i in range(len(potentials) - 1):
             assert potentials[i] < potentials[i + 1]
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_vmap_compatibility(self) -> None:
         """Test that function works with vmap over multiple structures."""
 
@@ -645,13 +759,17 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         # Process each structure
         results = []
         for i in range(n_structures):
-            results.append(process_single(positions_batch[i], atomic_numbers_batch[i]))
+            results.append(
+                process_single(positions_batch[i], atomic_numbers_batch[i])
+            )
 
         for result in results:
             assert result is not None
             assert jnp.sum(result.slices) > 0.0
 
-    @chex.variants(with_jit=True, without_jit=True, with_device=True, with_pmap=True)
+    @chex.variants(
+        with_jit=True, without_jit=True, with_device=True, with_pmap=True
+    )
     def test_repeats_with_default_lattice(self) -> None:
         """Test that repeats work with default identity lattice."""
         positions = jnp.array([[0.5, 0.5, 0.0]])
@@ -672,7 +790,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         repeats = jnp.array([2, 2, 1])
 
         # Should work fine with default identity lattice
-        result = self.variant(kirkland_potentials_XYZ)(xyz_data, pixel_size, repeats=repeats)
+        result = self.variant(kirkland_potentials_XYZ)(
+            xyz_data, pixel_size, repeats=repeats
+        )
 
         # With identity lattice and repeats [2,2,1], atoms will be at:
         # (0.5, 0.5), (1.5, 0.5), (0.5, 1.5), (1.5, 1.5)

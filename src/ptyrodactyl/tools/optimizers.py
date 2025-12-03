@@ -64,7 +64,15 @@ grad, and vmap.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Any, Callable, NamedTuple, Optional, Sequence, Tuple, Union
+from beartype.typing import (
+    Any,
+    Callable,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 from jaxtyping import Array, Complex, Float
 
 
@@ -126,10 +134,14 @@ def create_cosine_scheduler(
     """
 
     @jax.jit
-    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+    def scheduler_fn(
+        state: LRSchedulerState,
+    ) -> tuple[float, LRSchedulerState]:
         progress = jnp.minimum(state.step / total_steps, 1.0)
         cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * progress))
-        lr = state.initial_lr * (final_lr_factor + (1 - final_lr_factor) * cosine_decay)
+        lr = state.initial_lr * (
+            final_lr_factor + (1 - final_lr_factor) * cosine_decay
+        )
         new_state = LRSchedulerState(
             step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
         )
@@ -170,7 +182,9 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     """
 
     @jax.jit
-    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+    def scheduler_fn(
+        state: LRSchedulerState,
+    ) -> tuple[float, LRSchedulerState]:
         num_drops = state.step // step_size
         lr = state.initial_lr * (gamma**num_drops)
         new_state = LRSchedulerState(
@@ -223,14 +237,18 @@ def create_warmup_cosine_scheduler(
     """
 
     @jax.jit
-    def scheduler_fn(state: LRSchedulerState) -> tuple[float, LRSchedulerState]:
+    def scheduler_fn(
+        state: LRSchedulerState,
+    ) -> tuple[float, LRSchedulerState]:
         # Linear warmup
         warmup_progress = jnp.minimum(state.step / warmup_steps, 1.0)
         warmup_lr = state.initial_lr * warmup_progress
 
         # Cosine decay after warmup
         remaining_steps = total_steps - warmup_steps
-        decay_progress = jnp.maximum(0.0, state.step - warmup_steps) / remaining_steps
+        decay_progress = (
+            jnp.maximum(0.0, state.step - warmup_steps) / remaining_steps
+        )
         decay_progress = jnp.minimum(decay_progress, 1.0)
         cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * decay_progress))
         decay_lr = state.initial_lr * (
@@ -264,7 +282,9 @@ def init_scheduler_state(initial_lr: float) -> LRSchedulerState:
     - `state` (LRSchedulerState):
         Initialized scheduler state with step=0 and learning_rate=initial_lr
     """
-    return LRSchedulerState(step=0, learning_rate=initial_lr, initial_lr=initial_lr)
+    return LRSchedulerState(
+        step=0, learning_rate=initial_lr, initial_lr=initial_lr
+    )
 
 
 class OptimizerState(NamedTuple):
@@ -309,7 +329,9 @@ class Optimizer(NamedTuple):
 def wirtinger_grad(
     func2diff: Callable[..., Float[Array, " ..."]],
     argnums: Optional[Union[int, Sequence[int]]] = 0,
-) -> Callable[..., Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]]:
+) -> Callable[
+    ..., Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]
+]:
     """
     Description
     -----------
@@ -357,17 +379,23 @@ def wirtinger_grad(
         n = len(args)
 
         def f_real(*split_args):
-            return jnp.real(func2diff(*combine_complex(split_args[:n], split_args[n:])))
+            return jnp.real(
+                func2diff(*combine_complex(split_args[:n], split_args[n:]))
+            )
 
         def f_imag(*split_args):
-            return jnp.imag(func2diff(*combine_complex(split_args[:n], split_args[n:])))
+            return jnp.imag(
+                func2diff(*combine_complex(split_args[:n], split_args[n:]))
+            )
 
         gr = jax.grad(f_real, argnums=argnums)(*split_args)
         gi = jax.grad(f_imag, argnums=argnums)(*split_args)
 
         if isinstance(argnums, int):
             return 0.5 * (gr - 1j * gi)
-        return tuple(0.5 * (grr - 1j * gii) for grr, gii in zip(gr, gi, strict=False))
+        return tuple(
+            0.5 * (grr - 1j * gii) for grr, gii in zip(gr, gi, strict=False)
+        )
 
     return grad_f
 
@@ -381,7 +409,8 @@ def complex_adam(
     beta2: float = 0.999,
     eps: float = 1e-8,
 ) -> Tuple[
-    Complex[Array, " ..."], Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]
+    Complex[Array, " ..."],
+    Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int],
 ]:
     """
     Description
@@ -549,7 +578,9 @@ def complex_rmsprop(
     moving_avg = state
 
     # Update moving average of squared gradients
-    new_moving_avg = decay_rate * moving_avg + (1 - decay_rate) * jnp.abs(grads) ** 2
+    new_moving_avg = (
+        decay_rate * moving_avg + (1 - decay_rate) * jnp.abs(grads) ** 2
+    )
 
     # Compute adaptive learning rate
     adaptive_lr = learning_rate / (jnp.sqrt(new_moving_avg) + eps)
@@ -576,7 +607,9 @@ def init_adam(shape: tuple) -> OptimizerState:
     - `state` (OptimizerState):
         Initialized Adam optimizer state with zero moments and step=0
     """
-    return OptimizerState(m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0))
+    return OptimizerState(
+        m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
+    )
 
 
 def init_adagrad(shape: tuple) -> OptimizerState:
@@ -595,7 +628,9 @@ def init_adagrad(shape: tuple) -> OptimizerState:
     - `state` (OptimizerState):
         Initialized Adagrad optimizer state with zero accumulated gradients
     """
-    return OptimizerState(m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0))
+    return OptimizerState(
+        m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
+    )
 
 
 def init_rmsprop(shape: tuple) -> OptimizerState:
@@ -614,7 +649,9 @@ def init_rmsprop(shape: tuple) -> OptimizerState:
     - `state` (OptimizerState):
         Initialized RMSprop optimizer state with zero moving average
     """
-    return OptimizerState(m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0))
+    return OptimizerState(
+        m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
+    )
 
 
 def adam_update(

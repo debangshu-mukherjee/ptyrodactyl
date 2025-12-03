@@ -18,7 +18,11 @@ from beartype.typing import Any, TypeVar
 
 F = TypeVar("F", bound=Callable[..., Any])
 
-BUILDING_DOCS = os.environ.get("BUILDING_DOCS", "").lower() in ("1", "true", "yes")
+BUILDING_DOCS = os.environ.get("BUILDING_DOCS", "").lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 if BUILDING_DOCS:
 

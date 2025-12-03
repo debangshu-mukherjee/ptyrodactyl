@@ -42,13 +42,17 @@ from .electron_types import XYZData, make_xyz_data, scalar_int
 _KIRKLAND_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
 )
-_ATOMS_PATH: Path = Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
+_ATOMS_PATH: Path = (
+    Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
+)
 
 jax.config.update("jax_enable_x64", True)
 
 
 @beartype
-def _load_atomic_numbers(json_path: Optional[Path] = _ATOMS_PATH) -> Dict[str, int]:
+def _load_atomic_numbers(
+    json_path: Optional[Path] = _ATOMS_PATH,
+) -> Dict[str, int]:
     """Load atomic number mapping from JSON file in manifest folder.
 
     Parameters
@@ -158,9 +162,13 @@ def _load_kirkland_csv(
     Uses numpy to load CSV then converts to JAX array for performance.
     """
 
-    kirkland_numpy: np.ndarray = np.loadtxt(file_path, delimiter=",", dtype=np.float64)
+    kirkland_numpy: np.ndarray = np.loadtxt(
+        file_path, delimiter=",", dtype=np.float64
+    )
     if kirkland_numpy.shape != (103, 12):
-        raise ValueError(f"Expected CSV shape (103, 12), got {kirkland_numpy.shape}")
+        raise ValueError(
+            f"Expected CSV shape (103, 12), got {kirkland_numpy.shape}"
+        )
     kirkland_data: Float[Array, "103 12"] = jnp.asarray(
         kirkland_numpy, dtype=jnp.float64
     )
@@ -211,14 +219,20 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
     """
     metadata: Dict[str, Any] = {}
     max_xyz_columns: int = 9
-    lattice_match: Optional[re.Match[str]] = re.search(r'Lattice="([^"]+)"', line)
+    lattice_match: Optional[re.Match[str]] = re.search(
+        r'Lattice="([^"]+)"', line
+    )
     if lattice_match:
         values: List[float] = list(map(float, lattice_match.group(1).split()))
         if len(values) != max_xyz_columns:
             raise ValueError("Lattice must contain 9 values")
-        metadata["lattice"] = jnp.array(values, dtype=jnp.float64).reshape(3, 3)
+        metadata["lattice"] = jnp.array(values, dtype=jnp.float64).reshape(
+            3, 3
+        )
 
-    stress_match: Optional[re.Match[str]] = re.search(r'stress="([^"]+)"', line)
+    stress_match: Optional[re.Match[str]] = re.search(
+        r'stress="([^"]+)"', line
+    )
     if stress_match:
         values: List[float] = list(map(float, stress_match.group(1).split()))
         if len(values) != max_xyz_columns:
@@ -231,7 +245,9 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
     if energy_match:
         metadata["energy"] = float(energy_match.group(1))
 
-    props_match: Optional[re.Match[str]] = re.search(r"Properties=([^ ]+)", line)
+    props_match: Optional[re.Match[str]] = re.search(
+        r"Properties=([^ ]+)", line
+    )
     if props_match:
         raw_props: str = props_match.group(1)
         parts: List[str] = raw_props.split(":")
@@ -284,13 +300,17 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     try:
         num_atoms: int = int(lines[0].strip())
     except ValueError as err:
-        raise ValueError("First line must be the number of atoms (int).") from err
+        raise ValueError(
+            "First line must be the number of atoms (int)."
+        ) from err
 
     comment: str = lines[1].strip()
     metadata: Dict[str, Any] = _parse_xyz_metadata(comment)
 
     if len(lines) < 2 + num_atoms:
-        raise ValueError(f"Expected {num_atoms} atoms, found only {len(lines) - 2}.")
+        raise ValueError(
+            f"Expected {num_atoms} atoms, found only {len(lines) - 2}."
+        )
 
     positions: List[List[float]] = []
     atomic_numbers: List[int] = []
@@ -326,7 +346,9 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
             # Not a number, treat as atomic symbol
             atomic_numbers.append(atomic_symbol(symbol))
 
-    positions_arr: Float[Array, " N 3"] = jnp.array(positions, dtype=jnp.float64)
+    positions_arr: Float[Array, " N 3"] = jnp.array(
+        positions, dtype=jnp.float64
+    )
     atomic_z_arr: Int[Array, " N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
 
     return make_xyz_data(

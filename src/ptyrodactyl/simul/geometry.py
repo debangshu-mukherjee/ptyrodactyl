@@ -100,15 +100,25 @@ def rotmatrix_vectors(
         axis: Float[Array, " 3"] = jnp.cross(v1, ortho)
         axis: Float[Array, " 3"] = axis / jnp.linalg.norm(axis)
         kk: Float[Array, "3 3"] = jnp.array(
-            [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
+            [
+                [0, -axis[2], axis[1]],
+                [axis[2], 0, -axis[0]],
+                [-axis[1], axis[0], 0],
+            ]
         )
-        rotation_matrix_opposite: Float[Array, "3 3"] = jnp.eye(3) + 2 * kk @ kk
+        rotation_matrix_opposite: Float[Array, "3 3"] = (
+            jnp.eye(3) + 2 * kk @ kk
+        )
         return rotation_matrix_opposite
 
     def _compute() -> Float[Array, "3 3"]:
         axis: Float[Array, " 3"] = cross / sin_theta
         kk: Float[Array, "3 3"] = jnp.array(
-            [[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]]
+            [
+                [0, -axis[2], axis[1]],
+                [axis[2], 0, -axis[0]],
+                [-axis[1], axis[0], 0],
+            ]
         )
         rotation_matrix_general: Float[Array, "3 3"] = (
             jnp.eye(3) + sin_theta * kk + (1 - dot) * (kk @ kk)
@@ -121,7 +131,9 @@ def rotmatrix_vectors(
     almost_opposite: Bool[Array, " "] = dot < -close_to_one
     rotation_matrix: Float[Array, "3 3"] = jax.lax.cond(
         almost_parallel,
-        lambda: jax.lax.cond(almost_opposite, _fallback_opposite, _fallback_parallel),
+        lambda: jax.lax.cond(
+            almost_opposite, _fallback_opposite, _fallback_parallel
+        ),
         _compute,
     )
     return rotation_matrix
@@ -274,7 +286,9 @@ def rotate_structure(
         rotated_coords_in_plane: Float[Array, " N 3"] = (
             rotated_coords_with_ids[:, 1:4] @ in_plane_rotation.T
         )
-        return jnp.hstack((rotated_coords_with_ids[:, 0:1], rotated_coords_in_plane))
+        return jnp.hstack(
+            (rotated_coords_with_ids[:, 0:1], rotated_coords_in_plane)
+        )
 
     def _no_inplane_rotation() -> Float[Array, " N 4"]:
         return rotated_coords_with_ids

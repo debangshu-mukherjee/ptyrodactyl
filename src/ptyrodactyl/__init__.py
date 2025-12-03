@@ -15,6 +15,9 @@ simul
 tools
     Utility tools for optimization, loss functions, and parallel processing
     including complex-valued optimizers with Wirtinger derivatives.
+workflows
+    High-level workflows combining simulation steps for common use cases
+    such as simulating 4D-STEM data from XYZ structure files.
 
 Key Features
 ------------
@@ -24,8 +27,6 @@ Key Features
     Full support for gradient-based optimization.
 - Complex-valued optimization:
     Wirtinger calculus for complex parameters.
-- Multi-modal support:
-    Handles both single and multi-modal probes.
 - Parallel processing:
     Device mesh support for distributed computing.
 - Type safety:
@@ -33,9 +34,9 @@ Key Features
 
 Notes
 -----
-This package is designed for research and development in electron ptychography.
-All functions are optimized for JAX transformations and support both
-CPU and GPU execution. For best performance, use JIT compilation
+This package is designed for electron microscopy simulations and 
+reconstructions. All functions are optimized for JAX transformations and 
+support both CPU and GPU execution. For best performance, use JIT compilation
 and consider using the provided factory functions for data validation.
 """
 
@@ -47,10 +48,11 @@ os.environ.setdefault(
     "--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=0",
 )
 
-from . import invert, simul, tools
+from . import invert, simul, tools, workflows
 
 __all__: list[str] = [
     "invert",
     "simul",
     "tools",
+    "workflows",
 ]

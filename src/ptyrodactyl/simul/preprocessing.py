@@ -1,28 +1,24 @@
-"""
-Module: ptyrodactyl.electrons.preprocessing
---------------------------------------------
-Data preprocessing utilities for electron microscopy and ptychography.
+"""Data preprocessing utilities for electron microscopy and ptychography.
 
+Extended Summary
+----------------
 This module contains utilities for preprocessing electron microscopy data
-before analysis or reconstruction. Currently includes type definitions
-for scalar numeric types used throughout the electrons module.
+before analysis or reconstruction, including XYZ file parsing and atomic
+data lookups.
 
-Functions
----------
-- `atomic_symbol`:
+Routine Listings
+----------------
+atomic_symbol : function
     Returns atomic number for given atomic symbol string.
-- `kirkland_potentials`:
-    Loads Kirkland scattering factors from CSV file.
-- `parse_xyz`:
-    Parses an XYZ file and returns a list of atoms with their
-    element symbols and 3D coordinates.
+kirkland_potentials : function
+    Returns preloaded Kirkland scattering factors as JAX array.
+parse_xyz : function
+    Parses an XYZ file and returns validated XYZData PyTree.
 
 Notes
 -----
-Internal functions (not exported):
-- _load_atomic_numbers: Loads atomic number mapping from JSON file in manifest folder.
-- _load_kirkland_potentials: Loads Kirkland scattering factors from CSV file.
-- _parse_xyz_metadata: Internal function to extract metadata from the XYZ comment line.
+Internal functions (prefixed with underscore) handle loading atomic number
+mappings, Kirkland potentials from CSV, and parsing XYZ metadata.
 """
 
 import json

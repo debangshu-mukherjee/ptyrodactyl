@@ -1,29 +1,49 @@
-"""
-Module: ptyrodactyl.simul
--------------------------
-JAX-based electron microscopy simulation toolkit for ptychography and 4D-STEM.
+"""JAX-based electron microscopy simulation toolkit.
 
-This package implements various electron microscopy components and propagation models
-with JAX for automatic differentiation and acceleration. All functions
+Extended Summary
+----------------
+This package implements various electron microscopy components and propagation
+models with JAX for automatic differentiation and acceleration. All functions
 are fully differentiable and JIT-compilable.
 
 Submodules
 ----------
-- `atom_potentials`:
-    Functions for generating atomic potentials and slices from atomic coordinates
-- `geometry`:
-    Geometric transformations and operations for crystal structures
-- `electron_types`:
-    Data structures and type definitions for electron microscopy including
-    CalibratedArray, ProbeModes, and PotentialSlices
-- `preprocessing`:
-    Data preprocessing utilities and type definitions for electron microscopy data
-- `simulations`:
+atom_potentials
+    Functions for generating atomic potentials and slices from atomic coordinates.
+geometry
+    Geometric transformations and operations for crystal structures.
+preprocessing
+    Data preprocessing utilities and type definitions for electron microscopy data.
+simulations
     Forward simulation functions for electron beam propagation, CBED patterns,
-    and 4D-STEM data generation including aberration calculations and probe creation
-- `workflows`:
+    and 4D-STEM data generation including aberration calculations and probe creation.
+workflows
     High-level workflows that combine multiple simulation steps for common use cases
-    such as simulating 4D-STEM data from XYZ structure files
+    such as simulating 4D-STEM data from XYZ structure files.
+
+Routine Listings
+----------------
+stem_4d : function
+    Generate 4D-STEM data from potential slices and probe.
+make_probe : function
+    Create electron probe with specified aberrations.
+cbed : function
+    Generate convergent beam electron diffraction patterns.
+transmission_func : function
+    Compute transmission function for a potential slice.
+propagation_func : function
+    Compute Fresnel propagation function.
+kirkland_potentials_xyz : function
+    Generate atomic potentials from XYZ coordinates using Kirkland parameters.
+parse_xyz : function
+    Parse XYZ file and return validated structure data.
+
+Notes
+-----
+All simulation functions are JAX-compatible and support automatic
+differentiation. The module is designed to be extensible for new
+simulation methods and can be used for both forward modeling and
+gradient-based reconstruction algorithms.
 """
 
 from .atom_potentials import (

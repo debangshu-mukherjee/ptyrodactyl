@@ -1,13 +1,15 @@
 """Parallel processing utilities for distributed computing in ptychography.
 
+Extended Summary
+----------------
 This module provides utilities for sharding arrays across multiple devices
 for parallel processing and distributed computing in ptychography workflows.
 All functions are JAX-compatible and support automatic differentiation.
 
-Functions
----------
-shard_array
-    Shards an array across specified axes and devices for parallel processing
+Routine Listings
+----------------
+shard_array : function
+    Shards an array across specified axes and devices for parallel processing.
 
 Notes
 -----

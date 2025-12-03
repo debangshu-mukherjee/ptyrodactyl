@@ -1,18 +1,25 @@
-"""
-Module: ptyrodactyl.electrons.geometry
---------------------------------------
-Geometric transformations and operations for crystal structures.
+"""Geometric transformations and operations for crystal structures.
 
-Functions
----------
-- `rotmatrix_vectors`:
-    Compute a rotation matrix that rotates one vector to align with another
-- `rotmatrix_axis`:
-    Generate a rotation matrix for rotation around an arbitrary axis
-- `rotate_structure`:
-    Apply rotation transformations to crystal structures
-- `reciprocal_lattice`:
-    Compute reciprocal lattice vectors from real-space unit cell
+Extended Summary
+----------------
+Provides rotation matrices and lattice operations for manipulating
+crystal structures in electron microscopy simulations.
+
+Routine Listings
+----------------
+rotmatrix_vectors : function
+    Compute a rotation matrix that rotates one vector to align with another.
+rotmatrix_axis : function
+    Generate a rotation matrix for rotation around an arbitrary axis.
+rotate_structure : function
+    Apply rotation transformations to crystal structures.
+reciprocal_lattice : function
+    Compute reciprocal lattice vectors from real-space unit cell.
+
+Notes
+-----
+All functions use the Rodrigues rotation formula and are JAX-compatible
+for automatic differentiation.
 """
 
 import jax

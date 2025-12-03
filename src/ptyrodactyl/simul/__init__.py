@@ -50,7 +50,12 @@ from .electron_types import (
     scalar_int,
     scalar_numeric,
 )
-from .geometry import reciprocal_lattice, rotate_structure, rotmatrix_axis, rotmatrix_vectors
+from .geometry import (
+    reciprocal_lattice,
+    rotate_structure,
+    rotmatrix_axis,
+    rotmatrix_vectors,
+)
 from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
 from .simulations import (
     aberration,

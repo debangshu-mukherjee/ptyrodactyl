@@ -48,6 +48,7 @@ using the factory functions from electron_types module.
 
 import jax
 import jax.numpy as jnp
+from beartype import beartype
 from beartype.typing import Any, Optional, Tuple, Union
 from jax import lax
 from jax.experimental import mesh_utils
@@ -63,12 +64,10 @@ from jaxtyping import (
     Int,
     Num,
     PRNGKeyArray,
+    jaxtyped,
 )
 
-from ptyrodactyl._decorators import beartype as typechecker
-from ptyrodactyl._decorators import jaxtyped
-
-from .electron_types import (
+from ptyrodactyl.tools import (
     STEM4D,
     CalibratedArray,
     PotentialSlices,
@@ -76,17 +75,17 @@ from .electron_types import (
     make_calibrated_array,
     make_probe_modes,
     make_stem4d,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
+    ScalarFloat,
+    ScalarInt,
+    ScalarNumeric,
 )
 
 jax.config.update("jax_enable_x64", True)
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def transmission_func(
-    pot_slice: Float[Array, " a b"], voltage_kv: scalar_numeric
+    pot_slice: Float[Array, " a b"], voltage_kv: ScalarNumeric
 ) -> Complex[Array, " a b"]:
     """Calculate the complex transmission function from a single potential slice.
 
@@ -128,13 +127,13 @@ def transmission_func(
     return trans
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def propagation_func(
-    imsize_y: scalar_int,
-    imsize_x: scalar_int,
-    thickness_ang: scalar_numeric,
-    voltage_kv: scalar_numeric,
-    calib_ang: scalar_float,
+    imsize_y: ScalarInt,
+    imsize_x: ScalarInt,
+    thickness_ang: ScalarNumeric,
+    voltage_kv: ScalarNumeric,
+    calib_ang: ScalarFloat,
 ) -> Complex[Array, " h w"]:
     """Calculate the complex propagation function for multislice algorithm.
 
@@ -178,9 +177,9 @@ def propagation_func(
     return prop
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def fourier_coords(
-    calibration: scalar_float | Float[Array, " 2"],
+    calibration: ScalarFloat | Float[Array, " 2"],
     image_size: Int[Array, " 2"],
 ) -> CalibratedArray:
     """Return the Fourier coordinates for diffraction calculations.
@@ -243,7 +242,7 @@ def fourier_coords(
     return calibrated_inverse_array
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def fourier_calib(
     real_space_calib: Float[Array, " "] | Float[Array, " 2"],
     sizebeam: Int[Array, " 2"],
@@ -275,15 +274,15 @@ def fourier_calib(
     return inverse_space_calib
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def make_probe(
-    aperture: scalar_numeric,
-    voltage: scalar_numeric,
+    aperture: ScalarNumeric,
+    voltage: ScalarNumeric,
     image_size: Int[Array, " 2"],
-    calibration_pm: scalar_float,
-    defocus: Optional[scalar_numeric] = 0.0,
-    c3: Optional[scalar_numeric] = 0.0,
-    c5: Optional[scalar_numeric] = 0.0,
+    calibration_pm: ScalarFloat,
+    defocus: Optional[ScalarNumeric] = 0.0,
+    c3: Optional[ScalarNumeric] = 0.0,
+    c5: Optional[ScalarNumeric] = 0.0,
 ) -> Complex[Array, " h w"]:
     """Calculate an electron probe with spherical aberrations.
 
@@ -326,19 +325,19 @@ def make_probe(
     aperture: Float[Array, " "] = jnp.asarray(aperture / 1000.0)
     wavelength: Float[Array, " "] = wavelength_ang(voltage)
     l_max: Float[Array, " "] = aperture / wavelength
-    image_y: scalar_int
-    image_x: scalar_int
+    image_y: ScalarInt
+    image_x: ScalarInt
     image_y, image_x = image_size
     x_fov: Float[Array, " "] = image_x * 0.01 * calibration_pm
     y_fov: Float[Array, " "] = image_y * 0.01 * calibration_pm
     qx: Float[Array, " w"] = (
         jnp.arange((-image_x / 2), (image_x / 2), 1)
     ) / x_fov
-    x_shifter: scalar_int = image_x // 2
+    x_shifter: ScalarInt = image_x // 2
     qy: Float[Array, " h"] = (
         jnp.arange((-image_y / 2), (image_y / 2), 1)
     ) / y_fov
-    y_shifter: scalar_int = image_y // 2
+    y_shifter: ScalarInt = image_y // 2
     lx: Float[Array, " w"] = jnp.roll(qx, x_shifter)
     ly: Float[Array, " h"] = jnp.roll(qy, y_shifter)
     lya: Float[Array, " h w"]
@@ -359,13 +358,13 @@ def make_probe(
     return probe_real_space
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def aberration(
     fourier_coord: Float[Array, " H W"],
-    lambda_angstrom: scalar_float,
-    defocus: Optional[scalar_float] = 0.0,
-    c3: Optional[scalar_float] = 0.0,
-    c5: Optional[scalar_float] = 0.0,
+    lambda_angstrom: ScalarFloat,
+    defocus: Optional[ScalarFloat] = 0.0,
+    c3: Optional[ScalarFloat] = 0.0,
+    c5: Optional[ScalarFloat] = 0.0,
 ) -> Float[Array, " H W"]:
     """Calculate the aberration function for the electron probe based on the Fourier coordinates.
 
@@ -404,8 +403,8 @@ def aberration(
     return chi_probe
 
 
-@jaxtyped(typechecker=typechecker)
-def wavelength_ang(voltage_kv: scalar_numeric) -> Float[Array, " "]:
+@jaxtyped(typechecker=beartype)
+def wavelength_ang(voltage_kv: ScalarNumeric) -> Float[Array, " "]:
     """Calculate the relativistic electron wavelength in angstroms.
 
     Parameters
@@ -446,11 +445,11 @@ def wavelength_ang(voltage_kv: scalar_numeric) -> Float[Array, " "]:
     return lambda_angstroms
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def cbed(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
-    voltage_kv: scalar_numeric,
+    voltage_kv: ScalarNumeric,
 ) -> CalibratedArray:
     """Calculate the CBED pattern for single/multiple slices and single/multiple beam modes.
 
@@ -519,7 +518,7 @@ def cbed(
     init_wave: Complex[Array, " H W M"] = jnp.copy(beam_modes)
 
     def _scan_fn(
-        carry: Complex[Array, " H W M"], slice_idx: scalar_int
+        carry: Complex[Array, " H W M"], slice_idx: ScalarInt
     ) -> Tuple[Complex[Array, " H W M"], None]:
         wave: Complex[Array, " H W M"] = carry
         pot_single_slice: Float[Array, " H W 1"] = lax.dynamic_slice_in_dim(
@@ -563,11 +562,11 @@ def cbed(
     return cbed_pytree
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def shift_beam_fourier(
     beam: Union[Float[Array, " hh ww *mm"], Complex[Array, " hh ww *mm"]],
     pos: Float[Array, " #pp 2"],
-    calib_ang: scalar_float,
+    calib_ang: ScalarFloat,
 ) -> Complex128[Array, "#pp hh ww #mm"]:
     """Shift the beam to new position(s) using Fourier shifting.
 
@@ -611,8 +610,8 @@ def shift_beam_fourier(
     )
 
     def _apply_shift(position_idx: int) -> Complex128[Array, " hh ww #mm"]:
-        y_shift: scalar_numeric
-        x_shift: scalar_numeric
+        y_shift: ScalarNumeric
+        x_shift: ScalarNumeric
         y_shift, x_shift = pos[position_idx, 0], pos[position_idx, 1]
         phase: Float[Array, " hh ww"] = (
             -2.0 * jnp.pi * ((qya * y_shift) + (qxa * x_shift))
@@ -635,13 +634,13 @@ def shift_beam_fourier(
     return all_shifted_beams
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def stem_4d(
     pot_slice: PotentialSlices,
     beam: ProbeModes,
     positions: Num[Array, "#P 2"],
-    voltage_kv: scalar_numeric,
-    calib_ang: scalar_float,
+    voltage_kv: ScalarNumeric,
+    calib_ang: ScalarFloat,
 ) -> STEM4D:
     """Simulate CBED patterns for multiple beam positions by shifting the beam and
     running CBED simulations.
@@ -680,7 +679,7 @@ def stem_4d(
         beam.modes, positions, calib_ang
     )
 
-    def _process_single_position(pos_idx: scalar_int) -> Float[Array, " H W"]:
+    def _process_single_position(pos_idx: ScalarInt) -> Float[Array, " H W"]:
         current_beam: Complex[Array, " H W #M"] = jnp.take(
             shifted_beams, pos_idx, axis=0
         )
@@ -719,11 +718,11 @@ def stem_4d(
     return stem4d_data
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def decompose_beam_to_modes(
     beam: CalibratedArray,
-    num_modes: scalar_int,
-    first_mode_weight: scalar_float = 0.6,
+    num_modes: ScalarInt,
+    first_mode_weight: ScalarFloat = 0.6,
 ) -> ProbeModes:
     """Decompose a single electron beam into multiple orthogonal modes while
     preserving the total intensity.
@@ -780,7 +779,7 @@ def decompose_beam_to_modes(
     original_intensity: Float[Array, " tp"] = jnp.square(jnp.abs(beam_flat))
     weights: Float[Array, " mm"] = jnp.zeros(num_modes, dtype=jnp.float64)
     weights = weights.at[0].set(first_mode_weight)
-    remaining_weight: scalar_float = (1.0 - first_mode_weight) / max(
+    remaining_weight: ScalarFloat = (1.0 - first_mode_weight) / max(
         1, num_modes - 1
     )
     weights = weights.at[1:].set(remaining_weight)
@@ -800,13 +799,13 @@ def decompose_beam_to_modes(
     return probe_modes
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def stem_4d_sharded(
     pot_slice: PotentialSlices,
     beam: ProbeModes,
     positions: Num[Array, "#P 2"],
-    voltage_kv: scalar_numeric,
-    calib_ang: scalar_float,
+    voltage_kv: ScalarNumeric,
+    calib_ang: ScalarFloat,
 ) -> STEM4D:
     """Sharded version of stem_4d that distributes scan positions across available devices.
 
@@ -894,13 +893,13 @@ def stem_4d_sharded(
     return stem4d_data
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def stem_4d_parallel(
     pot_slice: PotentialSlices,
     beam: ProbeModes,
     positions: Num[Array, "#P 2"],
-    voltage_kv: scalar_numeric,
-    calib_ang: scalar_float,
+    voltage_kv: ScalarNumeric,
+    calib_ang: ScalarFloat,
     n_devices: Optional[int] = None,
 ) -> STEM4D:
     """Parallel version of stem_4d using explicit device parallelism.
@@ -997,7 +996,7 @@ def stem_4d_parallel(
     return stem4d_data
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def annular_detector(
     stem4d_data: STEM4D,
     collection_angles: Float[Array, " 2"],

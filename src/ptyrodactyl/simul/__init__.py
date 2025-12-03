@@ -32,24 +32,6 @@ from .atom_potentials import (
     kirkland_potentials_xyz,
     single_atom_potential,
 )
-from .electron_types import (
-    STEM4D,
-    CalibratedArray,
-    CrystalStructure,
-    PotentialSlices,
-    ProbeModes,
-    XYZData,
-    make_calibrated_array,
-    make_crystal_structure,
-    make_potential_slices,
-    make_probe_modes,
-    make_stem4d,
-    make_xyz_data,
-    non_jax_number,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
-)
 from .geometry import (
     reciprocal_lattice,
     rotate_structure,
@@ -76,38 +58,17 @@ from .simulations import (
 from .workflows import xyz_to_4d_stem
 
 __all__: list[str] = [
-    # atom_potentials
     "bessel_kv",
     "contrast_stretch",
     "kirkland_potentials_xyz",
-    "single_atom_potential",
-    # electron_types
-    "STEM4D",
-    "CalibratedArray",
-    "CrystalStructure",
-    "PotentialSlices",
-    "ProbeModes",
-    "XYZData",
-    "make_calibrated_array",
-    "make_crystal_structure",
-    "make_potential_slices",
-    "make_probe_modes",
-    "make_stem4d",
-    "make_xyz_data",
-    "non_jax_number",
-    "scalar_float",
-    "scalar_int",
-    "scalar_numeric",
-    # geometry
+    "single_atom_potential",    
     "reciprocal_lattice",
     "rotate_structure",
     "rotmatrix_axis",
     "rotmatrix_vectors",
-    # preprocessing
     "atomic_symbol",
     "kirkland_potentials",
     "parse_xyz",
-    # simulations
     "aberration",
     "annular_detector",
     "cbed",

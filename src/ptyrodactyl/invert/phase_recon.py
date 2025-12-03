@@ -37,17 +37,17 @@ from beartype.typing import Any, Dict, Optional, Tuple, Union
 from jaxtyping import Array, Complex, Float, Int
 
 import ptyrodactyl.tools as ptt
-from ptyrodactyl._decorators import beartype as typechecker
-from ptyrodactyl._decorators import jaxtyped
+from beartype import beartype
+from jaxtyping import jaxtyped
 
-from ptyrodactyl.simul.electron_types import (
+from ptyrodactyl.tools import (
     STEM4D,
     CalibratedArray,
     ProbeModes,
     make_calibrated_array,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
+    ScalarFloat,
+    ScalarInt,
+    ScalarNumeric,
 )
 from ptyrodactyl.simul.simulations import stem_4d
 
@@ -60,22 +60,22 @@ OPTIMIZERS: Dict[str, ptt.Optimizer] = {
 }
 
 
-@typechecker
+@beartype
 def _get_optimizer(optimizer_name: str) -> ptt.Optimizer:
     if optimizer_name not in OPTIMIZERS:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
     return OPTIMIZERS[optimizer_name]
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def single_slice_ptychography(
     experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
-    slice_thickness: scalar_numeric,
-    save_every: Optional[scalar_int] = 10,
-    num_iterations: Optional[scalar_int] = 1000,
-    learning_rate: Optional[scalar_float] = 0.001,
+    slice_thickness: ScalarNumeric,
+    save_every: Optional[ScalarInt] = 10,
+    num_iterations: Optional[ScalarInt] = 1000,
+    learning_rate: Optional[ScalarFloat] = 0.001,
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[
@@ -240,15 +240,15 @@ def single_slice_ptychography(
     )
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def single_slice_poscorrected(
     experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
-    slice_thickness: scalar_numeric,
-    save_every: Optional[scalar_int] = 10,
-    num_iterations: Optional[scalar_int] = 1000,
-    learning_rate: Optional[Union[scalar_float, Float[Array, "2"]]] = 0.01,
+    slice_thickness: ScalarNumeric,
+    save_every: Optional[ScalarInt] = 10,
+    num_iterations: Optional[ScalarInt] = 1000,
+    learning_rate: Optional[Union[ScalarFloat, Float[Array, "2"]]] = 0.01,
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[
@@ -476,15 +476,15 @@ def single_slice_poscorrected(
     )
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def single_slice_multi_modal(
     experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: ProbeModes,
-    slice_thickness: scalar_numeric,
-    save_every: Optional[scalar_int] = 10,
-    num_iterations: Optional[scalar_int] = 1000,
-    learning_rate: Optional[Union[scalar_float, Float[Array, "2"]]] = 0.01,
+    slice_thickness: ScalarNumeric,
+    save_every: Optional[ScalarInt] = 10,
+    num_iterations: Optional[ScalarInt] = 1000,
+    learning_rate: Optional[Union[ScalarFloat, Float[Array, "2"]]] = 0.01,
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[
@@ -679,16 +679,16 @@ def single_slice_multi_modal(
     return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
 
 
-@jaxtyped(typechecker=typechecker)
+@jaxtyped(typechecker=beartype)
 def multi_slice_multi_modal(
     experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: Complex[Array, "H W"],
-    slice_thickness: scalar_numeric,
-    save_every: Optional[scalar_int] = 10,
-    num_iterations: Optional[scalar_int] = 1000,
-    learning_rate: Optional[scalar_float] = 0.001,
-    pos_learning_rate: Optional[scalar_float] = 0.01,
+    slice_thickness: ScalarNumeric,
+    save_every: Optional[ScalarInt] = 10,
+    num_iterations: Optional[ScalarInt] = 1000,
+    learning_rate: Optional[ScalarFloat] = 0.001,
+    pos_learning_rate: Optional[ScalarFloat] = 0.01,
     loss_type: Optional[str] = "mse",
     optimizer_name: Optional[str] = "adam",
 ) -> Tuple[

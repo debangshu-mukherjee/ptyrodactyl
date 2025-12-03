@@ -5,14 +5,14 @@ Data structures and type definitions for electron microscopy and ptychography.
 
 Type Aliases
 ------------
-- `scalar_numeric`:
+- `ScalarNumeric`:
     Type alias for numeric types (int, float or Num array)
     Num Array has 0 dimensions
-- `scalar_float`:
+- `ScalarFloat`:
     Type alias for float or Float array of 0 dimensions
-- `scalar_int`:
+- `ScalarInt`:
     Type alias for int or Integer array of 0 dimensions
-- `non_jax_number`:
+- `NonJaxNumber`:
     Type alias for non-JAX numeric types (int, float)
 
 PyTrees
@@ -55,6 +55,7 @@ NamedTuple classes to ensure proper runtime type checking of the contents.
 
 import jax
 import jax.numpy as jnp
+from beartype import beartype
 from beartype.typing import (
     Any,
     Dict,
@@ -66,16 +67,14 @@ from beartype.typing import (
     Union,
 )
 from jax.tree_util import register_pytree_node_class
-from jaxtyping import Array, Bool, Complex, Float, Int, Num
-
-from ptyrodactyl._decorators import beartype, jaxtyped
+from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 
 jax.config.update("jax_enable_x64", True)
 
-scalar_numeric: TypeAlias = Union[int, float, Num[Array, " "]]
-scalar_float: TypeAlias = Union[float, Float[Array, " "]]
-scalar_int: TypeAlias = Union[int, Int[Array, " "]]
-non_jax_number: TypeAlias = Union[int, float]
+ScalarNumeric: TypeAlias = Union[int, float, Num[Array, " "]]
+ScalarFloat: TypeAlias = Union[float, Float[Array, " "]]
+ScalarInt: TypeAlias = Union[int, Int[Array, " "]]
+NonJaxNumber: TypeAlias = Union[int, float]
 
 
 @register_pytree_node_class
@@ -260,7 +259,7 @@ class XYZData(NamedTuple):
         Lattice vectors in Ångstroms if present, otherwise None.
     stress : Optional[Float[Array, "3 3"]]
         Symmetric stress tensor if present.
-    energy : Optional[scalar_float]
+    energy : Optional[ScalarFloat]
         Total energy in eV if present.
     properties : Optional[List[Dict[str, Union[str, int]]]]
         List of properties described in the metadata.
@@ -362,8 +361,8 @@ def make_calibrated_array(
     data_array: Union[
         Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]
     ],
-    calib_y: scalar_float,
-    calib_x: scalar_float,
+    calib_y: ScalarFloat,
+    calib_x: ScalarFloat,
     real_space: Union[bool, Bool[Array, " "]],
 ) -> CalibratedArray:
     """JAX-safe factory function for CalibratedArray with data validation.
@@ -372,9 +371,9 @@ def make_calibrated_array(
     ----------
     data_array : Union[Int[Array, "H W"], Float[Array, "H W"], Complex[Array, "H W"]]
         The actual array data
-    calib_y : scalar_float
+    calib_y : ScalarFloat
         Calibration in y direction
-    calib_x : scalar_float
+    calib_x : ScalarFloat
         Calibration in x direction
     real_space : Union[bool, Bool[Array, " "]]
         Whether the array is in real space
@@ -442,7 +441,7 @@ def make_calibrated_array(
 def make_probe_modes(
     modes: Complex[Array, "H W M"],
     weights: Float[Array, " M"],
-    calib: scalar_float,
+    calib: ScalarFloat,
 ) -> ProbeModes:
     """JAX-safe factory function for ProbeModes with data validation.
 
@@ -452,7 +451,7 @@ def make_probe_modes(
         Complex probe modes, M is number of modes
     weights : Float[Array, " M"]
         Mode occupation numbers
-    calib : scalar_float
+    calib : ScalarFloat
         Pixel calibration
 
     Returns
@@ -567,8 +566,8 @@ def make_probe_modes(
 @jaxtyped(typechecker=beartype)
 def make_potential_slices(
     slices: Float[Array, "H W S"],
-    slice_thickness: scalar_numeric,
-    calib: scalar_float,
+    slice_thickness: ScalarNumeric,
+    calib: ScalarFloat,
 ) -> PotentialSlices:
     """JAX-safe factory function for PotentialSlices with data validation.
 
@@ -576,9 +575,9 @@ def make_potential_slices(
     ----------
     slices : Float[Array, "H W S"]
         Individual potential slices, S is number of slices
-    slice_thickness : scalar_numeric
+    slice_thickness : ScalarNumeric
         Thickness of each slice
-    calib : scalar_float
+    calib : ScalarFloat
         Pixel calibration
 
     Returns
@@ -846,7 +845,7 @@ def make_xyz_data(
         Lattice vectors (if any)
     stress : Optional[Float[Array, "3 3"]], default=None
         Stress tensor (if any)
-    energy : Optional[scalar_float], default=None
+    energy : Optional[ScalarFloat], default=None
         Total energy (if any)
     properties : Optional[List[Dict[str, Union[str, int]]]], default=None
         Per-atom metadata
@@ -948,10 +947,10 @@ def make_xyz_data(
 @jaxtyped(typechecker=beartype)
 def make_stem4d(
     data: Float[Array, "P H W"],
-    real_space_calib: scalar_float,
-    fourier_space_calib: scalar_float,
+    real_space_calib: ScalarFloat,
+    fourier_space_calib: ScalarFloat,
     scan_positions: Float[Array, "P 2"],
-    voltage_kv: scalar_numeric,
+    voltage_kv: ScalarNumeric,
 ) -> STEM4D:
     """JAX-safe factory function for STEM4D with data validation.
 
@@ -959,13 +958,13 @@ def make_stem4d(
     ----------
     data : Float[Array, "P H W"]
         4D-STEM data array with P scan positions and HxW diffraction patterns
-    real_space_calib : scalar_float
+    real_space_calib : ScalarFloat
         Real space calibration in Angstroms per pixel
-    fourier_space_calib : scalar_float
+    fourier_space_calib : ScalarFloat
         Fourier space calibration in inverse Angstroms per pixel
     scan_positions : Float[Array, "P 2"]
         Real space scan positions in Angstroms (y, x coordinates)
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         Accelerating voltage in kilovolts
 
     Returns

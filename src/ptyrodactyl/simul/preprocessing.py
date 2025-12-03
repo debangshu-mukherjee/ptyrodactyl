@@ -35,9 +35,10 @@ import numpy as np
 from beartype.typing import Any, Dict, List, Optional, Union
 from jaxtyping import Array, Float, Int
 
-from ptyrodactyl._decorators import beartype, jaxtyped
+from beartype import beartype
+from jaxtyping import jaxtyped
 
-from .electron_types import XYZData, make_xyz_data, scalar_int
+from ptyrodactyl.tools import XYZData, make_xyz_data, ScalarInt
 
 _KIRKLAND_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
@@ -86,7 +87,7 @@ _ATOMIC_NUMBERS: Dict[str, int] = _load_atomic_numbers()
 
 
 @jaxtyped(typechecker=beartype)
-def atomic_symbol(symbol_string: str) -> scalar_int:
+def atomic_symbol(symbol_string: str) -> ScalarInt:
     """Return atomic number for given atomic symbol string.
 
     Parameters
@@ -130,7 +131,7 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
             f"Atomic symbol '{symbol_string}' not found. Available symbols: {available_symbols}"
         )
 
-    atomic_number: scalar_int = _ATOMIC_NUMBERS[normalized_symbol]
+    atomic_number: ScalarInt = _ATOMIC_NUMBERS[normalized_symbol]
     return atomic_number
 
 

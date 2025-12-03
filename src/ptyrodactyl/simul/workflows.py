@@ -15,19 +15,18 @@ Functions
 import jax
 import jax.numpy as jnp
 from beartype.typing import Optional
-from jaxtyping import Array, Complex, Float, Int
-
-from ptyrodactyl._decorators import beartype, jaxtyped
+from beartype import beartype
+from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from .atom_potentials import kirkland_potentials_xyz
-from .electron_types import (
+from ptyrodactyl.tools import (
     STEM4D,
     PotentialSlices,
     ProbeModes,
     XYZData,
     make_probe_modes,
-    scalar_float,
-    scalar_numeric,
+    ScalarFloat,
+    ScalarNumeric,
 )
 from .preprocessing import parse_xyz
 from .simulations import make_probe, stem_4d
@@ -38,15 +37,15 @@ jax.config.update("jax_enable_x64", True)
 @jaxtyped(typechecker=beartype)
 def xyz_to_4d_stem(
     xyz_filepath: str,
-    slice_thickness: scalar_float,
-    lateral_extent: scalar_float,
-    cbed_aperture_mrad: scalar_numeric,
-    voltage_kv: scalar_numeric,
+    slice_thickness: ScalarFloat,
+    lateral_extent: ScalarFloat,
+    cbed_aperture_mrad: ScalarNumeric,
+    voltage_kv: ScalarNumeric,
     scan_positions: Float[Array, "P 2"],
-    cbed_pixel_size_ang: scalar_float,
-    probe_defocus: Optional[scalar_numeric] = 0.0,
-    probe_c3: Optional[scalar_numeric] = 0.0,
-    probe_c5: Optional[scalar_numeric] = 0.0,
+    cbed_pixel_size_ang: ScalarFloat,
+    probe_defocus: Optional[ScalarNumeric] = 0.0,
+    probe_c3: Optional[ScalarNumeric] = 0.0,
+    probe_c5: Optional[ScalarNumeric] = 0.0,
 ) -> STEM4D:
     """Complete workflow to simulate 4D-STEM data from an XYZ structure file.
 

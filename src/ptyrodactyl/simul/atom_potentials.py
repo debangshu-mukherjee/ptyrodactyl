@@ -72,15 +72,16 @@ import jax.numpy as jnp
 from beartype.typing import Optional, Tuple, Union
 from jaxtyping import Array, Bool, Complex, Float, Int, Real
 
-from ptyrodactyl._decorators import beartype, jaxtyped
+from beartype import beartype
+from jaxtyping import jaxtyped
 
-from .electron_types import (
+from ptyrodactyl.tools import (
     PotentialSlices,
     XYZData,
     make_potential_slices,
-    scalar_float,
-    scalar_int,
-    scalar_numeric,
+    ScalarFloat,
+    ScalarInt,
+    ScalarNumeric,
 )
 from .preprocessing import kirkland_potentials
 
@@ -157,7 +158,7 @@ def contrast_stretch(
 
 
 def _bessel_iv_series(
-    v_order: scalar_float, x_val: Float[Array, " ..."], dtype: jnp.dtype
+    v_order: ScalarFloat, x_val: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
     """Compute I_v(x) using series expansion for Bessel function."""
     x_half: Float[Array, " ..."] = x_val / 2.0
@@ -251,7 +252,7 @@ def _bessel_kn_recurrence(
 
 
 def _bessel_kv_small_non_integer(
-    v: scalar_float, x: Float[Array, " ..."], dtype: jnp.dtype
+    v: ScalarFloat, x: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
     """Compute K_v(x) for small x and non-integer v."""
     error_bound: Float[Array, ""] = jnp.asarray(1e-10)
@@ -297,7 +298,7 @@ def _bessel_kv_small_integer(
 
 
 def _bessel_kv_large(
-    v: scalar_float, x: Float[Array, " ..."]
+    v: ScalarFloat, x: Float[Array, " ..."]
 ) -> Float[Array, " ..."]:
     """Asymptotic expansion for K_v(x) for large x."""
     sqrt_term: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
@@ -337,7 +338,7 @@ def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def bessel_kv(
-    v: scalar_float, x: Float[Array, " ..."]
+    v: ScalarFloat, x: Float[Array, " ..."]
 ) -> Float[Array, " ..."]:
     """Computes the modified Bessel function of the second kind K_v(x).
 
@@ -444,7 +445,7 @@ def _calculate_gaussian_contributions(
 
 def _downsample_potential(
     supersampled_potential: Float[Array, " h w"],
-    supersampling: scalar_int,
+    supersampling: ScalarInt,
     target_height: Int[Array, ""],
     target_width: Int[Array, ""],
 ) -> Float[Array, " h w"]:
@@ -480,12 +481,12 @@ def _downsample_potential(
 
 @jaxtyped(typechecker=beartype)
 def single_atom_potential(
-    atom_no: scalar_int,
-    pixel_size: scalar_float,
-    grid_shape: Optional[Tuple[scalar_int, scalar_int]] = None,
+    atom_no: ScalarInt,
+    pixel_size: ScalarFloat,
+    grid_shape: Optional[Tuple[ScalarInt, ScalarInt]] = None,
     center_coords: Optional[Float[Array, " 2"]] = None,
-    supersampling: Optional[scalar_int] = 4,
-    potential_extent: Optional[scalar_float] = 4.0,
+    supersampling: Optional[ScalarInt] = 4,
+    potential_extent: Optional[ScalarFloat] = 4.0,
 ) -> Float[Array, " h w"]:
     """Calculate the projected potential of a single atom using Kirkland scattering factors.
 
@@ -636,7 +637,7 @@ single_atom_potential = jax.jit(
 
 @jaxtyped(typechecker=beartype)
 def _compute_min_repeats(
-    cell: Float[Array, " 3 3"], threshold_nm: scalar_float
+    cell: Float[Array, " 3 3"], threshold_nm: ScalarFloat
 ) -> Tuple[int, int, int]:
     """Compute minimal unit cell repeats to exceed threshold distance.
 
@@ -687,7 +688,7 @@ def _compute_min_repeats(
 def _expand_periodic_images(
     coords: Float[Array, " N 4"],
     cell: Float[Array, " 3 3"],
-    threshold_nm: scalar_float,
+    threshold_nm: ScalarFloat,
 ) -> Tuple[Float[Array, " M 4"], Tuple[int, int, int]]:
     """Expand coordinates to exceed minimum bounding box size.
 
@@ -745,7 +746,7 @@ def _expand_periodic_images(
 def _slice_atoms(
     coords: Float[Array, " N 3"],
     atom_numbers: Int[Array, " N"],
-    slice_thickness: scalar_numeric,
+    slice_thickness: ScalarNumeric,
 ) -> Float[Array, " N 4"]:
     """Partitions atoms into slices along the z-axis.
 
@@ -897,8 +898,8 @@ def _build_atomic_potential_lookup(
     atom_nums: Int[Array, " N"],
     height: int,
     width: int,
-    pixel_size: scalar_float,
-    supersampling: scalar_int,
+    pixel_size: ScalarFloat,
+    supersampling: ScalarInt,
 ) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
     """Build lookup table of atomic potentials and mapping array."""
     unique_atoms: Int[Array, " 118"] = jnp.unique(
@@ -929,11 +930,11 @@ def _build_atomic_potential_lookup(
     atom_indices: Int[Array, " 118"] = jnp.where(valid_mask, unique_atoms, -1)
 
     def _update_mapping(
-        carry: Int[Array, " 119"], idx_atom: Tuple[scalar_int, scalar_int]
+        carry: Int[Array, " 119"], idx_atom: Tuple[ScalarInt, ScalarInt]
     ) -> Tuple[Int[Array, " 119"], None]:
         mapping_array: Int[Array, " 119"] = carry
-        idx: scalar_int
-        atom: scalar_int
+        idx: ScalarInt
+        atom: ScalarInt
         idx, atom = idx_atom
         mapping_array = jnp.where(
             atom >= 0, mapping_array.at[atom].set(idx), mapping_array
@@ -948,15 +949,15 @@ def _build_atomic_potential_lookup(
 
 def _add_atom_to_slice(
     slice_pot: Float[Array, " h w"],
-    atom_data: Tuple[scalar_float, scalar_float, scalar_int, scalar_int],
+    atom_data: Tuple[ScalarFloat, ScalarFloat, ScalarInt, ScalarInt],
     potential_lookup: Tuple[
         Float[Array, " 118 h w"],  # atomic_potentials
         Int[Array, " 119"],  # atom_to_idx_array
     ],
     grid_params: Tuple[
-        scalar_float,  # x_min
-        scalar_float,  # y_min
-        scalar_float,  # pixel_size
+        ScalarFloat,  # x_min
+        ScalarFloat,  # y_min
+        ScalarFloat,  # pixel_size
         int,  # width
         int,  # height
     ],
@@ -967,25 +968,25 @@ def _add_atom_to_slice(
     slice_idx: int,
 ) -> Float[Array, " h w"]:
     """Add single atom contribution to a slice using FFT shifting."""
-    x: scalar_float
-    y: scalar_float
-    atom_no: scalar_int
-    atom_slice_idx: scalar_int
+    x: ScalarFloat
+    y: ScalarFloat
+    atom_no: ScalarInt
+    atom_slice_idx: ScalarInt
     x, y, atom_no, atom_slice_idx = atom_data
 
     atomic_potentials, atom_to_idx_array = potential_lookup
     x_min, y_min, pixel_size, width, height = grid_params
     kx, ky = freq_grids
 
-    x_offset: scalar_float = x - x_min
-    y_offset: scalar_float = y - y_min
-    pixel_x: scalar_float = x_offset / pixel_size
-    pixel_y: scalar_float = y_offset / pixel_size
+    x_offset: ScalarFloat = x - x_min
+    y_offset: ScalarFloat = y - y_min
+    pixel_x: ScalarFloat = x_offset / pixel_size
+    pixel_y: ScalarFloat = y_offset / pixel_size
 
     center_x: float = width / 2.0
     center_y: float = height / 2.0
-    shift_x: scalar_float = pixel_x - center_x
-    shift_y: scalar_float = pixel_y - center_y
+    shift_x: ScalarFloat = pixel_x - center_x
+    shift_y: ScalarFloat = pixel_y - center_y
 
     atom_idx: int = atom_to_idx_array[atom_no]
     atom_pot: Float[Array, " h w"] = atomic_potentials[atom_idx]
@@ -1010,8 +1011,8 @@ def _add_atom_to_slice(
 def _compute_grid_dimensions(
     x_coords: Float[Array, " N"],
     y_coords: Float[Array, " N"],
-    padding: scalar_float,
-    pixel_size: scalar_float,
+    padding: ScalarFloat,
+    pixel_size: ScalarFloat,
 ) -> Tuple[Float[Array, ""], Float[Array, ""], int, int]:
     """Compute grid dimensions and ranges for potential slices."""
     x_coords_min: Float[Array, ""] = jnp.min(x_coords)
@@ -1046,9 +1047,9 @@ def _process_all_slices(
         Int[Array, " 119"],  # atom_to_idx_array
     ],
     grid_params: Tuple[
-        scalar_float,  # x_min
-        scalar_float,  # y_min
-        scalar_float,  # pixel_size
+        ScalarFloat,  # x_min
+        ScalarFloat,  # y_min
+        ScalarFloat,  # pixel_size
         int,  # height
         int,  # width
     ],
@@ -1076,22 +1077,22 @@ def _process_all_slices(
         def _add_atom_contribution(
             carry: Float[Array, " h w"],
             atom_data: Tuple[
-                scalar_float, scalar_float, scalar_int, scalar_int
+                ScalarFloat, ScalarFloat, ScalarInt, ScalarInt
             ],
         ) -> Tuple[Float[Array, " h w"], None]:
             slice_pot: Float[Array, " h w"] = carry
-            x: scalar_float
-            y: scalar_float
-            atom_no: scalar_int
-            atom_slice_idx: scalar_int
+            x: ScalarFloat
+            y: ScalarFloat
+            atom_no: ScalarInt
+            atom_slice_idx: ScalarInt
             x, y, atom_no, atom_slice_idx = atom_data
 
-            x_offset: scalar_float = x - x_min
-            y_offset: scalar_float = y - y_min
-            pixel_x: scalar_float = x_offset / pixel_size
-            pixel_y: scalar_float = y_offset / pixel_size
-            shift_x: scalar_float = pixel_x - center_x
-            shift_y: scalar_float = pixel_y - center_y
+            x_offset: ScalarFloat = x - x_min
+            y_offset: ScalarFloat = y - y_min
+            pixel_x: ScalarFloat = x_offset / pixel_size
+            pixel_y: ScalarFloat = y_offset / pixel_size
+            shift_x: ScalarFloat = pixel_x - center_x
+            shift_y: ScalarFloat = pixel_y - center_y
 
             atom_idx: int = atom_to_idx_array[atom_no]
             atom_pot: Float[Array, " h w"] = atomic_potentials[atom_idx]
@@ -1290,8 +1291,8 @@ def _build_potential_lookup(
     atom_nums: Int[Array, " N"],
     height: int,
     width: int,
-    pixel_size: scalar_float,
-    supersampling: scalar_int,
+    pixel_size: ScalarFloat,
+    supersampling: ScalarInt,
 ) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
     """Build lookup table for atomic potentials"""
     unique_atoms: Int[Array, " 118"] = jnp.unique(
@@ -1321,12 +1322,12 @@ def _build_potential_lookup(
     indices: Int[Array, " 118"] = jnp.arange(118, dtype=jnp.int32)
     atom_indices: Int[Array, " 118"] = jnp.where(valid_mask, unique_atoms, -1)
 
-    def _update_mapping(
-        carry: Int[Array, " 119"], idx_atom: Tuple[scalar_int, scalar_int]
+    def _update_mapping2(
+        carry: Int[Array, " 119"], idx_atom: Tuple[ScalarInt, ScalarInt]
     ) -> Tuple[Int[Array, " 119"], None]:
         mapping_array: Int[Array, " 119"] = carry
-        idx: scalar_int
-        atom: scalar_int
+        idx: ScalarInt
+        atom: ScalarInt
         idx, atom = idx_atom
         mapping_array = jnp.where(
             atom >= 0, mapping_array.at[atom].set(idx), mapping_array
@@ -1334,7 +1335,7 @@ def _build_potential_lookup(
         return mapping_array, None
 
     atom_to_idx_array, _ = jax.lax.scan(
-        _update_mapping, atom_to_idx_array, (indices, atom_indices)
+        _update_mapping2, atom_to_idx_array, (indices, atom_indices)
     )
     return atomic_potentials, atom_to_idx_array
 
@@ -1342,11 +1343,11 @@ def _build_potential_lookup(
 @jaxtyped(typechecker=beartype)
 def kirkland_potentials_xyz(
     xyz_data: XYZData,
-    pixel_size: scalar_float,
-    slice_thickness: Optional[scalar_float] = 1.0,
+    pixel_size: ScalarFloat,
+    slice_thickness: Optional[ScalarFloat] = 1.0,
     repeats: Optional[Int[Array, " 3"]] = default_repeats,
-    padding: Optional[scalar_float] = 4.0,
-    supersampling: Optional[scalar_int] = 4,
+    padding: Optional[ScalarFloat] = 4.0,
+    supersampling: Optional[ScalarInt] = 4,
 ) -> PotentialSlices:
     """Converts XYZData structure to PotentialSlices.
 

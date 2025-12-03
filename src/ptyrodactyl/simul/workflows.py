@@ -19,20 +19,21 @@ modules.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Optional
 from beartype import beartype
+from beartype.typing import Optional
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-from .atom_potentials import kirkland_potentials_xyz
 from ptyrodactyl.tools import (
     STEM4D,
     PotentialSlices,
     ProbeModes,
-    XYZData,
-    make_probe_modes,
     ScalarFloat,
     ScalarNumeric,
+    XYZData,
+    make_probe_modes,
 )
+
+from .atom_potentials import kirkland_potentials_xyz
 from .preprocessing import parse_xyz
 from .simulations import make_probe, stem_4d
 

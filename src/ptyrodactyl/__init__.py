@@ -2,9 +2,9 @@
 
 Extended Summary
 ----------------
-A comprehensive toolkit for electron ptychography simulations and reconstructions
-using JAX for automatic differentiation and acceleration. All functions are
-fully differentiable and JIT-compilable.
+A comprehensive toolkit for electron ptychography simulations and
+reconstructions using JAX for automatic differentiation and acceleration.
+All functions are fully differentiable and JIT-compilable.
 
 Submodules
 ----------
@@ -41,7 +41,7 @@ and consider using the provided factory functions for data validation.
 
 import os
 
-# Enable multi-threaded CPU execution for JAX (must be set before importing JAX)
+# Enable multi-threaded CPU execution for JAX (must be set before JAX import)
 os.environ.setdefault(
     "XLA_FLAGS",
     "--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=0",

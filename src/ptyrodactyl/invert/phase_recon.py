@@ -29,23 +29,21 @@ using the factory functions from the tools module.
 
 import jax
 import jax.numpy as jnp
+from beartype import beartype
 from beartype.typing import Any, Dict, Optional, Tuple, Union
-from jaxtyping import Array, Complex, Float, Int
+from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 import ptyrodactyl.tools as ptt
-from beartype import beartype
-from jaxtyping import jaxtyped
-
+from ptyrodactyl.simul.simulations import stem_4d
 from ptyrodactyl.tools import (
     STEM4D,
     CalibratedArray,
     ProbeModes,
-    make_calibrated_array,
     ScalarFloat,
     ScalarInt,
     ScalarNumeric,
+    make_calibrated_array,
 )
-from ptyrodactyl.simul.simulations import stem_4d
 
 jax.config.update("jax_enable_x64", True)
 

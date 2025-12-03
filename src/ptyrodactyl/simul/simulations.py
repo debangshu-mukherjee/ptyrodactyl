@@ -71,12 +71,12 @@ from ptyrodactyl.tools import (
     CalibratedArray,
     PotentialSlices,
     ProbeModes,
-    make_calibrated_array,
-    make_probe_modes,
-    make_stem4d,
     ScalarFloat,
     ScalarInt,
     ScalarNumeric,
+    make_calibrated_array,
+    make_probe_modes,
+    make_stem4d,
 )
 
 jax.config.update("jax_enable_x64", True)

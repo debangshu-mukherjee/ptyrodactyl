@@ -9,16 +9,16 @@ are fully differentiable and JIT-compilable.
 Submodules
 ----------
 atom_potentials
-    Functions for generating atomic potentials and slices from atomic coordinates.
+    Functions for generating atomic potentials and slices from coordinates.
 geometry
     Geometric transformations and operations for crystal structures.
 preprocessing
-    Data preprocessing utilities and type definitions for electron microscopy data.
+    Data preprocessing utilities and type definitions for microscopy data.
 simulations
-    Forward simulation functions for electron beam propagation, CBED patterns,
-    and 4D-STEM data generation including aberration calculations and probe creation.
+    Forward simulation functions for electron beam propagation, CBED
+    patterns, and 4D-STEM data generation with aberration calculations.
 workflows
-    High-level workflows that combine multiple simulation steps for common use cases
+    High-level workflows combining simulation steps for common use cases
     such as simulating 4D-STEM data from XYZ structure files.
 
 Routine Listings

@@ -24,11 +24,9 @@ for automatic differentiation.
 
 import jax
 import jax.numpy as jnp
-from beartype.typing import Optional, Tuple
-from jaxtyping import Array, Bool, Float, Real
-
 from beartype import beartype
-from jaxtyping import jaxtyped
+from beartype.typing import Optional, Tuple
+from jaxtyping import Array, Bool, Float, Real, jaxtyped
 
 from ptyrodactyl.tools import ScalarFloat, ScalarNumeric
 

@@ -1,22 +1,16 @@
-"""
-Module: ptyrodactyl
--------------------
-Ptychography through differentiable programming in JAX.
+"""Differentiable electron microscopy forward and inverse problems.
 
-A comprehensive toolkit for ptychography simulations and reconstructions
-using JAX for automatic differentiation and acceleration. Supports both
-optical and electron microscopy applications with fully differentiable
-and JIT-compilable functions.
+A comprehensive toolkit for electron ptychography simulations and reconstructions
+using JAX for automatic differentiation and acceleration. All functions are
+fully differentiable and JIT-compilable.
 
 Submodules
 ----------
-- `electrons`:
-    Electron microscopy simulation and ptychography reconstruction
-    including CBED patterns, 4D-STEM data generation, and inverse algorithms
-- `photons`:
-    Optical microscopy simulation and ptychography reconstruction
-    including wavefront propagation, lens optics, and optical ptychography
-- `tools`:
+invert
+    Electron microscopy reconstructions, ptychography and focal series
+simul
+    Electron microscopy simulations including 4D-STEM, CBED, and multislice
+tools
     Utility tools for optimization, loss functions, and parallel processing
     including complex-valued optimizers with Wirtinger derivatives
 
@@ -32,31 +26,33 @@ Key Features
 Examples
 --------
 Basic usage for electron ptychography:
-    >>> from ptyrodactyl.electrons import stem_4D, single_slice_ptychography
+    >>> from ptyrodactyl.simul import stem_4d, make_probe
+    >>> from ptyrodactyl.invert import single_slice_ptychography
     >>> # Generate 4D-STEM data
-    >>> data = stem_4D(potential, probe, positions)
+    >>> data = stem_4d(potential, probe, positions, voltage_kv, calib_ang)
     >>> # Reconstruct sample
     >>> reconstructed = single_slice_ptychography(data, initial_guess, positions)
 
-Basic usage for optical ptychography:
-    >>> from ptyrodactyl.photons import simple_microscope, simple_microscope_ptychography
-    >>> # Simulate optical data
-    >>> data = simple_microscope(sample, wavefront, positions)
-    >>> # Reconstruct sample
-    >>> reconstructed = simple_microscope_ptychography(data, initial_guess, positions)
-
 Notes
 -----
-This package is designed for research and development in ptychography.
+This package is designed for research and development in electron ptychography.
 All functions are optimized for JAX transformations and support both
 CPU and GPU execution. For best performance, use JIT compilation
 and consider using the provided factory functions for data validation.
 """
 
-from . import electrons, photons, tools
+import os
+
+# Enable multi-threaded CPU execution for JAX (must be set before importing JAX)
+os.environ.setdefault(
+    "XLA_FLAGS",
+    "--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=0",
+)
+
+from . import invert, simul, tools
 
 __all__: list[str] = [
-    "electrons",
-    "photons",
+    "invert",
+    "simul",
     "tools",
 ]

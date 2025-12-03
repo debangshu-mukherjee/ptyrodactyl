@@ -88,6 +88,7 @@ def rotmatrix_vectors(
     sin_theta: Float[Array, " "] = jnp.linalg.norm(cross)
 
     def _fallback_parallel() -> Float[Array, "3 3"]:
+        """Return identity matrix when vectors are already parallel."""
         rotation_matrix_parallel: Float[Array, "3 3"] = jnp.eye(3)
         return rotation_matrix_parallel
 
@@ -119,6 +120,7 @@ def rotmatrix_vectors(
         return rotation_matrix_opposite
 
     def _compute() -> Float[Array, "3 3"]:
+        """Compute rotation matrix using Rodrigues formula for general case."""
         axis: Float[Array, " 3"] = cross / sin_theta
         kk: Float[Array, "3 3"] = jnp.array(
             [
@@ -289,6 +291,7 @@ def rotate_structure(
     rotated_cell: Real[Array, "3 3"] = cell @ rotation_matrix.T
 
     def _apply_inplane_rotation() -> Float[Array, " N 4"]:
+        """Apply additional in-plane rotation around the z-axis."""
         in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(
             jnp.array([0.0, 0.0, 1.0]), theta
         )
@@ -300,6 +303,7 @@ def rotate_structure(
         )
 
     def _no_inplane_rotation() -> Float[Array, " N 4"]:
+        """Return coordinates without applying additional in-plane rotation."""
         return rotated_coords_with_ids
 
     rotated_coords_final: Float[Array, " N 4"] = jax.lax.cond(

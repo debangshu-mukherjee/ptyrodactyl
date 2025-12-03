@@ -34,9 +34,9 @@ from ptyrodactyl.tools import (
 )
 
 from ptyrodactyl.simul import (
-    kirkland_potentials_xyz, 
-    make_probe, 
-    parse_xyz, 
+    kirkland_potentials_xyz,
+    make_probe,
+    parse_xyz,
     stem_4d,
 )
 

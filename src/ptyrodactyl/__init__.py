@@ -34,8 +34,8 @@ Key Features
 
 Notes
 -----
-This package is designed for electron microscopy simulations and 
-reconstructions. All functions are optimized for JAX transformations and 
+This package is designed for electron microscopy simulations and
+reconstructions. All functions are optimized for JAX transformations and
 support both CPU and GPU execution. For best performance, use JIT compilation
 and consider using the provided factory functions for data validation.
 """

@@ -92,6 +92,7 @@ def contrast_stretch(
     def _rescale_single_image(
         image: Float[Array, " H W"],
     ) -> Float[Array, " H W"]:
+        """Rescale a single image using percentile-based contrast stretching."""
         flattened: Float[Array, " HW"] = image.flatten()
         lower_bound: Float[Array, ""] = jnp.percentile(flattened, p1)
         upper_bound: Float[Array, ""] = jnp.percentile(flattened, p2)
@@ -184,6 +185,7 @@ def _bessel_kn_recurrence(
     """Compute K_n(x) using recurrence relation."""
 
     def _compute_kn() -> Float[Array, " ..."]:
+        """Compute K_n(x) using forward recurrence relation starting from K_0 and K_1."""
         init = (k0, k1)
         max_n = 20
         indices = jnp.arange(1, max_n, dtype=jnp.float32)
@@ -195,6 +197,7 @@ def _bessel_kn_recurrence(
             Tuple[Float[Array, " ..."], Float[Array, " ..."]],
             Float[Array, " ..."],
         ]:
+            """Apply one step of the Bessel recurrence relation with masking."""
             k_prev2, k_prev1 = carry
             mask = i < n
             two_i_over_x: Float[Array, " ..."] = 2.0 * i / x
@@ -298,9 +301,7 @@ def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 
 @jaxtyped(typechecker=beartype)
 @jax.jit
-def bessel_kv(
-    v: ScalarFloat, x: Float[Array, " ..."]
-) -> Float[Array, " ..."]:
+def bessel_kv(v: ScalarFloat, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
     """Compute the modified Bessel function of the second kind K_v(x).
 
     Parameters
@@ -596,113 +597,6 @@ single_atom_potential = jax.jit(
 
 
 @jaxtyped(typechecker=beartype)
-def _compute_min_repeats(
-    cell: Float[Array, " 3 3"], threshold_nm: ScalarFloat
-) -> Tuple[int, int, int]:
-    """Compute minimal unit cell repeats to exceed threshold distance.
-
-    Parameters
-    ----------
-    cell : Float[Array, " 3 3"]
-        Real-space unit cell matrix where rows represent lattice vectors
-        a1, a2, a3.
-    threshold_nm : ScalarFloat
-        Minimum required length in nanometers for the supercell
-        along each direction.
-
-    Returns
-    -------
-    Tuple[int, int, int]
-        Number of repeats (nx, ny, nz) needed along each lattice vector
-        direction.
-
-    Notes
-    -----
-    Internal function to compute the minimal number of unit cell repeats
-    along each lattice vector direction such that the resulting supercell
-    dimensions exceed a specified threshold distance. This is used to ensure
-    periodic images are included for accurate potential calculations.
-
-    Algorithm:
-        - Calculate lattice vector lengths:
-            - Compute the norm of each row in the cell matrix
-            - This gives the physical length of each lattice vector in nm
-        - Determine minimal repeats:
-            - For each direction, divide threshold by lattice vector length
-            - Use ceiling function to ensure we exceed the threshold
-            - Convert to integers for use as repeat counts
-        - Return repeat counts:
-            - Package the three repeat values as a tuple
-            - These values will be used to construct supercells that include
-              sufficient periodic images for accurate calculations
-    """
-    lengths: Float[Array, " 3"] = jnp.linalg.norm(cell, axis=1)
-    repeat_ratios: Float[Array, " 3"] = threshold_nm / lengths
-    n_repeats_float: Float[Array, " 3"] = jnp.ceil(repeat_ratios)
-    n_repeats: Int[Array, " 3"] = n_repeats_float.astype(int)
-    n_repeats_tuple: Tuple[int, int, int] = tuple(n_repeats)
-    return n_repeats_tuple
-
-
-@jaxtyped(typechecker=beartype)
-def _expand_periodic_images(
-    coords: Float[Array, " N 4"],
-    cell: Float[Array, " 3 3"],
-    threshold_nm: ScalarFloat,
-) -> Tuple[Float[Array, " M 4"], Tuple[int, int, int]]:
-    """Expand coordinates to exceed minimum bounding box size.
-
-    Expand coordinates in all directions just enough to exceed (twice of) a
-    minimum bounding box size along each axis.
-
-    Args:
-        coords: Input coordinates (N, 4).
-        cell: Lattice matrix (3, 3) where rows are a1, a2, a3.
-        threshold_nm: Minimum bounding box size in nanometers.
-
-    Returns:
-        Tuple of expanded_coords (M, 4) and number of repeats (nx, ny, nz)
-        used in each direction.
-    """
-    nx: int
-    ny: int
-    nz: int
-    nx, ny, nz = _compute_min_repeats(cell, threshold_nm)
-    nz = 0
-
-    i: Int[Array, " 2nx+1"] = jnp.arange(-nx, nx + 1)
-    j: Int[Array, " 2ny+1"] = jnp.arange(-ny, ny + 1)
-    k: Int[Array, " 2nz+1"] = jnp.arange(-nz, nz + 1)
-
-    ii: Int[Array, " 2nx+1 2ny+1 2nz+1"]
-    jj: Int[Array, " 2nx+1 2ny+1 2nz+1"]
-    kk: Int[Array, " 2nx+1 2ny+1 2nz+1"]
-    ii, jj, kk = jnp.meshgrid(i, j, k, indexing="ij")
-    shifts: Int[Array, " M 3"] = jnp.stack(
-        [ii.ravel(), jj.ravel(), kk.ravel()], axis=-1
-    )
-    shift_vectors: Float[Array, " M 3"] = shifts @ cell
-
-    def _shift_all_atoms(
-        shift_vec: Float[Array, " 3"],
-    ) -> Float[Array, " N 4"]:
-        atom_numbers: Float[Array, " N 1"] = coords[:, 0:1]
-        positions: Float[Array, " N 3"] = coords[:, 1:4]
-        shifted_positions: Float[Array, " N 3"] = positions + shift_vec
-        new_coords: Float[Array, " N 4"] = jnp.hstack(
-            (atom_numbers, shifted_positions)
-        )
-        return new_coords
-
-    expanded_coords: Float[Array, " M N 4"] = jax.vmap(_shift_all_atoms)(
-        shift_vectors
-    )
-    final_coords: Float[Array, " M 4"] = expanded_coords.reshape(-1, 4)
-    repeat_counts: Tuple[int, int, int] = (nx, ny, nz)
-    return final_coords, repeat_counts
-
-
-@jaxtyped(typechecker=beartype)
 def _slice_atoms(
     coords: Float[Array, " N 3"],
     atom_numbers: Int[Array, " N"],
@@ -765,209 +659,6 @@ def _slice_atoms(
 
 
 default_repeats: Int[Array, " 3"] = jnp.array([1, 1, 1])
-
-
-def _apply_periodic_repeats(
-    positions: Float[Array, " N 3"],
-    atomic_numbers: Int[Array, " N"],
-    lattice: Float[Array, " 3 3"],
-    repeats: Int[Array, " 3"],
-) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
-    """Apply periodic repeats to atomic structure using lattice vectors."""
-    nx: Int[Array, ""] = repeats[0]
-    ny: Int[Array, ""] = repeats[1]
-    nz: Int[Array, ""] = repeats[2]
-
-    max_n: int = 20
-    ix: Int[Array, " max_n"] = jnp.arange(max_n)
-    iy: Int[Array, " max_n"] = jnp.arange(max_n)
-    iz: Int[Array, " max_n"] = jnp.arange(max_n)
-
-    mask_x: Bool[Array, " max_n"] = ix < nx
-    mask_y: Bool[Array, " max_n"] = iy < ny
-    mask_z: Bool[Array, " max_n"] = iz < nz
-
-    ixx: Int[Array, " max_n max_n max_n"]
-    iyy: Int[Array, " max_n max_n max_n"]
-    izz: Int[Array, " max_n max_n max_n"]
-    ixx, iyy, izz = jnp.meshgrid(ix, iy, iz, indexing="ij")
-
-    maskxx: Bool[Array, " max_n max_n max_n"]
-    maskyy: Bool[Array, " max_n max_n max_n"]
-    maskzz: Bool[Array, " max_n max_n max_n"]
-    maskxx, maskyy, maskzz = jnp.meshgrid(
-        mask_x, mask_y, mask_z, indexing="ij"
-    )
-
-    mask_combined: Bool[Array, " max_n max_n max_n"] = maskxx & maskyy & maskzz
-    shifts: Float[Array, " max_n max_n max_n 3"] = (
-        ixx[..., None] * lattice[0]
-        + iyy[..., None] * lattice[1]
-        + izz[..., None] * lattice[2]
-    )
-
-    n_atoms: int = positions.shape[0]
-    max_shifts: int = max_n * max_n * max_n
-    shifts_flat: Float[Array, " max_n^3 3"] = shifts.reshape(max_shifts, 3)
-    positions_expanded: Float[Array, " max_n^3 N 3"] = (
-        positions[None, :, :] + shifts_flat[:, None, :]
-    )
-    repeated_positions_flat: Float[Array, " max_n^3*N 3"] = (
-        positions_expanded.reshape(-1, 3)
-    )
-
-    mask_flat: Bool[Array, " max_n^3"] = mask_combined.reshape(max_shifts)
-    atom_mask: Bool[Array, " max_n^3*N"] = jnp.repeat(mask_flat, n_atoms)
-    atom_mask_float: Float[Array, " max_n^3*N"] = atom_mask.astype(jnp.float32)
-    atom_mask_expanded: Float[Array, "max_n^3*N 1"] = atom_mask_float[:, None]
-    repeated_positions_masked: Float[Array, "max_n^3*N 3"] = (
-        repeated_positions_flat * atom_mask_expanded
-    )
-
-    atomic_numbers_tiled: Int[Array, " max_n^3*N"] = jnp.tile(
-        atomic_numbers, max_shifts
-    )
-    atom_mask_int: Int[Array, " max_n^3*N"] = atom_mask.astype(jnp.int32)
-    repeated_atomic_numbers_masked: Int[Array, " max_n^3*N"] = (
-        atomic_numbers_tiled * atom_mask_int
-    )
-
-    return (repeated_positions_masked, repeated_atomic_numbers_masked)
-
-
-def _return_positions_unchanged(
-    positions: Float[Array, " N 3"], atomic_numbers: Int[Array, " N"]
-) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, " max_n^3*N"]]:
-    """Return positions/atomic numbers unchanged with apply_repeats shape."""
-    n_atoms: int = positions.shape[0]
-    max_n: int = 20
-    max_shifts: int = max_n * max_n * max_n
-    max_total: int = max_shifts * n_atoms
-
-    positions_padded: Float[Array, "max_n^3*N 3"] = jnp.zeros((max_total, 3))
-    atomic_numbers_padded: Int[Array, " max_n^3*N"] = jnp.zeros(
-        max_total, dtype=jnp.int32
-    )
-
-    positions_padded = positions_padded.at[:n_atoms].set(positions)
-    atomic_numbers_padded = atomic_numbers_padded.at[:n_atoms].set(
-        atomic_numbers
-    )
-
-    return (positions_padded, atomic_numbers_padded)
-
-
-def _build_atomic_potential_lookup(
-    atom_nums: Int[Array, " N"],
-    height: int,
-    width: int,
-    pixel_size: ScalarFloat,
-    supersampling: ScalarInt,
-) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
-    """Build lookup table of atomic potentials and mapping array."""
-    unique_atoms: Int[Array, " 118"] = jnp.unique(
-        atom_nums, size=118, fill_value=-1
-    )
-    valid_mask: Bool[Array, " 118"] = unique_atoms >= 0
-
-    @jax.jit
-    def _calc_single_potential_fixed_grid(
-        atom_no: ScalarInt, is_valid: Bool
-    ) -> Float[Array, " h w"]:
-        potential = single_atom_potential(
-            atom_no=atom_no,
-            pixel_size=pixel_size,
-            grid_shape=(height, width),
-            center_coords=jnp.array([0.0, 0.0]),
-            supersampling=supersampling,
-            potential_extent=4.0,
-        )
-        return jnp.where(is_valid, potential, jnp.zeros((height, width)))
-
-    atomic_potentials: Float[Array, " 118 h w"] = jax.vmap(
-        _calc_single_potential_fixed_grid
-    )(unique_atoms, valid_mask)
-
-    atom_to_idx_array: Int[Array, " 119"] = jnp.full(119, -1, dtype=jnp.int32)
-    indices: Int[Array, " 118"] = jnp.arange(118, dtype=jnp.int32)
-    atom_indices: Int[Array, " 118"] = jnp.where(valid_mask, unique_atoms, -1)
-
-    def _update_mapping(
-        carry: Int[Array, " 119"], idx_atom: Tuple[ScalarInt, ScalarInt]
-    ) -> Tuple[Int[Array, " 119"], None]:
-        mapping_array: Int[Array, " 119"] = carry
-        idx: ScalarInt
-        atom: ScalarInt
-        idx, atom = idx_atom
-        mapping_array = jnp.where(
-            atom >= 0, mapping_array.at[atom].set(idx), mapping_array
-        )
-        return mapping_array, None
-
-    atom_to_idx_array, _ = jax.lax.scan(
-        _update_mapping, atom_to_idx_array, (indices, atom_indices)
-    )
-    return atomic_potentials, atom_to_idx_array
-
-
-def _add_atom_to_slice(
-    slice_pot: Float[Array, " h w"],
-    atom_data: Tuple[ScalarFloat, ScalarFloat, ScalarInt, ScalarInt],
-    potential_lookup: Tuple[
-        Float[Array, " 118 h w"],  # atomic_potentials
-        Int[Array, " 119"],  # atom_to_idx_array
-    ],
-    grid_params: Tuple[
-        ScalarFloat,  # x_min
-        ScalarFloat,  # y_min
-        ScalarFloat,  # pixel_size
-        int,  # width
-        int,  # height
-    ],
-    freq_grids: Tuple[
-        Float[Array, " 1 w"],  # kx
-        Float[Array, " h 1"],  # ky
-    ],
-    slice_idx: int,
-) -> Float[Array, " h w"]:
-    """Add single atom contribution to a slice using FFT shifting."""
-    x: ScalarFloat
-    y: ScalarFloat
-    atom_no: ScalarInt
-    atom_slice_idx: ScalarInt
-    x, y, atom_no, atom_slice_idx = atom_data
-
-    atomic_potentials, atom_to_idx_array = potential_lookup
-    x_min, y_min, pixel_size, width, height = grid_params
-    kx, ky = freq_grids
-
-    x_offset: ScalarFloat = x - x_min
-    y_offset: ScalarFloat = y - y_min
-    pixel_x: ScalarFloat = x_offset / pixel_size
-    pixel_y: ScalarFloat = y_offset / pixel_size
-
-    center_x: float = width / 2.0
-    center_y: float = height / 2.0
-    shift_x: ScalarFloat = pixel_x - center_x
-    shift_y: ScalarFloat = pixel_y - center_y
-
-    atom_idx: int = atom_to_idx_array[atom_no]
-    atom_pot: Float[Array, " h w"] = atomic_potentials[atom_idx]
-
-    kx_sx: Float[Array, " h w"] = kx * shift_x
-    ky_sy: Float[Array, " h w"] = ky * shift_y
-    phase_arg: Float[Array, " h w"] = kx_sx + ky_sy
-    phase: Complex[Array, " h w"] = jnp.exp(2j * jnp.pi * phase_arg)
-
-    atom_pot_fft: Complex[Array, " h w"] = jnp.fft.fft2(atom_pot)
-    shifted_fft: Complex[Array, " h w"] = atom_pot_fft * phase
-    shifted_pot: Float[Array, " h w"] = jnp.real(jnp.fft.ifft2(shifted_fft))
-
-    contribution: Float[Array, " h w"] = jnp.where(
-        atom_slice_idx == slice_idx, shifted_pot, jnp.zeros_like(shifted_pot)
-    ).astype(jnp.float32)
-
-    return slice_pot + contribution
 
 
 @jaxtyped(typechecker=beartype)
@@ -1041,7 +732,9 @@ def _process_all_slices(
     if num_slices is not None:
         n_slices: int = num_slices
     else:
-        max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
+        max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(
+            jnp.int32
+        )
         n_slices: int = int(max_slice_idx + 1)
     all_slices: Float[Array, " h w n_slices"] = jnp.zeros(
         (height, width, n_slices), dtype=jnp.float32
@@ -1050,6 +743,7 @@ def _process_all_slices(
     kx: Float[Array, " 1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
 
     def _process_single_slice(slice_idx: int) -> Float[Array, " h w"]:
+        """Process all atoms belonging to a single slice and accumulate their potentials."""
         slice_potential: Float[Array, " h w"] = jnp.zeros(
             (height, width), dtype=jnp.float32
         )
@@ -1058,10 +752,9 @@ def _process_all_slices(
 
         def _add_atom_contribution(
             carry: Float[Array, " h w"],
-            atom_data: Tuple[
-                ScalarFloat, ScalarFloat, ScalarInt, ScalarInt
-            ],
+            atom_data: Tuple[ScalarFloat, ScalarFloat, ScalarInt, ScalarInt],
         ) -> Tuple[Float[Array, " h w"], None]:
+            """Add a single atom's potential contribution to the slice using FFT shifting."""
             slice_pot: Float[Array, " h w"] = carry
             x: ScalarFloat
             y: ScalarFloat
@@ -1219,6 +912,7 @@ def _apply_repeats_or_return(
         atomic_numbers: Int[Array, " N"],
         lattice: Float[Array, " 3 3"],
     ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
+        """Apply periodic boundary conditions by tiling positions with lattice vectors."""
         mask_flat: Bool[Array, " M"]
         shift_indices: Int[Array, " M 3"]
         mask_flat, shift_indices = _build_shift_masks(repeats)
@@ -1241,6 +935,7 @@ def _apply_repeats_or_return(
         positions: Float[Array, " N 3"],
         atomic_numbers: Int[Array, " N"],
     ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
+        """Return positions unchanged but padded to match shape requirements."""
         n_atoms: int = positions.shape[0]
         max_n: int = 20
         max_shifts: int = max_n * max_n * max_n
@@ -1276,7 +971,7 @@ def _build_potential_lookup(
     pixel_size: ScalarFloat,
     supersampling: ScalarInt,
 ) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
-    """Build lookup table for atomic potentials"""
+    """Build lookup table for atomic potentials."""
     unique_atoms: Int[Array, " 118"] = jnp.unique(
         atom_nums, size=118, fill_value=-1
     )
@@ -1286,6 +981,7 @@ def _build_potential_lookup(
     def _calc_single_potential_fixed_grid(
         atom_no: ScalarInt, is_valid: Bool
     ) -> Float[Array, " h w"]:
+        """Calculate atomic potential for a single atom type on fixed grid."""
         potential = single_atom_potential(
             atom_no=atom_no,
             pixel_size=pixel_size,
@@ -1307,6 +1003,7 @@ def _build_potential_lookup(
     def _update_mapping2(
         carry: Int[Array, " 119"], idx_atom: Tuple[ScalarInt, ScalarInt]
     ) -> Tuple[Int[Array, " 119"], None]:
+        """Update atomic number to lookup index mapping array."""
         mapping_array: Int[Array, " 119"] = carry
         idx: ScalarInt
         atom: ScalarInt
@@ -1462,10 +1159,12 @@ def kirkland_potentials_xyz(
     output_height: int = height - 2 * crop_pixels
     output_width: int = width - 2 * crop_pixels
     n_slices_out: int = all_slices.shape[2]
-    cropped_slices: Float[Array, " h_crop w_crop n_slices"] = jax.lax.dynamic_slice(
-        all_slices,
-        (crop_pixels, crop_pixels, 0),
-        (output_height, output_width, n_slices_out),
+    cropped_slices: Float[Array, " h_crop w_crop n_slices"] = (
+        jax.lax.dynamic_slice(
+            all_slices,
+            (crop_pixels, crop_pixels, 0),
+            (output_height, output_width, n_slices_out),
+        )
     )
     pot_slices: PotentialSlices = make_potential_slices(
         slices=cropped_slices,

@@ -130,6 +130,7 @@ def create_cosine_scheduler(
     def scheduler_fn(
         state: LRSchedulerState,
     ) -> tuple[float, LRSchedulerState]:
+        """Apply cosine annealing schedule to update learning rate based on current step."""
         progress = jnp.minimum(state.step / total_steps, 1.0)
         cosine_decay = 0.5 * (1 + jnp.cos(jnp.pi * progress))
         lr = state.initial_lr * (
@@ -178,6 +179,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     def scheduler_fn(
         state: LRSchedulerState,
     ) -> tuple[float, LRSchedulerState]:
+        """Apply step decay schedule to reduce learning rate periodically."""
         num_drops = state.step // step_size
         lr = state.initial_lr * (gamma**num_drops)
         new_state = LRSchedulerState(
@@ -233,6 +235,7 @@ def create_warmup_cosine_scheduler(
     def scheduler_fn(
         state: LRSchedulerState,
     ) -> tuple[float, LRSchedulerState]:
+        """Apply warmup followed by cosine decay schedule to learning rate."""
         # Linear warmup
         warmup_progress = jnp.minimum(state.step / warmup_steps, 1.0)
         warmup_lr = state.initial_lr * warmup_progress
@@ -354,7 +357,9 @@ def wirtinger_grad(
     def grad_f(
         *args: Any,
     ) -> Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]:
+        """Compute Wirtinger gradient by splitting complex arguments and differentiating real and imaginary parts separately."""
         def split_complex(args):
+            """Split complex arguments into separate real and imaginary components."""
             return tuple(
                 jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args
             ) + tuple(
@@ -363,6 +368,7 @@ def wirtinger_grad(
             )
 
         def combine_complex(r, i):
+            """Recombine real and imaginary components into complex arguments."""
             return tuple(
                 rr + 1j * ii if jnp.iscomplexobj(arg) else rr
                 for rr, ii, arg in zip(r, i, args, strict=False)
@@ -372,11 +378,13 @@ def wirtinger_grad(
         n = len(args)
 
         def f_real(*split_args):
+            """Extract real part of the function output."""
             return jnp.real(
                 func2diff(*combine_complex(split_args[:n], split_args[n:]))
             )
 
         def f_imag(*split_args):
+            """Extract imaginary part of the function output."""
             return jnp.imag(
                 func2diff(*combine_complex(split_args[:n], split_args[n:]))
             )

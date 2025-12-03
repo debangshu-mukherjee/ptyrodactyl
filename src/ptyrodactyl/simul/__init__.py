@@ -20,20 +20,52 @@ simulations
 
 Routine Listings
 ----------------
-stem_4d : function
-    Generate 4D-STEM data from potential slices and probe.
-make_probe : function
-    Create electron probe with specified aberrations.
+aberration : function
+    Calculate aberration phase from aberration coefficients.
+annular_detector : function
+    Create annular detector mask for STEM imaging.
+atomic_symbol : function
+    Convert atomic number to chemical symbol.
+bessel_kv : function
+    Modified Bessel function of second kind.
 cbed : function
     Generate convergent beam electron diffraction patterns.
-transmission_func : function
-    Compute transmission function for a potential slice.
-propagation_func : function
-    Compute Fresnel propagation function.
+contrast_stretch : function
+    Contrast stretch for visualization.
+decompose_beam_to_modes : function
+    Decompose electron beam into orthogonal modes.
+fourier_calib : function
+    Calculate Fourier space calibration from real space.
+fourier_coords : function
+    Generate Fourier space coordinate arrays.
+kirkland_potentials : function
+    Kirkland atomic potential parameters lookup.
 kirkland_potentials_xyz : function
     Generate atomic potentials from XYZ coordinates using Kirkland parameters.
+make_probe : function
+    Create electron probe with specified aberrations.
 parse_xyz : function
     Parse XYZ file and return validated structure data.
+propagation_func : function
+    Compute Fresnel propagation function.
+reciprocal_lattice : function
+    Calculate reciprocal lattice vectors from real space lattice.
+rotate_structure : function
+    Rotate crystal structure by specified angles.
+rotmatrix_axis : function
+    Create rotation matrix from axis and angle.
+rotmatrix_vectors : function
+    Create rotation matrix from two vectors.
+shift_beam_fourier : function
+    Shift beam in Fourier space.
+single_atom_potential : function
+    Calculate single atom potential using Kirkland parameterization.
+stem_4d : function
+    Generate 4D-STEM data from potential slices and probe.
+transmission_func : function
+    Compute transmission function for a potential slice.
+wavelength_ang : function
+    Calculate electron wavelength in Angstroms from accelerating voltage.
 
 Notes
 -----
@@ -72,26 +104,27 @@ from .simulations import (
 )
 
 __all__: list[str] = [
+    # Functions (snake_case, alphabetical)
+    "aberration",
+    "annular_detector",
+    "atomic_symbol",
     "bessel_kv",
+    "cbed",
     "contrast_stretch",
+    "decompose_beam_to_modes",
+    "fourier_calib",
+    "fourier_coords",
+    "kirkland_potentials",
     "kirkland_potentials_xyz",
-    "single_atom_potential",    
+    "make_probe",
+    "parse_xyz",
+    "propagation_func",
     "reciprocal_lattice",
     "rotate_structure",
     "rotmatrix_axis",
     "rotmatrix_vectors",
-    "atomic_symbol",
-    "kirkland_potentials",
-    "parse_xyz",
-    "aberration",
-    "annular_detector",
-    "cbed",
-    "decompose_beam_to_modes",
-    "fourier_calib",
-    "fourier_coords",
-    "make_probe",
-    "propagation_func",
     "shift_beam_fourier",
+    "single_atom_potential",
     "stem_4d",
     "transmission_func",
     "wavelength_ang",

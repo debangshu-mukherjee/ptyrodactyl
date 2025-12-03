@@ -89,13 +89,13 @@ def single_slice_ptychography(
         Initial guess for potential slice.
     initial_beam : CalibratedArray
         Initial guess for electron beam.
-    slice_thickness : scalar_numeric
+    slice_thickness : ScalarNumeric
         Thickness of each slice.
-    save_every : scalar_int, optional
+    save_every : ScalarInt, optional
         Save every nth iteration. Default is 10.
-    num_iterations : scalar_int, optional
+    num_iterations : ScalarInt, optional
         Number of optimization iterations. Default is 1000.
-    learning_rate : scalar_float, optional
+    learning_rate : ScalarFloat, optional
         Learning rate for optimization. Default is 0.001.
     loss_type : str, optional
         Type of loss function to use. Default is "mse".
@@ -264,13 +264,13 @@ def single_slice_poscorrected(
         Initial guess for potential slice.
     initial_beam : CalibratedArray
         Initial guess for electron beam.
-    slice_thickness : scalar_numeric
+    slice_thickness : ScalarNumeric
         Thickness of each slice.
-    save_every : scalar_int, optional
+    save_every : ScalarInt, optional
         Save every nth iteration. Default is 10.
-    num_iterations : scalar_int, optional
+    num_iterations : ScalarInt, optional
         Number of optimization iterations. Default is 1000.
-    learning_rate : scalar_float or Float[Array, "2"], optional
+    learning_rate : ScalarFloat or Float[Array, "2"], optional
         Learning rate for potential slice and beam optimization.
         If the learning rate is a scalar, it is used for both
         potential slice and position optimization. If it is an array,
@@ -499,13 +499,13 @@ def single_slice_multi_modal(
         Initial guess for potential slice.
     initial_beam : ProbeModes
         Initial guess for electron beam with multiple probe modes.
-    slice_thickness : scalar_numeric
+    slice_thickness : ScalarNumeric
         Thickness of each slice.
-    save_every : scalar_int, optional
+    save_every : ScalarInt, optional
         Save every nth iteration. Default is 10.
-    num_iterations : scalar_int, optional
+    num_iterations : ScalarInt, optional
         Number of optimization iterations. Default is 1000.
-    learning_rate : scalar_float or Float[Array, "2"], optional
+    learning_rate : ScalarFloat or Float[Array, "2"], optional
         Learning rate for potential slice and beam optimization.
         If the learning rate is a scalar, it is used for both
         potential slice and position optimization. If it is an array,
@@ -703,15 +703,15 @@ def multi_slice_multi_modal(
         Initial guess for potential slice.
     initial_beam : Complex[Array, "H W"]
         Initial guess for electron beam.
-    slice_thickness : scalar_numeric
+    slice_thickness : ScalarNumeric
         Thickness of each slice.
-    save_every : scalar_int, optional
+    save_every : ScalarInt, optional
         Save every nth iteration. Default is 10.
-    num_iterations : scalar_int, optional
+    num_iterations : ScalarInt, optional
         Number of optimization iterations. Default is 1000.
-    learning_rate : scalar_float, optional
+    learning_rate : ScalarFloat, optional
         Learning rate for potential slice and beam optimization. Default is 0.001.
-    pos_learning_rate : scalar_float, optional
+    pos_learning_rate : ScalarFloat, optional
         Learning rate for position optimization. Default is 0.01.
     loss_type : str, optional
         Type of loss function to use. Default is "mse".

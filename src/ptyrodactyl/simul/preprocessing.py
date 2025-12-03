@@ -91,7 +91,7 @@ def atomic_symbol(symbol_string: str) -> ScalarInt:
 
     Returns
     -------
-    scalar_int
+    ScalarInt
         Atomic number corresponding to the symbol.
 
     Raises

@@ -302,7 +302,7 @@ def bessel_kv(
 
     Parameters
     ----------
-    v : scalar_float
+    v : ScalarFloat
         Order of the Bessel function (v >= 0).
     x : Float[Array, "..."]
         Positive real input array.
@@ -449,19 +449,19 @@ def single_atom_potential(
 
     Parameters
     ----------
-    atom_no : scalar_int
+    atom_no : ScalarInt
         Atomic number of the atom whose potential is being calculated.
-    pixel_size : scalar_float
+    pixel_size : ScalarFloat
         Real space pixel size in Ångstroms.
-    grid_shape : Tuple[scalar_int, scalar_int], optional
+    grid_shape : Tuple[ScalarInt, ScalarInt], optional
         Shape of the output grid (height, width). If None, calculated from
         potential_extent. Defaults to None.
     center_coords : Float[Array, " 2"], optional
         (x, y) coordinates in Ångstroms where atom should be centered.
         If None, centers at grid center. Defaults to None.
-    supersampling : scalar_int, optional
+    supersampling : ScalarInt, optional
         Supersampling factor for increased accuracy. Defaults to 4.
-    potential_extent : scalar_float, optional
+    potential_extent : ScalarFloat, optional
         Distance in Ångstroms from atom center to calculate potential.
         Defaults to 4.0 Å.
 
@@ -603,7 +603,7 @@ def _compute_min_repeats(
     cell : Float[Array, " 3 3"]
         Real-space unit cell matrix where rows represent lattice vectors
         a1, a2, a3.
-    threshold_nm : scalar_float
+    threshold_nm : ScalarFloat
         Minimum required length in nanometers for the supercell
         along each direction.
 
@@ -866,7 +866,7 @@ def _build_atomic_potential_lookup(
 
     @jax.jit
     def _calc_single_potential_fixed_grid(
-        atom_no: scalar_int, is_valid: Bool
+        atom_no: ScalarInt, is_valid: Bool
     ) -> Float[Array, " h w"]:
         potential = single_atom_potential(
             atom_no=atom_no,
@@ -1259,7 +1259,7 @@ def _build_potential_lookup(
 
     @jax.jit
     def _calc_single_potential_fixed_grid(
-        atom_no: scalar_int, is_valid: Bool
+        atom_no: ScalarInt, is_valid: Bool
     ) -> Float[Array, " h w"]:
         potential = single_atom_potential(
             atom_no=atom_no,
@@ -1312,17 +1312,17 @@ def kirkland_potentials_xyz(
     ----------
     xyz_data : XYZData
         Input structure containing atomic positions and numbers.
-    pixel_size : scalar_float
+    pixel_size : ScalarFloat
         Size of each pixel in Angstroms (becomes calib in PotentialSlices).
-    slice_thickness : scalar_float, optional
+    slice_thickness : ScalarFloat, optional
         Thickness of each slice in Angstroms. Defaults to 1.0.
     repeats : Int[Array, " 3"], optional
         Number of unit cell repeats in [x, y, z] directions. Default is
         [1, 1, 1], which means no repeating. Requires xyz_data.lattice to be
         provided for repeating the structure.
-    padding : scalar_float, optional
+    padding : ScalarFloat, optional
         Padding in Angstroms added to all sides. Defaults to 4.0.
-    supersampling : scalar_int, optional
+    supersampling : ScalarInt, optional
         Supersampling factor for accuracy. Defaults to 4.
 
     Returns

@@ -92,7 +92,7 @@ def transmission_func(
     ----------
     pot_slice : Float[Array, " a b"]
         Potential slice in Kirkland units.
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         Microscope operating voltage in kiloelectronvolts.
 
     Returns
@@ -138,15 +138,15 @@ def propagation_func(
 
     Parameters
     ----------
-    imsize_y : scalar_int
+    imsize_y : ScalarInt
         Size of the image of the propagator in y axis.
-    imsize_x : scalar_int
+    imsize_x : ScalarInt
         Size of the image of the propagator in x axis.
-    thickness_ang : scalar_numeric
+    thickness_ang : ScalarNumeric
         Distance between the slices in angstroms.
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         Accelerating voltage in kilovolts.
-    calib_ang : scalar_float
+    calib_ang : ScalarFloat
         Calibration or pixel size in angstroms.
 
     Returns
@@ -185,7 +185,7 @@ def fourier_coords(
 
     Parameters
     ----------
-    calibration : scalar_float or Float[Array, " 2"]
+    calibration : ScalarFloat or Float[Array, " 2"]
         The pixel size in angstroms in real space.
     image_size : Int[Array, " 2"]
         The size of the beam in pixels.
@@ -287,19 +287,19 @@ def make_probe(
 
     Parameters
     ----------
-    aperture : scalar_numeric
+    aperture : ScalarNumeric
         The aperture size in milliradians.
-    voltage : scalar_numeric
+    voltage : ScalarNumeric
         The microscope accelerating voltage in kiloelectronvolts.
     image_size : Int[Array, " 2"]
         The size of the beam in pixels.
-    calibration_pm : scalar_float
+    calibration_pm : ScalarFloat
         The calibration in picometers.
-    defocus : scalar_numeric, optional
+    defocus : ScalarNumeric, optional
         The defocus value in angstroms. Default is 0.
-    c3 : scalar_numeric, optional
+    c3 : ScalarNumeric, optional
         The C3 value in angstroms. Default is 0.
-    c5 : scalar_numeric, optional
+    c5 : ScalarNumeric, optional
         The C5 value in angstroms. Default is 0.
 
     Returns
@@ -371,13 +371,13 @@ def aberration(
     ----------
     fourier_coord : Float[Array, " H W"]
         The Fourier coordinates.
-    lambda_angstrom : scalar_float
+    lambda_angstrom : ScalarFloat
         The wavelength in angstroms.
-    defocus : scalar_float, optional
+    defocus : ScalarFloat, optional
         The defocus value in angstroms. Default is 0.0.
-    c3 : scalar_float, optional
+    c3 : ScalarFloat, optional
         The C3 value in angstroms. Default is 0.0.
-    c5 : scalar_float, optional
+    c5 : ScalarFloat, optional
         The C5 value in angstroms. Default is 0.0.
 
     Returns
@@ -408,7 +408,7 @@ def wavelength_ang(voltage_kv: ScalarNumeric) -> Float[Array, " "]:
 
     Parameters
     ----------
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         The microscope accelerating voltage in kiloelectronvolts.
         Can be a scalar or array.
 
@@ -461,9 +461,9 @@ def cbed(
         The potential slice(s) with the following attributes:
         - slices : Float[Array, " H W S"]
             Individual potential slices in Kirkland units. S is number of slices
-        - slice_thickness : scalar_numeric
+        - slice_thickness : ScalarNumeric
             Thickness of each slice in angstroms
-        - calib : scalar_float
+        - calib : ScalarFloat
             Pixel calibration
     beam : ProbeModes
         The electron beam with the following attributes:
@@ -471,9 +471,9 @@ def cbed(
             M is number of modes
         - weights : Float[Array, " M"]
             Mode occupation numbers
-        - calib : scalar_float
+        - calib : ScalarFloat
             Pixel calibration
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         The accelerating voltage in kilovolts.
 
     Returns
@@ -482,9 +482,9 @@ def cbed(
         The calculated CBED pattern with the following attributes:
         - data_array : Float[Array, " H W"]
             The calculated CBED pattern.
-        - calib_y : scalar_float
+        - calib_y : ScalarFloat
             The calibration in y direction.
-        - calib_x : scalar_float
+        - calib_x : ScalarFloat
             The calibration in x direction.
         - real_space : bool
             False, indicating reciprocal space data.
@@ -576,7 +576,7 @@ def shift_beam_fourier(
     pos : Float[Array, " #P 2"]
         The (y, x) position(s) to shift to in pixels.
         Can be a single position [2] or multiple [P, 2].
-    calib_ang : scalar_float
+    calib_ang : ScalarFloat
         The calibration in angstroms.
 
     Returns
@@ -653,9 +653,9 @@ def stem_4d(
     positions : Num[Array, "#P 2"]
         The (y, x) positions to shift the beam to.
         With P being the number of positions.
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         The accelerating voltage in kilovolts.
-    calib_ang : scalar_float
+    calib_ang : ScalarFloat
         The calibration in angstroms.
 
     Returns
@@ -730,9 +730,9 @@ def decompose_beam_to_modes(
     ----------
     beam : CalibratedArray
         The electron beam to decompose.
-    num_modes : scalar_int
+    num_modes : ScalarInt
         The number of modes to decompose into.
-    first_mode_weight : scalar_float, optional
+    first_mode_weight : ScalarFloat, optional
         The weight of the first mode. Default is 0.6.
         The remaining weight is divided equally among the other modes.
         Must be below 1.0.
@@ -745,7 +745,7 @@ def decompose_beam_to_modes(
             The orthogonal modes.
         - weights : Float[Array, " M"]
             The mode occupation numbers.
-        - calib : scalar_float
+        - calib : ScalarFloat
             The pixel calibration.
 
     Notes
@@ -821,9 +821,9 @@ def stem_4d_sharded(
     positions : Num[Array, "#P 2"]
         The (y, x) positions to shift the beam to.
         With P being the number of positions.
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         The accelerating voltage in kilovolts.
-    calib_ang : scalar_float
+    calib_ang : ScalarFloat
         The calibration in angstroms.
 
     Returns
@@ -915,9 +915,9 @@ def stem_4d_parallel(
         The electron beam mode(s).
     positions : Num[Array, "#P 2"]
         The (y, x) positions to shift the beam to.
-    voltage_kv : scalar_numeric
+    voltage_kv : ScalarNumeric
         The accelerating voltage in kilovolts.
-    calib_ang : scalar_float
+    calib_ang : ScalarFloat
         The calibration in angstroms.
     n_devices : int, optional
         Number of devices to use. If None, uses all available devices.

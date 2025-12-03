@@ -703,7 +703,7 @@ def stem_4d(
         calib=beam.calib,
     )
     first_cbed: CalibratedArray = cbed(
-        pot_slices=pot_slice, beam=first_beam_modes, voltage_kV=voltage_kv
+        pot_slices=pot_slice, beam=first_beam_modes, voltage_kv=voltage_kv
     )
     fourier_calib: Float[Array, " "] = first_cbed.calib_y
     scan_positions_ang: Float[Array, " P 2"] = positions * calib_ang
@@ -712,7 +712,7 @@ def stem_4d(
         real_space_calib=calib_ang,
         fourier_space_calib=fourier_calib,
         scan_positions=scan_positions_ang,
-        voltage_kV=voltage_kv,
+        voltage_kv=voltage_kv,
     )
     return stem4d_data
 
@@ -864,7 +864,7 @@ def stem_4d_sharded(
         cbed_result: CalibratedArray = cbed(
             pot_slices=pot_slice,
             beam=current_probe_modes,
-            voltage_kV=voltage_kv,
+            voltage_kv=voltage_kv,
         )
         return cbed_result.data_array
 
@@ -877,7 +877,7 @@ def stem_4d_sharded(
         calib=beam.calib,
     )
     first_cbed: CalibratedArray = cbed(
-        pot_slices=pot_slice, beam=first_beam_modes, voltage_kV=voltage_kv
+        pot_slices=pot_slice, beam=first_beam_modes, voltage_kv=voltage_kv
     )
     fourier_calib: Float[Array, " "] = first_cbed.calib_y
     scan_positions_ang: Float[Array, " P 2"] = positions * calib_ang
@@ -957,7 +957,7 @@ def stem_4d_parallel(
             cbed_result: CalibratedArray = cbed(
                 pot_slices=pot_slice,
                 beam=current_probe_modes,
-                voltage_kV=voltage_kv,
+                voltage_kv=voltage_kv,
             )
             return cbed_result.data_array
 

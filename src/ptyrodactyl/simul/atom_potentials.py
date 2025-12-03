@@ -26,6 +26,8 @@ used internally by the module for slice partitioning, periodic image
 expansion, Bessel function calculations, and potential lookup tables.
 """
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -47,6 +49,7 @@ jax.config.update("jax_enable_x64", True)
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def contrast_stretch(
     series: Union[Float[Array, " H W"], Float[Array, " N H W"]],
     p1: float,
@@ -66,7 +69,7 @@ def contrast_stretch(
 
     Returns
     -------
-    Float[Array, " H W"] | Float[Array, " N H W"]
+    final_result : Float[Array, " H W"] | Float[Array, " N H W"]
         Intensity-rescaled image(s) with same shape as input.
 
     Notes
@@ -442,8 +445,8 @@ def single_atom_potential(
     pixel_size: ScalarFloat,
     grid_shape: Optional[Tuple[ScalarInt, ScalarInt]] = None,
     center_coords: Optional[Float[Array, " 2"]] = None,
-    supersampling: Optional[ScalarInt] = 4,
-    potential_extent: Optional[ScalarFloat] = 4.0,
+    supersampling: ScalarInt = 4,
+    potential_extent: ScalarFloat = 4.0,
 ) -> Float[Array, " h w"]:
     """Calculate projected potential of a single atom using Kirkland factors.
 
@@ -705,29 +708,32 @@ def _slice_atoms(
     atom_numbers: Int[Array, " N"],
     slice_thickness: ScalarNumeric,
 ) -> Float[Array, " N 4"]:
-    """Partitions atoms into slices along the z-axis.
+    """Partition atoms into slices along the z-axis.
 
     This internal function organizes atomic positions for slice-by-slice
     potential calculations in electron microscopy. Returns atoms sorted
     by slice number.
 
-    Args:
-        coords: Atomic positions with shape (N, 3) where columns are x, y, z
-            coordinates in Angstroms. Float[Array, "N 3"].
-        atom_numbers: Atomic numbers for each of the N atoms, used to
-            identify element types. Int[Array, "N"].
-        slice_thickness: Thickness of each slice in Angstroms. Can be
-            float, int, or 0-dimensional JAX array.
+    Parameters
+    ----------
+    coords : Float[Array, " N 3"]
+        Atomic positions where columns are x, y, z coordinates in Angstroms.
+    atom_numbers : Int[Array, " N"]
+        Atomic numbers for each of the N atoms, used to identify element types.
+    slice_thickness : ScalarNumeric
+        Thickness of each slice in Angstroms.
 
-    Returns:
-        Array with shape (N, 4) containing [x, y, slice_num, atom_number]
-        for each atom, sorted by ascending slice number. Slice numbers start
-        from 0. Float[Array, "N 4"].
+    Returns
+    -------
+    sorted_atoms : Float[Array, " N 4"]
+        Array containing [x, y, slice_num, atom_number] for each atom,
+        sorted by ascending slice number. Slice numbers start from 0.
 
-    Note:
-        - Number of slices is ceil((z_max - z_min) / slice_thickness)
-        - Atoms exactly at slice boundaries are assigned to the lower slice
-        - All arrays are JAX arrays for compatibility with JIT compilation
+    Notes
+    -----
+    - Number of slices is ceil((z_max - z_min) / slice_thickness)
+    - Atoms exactly at slice boundaries are assigned to the lower slice
+    - All arrays are JAX arrays for compatibility with JIT compilation
 
     Algorithm:
         - Extract z-coordinates and find minimum and maximum z values
@@ -970,15 +976,26 @@ def _compute_grid_dimensions(
     y_coords: Float[Array, " N"],
     padding: ScalarFloat,
     pixel_size: ScalarFloat,
+    grid_height: Optional[int] = None,
+    grid_width: Optional[int] = None,
 ) -> Tuple[Float[Array, ""], Float[Array, ""], int, int]:
-    """Compute grid dimensions and ranges for potential slices."""
+    """Compute grid dimensions and ranges for potential slices.
+
+    If grid_height and grid_width are provided, they are used directly
+    (for JIT compatibility). Otherwise, dimensions are computed from
+    the coordinate ranges.
+    """
     x_coords_min: Float[Array, ""] = jnp.min(x_coords)
-    x_coords_max: Float[Array, ""] = jnp.max(x_coords)
     y_coords_min: Float[Array, ""] = jnp.min(y_coords)
-    y_coords_max: Float[Array, ""] = jnp.max(y_coords)
     x_min: Float[Array, ""] = x_coords_min - padding
-    x_max: Float[Array, ""] = x_coords_max + padding
     y_min: Float[Array, ""] = y_coords_min - padding
+
+    if grid_height is not None and grid_width is not None:
+        return x_min, y_min, grid_width, grid_height
+
+    x_coords_max: Float[Array, ""] = jnp.max(x_coords)
+    y_coords_max: Float[Array, ""] = jnp.max(y_coords)
+    x_max: Float[Array, ""] = x_coords_max + padding
     y_max: Float[Array, ""] = y_coords_max + padding
     x_range: Float[Array, ""] = x_max - x_min
     y_range: Float[Array, ""] = y_max - y_min
@@ -1010,14 +1027,22 @@ def _process_all_slices(
         int,  # height
         int,  # width
     ],
+    num_slices: Optional[int] = None,
 ) -> Float[Array, " h w n_slices"]:
-    """Process all slices and accumulate atomic potentials."""
+    """Process all slices and accumulate atomic potentials.
+
+    If num_slices is provided, it is used directly (for JIT compatibility).
+    Otherwise, it is computed from the maximum slice index.
+    """
     x_coords, y_coords, atom_nums, slice_indices = atom_data
     atomic_potentials, atom_to_idx_array = potential_data
     x_min, y_min, pixel_size, height, width = grid_params
 
-    max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
-    n_slices: Int[Array, ""] = max_slice_idx + 1
+    if num_slices is not None:
+        n_slices: int = num_slices
+    else:
+        max_slice_idx: Int[Array, ""] = jnp.max(slice_indices).astype(jnp.int32)
+        n_slices: int = int(max_slice_idx + 1)
     all_slices: Float[Array, " h w n_slices"] = jnp.zeros(
         (height, width, n_slices), dtype=jnp.float32
     )
@@ -1093,7 +1118,7 @@ def _process_all_slices(
 @jaxtyped(typechecker=beartype)
 def _build_shift_masks(
     repeats: Int[Array, " 3"],
-    max_n: Optional[int] = 20,
+    max_n: int = 20,
 ) -> Tuple[Bool[Array, " max_n^3"], Int[Array, " max_n^3 3"]]:
     """Build shift indices and masks for periodic repeats."""
     nx: Int[Array, ""] = repeats[0]
@@ -1298,13 +1323,15 @@ def _build_potential_lookup(
 
 
 @jaxtyped(typechecker=beartype)
+@partial(jax.jit, static_argnames=["grid_shape", "supersampling"])
 def kirkland_potentials_xyz(
     xyz_data: XYZData,
     pixel_size: ScalarFloat,
-    slice_thickness: Optional[ScalarFloat] = 1.0,
-    repeats: Optional[Int[Array, " 3"]] = default_repeats,
-    padding: Optional[ScalarFloat] = 4.0,
-    supersampling: Optional[ScalarInt] = 4,
+    slice_thickness: ScalarFloat = 1.0,
+    repeats: Int[Array, " 3"] = default_repeats,
+    padding: ScalarFloat = 4.0,
+    supersampling: ScalarInt = 4,
+    grid_shape: Optional[Tuple[int, int, int]] = None,
 ) -> PotentialSlices:
     """Convert XYZData structure to PotentialSlices.
 
@@ -1324,6 +1351,12 @@ def kirkland_potentials_xyz(
         Padding in Angstroms added to all sides. Defaults to 4.0.
     supersampling : ScalarInt, optional
         Supersampling factor for accuracy. Defaults to 4.
+    grid_shape : Tuple[int, int, int], optional
+        Static grid shape as (height, width, n_slices). When provided, enables
+        JIT compilation by using fixed array dimensions. The output will have
+        shape (height - 2*crop_pixels, width - 2*crop_pixels, n_slices) where
+        crop_pixels = round(padding / pixel_size). If None, dimensions are
+        computed dynamically from the input data (not JIT-compatible).
 
     Returns
     -------
@@ -1334,6 +1367,13 @@ def kirkland_potentials_xyz(
     -----
     Calculates atomic potentials and assembles them into slices using FFT
     shifts for precise positioning.
+
+    For JIT compilation, provide the grid_shape parameter. You can determine
+    appropriate values by first calling without grid_shape and examining the
+    output dimensions, or by computing them from your structure dimensions:
+        height = ceil((y_max - y_min + 2*padding) / pixel_size)
+        width = ceil((x_max - x_min + 2*padding) / pixel_size)
+        n_slices = ceil(z_extent / slice_thickness)
 
     Algorithm:
         - Extract atomic positions, atomic numbers, and lattice from the input
@@ -1391,12 +1431,18 @@ def kirkland_potentials_xyz(
     slice_indices: Int[Array, " N"] = sliced_atoms[:, 2].astype(jnp.int32)
     atom_nums: Int[Array, " N"] = sliced_atoms[:, 3].astype(jnp.int32)
 
+    grid_height: Optional[int] = None
+    grid_width: Optional[int] = None
+    num_slices: Optional[int] = None
+    if grid_shape is not None:
+        grid_height, grid_width, num_slices = grid_shape
+
     x_min: Float[Array, ""]
     y_min: Float[Array, ""]
     width: int
     height: int
     x_min, y_min, width, height = _compute_grid_dimensions(
-        x_coords, y_coords, padding, pixel_size
+        x_coords, y_coords, padding, pixel_size, grid_height, grid_width
     )
 
     atomic_potentials: Float[Array, " 118 h w"]
@@ -1409,13 +1455,18 @@ def kirkland_potentials_xyz(
         (x_coords, y_coords, atom_nums, slice_indices),
         (atomic_potentials, atom_to_idx_array),
         (x_min, y_min, pixel_size, height, width),
+        num_slices,
     )
 
-    padding_pixels_float: Float[Array, ""] = jnp.round(padding / pixel_size)
-    crop_pixels: int = int(padding_pixels_float)
-    cropped_slices: Float[Array, " h_crop w_crop n_slices"] = all_slices[
-        crop_pixels:-crop_pixels, crop_pixels:-crop_pixels, :
-    ]
+    crop_pixels: int = int(jnp.round(padding / pixel_size))
+    output_height: int = height - 2 * crop_pixels
+    output_width: int = width - 2 * crop_pixels
+    n_slices_out: int = all_slices.shape[2]
+    cropped_slices: Float[Array, " h_crop w_crop n_slices"] = jax.lax.dynamic_slice(
+        all_slices,
+        (crop_pixels, crop_pixels, 0),
+        (output_height, output_width, n_slices_out),
+    )
     pot_slices: PotentialSlices = make_potential_slices(
         slices=cropped_slices,
         slice_thickness=slice_thickness,

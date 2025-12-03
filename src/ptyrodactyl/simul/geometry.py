@@ -32,6 +32,7 @@ from ptyrodactyl.tools import ScalarFloat, ScalarNumeric
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def rotmatrix_vectors(
     v1: Real[Array, " 3"], v2: Real[Array, " 3"]
 ) -> Float[Array, "3 3"]:
@@ -146,6 +147,7 @@ def rotmatrix_vectors(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def rotmatrix_axis(
     axis: Real[Array, " 3"], theta: ScalarNumeric
 ) -> Float[Array, "3 3"]:
@@ -224,11 +226,12 @@ def rotmatrix_axis(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def rotate_structure(
     coords: Real[Array, " N 4"],
     cell: Real[Array, "3 3"],
     rotation_matrix: Real[Array, "3 3"],
-    theta: Optional[ScalarNumeric] = 0,
+    theta: ScalarNumeric = 0,
 ) -> Tuple[Float[Array, " N 4"], Float[Array, "3 3"]]:
     """Apply rotation transformations to a crystal structure.
 

@@ -29,10 +29,6 @@ shift_beam_fourier : function
     Shifts electron beam in Fourier space for scanning.
 stem_4d : function
     Generates 4D-STEM data with multiple probe positions.
-stem_4d_sharded : function
-    Sharded version using JAX's automatic sharding API.
-stem_4d_parallel : function
-    Parallel version with explicit device control using shard_map.
 decompose_beam_to_modes : function
     Decomposes electron beam into orthogonal modes.
 annular_detector : function
@@ -48,12 +44,8 @@ using the factory functions from the tools module.
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Any, Optional, Tuple, Union
+from beartype.typing import Tuple, Union
 from jax import lax
-from jax.experimental import mesh_utils
-from jax.experimental.shard_map import shard_map
-from jax.sharding import Mesh, NamedSharding
-from jax.sharding import PartitionSpec as P
 from jaxtyping import (
     Array,
     Bool,
@@ -83,10 +75,11 @@ jax.config.update("jax_enable_x64", True)
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def transmission_func(
     pot_slice: Float[Array, " a b"], voltage_kv: ScalarNumeric
 ) -> Complex[Array, " a b"]:
-    """Calculate the complex transmission function from a single potential slice.
+    """Calculate the complex transmission function of a single potential slice.
 
     Parameters
     ----------
@@ -97,7 +90,7 @@ def transmission_func(
 
     Returns
     -------
-    Complex[Array, " a b"]
+    trans : Complex[Array, " a b"]
         The transmission function of a single crystal slice.
 
     Notes
@@ -109,13 +102,10 @@ def transmission_func(
     - Calculate the sigma value, which is the constant for the phase shift
     - Calculate the transmission function as a complex exponential
     """
-
     voltage: Float[Array, " "] = jnp.multiply(voltage_kv, jnp.asarray(1000.0))
-
     m_e: Float[Array, " "] = jnp.asarray(9.109383e-31)
     e_e: Float[Array, " "] = jnp.asarray(1.602177e-19)
     c: Float[Array, " "] = jnp.asarray(299792458.0)
-
     ev: Float[Array, " "] = jnp.multiply(e_e, voltage)
     lambda_angstrom: Float[Array, " "] = wavelength_ang(voltage_kv)
     einstein_energy: Float[Array, " "] = jnp.multiply(m_e, jnp.square(c))
@@ -127,6 +117,7 @@ def transmission_func(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def propagation_func(
     imsize_y: ScalarInt,
     imsize_x: ScalarInt,
@@ -151,7 +142,7 @@ def propagation_func(
 
     Returns
     -------
-    Complex[Array, " h w"]
+    prop : Complex[Array, " h w"]
         The propagation function of the same size given by imsize.
 
     Notes
@@ -192,7 +183,7 @@ def fourier_coords(
 
     Returns
     -------
-    CalibratedArray
+    calibrated_inverse_array : CalibratedArray
         The calibrated inverse array with the following attributes:
         - data_array : Float[Array, " H W"]
             The inverse array data
@@ -257,7 +248,7 @@ def fourier_calib(
 
     Returns
     -------
-    Float[Array, " 2"]
+    inverse_space_calib : Float[Array, " 2"]
         The Fourier calibration in inverse angstroms.
 
     Notes
@@ -279,9 +270,9 @@ def make_probe(
     voltage: ScalarNumeric,
     image_size: Int[Array, " 2"],
     calibration_pm: ScalarFloat,
-    defocus: Optional[ScalarNumeric] = 0.0,
-    c3: Optional[ScalarNumeric] = 0.0,
-    c5: Optional[ScalarNumeric] = 0.0,
+    defocus: ScalarNumeric = 0.0,
+    c3: ScalarNumeric = 0.0,
+    c5: ScalarNumeric = 0.0,
 ) -> Complex[Array, " h w"]:
     """Calculate an electron probe with spherical aberrations.
 
@@ -304,7 +295,7 @@ def make_probe(
 
     Returns
     -------
-    Complex[Array, " h w"]
+    probe_real_space : Complex[Array, " h w"]
         The calculated electron probe in real space.
 
     Notes
@@ -358,14 +349,15 @@ def make_probe(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def aberration(
     fourier_coord: Float[Array, " H W"],
     lambda_angstrom: ScalarFloat,
-    defocus: Optional[ScalarFloat] = 0.0,
-    c3: Optional[ScalarFloat] = 0.0,
-    c5: Optional[ScalarFloat] = 0.0,
+    defocus: ScalarFloat = 0.0,
+    c3: ScalarFloat = 0.0,
+    c5: ScalarFloat = 0.0,
 ) -> Float[Array, " H W"]:
-    """Calculate the aberration function for the electron probe based on the Fourier coordinates.
+    """Calculate the aberration function for the electron probe.
 
     Parameters
     ----------
@@ -382,7 +374,7 @@ def aberration(
 
     Returns
     -------
-    Float[Array, " H W"]
+    chi_probe : Float[Array, " H W"]
         The calculated aberration function.
 
     Notes
@@ -403,6 +395,7 @@ def aberration(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def wavelength_ang(voltage_kv: ScalarNumeric) -> Float[Array, " "]:
     """Calculate the relativistic electron wavelength in angstroms.
 
@@ -445,15 +438,13 @@ def wavelength_ang(voltage_kv: ScalarNumeric) -> Float[Array, " "]:
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def cbed(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
     voltage_kv: ScalarNumeric,
 ) -> CalibratedArray:
-    """Calculate the CBED pattern for single/multiple slices and single/multiple beam modes.
-
-    This function computes the Convergent Beam Electron Diffraction (CBED) pattern
-    by propagating one or more beam modes through one or more potential slices.
+    """Calculate the CBED pattern for slices and beam modes.
 
     Parameters
     ----------
@@ -478,7 +469,7 @@ def cbed(
 
     Returns
     -------
-    CalibratedArray
+    cbed_pytree : CalibratedArray
         The calculated CBED pattern with the following attributes:
         - data_array : Float[Array, " H W"]
             The calculated CBED pattern.
@@ -491,6 +482,10 @@ def cbed(
 
     Notes
     -----
+    This function computes the Convergent Beam Electron Diffraction (CBED) 
+    pattern by propagating one or more beam modes through one or more 
+    potential slices.
+
     Algorithm:
     - Ensure 3D arrays even for single slice/mode
     - Calculate the transmission function for a single slice
@@ -562,6 +557,7 @@ def cbed(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def shift_beam_fourier(
     beam: Union[Float[Array, " hh ww *mm"], Complex[Array, " hh ww *mm"]],
     pos: Float[Array, " #pp 2"],
@@ -581,7 +577,7 @@ def shift_beam_fourier(
 
     Returns
     -------
-    Complex128[Array, "#P H W #M"]
+    all_shifted_beams : Complex128[Array, "#P H W #M"]
         The shifted beam(s) for all position(s) and mode(s).
 
     Notes
@@ -634,6 +630,7 @@ def shift_beam_fourier(
 
 
 @jaxtyped(typechecker=beartype)
+@jax.jit
 def stem_4d(
     pot_slice: PotentialSlices,
     beam: ProbeModes,
@@ -660,7 +657,7 @@ def stem_4d(
 
     Returns
     -------
-    STEM4D
+    stem4d_data : STEM4D
         Complete 4D-STEM dataset containing:
         - Diffraction patterns for each scan position
         - Real and Fourier space calibrations
@@ -796,203 +793,6 @@ def decompose_beam_to_modes(
         modes=multimodal_beam, weights=weights, calib=beam.calib_y
     )
     return probe_modes
-
-
-@jaxtyped(typechecker=beartype)
-def stem_4d_sharded(
-    pot_slice: PotentialSlices,
-    beam: ProbeModes,
-    positions: Num[Array, "#P 2"],
-    voltage_kv: ScalarNumeric,
-    calib_ang: ScalarFloat,
-) -> STEM4D:
-    """Sharded version of stem_4d that distributes scan positions across available devices.
-
-    This function uses JAX's sharding API to distribute the computation
-    across multiple GPUs/TPUs. It is fully compatible with JIT compilation
-    and automatic differentiation.
-
-    Parameters
-    ----------
-    pot_slice : PotentialSlices
-        The potential slice(s).
-    beam : ProbeModes
-        The electron beam mode(s).
-    positions : Num[Array, "#P 2"]
-        The (y, x) positions to shift the beam to.
-        With P being the number of positions.
-    voltage_kv : ScalarNumeric
-        The accelerating voltage in kilovolts.
-    calib_ang : ScalarFloat
-        The calibration in angstroms.
-
-    Returns
-    -------
-    STEM4D
-        Complete 4D-STEM dataset containing:
-        - Diffraction patterns for each scan position
-        - Real and Fourier space calibrations
-        - Scan positions in Angstroms
-        - Accelerating voltage
-
-    Notes
-    -----
-    - Uses JAX sharding for automatic distribution across devices
-    - Fully compatible with JIT compilation and automatic differentiation
-    - The positions array is sharded along the first axis
-    """
-    shifted_beams: Complex[Array, " P H W #M"] = shift_beam_fourier(
-        beam.modes, positions, calib_ang
-    )
-    devices: Any = mesh_utils.create_device_mesh((jax.device_count(),))
-    mesh: Mesh = Mesh(devices, axis_names=("positions",))
-    shifted_beams_sharding: NamedSharding = NamedSharding(
-        mesh, P("positions", None, None, None)
-    )
-    shifted_beams_sharded: Complex[Array, " P H W #M"] = jax.device_put(
-        shifted_beams, shifted_beams_sharding
-    )
-
-    def _process_single_position(
-        shifted_beam: Complex[Array, " H W #M"],
-    ) -> Float[Array, " H W"]:
-        current_probe_modes: ProbeModes = ProbeModes(
-            modes=shifted_beam,
-            weights=beam.weights,
-            calib=beam.calib,
-        )
-        cbed_result: CalibratedArray = cbed(
-            pot_slices=pot_slice,
-            beam=current_probe_modes,
-            voltage_kv=voltage_kv,
-        )
-        return cbed_result.data_array
-
-    cbed_patterns: Float[Array, " P H W"] = jax.vmap(_process_single_position)(
-        shifted_beams_sharded
-    )
-    first_beam_modes: ProbeModes = ProbeModes(
-        modes=shifted_beams[0],
-        weights=beam.weights,
-        calib=beam.calib,
-    )
-    first_cbed: CalibratedArray = cbed(
-        pot_slices=pot_slice, beam=first_beam_modes, voltage_kv=voltage_kv
-    )
-    fourier_calib: Float[Array, " "] = first_cbed.calib_y
-    scan_positions_ang: Float[Array, " P 2"] = positions * calib_ang
-    stem4d_data: STEM4D = make_stem4d(
-        data=cbed_patterns,
-        real_space_calib=calib_ang,
-        fourier_space_calib=fourier_calib,
-        scan_positions=scan_positions_ang,
-        voltage_kv=voltage_kv,
-    )
-
-    return stem4d_data
-
-
-@jaxtyped(typechecker=beartype)
-def stem_4d_parallel(
-    pot_slice: PotentialSlices,
-    beam: ProbeModes,
-    positions: Num[Array, "#P 2"],
-    voltage_kv: ScalarNumeric,
-    calib_ang: ScalarFloat,
-    n_devices: Optional[int] = None,
-) -> STEM4D:
-    """Parallel version of stem_4d using explicit device parallelism.
-
-    This function provides more control over device usage and is suitable
-    for cases where automatic sharding may not be optimal. It uses shard_map
-    for explicit control over data distribution.
-
-    Parameters
-    ----------
-    pot_slice : PotentialSlices
-        The potential slice(s).
-    beam : ProbeModes
-        The electron beam mode(s).
-    positions : Num[Array, "#P 2"]
-        The (y, x) positions to shift the beam to.
-    voltage_kv : ScalarNumeric
-        The accelerating voltage in kilovolts.
-    calib_ang : ScalarFloat
-        The calibration in angstroms.
-    n_devices : int, optional
-        Number of devices to use. If None, uses all available devices.
-
-    Returns
-    -------
-    STEM4D
-        Complete 4D-STEM dataset.
-
-    Notes
-    -----
-    - Provides explicit control over device parallelism
-    - Compatible with JIT compilation and automatic differentiation
-    - Uses shard_map for fine-grained control
-    """
-    if n_devices is None:
-        n_devices = jax.device_count()
-
-    devices = mesh_utils.create_device_mesh((n_devices,))
-    mesh = Mesh(devices, axis_names=("devices",))
-
-    shifted_beams: Complex[Array, " P H W #M"] = shift_beam_fourier(
-        beam.modes, positions, calib_ang
-    )
-
-    def _compute_cbed_batch(
-        shifted_beams_batch: Complex[Array, " batch H W #M"],
-    ) -> Float[Array, "batch H W"]:
-        def _process_single(
-            shifted_beam: Complex[Array, " H W #M"],
-        ) -> Float[Array, " H W"]:
-            current_probe_modes: ProbeModes = ProbeModes(
-                modes=shifted_beam,
-                weights=beam.weights,
-                calib=beam.calib,
-            )
-            cbed_result: CalibratedArray = cbed(
-                pot_slices=pot_slice,
-                beam=current_probe_modes,
-                voltage_kv=voltage_kv,
-            )
-            return cbed_result.data_array
-
-        return jax.vmap(_process_single)(shifted_beams_batch)
-
-    with mesh:
-        cbed_patterns = shard_map(
-            _compute_cbed_batch,
-            mesh=mesh,
-            in_specs=P("devices", None, None, None),
-            out_specs=P("devices", None, None),
-            check_rep=False,
-        )(shifted_beams)
-
-    first_beam_modes: ProbeModes = ProbeModes(
-        modes=shifted_beams[0],
-        weights=beam.weights,
-        calib=beam.calib,
-    )
-    first_cbed: CalibratedArray = cbed(
-        pot_slices=pot_slice, beam=first_beam_modes, voltage_kv=voltage_kv
-    )
-    fourier_calib: Float[Array, " "] = first_cbed.calib_y
-
-    scan_positions_ang: Float[Array, " P 2"] = positions * calib_ang
-
-    stem4d_data: STEM4D = make_stem4d(
-        data=cbed_patterns,
-        real_space_calib=calib_ang,
-        fourier_space_calib=fourier_calib,
-        scan_positions=scan_positions_ang,
-        voltage_kv=voltage_kv,
-    )
-
-    return stem4d_data
 
 
 @jaxtyped(typechecker=beartype)

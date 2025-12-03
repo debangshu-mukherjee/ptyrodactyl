@@ -67,8 +67,6 @@ from .simulations import (
     propagation_func,
     shift_beam_fourier,
     stem_4d,
-    stem_4d_parallel,
-    stem_4d_sharded,
     transmission_func,
     wavelength_ang,
 )
@@ -95,8 +93,6 @@ __all__: list[str] = [
     "propagation_func",
     "shift_beam_fourier",
     "stem_4d",
-    "stem_4d_parallel",
-    "stem_4d_sharded",
     "transmission_func",
     "wavelength_ang",
 ]

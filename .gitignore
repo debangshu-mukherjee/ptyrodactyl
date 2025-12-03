@@ -5,6 +5,7 @@ __pycache__/
 
 # AI Assistants
 .claude/
+.claude/CLAUDE.md
 .qodo/
 
 # Test data
@@ -90,4 +91,5 @@ target/
 .ipynb_checkpoints/
 
 # Local AI assistant notes
-**/CLAUDE.local.md
+**/CLAUDE.md
+.claude/

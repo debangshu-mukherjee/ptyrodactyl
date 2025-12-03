@@ -122,6 +122,7 @@ def single_slice_ptychography(
     def _forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Float[Array, "P H W"]:
+        """Forward model that simulates 4D-STEM data from potential and beam."""
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
@@ -140,6 +141,7 @@ def single_slice_ptychography(
     def _loss_and_grad(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Tuple[Float[Array, " "], Dict[str, Complex[Array, "H W"]]]:
+        """Compute loss value and gradients with respect to potential and beam."""
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(
             pot_slice, beam
         )
@@ -169,6 +171,7 @@ def single_slice_ptychography(
         Any,
         Float[Array, " "],
     ]:
+        """Perform one optimization step updating both potential and beam."""
         loss: Float[Array, " "]
         grads: Dict[str, Complex[Array, "H W"]]
         loss, grads = _loss_and_grad(pot_slice, beam)
@@ -308,6 +311,7 @@ def single_slice_poscorrected(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
+        """Forward model that simulates 4D-STEM data from potential, beam, and positions with position correction."""
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
@@ -328,6 +332,7 @@ def single_slice_poscorrected(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
+        """Compute loss value and gradients with respect to potential, beam, and positions for single-slice position correction."""
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
@@ -364,6 +369,7 @@ def single_slice_poscorrected(
         Any,
         Float[Array, " "],
     ]:
+        """Perform one optimization step updating potential, beam, and positions for single-slice position correction."""
         loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
@@ -541,6 +547,7 @@ def single_slice_multi_modal(
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
+        """Forward model that simulates 4D-STEM data from potential, multi-modal beam, and positions."""
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam,
@@ -561,6 +568,7 @@ def single_slice_multi_modal(
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Any]]:
+        """Compute loss value and gradients with respect to potential, multi-modal beam, and positions."""
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
@@ -596,6 +604,7 @@ def single_slice_multi_modal(
         Any,
         Float[Array, " "],
     ]:
+        """Perform one optimization step updating potential, multi-modal beam, and positions."""
         loss: Float[Array, " "]
         grads: Dict[str, Any]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
@@ -742,6 +751,7 @@ def multi_slice_multi_modal(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
+        """Forward model that simulates multi-slice 4D-STEM data from potential, beam, and positions."""
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
@@ -762,6 +772,7 @@ def multi_slice_multi_modal(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
+        """Compute loss value and gradients with respect to potential, beam, and positions for multi-slice."""
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
@@ -793,6 +804,7 @@ def multi_slice_multi_modal(
         Any,
         Float[Array, " "],
     ]:
+        """Perform one optimization step updating potential, beam, and positions for multi-slice."""
         loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)

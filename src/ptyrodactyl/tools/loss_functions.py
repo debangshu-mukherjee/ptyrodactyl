@@ -68,12 +68,15 @@ def create_loss_function(
     """
 
     def mae_loss(diff):
+        """Compute mean absolute error loss."""
         return jnp.mean(jnp.abs(diff))
 
     def mse_loss(diff):
+        """Compute mean squared error loss."""
         return jnp.mean(jnp.square(diff))
 
     def rmse_loss(diff):
+        """Compute root mean squared error loss."""
         return jnp.sqrt(jnp.mean(jnp.square(diff)))
 
     loss_functions = {"mae": mae_loss, "mse": mse_loss, "rmse": rmse_loss}
@@ -82,6 +85,7 @@ def create_loss_function(
 
     @jax.jit
     def loss_fn(params: PyTree, *args: Any) -> Float[Array, ""]:
+        """Compute loss between forward model output and experimental data."""
         model_output = forward_function(params, *args)
         diff = model_output - experimental_data
         return selected_loss_fn(diff)

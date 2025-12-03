@@ -111,17 +111,15 @@ autodoc_default_options = {
     "ignore-module-all": False,
 }
 
-autodoc_typehints = (
-    "none"
-)
+autodoc_typehints = "signature"
 autodoc_typehints_format = "short"
 autodoc_typehints_description_target = "documented"
 python_use_unqualified_type_names = True
 typehints_fully_qualified = False
 always_document_param_types = False
-typehints_document_rtype = False
-typehints_use_signature = False
-typehints_use_signature_return = False
+typehints_document_rtype = True
+typehints_use_signature = True
+typehints_use_signature_return = True
 autodoc_preserve_defaults = True
 autodoc_inherit_docstrings = True
 
@@ -138,9 +136,11 @@ napoleon_type_aliases = {
     'Int[Array, " N"]': "N int array",
     'Num[Array, " N"]': "N numeric array",
     'Bool[Array, " "]': "scalar bool",
-    "scalar_float": "float",
-    "scalar_int": "int",
-    "scalar_num": "numeric",
+    "ScalarFloat": "float",
+    "ScalarInt": "int",
+    "ScalarNumeric": "numeric",
+    "ScalarComplex": "complex",
+    "ScalarBool": "bool",
 }
 
 typehints_defaults = "comma"

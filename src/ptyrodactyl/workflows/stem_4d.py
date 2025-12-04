@@ -135,7 +135,8 @@ def xyz_4dstem_single(  # noqa: PLR0913
     5. Create multimodal probe with equal weights if num_modes > 1,
        otherwise wrap single probe as 1-mode array
     6. Convert scan positions from Angstroms to pixels
-    7. Run stem_4d simulation and return calibrated STEM4D result
+    7. AOT compile stem_4d with concrete input shapes
+    8. Run compiled stem_4d and return calibrated STEM4D result
 
     See Also
     --------
@@ -192,12 +193,20 @@ def xyz_4dstem_single(  # noqa: PLR0913
         scan_positions / cbed_pixel_size_ang
     )
 
-    stem4d_data: STEM4D = stem_4d(
-        pot_slice=potential_slices,
-        beam=probe_modes,
-        positions=scan_positions_pixels,
-        voltage_kv=voltage_kv,
-        calib_ang=cbed_pixel_size_ang,
+    stem_4d_compiled = stem_4d.lower(
+        potential_slices,
+        probe_modes,
+        scan_positions_pixels,
+        voltage_kv,
+        cbed_pixel_size_ang,
+    ).compile()
+
+    stem4d_data: STEM4D = stem_4d_compiled(
+        potential_slices,
+        probe_modes,
+        scan_positions_pixels,
+        voltage_kv,
+        cbed_pixel_size_ang,
     )
 
     return stem4d_data
@@ -290,8 +299,8 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
         atom_coords/slice_bounds (None,None), atom_types (None),
         atom_potentials (None,None,None) for replication
     13. Distribute arrays to devices using jax.device_put
-    14. Call JIT-compiled stem4d_sharded function
-    15. Return the sharded STEM4D result
+    14. AOT compile stem4d_sharded with concrete sharded input shapes
+    15. Run compiled stem4d_sharded and return sharded STEM4D result
 
     See Also
     --------
@@ -407,15 +416,26 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
     replicated_slice_bounds = jax.device_put(slice_z_bounds, replicated_2d)
     replicated_potentials = jax.device_put(atom_potentials, replicated_3d)
 
-    stem4d_result: STEM4D = stem4d_sharded(
-        sharded_multimodal_beams=sharded_beams,
-        sharded_positions=sharded_positions,
-        atom_coords=replicated_atom_coords,
-        atom_types=replicated_atom_types,
-        slice_z_bounds=replicated_slice_bounds,
-        atom_potentials=replicated_potentials,
-        voltage_kv=voltage_kv,
-        calib_ang=cbed_pixel_size_ang,
+    stem4d_sharded_compiled = stem4d_sharded.lower(
+        sharded_beams,
+        sharded_positions,
+        replicated_atom_coords,
+        replicated_atom_types,
+        replicated_slice_bounds,
+        replicated_potentials,
+        voltage_kv,
+        cbed_pixel_size_ang,
+    ).compile()
+
+    stem4d_result: STEM4D = stem4d_sharded_compiled(
+        sharded_beams,
+        sharded_positions,
+        replicated_atom_coords,
+        replicated_atom_types,
+        replicated_slice_bounds,
+        replicated_potentials,
+        voltage_kv,
+        cbed_pixel_size_ang,
     )
 
     return stem4d_result

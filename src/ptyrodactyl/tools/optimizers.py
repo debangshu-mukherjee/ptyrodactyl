@@ -358,6 +358,7 @@ def wirtinger_grad(
         *args: Any,
     ) -> Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]:
         """Compute Wirtinger gradient by splitting complex arguments and differentiating real and imaginary parts separately."""
+
         def split_complex(args):
             """Split complex arguments into separate real and imaginary components."""
             return tuple(

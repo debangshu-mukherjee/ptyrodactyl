@@ -41,6 +41,8 @@ jit, grad, and vmap. Input arrays should be properly typed and validated
 using the factory functions from the tools module.
 """
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -117,7 +119,7 @@ def transmission_func(
 
 
 @jaxtyped(typechecker=beartype)
-@jax.jit
+@partial(jax.jit, static_argnames=["imsize_y", "imsize_x"])
 def propagation_func(
     imsize_y: ScalarInt,
     imsize_x: ScalarInt,

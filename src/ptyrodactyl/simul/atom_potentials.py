@@ -13,8 +13,8 @@ contrast_stretch : function
 single_atom_potential : function
     Calculates the projected potential of a single atom using Kirkland
     scattering factors.
-kirkland_potentials_xyz : function
-    Converts XYZData structure to PotentialSlices using FFT-based atomic
+kirkland_potentials_crystal : function
+    Converts CrystalData structure to PotentialSlices using FFT-based atomic
     positioning.
 bessel_kv : function
     Computes the modified Bessel function of the second kind K_v(x).
@@ -35,11 +35,11 @@ from beartype.typing import Optional, Tuple, Union
 from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
 from ptyrodactyl.tools import (
+    CrystalData,
     PotentialSlices,
     ScalarFloat,
     ScalarInt,
     ScalarNumeric,
-    XYZData,
     make_potential_slices,
 )
 
@@ -1021,8 +1021,8 @@ def _build_potential_lookup(
 
 @jaxtyped(typechecker=beartype)
 @partial(jax.jit, static_argnames=["grid_shape", "supersampling"])
-def kirkland_potentials_xyz(
-    xyz_data: XYZData,
+def kirkland_potentials_crystal(
+    crystal_data: CrystalData,
     pixel_size: ScalarFloat,
     slice_thickness: ScalarFloat = 1.0,
     repeats: Int[Array, " 3"] = default_repeats,
@@ -1030,11 +1030,11 @@ def kirkland_potentials_xyz(
     supersampling: ScalarInt = 4,
     grid_shape: Optional[Tuple[int, int, int]] = None,
 ) -> PotentialSlices:
-    """Convert XYZData structure to PotentialSlices.
+    """Convert CrystalData structure to PotentialSlices.
 
     Parameters
     ----------
-    xyz_data : XYZData
+    crystal_data : CrystalData
         Input structure containing atomic positions and numbers.
     pixel_size : ScalarFloat
         Size of each pixel in Angstroms (becomes calib in PotentialSlices).
@@ -1042,8 +1042,8 @@ def kirkland_potentials_xyz(
         Thickness of each slice in Angstroms. Defaults to 1.0.
     repeats : Int[Array, " 3"], optional
         Number of unit cell repeats in [x, y, z] directions. Default is
-        [1, 1, 1], which means no repeating. Requires xyz_data.lattice to be
-        provided for repeating the structure.
+        [1, 1, 1], which means no repeating. Requires crystal_data.lattice to
+        be provided for repeating the structure.
     padding : ScalarFloat, optional
         Padding in Angstroms added to all sides. Defaults to 4.0.
     supersampling : ScalarInt, optional
@@ -1074,7 +1074,7 @@ def kirkland_potentials_xyz(
 
     Algorithm:
         - Extract atomic positions, atomic numbers, and lattice from the input
-          XYZData structure
+          CrystalData structure
         - If repeats > [1,1,1], tile the structure using the lattice vectors to
           create a supercell
         - Partition atoms into slices along the z-axis using _slice_atoms,
@@ -1110,9 +1110,9 @@ def kirkland_potentials_xyz(
         - Return a PotentialSlices object containing the 3D array of potential
           slices, the slice thickness, and the pixel size
     """
-    positions: Float[Array, " N 3"] = xyz_data.positions
-    atomic_numbers: Int[Array, " N"] = xyz_data.atomic_numbers
-    lattice: Float[Array, " 3 3"] = xyz_data.lattice
+    positions: Float[Array, " N 3"] = crystal_data.positions
+    atomic_numbers: Int[Array, " N"] = crystal_data.atomic_numbers
+    lattice: Float[Array, " 3 3"] = crystal_data.lattice
 
     positions, atomic_numbers = _apply_repeats_or_return(
         positions, atomic_numbers, lattice, repeats

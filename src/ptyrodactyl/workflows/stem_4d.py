@@ -11,12 +11,12 @@ _estimate_memory_gb : function, internal
     Estimate memory requirements for 4D-STEM simulation in GB.
 _get_device_memory_gb : function, internal
     Get available memory on the first JAX device in GB.
-xyz_4dstem : function
+crystal2stem4d : function
     Smart dispatcher for 4D-STEM simulation, auto-selects implementation.
-xyz_4dstem_parallel : function
+crystal2stem4d_parallel : function
     Parallel sharded 4D-STEM simulation for large-scale computations.
-xyz_4dstem_single : function
-    Single-device 4D-STEM simulation from XYZ structure file.
+crystal2stem4d_single : function
+    Single-device 4D-STEM simulation from crystal structure file.
 
 Notes
 -----
@@ -34,9 +34,9 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.simul import (
-    kirkland_potentials_xyz,
+    kirkland_potentials_crystal,
     make_probe,
-    parse_xyz,
+    parse_crystal,
     shift_beam_fourier,
     single_atom_potential,
     stem4d_sharded,
@@ -58,8 +58,8 @@ _LARGE_POSITION_THRESHOLD: int = 100
 
 
 @jaxtyped(typechecker=beartype)
-def xyz_4dstem_single(  # noqa: PLR0913
-    xyz_filepath: str,
+def crystal2stem4d_single(  # noqa: PLR0913
+    crystal_filepath: str,
     scan_positions: Float[Array, "P 2"],
     voltage_kv: ScalarNumeric,
     cbed_pixel_size_ang: ScalarFloat,
@@ -72,16 +72,16 @@ def xyz_4dstem_single(  # noqa: PLR0913
     padding: float = 4.0,
     supersampling: int = 4,
 ) -> STEM4D:
-    """Single-device 4D-STEM simulation from an XYZ structure file.
+    """Single-device 4D-STEM simulation from a crystal structure file.
 
-    Loads an XYZ structure file, generates Kirkland potential slices,
-    creates an electron probe with specified aberrations, and runs the
-    4D-STEM simulation on a single device.
+    Loads a crystal structure file (XYZ or POSCAR), generates Kirkland
+    potential slices, creates an electron probe with specified aberrations,
+    and runs the 4D-STEM simulation on a single device.
 
     Parameters
     ----------
-    xyz_filepath : str
-        Path to the XYZ file containing atomic structure.
+    crystal_filepath : str
+        Path to the crystal structure file (.xyz, POSCAR, or CONTCAR).
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms.
         P is the number of scan positions.
@@ -124,11 +124,11 @@ def xyz_4dstem_single(  # noqa: PLR0913
     Notes
     -----
     This function runs on a single device without sharding. Use
-    xyz_4dstem_parallel for multi-device execution or xyz_4dstem for
+    crystal2stem4d_parallel for multi-device execution or crystal2stem4d for
     automatic selection.
 
     Algorithm:
-    1. Load XYZ structure from file using parse_xyz
+    1. Load crystal structure from file using parse_crystal
     2. Generate Kirkland potential slices from atomic coordinates
     3. Extract grid dimensions (H, W) from potential slice shape
     4. Create electron probe with specified aberrations
@@ -140,22 +140,20 @@ def xyz_4dstem_single(  # noqa: PLR0913
 
     See Also
     --------
-    xyz_4dstem : Smart dispatcher that auto-selects implementation.
-    xyz_4dstem_parallel : Parallel sharded implementation for multi-device.
+    crystal2stem4d : Smart dispatcher that auto-selects implementation.
+    crystal2stem4d_parallel : Parallel sharded implementation for multi-device.
     stem_4d : Low-level 4D-STEM simulation function.
-    kirkland_potentials_xyz : Generates potential slices from XYZ data.
+    kirkland_potentials_crystal : Generates potential slices from crystal data.
     make_probe : Creates electron probe with aberrations.
     """
-    xyz_data: CrystalData = parse_xyz(xyz_filepath)
-
-    potential_slices: PotentialSlices = kirkland_potentials_xyz(
-        xyz_data=xyz_data,
+    crystal_data: CrystalData = parse_crystal(crystal_filepath)
+    potential_slices: PotentialSlices = kirkland_potentials_crystal(
+        crystal_data=crystal_data,
         pixel_size=cbed_pixel_size_ang,
         slice_thickness=slice_thickness,
         padding=padding,
         supersampling=supersampling,
     )
-
     image_height: Int[Array, ""] = jnp.asarray(
         potential_slices.slices.shape[0], dtype=jnp.int32
     )
@@ -163,7 +161,6 @@ def xyz_4dstem_single(  # noqa: PLR0913
         potential_slices.slices.shape[1], dtype=jnp.int32
     )
     image_size: Int[Array, " 2"] = jnp.array([image_height, image_width])
-
     probe: Complex[Array, "H W"] = make_probe(
         aperture=cbed_aperture_mrad,
         voltage=voltage_kv,
@@ -182,17 +179,14 @@ def xyz_4dstem_single(  # noqa: PLR0913
     else:
         modes = probe[..., jnp.newaxis]
         weights = jnp.array([1.0])
-
     probe_modes: ProbeModes = make_probe_modes(
         modes=modes,
         weights=weights,
         calib=cbed_pixel_size_ang,
     )
-
     scan_positions_pixels: Float[Array, "P 2"] = (
         scan_positions / cbed_pixel_size_ang
     )
-
     stem_4d_compiled = stem_4d.lower(
         potential_slices,
         probe_modes,
@@ -200,7 +194,6 @@ def xyz_4dstem_single(  # noqa: PLR0913
         voltage_kv,
         cbed_pixel_size_ang,
     ).compile()
-
     stem4d_data: STEM4D = stem_4d_compiled(
         potential_slices,
         probe_modes,
@@ -208,13 +201,12 @@ def xyz_4dstem_single(  # noqa: PLR0913
         voltage_kv,
         cbed_pixel_size_ang,
     )
-
     return stem4d_data
 
 
 @beartype
-def xyz_4dstem_parallel(  # noqa: PLR0913
-    xyz_filepath: str,
+def crystal2stem4d_parallel(  # noqa: PLR0913
+    crystal_filepath: str,
     scan_positions: Float[Array, "P 2"],
     voltage_kv: ScalarNumeric,
     cbed_pixel_size_ang: ScalarFloat,
@@ -229,14 +221,14 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
 ) -> STEM4D:
     """Parallel sharded 4D-STEM simulation for large-scale computations.
 
-    This workflow loads an XYZ structure file, generates beams, computes
-    atomic potentials, sets up sharding across available devices, and runs
-    the sharded 4D-STEM simulation.
+    This workflow loads a crystal structure file (XYZ or POSCAR), generates
+    beams, computes atomic potentials, sets up sharding across available
+    devices, and runs the sharded 4D-STEM simulation.
 
     Parameters
     ----------
-    xyz_filepath : str
-        Path to the XYZ file containing atomic structure.
+    crystal_filepath : str
+        Path to the crystal structure file (.xyz, POSCAR, or CONTCAR).
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms.
         P is the number of scan positions.
@@ -280,12 +272,12 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
     Notes
     -----
     This function shards beams and positions along the P axis for parallel
-    execution across multiple devices. Use xyz_4dstem_single for
-    single-device execution or xyz_4dstem for automatic selection.
+    execution across multiple devices. Use crystal2stem4d_single for
+    single-device execution or crystal2stem4d for automatic selection.
 
     Algorithm:
-    1. Load XYZ data from file using parse_xyz
-    2. Compute potential slices to determine grid dimensions (H, W, S)
+    1. Load crystal data from file using parse_crystal
+    2. Calculate grid dimensions (H, W, S) directly from coordinate ranges
     3. Generate electron probe with specified aberrations
     4. Create multimodal probe if num_modes > 1, otherwise single mode
     5. Convert scan positions from Angstroms to pixels
@@ -304,28 +296,24 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
 
     See Also
     --------
-    xyz_4dstem : Smart dispatcher that auto-selects implementation.
-    xyz_4dstem_single : Single-device implementation without sharding.
+    crystal2stem4d : Smart dispatcher that auto-selects implementation.
+    crystal2stem4d_single : Single-device implementation without sharding.
     stem4d_sharded : Low-level JAX-safe sharded 4D-STEM function.
     single_atom_potential : Computes 2D atomic potentials for each type.
     shift_beam_fourier : Pre-shifts beams to scan positions.
     make_probe : Creates electron probe with aberrations.
     """
-    xyz_data: CrystalData = parse_xyz(xyz_filepath)
-
-    potential_slices: PotentialSlices = kirkland_potentials_xyz(
-        xyz_data=xyz_data,
-        pixel_size=cbed_pixel_size_ang,
-        slice_thickness=slice_thickness,
-        padding=padding,
-        supersampling=supersampling,
-    )
-
-    height: int = potential_slices.slices.shape[0]
-    width: int = potential_slices.slices.shape[1]
-    num_slices: int = potential_slices.slices.shape[2]
+    crystal_data: CrystalData = parse_crystal(crystal_filepath)
+    x_coords: Float[Array, " N"] = crystal_data.positions[:, 0]
+    y_coords: Float[Array, " N"] = crystal_data.positions[:, 1]
+    z_coords: Float[Array, " N"] = crystal_data.positions[:, 2]
+    x_range: float = float(jnp.max(x_coords) - jnp.min(x_coords)) + 2 * padding
+    y_range: float = float(jnp.max(y_coords) - jnp.min(y_coords)) + 2 * padding
+    z_range: float = float(jnp.max(z_coords) - jnp.min(z_coords))
+    width: int = int(np.ceil(x_range / cbed_pixel_size_ang))
+    height: int = int(np.ceil(y_range / cbed_pixel_size_ang))
+    num_slices: int = max(1, int(np.ceil(z_range / slice_thickness)))
     image_size: Int[Array, " 2"] = jnp.array([height, width])
-
     probe: Complex[Array, "H W"] = make_probe(
         aperture=cbed_aperture_mrad,
         voltage=voltage_kv,
@@ -335,7 +323,6 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
         c3=probe_c3,
         c5=probe_c5,
     )
-
     if num_modes > 1:
         modes: Complex[Array, "H W M"] = jnp.stack(
             [probe] * num_modes, axis=-1
@@ -346,16 +333,13 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
     scan_positions_pixels: Float[Array, "P 2"] = (
         scan_positions / cbed_pixel_size_ang
     )
-
     shifted_beams: Complex[Array, "P H W M"] = shift_beam_fourier(
         beam=modes,
         pos=scan_positions_pixels,
         calib_ang=cbed_pixel_size_ang,
     )
-
-    z_coords: Float[Array, " N"] = xyz_data.positions[:, 2]
+    z_coords: Float[Array, " N"] = crystal_data.positions[:, 2]
     z_min: float = float(jnp.min(z_coords))
-
     slice_boundaries: list[list[float]] = []
     for i in range(num_slices):
         z_start: float = z_min + i * float(slice_thickness)
@@ -365,15 +349,13 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
     slice_z_bounds: Float[Array, "S 2"] = jnp.array(
         slice_boundaries, dtype=jnp.float64
     )
-
     unique_atoms: list[int] = sorted(
-        {int(x) for x in xyz_data.atomic_numbers}
+        {int(x) for x in crystal_data.atomic_numbers}
     )
 
     atom_type_map: dict[int, int] = {
         atom_num: idx for idx, atom_num in enumerate(unique_atoms)
     }
-
     atom_potentials_list: list[Float[Array, "H W"]] = []
     for atom_num in unique_atoms:
         pot: Float[Array, "H W"] = single_atom_potential(
@@ -384,38 +366,27 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
             supersampling=supersampling,
         )
         atom_potentials_list.append(pot)
-
     atom_potentials: Float[Array, "T H W"] = jnp.stack(
         atom_potentials_list, axis=0
     )
-
     atom_types: Int[Array, " N"] = jnp.array(
-        [atom_type_map[int(x)] for x in xyz_data.atomic_numbers],
+        [atom_type_map[int(x)] for x in crystal_data.atomic_numbers],
         dtype=jnp.int32,
     )
-
-    atom_coords: Float[Array, "N 3"] = xyz_data.positions
-
+    atom_coords: Float[Array, "N 3"] = crystal_data.positions
     devices = jax.devices()
-
     mesh = Mesh(np.array(devices), axis_names=("p",))
-
-    beam_sharding = NamedSharding(
-        mesh, PartitionSpec("p", None, None, None)
-    )
+    beam_sharding = NamedSharding(mesh, PartitionSpec("p", None, None, None))
     pos_sharding = NamedSharding(mesh, PartitionSpec("p", None))
     replicated_3d = NamedSharding(mesh, PartitionSpec(None, None, None))
     replicated_1d = NamedSharding(mesh, PartitionSpec(None))
     replicated_2d = NamedSharding(mesh, PartitionSpec(None, None))
-
     sharded_beams = jax.device_put(shifted_beams, beam_sharding)
     sharded_positions = jax.device_put(scan_positions_pixels, pos_sharding)
-
     replicated_atom_coords = jax.device_put(atom_coords, replicated_2d)
     replicated_atom_types = jax.device_put(atom_types, replicated_1d)
     replicated_slice_bounds = jax.device_put(slice_z_bounds, replicated_2d)
     replicated_potentials = jax.device_put(atom_potentials, replicated_3d)
-
     stem4d_sharded_compiled = stem4d_sharded.lower(
         sharded_beams,
         sharded_positions,
@@ -426,7 +397,6 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
         voltage_kv,
         cbed_pixel_size_ang,
     ).compile()
-
     stem4d_result: STEM4D = stem4d_sharded_compiled(
         sharded_beams,
         sharded_positions,
@@ -437,7 +407,6 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
         voltage_kv,
         cbed_pixel_size_ang,
     )
-
     return stem4d_result
 
 
@@ -477,22 +446,16 @@ def _estimate_memory_gb(
     """
     bytes_per_complex128: int = 16
     bytes_per_float64: int = 8
-
     beams_bytes: int = (
         num_positions * height * width * num_modes * bytes_per_complex128
     )
-
     cbed_bytes: int = num_positions * height * width * bytes_per_float64
-
     slices_bytes: int = height * width * num_slices * bytes_per_float64
-
     overhead_factor: float = 2.5
-
     total_bytes: float = (
-        (beams_bytes + cbed_bytes + slices_bytes) * overhead_factor
-    )
-    memory_gb: float = total_bytes / (1024 ** 3)
-
+        beams_bytes + cbed_bytes + slices_bytes
+    ) * overhead_factor
+    memory_gb: float = total_bytes / (1024**3)
     return memory_gb
 
 
@@ -514,18 +477,18 @@ def _get_device_memory_gb() -> float:
         devices = jax.devices()
         if len(devices) > 0:
             device = devices[0]
-            if hasattr(device, 'memory_stats'):
+            if hasattr(device, "memory_stats"):
                 stats = device.memory_stats()
-                if stats and 'bytes_limit' in stats:
-                    return stats['bytes_limit'] / (1024 ** 3)
+                if stats and "bytes_limit" in stats:
+                    return stats["bytes_limit"] / (1024**3)
         return 16.0
     except Exception:  # noqa: BLE001
         return 16.0
 
 
 @beartype
-def xyz_4dstem(  # noqa: PLR0913
-    xyz_filepath: str,
+def crystal2stem4d(  # noqa: PLR0913
+    crystal_filepath: str,
     scan_positions: Float[Array, "P 2"],
     voltage_kv: ScalarNumeric,
     cbed_pixel_size_ang: ScalarFloat,
@@ -539,15 +502,15 @@ def xyz_4dstem(  # noqa: PLR0913
     supersampling: int = 4,
     force_parallel: Optional[bool] = None,
 ) -> STEM4D:
-    """Smart dispatcher for 4D-STEM simulation from XYZ structure file.
+    """Smart dispatcher for 4D-STEM simulation from crystal structure file.
 
     Automatically selects between single-device and parallel implementations
     based on available devices and estimated memory requirements.
 
     Parameters
     ----------
-    xyz_filepath : str
-        Path to the XYZ file containing atomic structure.
+    crystal_filepath : str
+        Path to the crystal structure file (.xyz, POSCAR, or CONTCAR).
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms.
         P is the number of scan positions.
@@ -602,42 +565,36 @@ def xyz_4dstem(  # noqa: PLR0913
 
     Algorithm:
     1. Query available JAX devices and device memory
-    2. Load XYZ structure to estimate grid dimensions
+    2. Load crystal structure to estimate grid dimensions
     3. Compute coordinate ranges with padding for x/y, raw for z
     4. Estimate grid size (width, height, slices) from ranges
     5. Estimate memory requirements using _estimate_memory_gb
     6. If force_parallel is set, use that choice directly
     7. Otherwise, use parallel if: multi-device OR high memory OR many
        positions exceeds _LARGE_POSITION_THRESHOLD
-    8. Call xyz_4dstem_parallel or xyz_4dstem_single accordingly
+    8. Call crystal2stem4d_parallel or crystal2stem4d_single accordingly
 
     See Also
     --------
-    xyz_4dstem_single : Single-device implementation without sharding.
-    xyz_4dstem_parallel : Parallel sharded implementation for multi-device.
+    crystal2stem4d_single : Single-device implementation without sharding.
+    crystal2stem4d_parallel : Parallel sharded implementation for multi-device.
     stem_4d : Low-level single-device 4D-STEM simulation function.
     stem4d_sharded : Low-level JAX-safe sharded 4D-STEM function.
     """
     devices = jax.devices()
     num_devices: int = len(devices)
     device_memory_gb: float = _get_device_memory_gb()
-
-    xyz_data: CrystalData = parse_xyz(xyz_filepath)
-
-    x_coords: Float[Array, " N"] = xyz_data.positions[:, 0]
-    y_coords: Float[Array, " N"] = xyz_data.positions[:, 1]
-    z_coords: Float[Array, " N"] = xyz_data.positions[:, 2]
-
+    crystal_data: CrystalData = parse_crystal(crystal_filepath)
+    x_coords: Float[Array, " N"] = crystal_data.positions[:, 0]
+    y_coords: Float[Array, " N"] = crystal_data.positions[:, 1]
+    z_coords: Float[Array, " N"] = crystal_data.positions[:, 2]
     x_range: float = float(jnp.max(x_coords) - jnp.min(x_coords)) + 2 * padding
     y_range: float = float(jnp.max(y_coords) - jnp.min(y_coords)) + 2 * padding
     z_range: float = float(jnp.max(z_coords) - jnp.min(z_coords))
-
     est_width: int = int(np.ceil(x_range / cbed_pixel_size_ang))
     est_height: int = int(np.ceil(y_range / cbed_pixel_size_ang))
     est_slices: int = int(np.ceil(z_range / slice_thickness))
-
     num_positions: int = scan_positions.shape[0]
-
     est_memory_gb: float = _estimate_memory_gb(
         num_positions=num_positions,
         height=est_height,
@@ -645,7 +602,6 @@ def xyz_4dstem(  # noqa: PLR0913
         num_modes=num_modes,
         num_slices=est_slices,
     )
-
     if force_parallel is not None:
         use_parallel: bool = force_parallel
     else:
@@ -653,14 +609,13 @@ def xyz_4dstem(  # noqa: PLR0913
         large_positions: bool = num_positions > _LARGE_POSITION_THRESHOLD
 
         use_parallel = (
-            (num_devices > 1) or
-            (est_memory_gb > memory_threshold) or
-            large_positions
+            (num_devices > 1)
+            or (est_memory_gb > memory_threshold)
+            or large_positions
         )
-
     if use_parallel:
-        return xyz_4dstem_parallel(
-            xyz_filepath=xyz_filepath,
+        return crystal2stem4d_parallel(
+            crystal_filepath=crystal_filepath,
             scan_positions=scan_positions,
             voltage_kv=voltage_kv,
             cbed_pixel_size_ang=cbed_pixel_size_ang,
@@ -673,9 +628,8 @@ def xyz_4dstem(  # noqa: PLR0913
             padding=padding,
             supersampling=supersampling,
         )
-
-    return xyz_4dstem_single(
-        xyz_filepath=xyz_filepath,
+    return crystal2stem4d_single(
+        crystal_filepath=crystal_filepath,
         scan_positions=scan_positions,
         voltage_kv=voltage_kv,
         cbed_pixel_size_ang=cbed_pixel_size_ang,

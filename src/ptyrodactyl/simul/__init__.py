@@ -42,10 +42,12 @@ fourier_coords : function
     Generate Fourier space coordinate arrays.
 kirkland_potentials : function
     Kirkland atomic potential parameters lookup.
-kirkland_potentials_xyz : function
-    Generate atomic potentials from XYZ coordinates using Kirkland parameters.
+kirkland_potentials_crystal : function
+    Generate atomic potentials from crystal data using Kirkland parameters.
 make_probe : function
     Create electron probe with specified aberrations.
+parse_crystal : function
+    Parse XYZ or POSCAR file, auto-detecting format, returns CrystalData.
 parse_poscar : function
     Parse VASP POSCAR file and return validated structure data.
 parse_xyz : function
@@ -84,7 +86,7 @@ gradient-based reconstruction algorithms.
 from .atom_potentials import (
     bessel_kv,
     contrast_stretch,
-    kirkland_potentials_xyz,
+    kirkland_potentials_crystal,
     single_atom_potential,
 )
 from .geometry import (
@@ -97,6 +99,7 @@ from .parallelized import stem4d_sharded
 from .preprocessing import (
     atomic_symbol,
     kirkland_potentials,
+    parse_crystal,
     parse_poscar,
     parse_xyz,
 )
@@ -126,8 +129,9 @@ __all__: list[str] = [
     "fourier_calib",
     "fourier_coords",
     "kirkland_potentials",
-    "kirkland_potentials_xyz",
+    "kirkland_potentials_crystal",
     "make_probe",
+    "parse_crystal",
     "parse_poscar",
     "parse_xyz",
     "propagation_func",

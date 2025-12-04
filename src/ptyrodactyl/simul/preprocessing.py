@@ -12,6 +12,8 @@ atomic_symbol : function
     Returns atomic number for given atomic symbol string.
 kirkland_potentials : function
     Returns preloaded Kirkland scattering factors as JAX array.
+parse_crystal : function
+    Parses XYZ or POSCAR file, auto-detecting format, returns CrystalData.
 parse_poscar : function
     Parses a VASP POSCAR file and returns validated CrystalData PyTree.
 parse_xyz : function
@@ -452,9 +454,9 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
             )
         lattice_rows.append([float(x) for x in parts])
 
-    lattice: Float[Array, "3 3"] = jnp.array(
-        lattice_rows, dtype=jnp.float64
-    ) * scale
+    lattice: Float[Array, "3 3"] = (
+        jnp.array(lattice_rows, dtype=jnp.float64) * scale
+    )
 
     line_6: str = lines[5].strip()
     has_symbols: bool = any(c.isalpha() for c in line_6)
@@ -556,9 +558,76 @@ def _extract_elements_from_comment(comment: str) -> List[str]:
     words: List[str] = comment.split()
     elements: List[str] = []
     for word in words:
-        cleaned: str = re.sub(r'[^A-Za-z]', '', word)
+        cleaned: str = re.sub(r"[^A-Za-z]", "", word)
         if cleaned:
             normalized: str = cleaned.capitalize()
             if normalized in _ATOMIC_NUMBERS:
                 elements.append(normalized)
     return elements
+
+
+@jaxtyped(typechecker=beartype)
+def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
+    """Parse XYZ or POSCAR file, auto-detecting format, returns CrystalData.
+
+    Automatically detects whether the input file is an XYZ or POSCAR/CONTCAR
+    file based on file extension and calls the appropriate parser.
+
+    Parameters
+    ----------
+    file_path : str or Path
+        Path to the crystal structure file (.xyz, POSCAR, or CONTCAR).
+
+    Returns
+    -------
+    crystal_data : CrystalData
+        Validated JAX-compatible structure with atomic positions and numbers.
+
+    Raises
+    ------
+    ValueError
+        If file format cannot be determined or is unsupported.
+    FileNotFoundError
+        If the specified file does not exist.
+
+    Notes
+    -----
+    Supported file formats:
+    - XYZ files: detected by .xyz extension
+    - POSCAR/CONTCAR: detected by filename containing "POSCAR" or "CONTCAR",
+      or by file extension (no extension or unrecognized extension with
+      POSCAR-like content)
+
+    Algorithm:
+    1. Convert file_path to Path object
+    2. Check if filename matches XYZ pattern (.xyz extension)
+    3. Check if filename matches POSCAR pattern (POSCAR/CONTCAR in name)
+    4. If neither, attempt to detect by examining file content
+    5. Call appropriate parser (parse_xyz or parse_poscar)
+    6. Return CrystalData PyTree
+
+    See Also
+    --------
+    parse_xyz : Parser for XYZ format files.
+    parse_poscar : Parser for VASP POSCAR/CONTCAR files.
+    """
+    path: Path = Path(file_path)
+    filename: str = path.name.lower()
+    suffix: str = path.suffix.lower()
+
+    if suffix == ".xyz":
+        return parse_xyz(file_path)
+
+    if "poscar" in filename or "contcar" in filename:
+        return parse_poscar(file_path)
+
+    with open(path, encoding="utf-8") as f:
+        first_line: str = f.readline().strip()
+
+    try:
+        int(first_line)
+        return parse_xyz(file_path)
+    except ValueError:
+        pass
+
+    return parse_poscar(file_path)

@@ -41,7 +41,7 @@ Atomic Potentials
 -----------------
 
 .. autofunction:: ptyrodactyl.simul.kirkland_potentials
-.. autofunction:: ptyrodactyl.simul.kirkland_potentials_xyz
+.. autofunction:: ptyrodactyl.simul.kirkland_potentials_crystal
 .. autofunction:: ptyrodactyl.simul.single_atom_potential
 .. autofunction:: ptyrodactyl.simul.bessel_kv
 .. autofunction:: ptyrodactyl.simul.contrast_stretch
@@ -49,6 +49,7 @@ Atomic Potentials
 Preprocessing
 -------------
 
+.. autofunction:: ptyrodactyl.simul.parse_crystal
 .. autofunction:: ptyrodactyl.simul.parse_poscar
 .. autofunction:: ptyrodactyl.simul.parse_xyz
 .. autofunction:: ptyrodactyl.simul.atomic_symbol

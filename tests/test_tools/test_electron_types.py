@@ -9,17 +9,17 @@ jax.config.update("jax_enable_x64", True)
 
 import pytest
 
-from ptyrodactyl.electrons.electron_types import (
+from ptyrodactyl.tools import (
     CalibratedArray,
+    CrystalData,
     CrystalStructure,
     PotentialSlices,
     ProbeModes,
-    XYZData,
     make_calibrated_array,
+    make_crystal_data,
     make_crystal_structure,
     make_potential_slices,
     make_probe_modes,
-    make_xyz_data,
 )
 
 
@@ -358,8 +358,8 @@ class TestCrystalStructure(chex.TestCase):
         assert jnp.all(crystal.cell_angles < 180)
 
 
-class TestXYZData(chex.TestCase):
-    """Test suite for XYZData PyTree and factory function."""
+class TestCrystalData(chex.TestCase):
+    """Test suite for CrystalData PyTree and factory function."""
 
     def setUp(self) -> None:
         """Set up test data."""
@@ -385,8 +385,8 @@ class TestXYZData(chex.TestCase):
 
     def test_factory_function_minimal(self) -> None:
         """Test factory function with minimal required data."""
-        xyz = make_xyz_data(self.positions, self.atomic_numbers)
-        assert isinstance(xyz, XYZData)
+        xyz = make_crystal_data(self.positions, self.atomic_numbers)
+        assert isinstance(xyz, CrystalData)
         assert xyz.positions.shape == (self.n_atoms, 3)
         assert xyz.atomic_numbers.shape == (self.n_atoms,)
         # Lattice should now default to identity matrix
@@ -400,7 +400,7 @@ class TestXYZData(chex.TestCase):
 
     def test_factory_function_full(self) -> None:
         """Test factory function with all optional data."""
-        xyz = make_xyz_data(
+        xyz = make_crystal_data(
             self.positions,
             self.atomic_numbers,
             lattice=self.lattice,
@@ -409,7 +409,7 @@ class TestXYZData(chex.TestCase):
             properties=self.properties,
             comment=self.comment,
         )
-        assert isinstance(xyz, XYZData)
+        assert isinstance(xyz, CrystalData)
         assert xyz.lattice.shape == (3, 3)
         assert xyz.stress.shape == (3, 3)
         self.assertAlmostEqual(float(xyz.energy), -76.4)
@@ -418,7 +418,7 @@ class TestXYZData(chex.TestCase):
 
     def test_pytree_flatten_unflatten(self) -> None:
         """Test PyTree flatten and unflatten operations."""
-        xyz = make_xyz_data(
+        xyz = make_crystal_data(
             self.positions,
             self.atomic_numbers,
             lattice=self.lattice,
@@ -436,18 +436,18 @@ class TestXYZData(chex.TestCase):
 
     def test_factory_function_with_none_lattice(self) -> None:
         """Test that explicitly passing None for lattice gives identity matrix."""
-        xyz = make_xyz_data(self.positions, self.atomic_numbers, lattice=None)
+        xyz = make_crystal_data(self.positions, self.atomic_numbers, lattice=None)
         assert xyz.lattice is not None
         assert xyz.lattice.shape == (3, 3)
         chex.assert_trees_all_close(xyz.lattice, jnp.eye(3, dtype=jnp.float64))
 
     @chex.variants(with_jit=True, without_jit=True)
     def test_jax_transformations(self) -> None:
-        """Test JAX transformations on XYZData."""
+        """Test JAX transformations on CrystalData."""
 
         def center_positions(xyz):
             center = jnp.mean(xyz.positions, axis=0)
-            return XYZData(
+            return CrystalData(
                 positions=xyz.positions - center,
                 atomic_numbers=xyz.atomic_numbers,
                 lattice=xyz.lattice,
@@ -457,7 +457,7 @@ class TestXYZData(chex.TestCase):
                 comment=xyz.comment,
             )
 
-        xyz = make_xyz_data(
+        xyz = make_crystal_data(
             self.positions,
             self.atomic_numbers,
             lattice=self.lattice,
@@ -472,20 +472,20 @@ class TestXYZData(chex.TestCase):
     def test_invalid_inputs(self) -> None:
         """Test factory function with invalid inputs."""
         with pytest.raises(Exception):
-            make_xyz_data(jnp.ones((3, 2)), self.atomic_numbers)
+            make_crystal_data(jnp.ones((3, 2)), self.atomic_numbers)
 
         with pytest.raises(Exception):
-            make_xyz_data(self.positions, jnp.array([1, 1]))
+            make_crystal_data(self.positions, jnp.array([1, 1]))
 
         with pytest.raises(ValueError):
             pos_with_nan = self.positions.at[0, 0].set(jnp.nan)
-            make_xyz_data(pos_with_nan, self.atomic_numbers)
+            make_crystal_data(pos_with_nan, self.atomic_numbers)
 
         with pytest.raises(ValueError):
-            make_xyz_data(self.positions, jnp.array([-1, 1, 8]))
+            make_crystal_data(self.positions, jnp.array([-1, 1, 8]))
 
         with pytest.raises(Exception):
-            make_xyz_data(
+            make_crystal_data(
                 self.positions, self.atomic_numbers, lattice=jnp.ones((2, 3))
             )
 

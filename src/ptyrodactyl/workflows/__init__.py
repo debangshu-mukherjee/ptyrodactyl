@@ -13,13 +13,19 @@ stem_4d
 
 Routine Listings
 ----------------
-xyz_to_4d_stem : function
-    Simulates 4D-STEM data from an XYZ structure file.
+xyz_4dstem : function
+    Smart dispatcher for 4D-STEM simulation, auto-selects implementation.
+xyz_4dstem_parallel : function
+    Parallel sharded 4D-STEM simulation for large-scale computations.
+xyz_4dstem_single : function
+    Single-device 4D-STEM simulation from XYZ structure file.
 
 """
 
-from .stem_4d import xyz_to_4d_stem
+from .stem_4d import xyz_4dstem, xyz_4dstem_parallel, xyz_4dstem_single
 
 __all__: list[str] = [
-    "xyz_to_4d_stem",
+    "xyz_4dstem",
+    "xyz_4dstem_parallel",
+    "xyz_4dstem_single",
 ]

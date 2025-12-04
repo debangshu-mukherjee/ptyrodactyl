@@ -2,8 +2,12 @@ ptyrodactyl.invert
 ==================
 
 .. automodule:: ptyrodactyl.invert
-   :members:
-   :undoc-members:
-   :show-inheritance:
-   :imported-members:
-   :exclude-members: __builtins__, __cached__, __doc__, __file__, __loader__, __name__, __package__, __path__, __spec__
+   :no-members:
+
+Ptychography Reconstruction
+---------------------------
+
+.. autofunction:: ptyrodactyl.invert.single_slice_ptychography
+.. autofunction:: ptyrodactyl.invert.single_slice_poscorrected
+.. autofunction:: ptyrodactyl.invert.single_slice_multi_modal
+.. autofunction:: ptyrodactyl.invert.multi_slice_multi_modal

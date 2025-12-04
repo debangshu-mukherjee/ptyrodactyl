@@ -46,6 +46,8 @@ kirkland_potentials_xyz : function
     Generate atomic potentials from XYZ coordinates using Kirkland parameters.
 make_probe : function
     Create electron probe with specified aberrations.
+parse_poscar : function
+    Parse VASP POSCAR file and return validated structure data.
 parse_xyz : function
     Parse XYZ file and return validated structure data.
 propagation_func : function
@@ -92,7 +94,12 @@ from .geometry import (
     rotmatrix_vectors,
 )
 from .parallelized import stem4d_sharded
-from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
+from .preprocessing import (
+    atomic_symbol,
+    kirkland_potentials,
+    parse_poscar,
+    parse_xyz,
+)
 from .simulations import (
     aberration,
     annular_detector,
@@ -121,6 +128,7 @@ __all__: list[str] = [
     "kirkland_potentials",
     "kirkland_potentials_xyz",
     "make_probe",
+    "parse_poscar",
     "parse_xyz",
     "propagation_func",
     "reciprocal_lattice",

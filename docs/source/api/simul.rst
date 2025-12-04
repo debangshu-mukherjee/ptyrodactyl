@@ -49,6 +49,7 @@ Atomic Potentials
 Preprocessing
 -------------
 
+.. autofunction:: ptyrodactyl.simul.parse_poscar
 .. autofunction:: ptyrodactyl.simul.parse_xyz
 .. autofunction:: ptyrodactyl.simul.atomic_symbol
 

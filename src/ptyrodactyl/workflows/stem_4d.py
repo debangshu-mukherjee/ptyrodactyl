@@ -44,11 +44,11 @@ from ptyrodactyl.simul import (
 )
 from ptyrodactyl.tools import (
     STEM4D,
+    CrystalData,
     PotentialSlices,
     ProbeModes,
     ScalarFloat,
     ScalarNumeric,
-    XYZData,
     make_probe_modes,
 )
 
@@ -146,7 +146,7 @@ def xyz_4dstem_single(  # noqa: PLR0913
     kirkland_potentials_xyz : Generates potential slices from XYZ data.
     make_probe : Creates electron probe with aberrations.
     """
-    xyz_data: XYZData = parse_xyz(xyz_filepath)
+    xyz_data: CrystalData = parse_xyz(xyz_filepath)
 
     potential_slices: PotentialSlices = kirkland_potentials_xyz(
         xyz_data=xyz_data,
@@ -311,7 +311,7 @@ def xyz_4dstem_parallel(  # noqa: PLR0913
     shift_beam_fourier : Pre-shifts beams to scan positions.
     make_probe : Creates electron probe with aberrations.
     """
-    xyz_data: XYZData = parse_xyz(xyz_filepath)
+    xyz_data: CrystalData = parse_xyz(xyz_filepath)
 
     potential_slices: PotentialSlices = kirkland_potentials_xyz(
         xyz_data=xyz_data,
@@ -622,7 +622,7 @@ def xyz_4dstem(  # noqa: PLR0913
     num_devices: int = len(devices)
     device_memory_gb: float = _get_device_memory_gb()
 
-    xyz_data: XYZData = parse_xyz(xyz_filepath)
+    xyz_data: CrystalData = parse_xyz(xyz_filepath)
 
     x_coords: Float[Array, " N"] = xyz_data.positions[:, 0]
     y_coords: Float[Array, " N"] = xyz_data.positions[:, 1]

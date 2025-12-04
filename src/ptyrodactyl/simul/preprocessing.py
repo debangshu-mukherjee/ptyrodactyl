@@ -3,8 +3,8 @@
 Extended Summary
 ----------------
 This module contains utilities for preprocessing electron microscopy data
-before analysis or reconstruction, including XYZ file parsing and atomic
-data lookups.
+before analysis or reconstruction, including XYZ and POSCAR file parsing
+and atomic data lookups.
 
 Routine Listings
 ----------------
@@ -12,8 +12,10 @@ atomic_symbol : function
     Returns atomic number for given atomic symbol string.
 kirkland_potentials : function
     Returns preloaded Kirkland scattering factors as JAX array.
+parse_poscar : function
+    Parses a VASP POSCAR file and returns validated CrystalData PyTree.
 parse_xyz : function
-    Parses an XYZ file and returns validated XYZData PyTree.
+    Parses an XYZ file and returns validated CrystalData PyTree.
 
 Notes
 -----
@@ -32,7 +34,7 @@ from beartype import beartype
 from beartype.typing import Any, Dict, List, Optional, Union
 from jaxtyping import Array, Float, Int, jaxtyped
 
-from ptyrodactyl.tools import ScalarInt, XYZData, make_xyz_data
+from ptyrodactyl.tools import CrystalData, ScalarInt, make_crystal_data
 
 _KIRKLAND_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
@@ -156,7 +158,6 @@ def _load_kirkland_csv(
     -----
     Uses numpy to load CSV then converts to JAX array for performance.
     """
-
     kirkland_numpy: np.ndarray = np.loadtxt(
         file_path, delimiter=",", dtype=np.float64
     )
@@ -261,8 +262,8 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
 
 
 @jaxtyped(typechecker=beartype)
-def parse_xyz(file_path: Union[str, Path]) -> XYZData:
-    """Parse an XYZ file and return a validated XYZData PyTree.
+def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
+    """Parse an XYZ file and return a validated CrystalData PyTree.
 
     Parameters
     ----------
@@ -271,7 +272,7 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
 
     Returns
     -------
-    XYZData
+    crystal_data : CrystalData
         Validated JAX-compatible structure with all contents from the XYZ file.
 
     Raises
@@ -346,7 +347,7 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
     )
     atomic_z_arr: Int[Array, " N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
 
-    return make_xyz_data(
+    return make_crystal_data(
         positions=positions_arr,
         atomic_numbers=atomic_z_arr,
         lattice=metadata.get("lattice"),
@@ -355,3 +356,209 @@ def parse_xyz(file_path: Union[str, Path]) -> XYZData:
         properties=metadata.get("properties"),
         comment=comment,
     )
+
+
+_NUM_LATTICE_COMPONENTS: int = 3
+_NUM_POSITION_COMPONENTS: int = 3
+
+
+@jaxtyped(typechecker=beartype)
+def parse_poscar(  # noqa: PLR0912, PLR0915
+    file_path: Union[str, Path],
+) -> CrystalData:
+    """Parse a VASP POSCAR file and return a validated CrystalData PyTree.
+
+    Supports VASP 5+ format with element symbols on line 6, as well as
+    older VASP 4 format where element symbols must be inferred from
+    the comment line.
+
+    Parameters
+    ----------
+    file_path : str or Path
+        Path to the POSCAR/CONTCAR file.
+
+    Returns
+    -------
+    crystal_data : CrystalData
+        Validated JAX-compatible structure containing:
+        - positions : Float[Array, "N 3"]
+            Cartesian coordinates in Angstroms
+        - atomic_numbers : Int[Array, " N"]
+            Atomic numbers for each atom
+        - lattice : Float[Array, "3 3"]
+            Lattice vectors in Angstroms
+        - comment : str
+            First line of the POSCAR file
+
+    Raises
+    ------
+    ValueError
+        If file format is invalid, element symbols are missing,
+        or atom counts don't match positions.
+    FileNotFoundError
+        If the specified file does not exist.
+
+    Notes
+    -----
+    POSCAR format:
+    1. Comment line
+    2. Universal scaling factor
+    3-5. Lattice vectors (3 lines, 3 values each)
+    6. Element symbols (VASP 5+) or atom counts (VASP 4)
+    7. Atom counts per element (if line 6 has symbols)
+    8. Optional: "Selective dynamics"
+    9. Coordinate type: "Direct"/"Cartesian" (or first letter)
+    10+. Atomic positions
+
+    Algorithm:
+    1. Read all lines from file
+    2. Parse comment and scaling factor
+    3. Parse 3x3 lattice vectors and apply scaling
+    4. Detect VASP version by checking if line 6 contains letters
+    5. Parse element symbols and atom counts
+    6. Check for optional "Selective dynamics" line
+    7. Parse coordinate type (Direct or Cartesian)
+    8. Read atomic positions
+    9. Convert fractional to Cartesian if Direct coordinates
+    10. Build atomic numbers array from element symbols and counts
+    11. Return CrystalData PyTree with positions, atomic numbers, lattice
+    """
+    with open(file_path, encoding="utf-8") as f:
+        lines: List[str] = f.readlines()
+
+    min_lines: int = 8
+    if len(lines) < min_lines:
+        raise ValueError(
+            f"Invalid POSCAR: expected at least {min_lines} lines, "
+            f"got {len(lines)}."
+        )
+
+    comment: str = lines[0].strip()
+
+    try:
+        scale: float = float(lines[1].strip())
+    except ValueError as err:
+        raise ValueError(
+            "Line 2 must be the universal scaling factor (float)."
+        ) from err
+
+    lattice_rows: List[List[float]] = []
+    for i in range(2, 5):
+        parts: List[str] = lines[i].split()
+        if len(parts) != _NUM_LATTICE_COMPONENTS:
+            raise ValueError(
+                f"Line {i + 1} must have {_NUM_LATTICE_COMPONENTS} lattice "
+                f"vector components, got {len(parts)}."
+            )
+        lattice_rows.append([float(x) for x in parts])
+
+    lattice: Float[Array, "3 3"] = jnp.array(
+        lattice_rows, dtype=jnp.float64
+    ) * scale
+
+    line_6: str = lines[5].strip()
+    has_symbols: bool = any(c.isalpha() for c in line_6)
+
+    if has_symbols:
+        element_symbols: List[str] = line_6.split()
+        counts_line: str = lines[6].strip()
+        atom_counts: List[int] = [int(x) for x in counts_line.split()]
+        next_line_idx: int = 7
+    else:
+        atom_counts = [int(x) for x in line_6.split()]
+        element_symbols = _extract_elements_from_comment(comment)
+        if len(element_symbols) != len(atom_counts):
+            raise ValueError(
+                "VASP 4 format detected but cannot determine element "
+                "symbols. Use VASP 5+ format with element symbols on line 6."
+            )
+        next_line_idx = 6
+
+    if len(element_symbols) != len(atom_counts):
+        raise ValueError(
+            f"Number of element symbols ({len(element_symbols)}) does not "
+            f"match number of atom counts ({len(atom_counts)})."
+        )
+
+    coord_line: str = lines[next_line_idx].strip()
+    if coord_line.lower().startswith("s"):
+        next_line_idx += 1
+        coord_line = lines[next_line_idx].strip()
+
+    is_direct: bool = coord_line.lower().startswith("d")
+    next_line_idx += 1
+
+    total_atoms: int = sum(atom_counts)
+    if len(lines) < next_line_idx + total_atoms:
+        raise ValueError(
+            f"Expected {total_atoms} atom positions, but file has only "
+            f"{len(lines) - next_line_idx} remaining lines."
+        )
+
+    positions_list: List[List[float]] = []
+    for i in range(next_line_idx, next_line_idx + total_atoms):
+        parts = lines[i].split()
+        if len(parts) < _NUM_POSITION_COMPONENTS:
+            raise ValueError(
+                f"Line {i + 1} must have at least "
+                f"{_NUM_POSITION_COMPONENTS} position coordinates."
+            )
+        positions_list.append(
+            [float(parts[0]), float(parts[1]), float(parts[2])]
+        )
+
+    positions_arr: Float[Array, "N 3"] = jnp.array(
+        positions_list, dtype=jnp.float64
+    )
+
+    if is_direct:
+        positions_arr = positions_arr @ lattice
+
+    atomic_numbers_list: List[int] = []
+    for symbol, count in zip(element_symbols, atom_counts, strict=True):
+        atom_num: int = atomic_symbol(symbol)
+        atomic_numbers_list.extend([atom_num] * count)
+
+    atomic_z_arr: Int[Array, " N"] = jnp.array(
+        atomic_numbers_list, dtype=jnp.int32
+    )
+
+    return make_crystal_data(
+        positions=positions_arr,
+        atomic_numbers=atomic_z_arr,
+        lattice=lattice,
+        comment=comment,
+    )
+
+
+@beartype
+def _extract_elements_from_comment(comment: str) -> List[str]:
+    """Extract element symbols from POSCAR comment line.
+
+    Attempts to find element symbols in the comment line for VASP 4
+    format files where symbols are not on a dedicated line.
+
+    Parameters
+    ----------
+    comment : str
+        The first line of the POSCAR file.
+
+    Returns
+    -------
+    elements : List[str]
+        List of element symbols found in the comment.
+
+    Notes
+    -----
+    This is a heuristic approach that looks for capitalized words
+    that match known element symbols.
+    """
+    words: List[str] = comment.split()
+    elements: List[str] = []
+    for word in words:
+        cleaned: str = re.sub(r'[^A-Za-z]', '', word)
+        if cleaned:
+            normalized: str = cleaned.capitalize()
+            if normalized in _ATOMIC_NUMBERS:
+                elements.append(normalized)
+    return elements

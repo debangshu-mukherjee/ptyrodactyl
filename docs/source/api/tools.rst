@@ -11,6 +11,10 @@ Data Types
    :members:
    :show-inheritance:
 
+.. autoclass:: ptyrodactyl.tools.CrystalData
+   :members:
+   :show-inheritance:
+
 .. autoclass:: ptyrodactyl.tools.CrystalStructure
    :members:
    :show-inheritance:
@@ -27,10 +31,6 @@ Data Types
    :members:
    :show-inheritance:
 
-.. autoclass:: ptyrodactyl.tools.XYZData
-   :members:
-   :show-inheritance:
-
 Type Aliases
 ------------
 
@@ -43,11 +43,11 @@ Factory Functions
 -----------------
 
 .. autofunction:: ptyrodactyl.tools.make_calibrated_array
+.. autofunction:: ptyrodactyl.tools.make_crystal_data
 .. autofunction:: ptyrodactyl.tools.make_crystal_structure
 .. autofunction:: ptyrodactyl.tools.make_potential_slices
 .. autofunction:: ptyrodactyl.tools.make_probe_modes
 .. autofunction:: ptyrodactyl.tools.make_stem4d
-.. autofunction:: ptyrodactyl.tools.make_xyz_data
 
 Optimizers
 ----------

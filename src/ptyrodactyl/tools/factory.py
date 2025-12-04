@@ -10,14 +10,14 @@ Routine Listings
 ----------------
 make_calibrated_array : function
     Creates a CalibratedArray instance with runtime type checking.
-make_probe_modes : function
-    Creates a ProbeModes instance with runtime type checking.
-make_potential_slices : function
-    Creates a PotentialSlices instance with runtime type checking.
+make_crystal_data : function
+    Creates a CrystalData instance with runtime type checking.
 make_crystal_structure : function
     Creates a CrystalStructure instance with runtime type checking.
-make_xyz_data : function
-    Creates an XYZData instance with runtime type checking.
+make_potential_slices : function
+    Creates a PotentialSlices instance with runtime type checking.
+make_probe_modes : function
+    Creates a ProbeModes instance with runtime type checking.
 make_stem4d : function
     Creates a STEM4D instance with runtime type checking.
 
@@ -36,12 +36,12 @@ from jaxtyping import Array, Bool, Complex, Float, Int, Num, jaxtyped
 from .electron_types import (
     STEM4D,
     CalibratedArray,
+    CrystalData,
     CrystalStructure,
     PotentialSlices,
     ProbeModes,
     ScalarFloat,
     ScalarNumeric,
-    XYZData,
 )
 
 jax.config.update("jax_enable_x64", True)
@@ -510,7 +510,7 @@ def make_crystal_structure(
 
 
 @jaxtyped(typechecker=beartype)
-def make_xyz_data(
+def make_crystal_data(
     positions: Float[Array, " N 3"],
     atomic_numbers: Int[Array, " N"],
     lattice: Optional[Float[Array, "3 3"]] = None,
@@ -518,35 +518,35 @@ def make_xyz_data(
     energy: Optional[ScalarFloat] = None,
     properties: Optional[List[Dict[str, Union[str, int]]]] = None,
     comment: Optional[str] = None,
-) -> XYZData:
-    """Create XYZData instance with runtime validation.
+) -> CrystalData:
+    """Create CrystalData instance with runtime validation.
 
     Parameters
     ----------
     positions : Float[Array, " N 3"]
-        Cartesian positions in Angstroms
+        Cartesian positions in Angstroms.
     atomic_numbers : Int[Array, " N"]
-        Atomic numbers (Z) for each atom
+        Atomic numbers (Z) for each atom.
     lattice : Optional[Float[Array, "3 3"]], default=None
-        Lattice vectors (if any)
+        Lattice vectors (if any).
     stress : Optional[Float[Array, "3 3"]], default=None
-        Stress tensor (if any)
+        Stress tensor (if any).
     energy : Optional[ScalarFloat], default=None
-        Total energy (if any)
+        Total energy (if any).
     properties : Optional[List[Dict[str, Union[str, int]]]], default=None
-        Per-atom metadata
+        Per-atom metadata.
     comment : Optional[str], default=None
-        Original XYZ comment line
+        Original comment line from file.
 
     Returns
     -------
-    XYZData
-        Validated PyTree structure for XYZ file contents
+    crystal_data : CrystalData
+        Validated PyTree structure for crystal data.
 
     Raises
     ------
     ValueError
-        If input arrays have incompatible shapes or invalid values
+        If input arrays have incompatible shapes or invalid values.
 
     Notes
     -----
@@ -574,8 +574,8 @@ def make_xyz_data(
     if energy is not None:
         energy_arr = jnp.asarray(energy, dtype=jnp.float64)
 
-    def validate_and_create() -> XYZData:
-        """Validate inputs and create XYZData instance."""
+    def validate_and_create() -> CrystalData:
+        """Validate inputs and create CrystalData instance."""
         num_atoms: int = positions_arr.shape[0]
         expected_pos_dims: int = 3
 
@@ -612,7 +612,7 @@ def make_xyz_data(
         check_finiteness()
         check_optional_matrices()
 
-        return XYZData(
+        return CrystalData(
             positions=positions_arr,
             atomic_numbers=atomic_numbers_arr,
             lattice=lattice_arr,
@@ -622,8 +622,8 @@ def make_xyz_data(
             comment=comment,
         )
 
-    result: XYZData = validate_and_create()
-    return result
+    crystal_data: CrystalData = validate_and_create()
+    return crystal_data
 
 
 @jaxtyped(typechecker=beartype)

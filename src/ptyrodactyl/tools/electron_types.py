@@ -8,24 +8,24 @@ datasets. All structures support JAX transformations.
 
 Routine Listings
 ----------------
-ScalarNumeric : TypeAlias
-    Numeric types (int, float, or 0-dimensional Num array).
+CalibratedArray : PyTree
+    Calibrated array data with spatial calibration.
+CrystalData : PyTree
+    Crystal data with atomic positions, lattice vectors, and metadata.
+CrystalStructure : PyTree
+    Crystal structure with fractional and Cartesian coordinates.
+NonJaxNumber : TypeAlias
+    Non-JAX numeric types (int, float).
+PotentialSlices : PyTree
+    Potential slices for multi-slice simulations.
+ProbeModes : PyTree
+    Multimodal electron probe state.
 ScalarFloat : TypeAlias
     Float or 0-dimensional Float array.
 ScalarInt : TypeAlias
     Int or 0-dimensional Int array.
-NonJaxNumber : TypeAlias
-    Non-JAX numeric types (int, float).
-CalibratedArray : PyTree
-    Calibrated array data with spatial calibration.
-ProbeModes : PyTree
-    Multimodal electron probe state.
-PotentialSlices : PyTree
-    Potential slices for multi-slice simulations.
-CrystalStructure : PyTree
-    Crystal structure with fractional and Cartesian coordinates.
-XYZData : PyTree
-    XYZ file data with atomic positions, lattice vectors, and metadata.
+ScalarNumeric : TypeAlias
+    Numeric types (int, float, or 0-dimensional Num array).
 STEM4D : PyTree
     4D-STEM data with diffraction patterns, calibrations, and parameters.
 """
@@ -229,8 +229,11 @@ class CrystalStructure(NamedTuple):
 
 
 @register_pytree_node_class
-class XYZData(NamedTuple):
-    """JAX-compatible PyTree representing a full parsed XYZ file.
+class CrystalData(NamedTuple):
+    """JAX-compatible PyTree representing crystal structure data.
+
+    Supports data from XYZ files, VASP POSCAR/CONTCAR files, and other
+    crystal structure formats.
 
     Attributes
     ----------
@@ -247,7 +250,7 @@ class XYZData(NamedTuple):
     properties : Optional[List[Dict[str, Union[str, int]]]]
         List of properties described in the metadata.
     comment : Optional[str]
-        The raw comment line from the XYZ file.
+        The raw comment line from the file.
 
     Notes
     -----
@@ -264,7 +267,7 @@ class XYZData(NamedTuple):
     comment: Optional[str]
 
     def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
-        """Flatten XYZData for JAX pytree serialization."""
+        """Flatten CrystalData for JAX pytree serialization."""
         children = (
             self.positions,
             self.atomic_numbers,
@@ -281,8 +284,8 @@ class XYZData(NamedTuple):
     @classmethod
     def tree_unflatten(
         cls, aux_data: Dict[str, Any], children: Tuple[Any, ...]
-    ) -> "XYZData":
-        """Reconstruct XYZData from flattened pytree data."""
+    ) -> "CrystalData":
+        """Reconstruct CrystalData from flattened pytree data."""
         positions, atomic_numbers, lattice, stress, energy = children
         return cls(
             positions=positions,

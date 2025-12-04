@@ -12,6 +12,8 @@ atom_potentials
     Functions for generating atomic potentials and slices from coordinates.
 geometry
     Geometric transformations and operations for crystal structures.
+parallelized
+    Sharded simulation functions for distributed computing.
 preprocessing
     Data preprocessing utilities and type definitions for microscopy data.
 simulations
@@ -62,6 +64,8 @@ single_atom_potential : function
     Calculate single atom potential using Kirkland parameterization.
 stem_4d : function
     Generate 4D-STEM data from potential slices and probe.
+stem4d_sharded : function
+    Generate 4D-STEM data from sharded beams with on-the-fly slice generation.
 transmission_func : function
     Compute transmission function for a potential slice.
 wavelength_ang : function
@@ -87,6 +91,7 @@ from .geometry import (
     rotmatrix_axis,
     rotmatrix_vectors,
 )
+from .parallelized import stem4d_sharded
 from .preprocessing import atomic_symbol, kirkland_potentials, parse_xyz
 from .simulations import (
     aberration,
@@ -104,7 +109,6 @@ from .simulations import (
 )
 
 __all__: list[str] = [
-    # Functions (snake_case, alphabetical)
     "aberration",
     "annular_detector",
     "atomic_symbol",
@@ -126,6 +130,7 @@ __all__: list[str] = [
     "shift_beam_fourier",
     "single_atom_potential",
     "stem_4d",
+    "stem4d_sharded",
     "transmission_func",
     "wavelength_ang",
 ]

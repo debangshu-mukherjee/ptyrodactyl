@@ -13,6 +13,8 @@ _compute_slice_potential : function, internal
     Compute potential slice on-the-fly by summing atom type contributions.
 _cbed_from_potential_slices : function, internal
     Compute CBED pattern with on-the-fly potential slice generation.
+clip_cbed : function
+    Clip CBED patterns to mrad extent and resize to target shape.
 stem4d_sharded : function
     Generate 4D-STEM data from sharded beams and atom coordinates.
 
@@ -27,6 +29,7 @@ import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Tuple
 from jax import lax
+from jax.image import resize
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 from ptyrodactyl.tools import (
@@ -225,6 +228,71 @@ def _cbed_from_potential_slices(
     cbed_pattern: Float[Array, "H W"] = jnp.sum(intensity_per_mode, axis=-1)
 
     return cbed_pattern
+
+
+@jaxtyped(typechecker=beartype)
+@jax.jit
+def clip_cbed(
+    cbed: Float[Array, "H W"],
+    fourier_calib_inv_ang: ScalarFloat,
+    voltage_kv: ScalarNumeric,
+    extent_mrad: ScalarFloat,
+    output_shape: Tuple[int, int],
+) -> Float[Array, "Ho Wo"]:
+    """Clip CBED pattern to mrad extent and resize to target shape.
+
+    Parameters
+    ----------
+    cbed : Float[Array, "H W"]
+        Input CBED pattern (fftshifted, centered).
+    fourier_calib_inv_ang : ScalarFloat
+        Fourier space calibration in inverse angstroms per pixel.
+    voltage_kv : ScalarNumeric
+        Accelerating voltage in kilovolts.
+    extent_mrad : ScalarFloat
+        Half-angle extent in milliradians (radius from center).
+    output_shape : Tuple[int, int]
+        Target output shape (height, width).
+
+    Returns
+    -------
+    clipped_cbed : Float[Array, "Ho Wo"]
+        Clipped and resized CBED pattern.
+    """
+    h: int = cbed.shape[0]
+    w: int = cbed.shape[1]
+
+    wavelength_ang: Float[Array, " "] = 12.2643 / jnp.sqrt(
+        voltage_kv * (1.0 + 0.978459e-3 * voltage_kv)
+    )
+    mrad_per_inv_ang: Float[Array, " "] = wavelength_ang * 1000.0
+
+    extent_inv_ang: Float[Array, " "] = extent_mrad / mrad_per_inv_ang
+    extent_pixels: Int[Array, " "] = jnp.ceil(
+        extent_inv_ang / fourier_calib_inv_ang
+    ).astype(jnp.int32)
+
+    center_y: int = h // 2
+    center_x: int = w // 2
+
+    y_start: Int[Array, " "] = jnp.maximum(0, center_y - extent_pixels)
+    y_end: Int[Array, " "] = jnp.minimum(h, center_y + extent_pixels)
+    x_start: Int[Array, " "] = jnp.maximum(0, center_x - extent_pixels)
+    x_end: Int[Array, " "] = jnp.minimum(w, center_x + extent_pixels)
+
+    clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
+        cbed,
+        (y_start, x_start),
+        (y_end - y_start, x_end - x_start),
+    )
+
+    resized: Float[Array, "Ho Wo"] = resize(
+        clipped,
+        output_shape,
+        method="linear",
+    )
+
+    return resized
 
 
 @jaxtyped(typechecker=beartype)

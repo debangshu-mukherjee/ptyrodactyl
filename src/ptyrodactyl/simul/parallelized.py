@@ -30,7 +30,7 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jax import lax
 from jax.image import resize
-from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
+from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.tools import (
     STEM4D,
@@ -298,8 +298,8 @@ def clip_cbed(
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def stem4d_sharded(
-    sharded_multimodal_beams: Complex[Array, "P H W M"],
-    sharded_positions: Num[Array, "P 2"],
+    probe_modes: Complex[Array, "H W M"],
+    scan_positions_ang: Float[Array, "P 2"],
     atom_coords: Float[Array, "N 3"],
     atom_types: Int[Array, " N"],
     slice_z_bounds: Float[Array, "S 2"],
@@ -307,21 +307,20 @@ def stem4d_sharded(
     voltage_kv: ScalarNumeric,
     calib_ang: ScalarFloat,
 ) -> STEM4D:
-    """Generate 4D-STEM data from sharded beams with on-the-fly slices.
+    """Generate 4D-STEM data with on-the-fly beam shifting and slices.
 
-    This function accepts pre-shifted beams and computes CBED patterns for
-    each position using on-the-fly potential slice generation. Designed for
-    efficient parallel execution with JAX sharding.
+    This function accepts base probe modes and scan positions, then shifts the
+    beams on-the-fly for each position. Potential slices are also generated
+    on-the-fly, enabling memory-efficient simulation of large datasets.
 
     Parameters
     ----------
-    sharded_multimodal_beams : Complex[Array, "P H W M"]
-        Pre-shifted electron beam modes for each scan position.
-        P is number of positions, H and W are image dimensions, M is modes.
-        Beams are sharded along the first axis (P)
-    sharded_positions : Num[Array, "P 2"]
-        Scan positions in pixels with columns (y, x).
-        Positions are sharded along the first axis (P)
+    probe_modes : Complex[Array, "H W M"]
+        Base electron probe modes (unshifted).
+        H and W are image dimensions, M is number of modes.
+    scan_positions_ang : Float[Array, "P 2"]
+        Scan positions in angstroms with columns (y, x).
+        P is number of positions. Can be sharded along the first axis.
     atom_coords : Float[Array, "N 3"]
         Atom coordinates in angstroms with columns (x, y, z).
         N is the total number of atoms.
@@ -344,45 +343,73 @@ def stem4d_sharded(
         Complete 4D-STEM dataset containing:
         - data : Float[Array, "P H W"]
             Diffraction patterns for each scan position
-            Sharded along the first axis (P).
+            Sharded along the first axis (P) if input was sharded.
         - real_space_calib : Float[Array, " "]
-            Real space calibration in angstroms per pixel
-            Not sharded, scalar value.
+            Real space calibration in angstroms per pixel.
         - fourier_space_calib : Float[Array, " "]
-            Fourier space calibration in inverse angstroms per pixel
-            Not sharded, scalar value.
+            Fourier space calibration in inverse angstroms per pixel.
         - scan_positions : Float[Array, "P 2"]
             Scan positions in angstroms.
-            Sharded along the first axis (P).
         - voltage_kv : Float[Array, " "]
             Accelerating voltage in kilovolts.
-            Not sharded, scalar value.
 
     Notes
     -----
-    This function generates potential slices on-the-fly rather than
-    pre-computing them, enabling memory-efficient simulation of thick samples.
+    This function generates both beam shifts and potential slices on-the-fly
+    rather than pre-computing them, enabling memory-efficient simulation of
+    large scan grids and thick samples.
 
     Algorithm:
-    1. For each scan position, compute CBED with on-the-fly slice generation
-    2. Each slice potential is computed by:
+    1. Pre-compute probe in Fourier space and frequency grids (once)
+    2. For each scan position:
+       a. Apply Fourier shift to probe modes for current position
+       b. Compute CBED with on-the-fly slice generation
+    3. Each slice potential is computed by:
        - Selecting atoms within the slice z-range
        - Scattering atom positions to a grid by type
        - FFT-convolving with precomputed atomic potentials
        - Summing contributions from all atom types
-    3. Propagate beam through all slices using multislice algorithm
-    4. Return STEM4D PyTree with all data and calibrations
+    4. Propagate beam through all slices using multislice algorithm
+    5. Return STEM4D PyTree with all data and calibrations
 
     The function is fully JIT-compilable and designed for use with JAX's
-    sharding primitives (pjit, shard_map) for distributed execution.
-    """
-    h: int = sharded_multimodal_beams.shape[1]
+    sharding primitives for distributed execution.
 
-    def _process_single_position(pos_idx: ScalarInt) -> Float[Array, "H W"]:
-        """Compute CBED pattern for a single beam position."""
-        current_beam: Complex[Array, "H W M"] = sharded_multimodal_beams[
-            pos_idx
-        ]
+    See Also
+    --------
+    clip_cbed : Clip and resize CBED patterns to target mrad extent and shape.
+    """
+    h: int = probe_modes.shape[0]
+    w: int = probe_modes.shape[1]
+
+    probe_k: Complex[Array, "H W M"] = jnp.fft.fft2(probe_modes, axes=(0, 1))
+    qy: Float[Array, " H"] = jnp.fft.fftfreq(h, d=calib_ang)
+    qx: Float[Array, " W"] = jnp.fft.fftfreq(w, d=calib_ang)
+    qya: Float[Array, "H W"]
+    qxa: Float[Array, "H W"]
+    qya, qxa = jnp.meshgrid(qy, qx, indexing="ij")
+
+    def _shift_probe(
+        position_ang: Float[Array, " 2"]
+    ) -> Complex[Array, "H W M"]:
+        """Shift probe modes to a single position using Fourier phase ramp."""
+        y_shift: ScalarFloat = position_ang[0]
+        x_shift: ScalarFloat = position_ang[1]
+        phase: Float[Array, "H W"] = (
+            -2.0 * jnp.pi * ((qya * y_shift) + (qxa * x_shift))
+        )
+        phase_shift: Complex[Array, "H W"] = jnp.exp(1j * phase)
+        shifted_k: Complex[Array, "H W M"] = probe_k * phase_shift[..., None]
+        shifted_beam: Complex[Array, "H W M"] = jnp.fft.ifft2(
+            shifted_k, axes=(0, 1)
+        )
+        return shifted_beam
+
+    def _process_single_position(
+        position_ang: Float[Array, " 2"]
+    ) -> Float[Array, "H W"]:
+        """Compute CBED pattern for a single scan position."""
+        current_beam: Complex[Array, "H W M"] = _shift_probe(position_ang)
 
         cbed_pattern: Float[Array, "H W"] = _cbed_from_potential_slices(
             beam=current_beam,
@@ -396,13 +423,11 @@ def stem4d_sharded(
         return cbed_pattern
 
     cbed_patterns: Float[Array, "P H W"] = jax.vmap(_process_single_position)(
-        jnp.arange(sharded_multimodal_beams.shape[0])
+        scan_positions_ang
     )
 
     real_space_fov: Float[Array, " "] = jnp.asarray(h * calib_ang)
     fourier_calib: Float[Array, " "] = 1.0 / real_space_fov
-
-    scan_positions_ang: Float[Array, "P 2"] = sharded_positions * calib_ang
 
     stem4d_data_sharded: STEM4D = make_stem4d(
         data=cbed_patterns,

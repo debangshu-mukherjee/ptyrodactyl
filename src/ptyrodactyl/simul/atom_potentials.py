@@ -253,7 +253,7 @@ def _bessel_kv_small_integer(
     k1: Float[Array, " ..."] = log_i1_term + k1_poly / x
 
     kn_result: Float[Array, " ..."] = _bessel_kn_recurrence(
-        n, x, k0, k1, dtype
+        n, x, k0, k1
     )
     pos_v_result: Float[Array, " ..."] = jnp.where(
         v >= 0, kn_result, kn_result
@@ -406,19 +406,15 @@ def _calculate_gaussian_contributions(
 
 def _downsample_potential(
     supersampled_potential: Float[Array, " h w"],
-    supersampling: ScalarInt,
-    target_height: Int[Array, ""],
-    target_width: Int[Array, ""],
+    supersampling: int,
+    target_height: int,
+    target_width: int,
 ) -> Float[Array, " h w"]:
     """Downsample the supersampled potential to target resolution."""
-    height: Int[Array, ""] = jnp.asarray(
-        supersampled_potential.shape[0], dtype=jnp.int32
-    )
-    width: Int[Array, ""] = jnp.asarray(
-        supersampled_potential.shape[1], dtype=jnp.int32
-    )
-    new_height: Int[Array, ""] = (height // supersampling) * supersampling
-    new_width: Int[Array, ""] = (width // supersampling) * supersampling
+    height: int = supersampled_potential.shape[0]
+    width: int = supersampled_potential.shape[1]
+    new_height: int = (height // supersampling) * supersampling
+    new_width: int = (width // supersampling) * supersampling
 
     cropped: Float[Array, " h_crop w_crop"] = jax.lax.dynamic_slice(
         supersampled_potential, (0, 0), (new_height, new_width)
@@ -441,13 +437,13 @@ def _downsample_potential(
 
 
 @jaxtyped(typechecker=beartype)
+@partial(jax.jit, static_argnames=["grid_shape", "supersampling"])
 def single_atom_potential(
     atom_no: ScalarInt,
     pixel_size: ScalarFloat,
-    grid_shape: Optional[Tuple[ScalarInt, ScalarInt]] = None,
+    grid_shape: Tuple[int, int],
     center_coords: Optional[Float[Array, " 2"]] = None,
-    supersampling: ScalarInt = 4,
-    potential_extent: ScalarFloat = 4.0,
+    supersampling: int = 4,
 ) -> Float[Array, " h w"]:
     """Calculate projected potential of a single atom using Kirkland factors.
 
@@ -457,17 +453,13 @@ def single_atom_potential(
         Atomic number of the atom whose potential is being calculated.
     pixel_size : ScalarFloat
         Real space pixel size in Ångstroms.
-    grid_shape : Tuple[ScalarInt, ScalarInt], optional
-        Shape of the output grid (height, width). If None, calculated from
-        potential_extent. Defaults to None.
+    grid_shape : Tuple[int, int]
+        Shape of the output grid (height, width). Must be provided.
     center_coords : Float[Array, " 2"], optional
         (x, y) coordinates in Ångstroms where atom should be centered.
         If None, centers at grid center. Defaults to None.
-    supersampling : ScalarInt, optional
+    supersampling : int, optional
         Supersampling factor for increased accuracy. Defaults to 4.
-    potential_extent : ScalarFloat, optional
-        Distance in Ångstroms from atom center to calculate potential.
-        Defaults to 4.0 Å.
 
     Returns
     -------
@@ -531,20 +523,8 @@ def single_atom_potential(
         kirkland_array, (atom_idx, jnp.int32(0)), (1, 12)
     )[0]
     step_size: Float[Array, ""] = pixel_size / supersampling
-    if grid_shape is None:
-        grid_extent: Float[Array, ""] = potential_extent
-        n_points: Int[Array, ""] = jnp.ceil(
-            2.0 * grid_extent / step_size
-        ).astype(jnp.int32)
-        grid_height: Int[Array, ""] = n_points
-        grid_width: Int[Array, ""] = n_points
-    else:
-        grid_height: Int[Array, ""] = jnp.asarray(
-            grid_shape[0] * supersampling, dtype=jnp.int32
-        )
-        grid_width: Int[Array, ""] = jnp.asarray(
-            grid_shape[1] * supersampling, dtype=jnp.int32
-        )
+    grid_height: int = grid_shape[0] * supersampling
+    grid_width: int = grid_shape[1] * supersampling
     if center_coords is None:
         center_x: Float[Array, ""] = 0.0
         center_y: Float[Array, ""] = 0.0
@@ -573,16 +553,8 @@ def single_atom_potential(
     )
     supersampled_potential: Float[Array, " h w"] = part1 + part2
 
-    if grid_shape is None:
-        target_height: Int[Array, ""] = grid_height // supersampling
-        target_width: Int[Array, ""] = grid_width // supersampling
-    else:
-        target_height: Int[Array, ""] = jnp.asarray(
-            grid_shape[0], dtype=jnp.int32
-        )
-        target_width: Int[Array, ""] = jnp.asarray(
-            grid_shape[1], dtype=jnp.int32
-        )
+    target_height: int = grid_shape[0]
+    target_width: int = grid_shape[1]
 
     potential_resized: Float[Array, " h w"] = _downsample_potential(
         supersampled_potential, supersampling, target_height, target_width

@@ -32,7 +32,6 @@ from jaxtyping import Array, Complex, Float, Int
 from ptyrodactyl.simul import (
     clip_cbed,
     make_probe,
-    shift_beam_fourier,
     single_atom_potential,
     stem4d_sharded,
 )
@@ -283,15 +282,6 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     else:
         modes = probe[..., jnp.newaxis]
 
-    scan_positions_pixels: Float[Array, "P 2"] = (
-        scan_positions / real_space_pixel_size_ang
-    )
-    shifted_beams: Complex[Array, "P H W M"] = shift_beam_fourier(
-        beam=modes,
-        pos=scan_positions_pixels,
-        calib_ang=real_space_pixel_size_ang,
-    )
-
     z_min: float = float(jnp.min(z_coords))
     slice_boundaries: list[list[float]] = []
     for i in range(num_slices):
@@ -332,26 +322,21 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
 
     if use_parallel:
         mesh = Mesh(np.array(devices), axis_names=("p",))
-        beam_sharding = NamedSharding(
-            mesh, PartitionSpec("p", None, None, None)
-        )
         pos_sharding = NamedSharding(mesh, PartitionSpec("p", None))
         replicated_3d = NamedSharding(mesh, PartitionSpec(None, None, None))
         replicated_1d = NamedSharding(mesh, PartitionSpec(None))
         replicated_2d = NamedSharding(mesh, PartitionSpec(None, None))
 
-        shifted_beams = jax.device_put(shifted_beams, beam_sharding)
-        scan_positions_pixels = jax.device_put(
-            scan_positions_pixels, pos_sharding
-        )
+        modes = jax.device_put(modes, replicated_3d)
+        scan_positions = jax.device_put(scan_positions, pos_sharding)
         atom_coords = jax.device_put(atom_coords, replicated_2d)
         atom_types = jax.device_put(atom_types, replicated_1d)
         slice_z_bounds = jax.device_put(slice_z_bounds, replicated_2d)
         atom_potentials = jax.device_put(atom_potentials, replicated_3d)
 
     stem4d_sharded_compiled = stem4d_sharded.lower(
-        shifted_beams,
-        scan_positions_pixels,
+        modes,
+        scan_positions,
         atom_coords,
         atom_types,
         slice_z_bounds,
@@ -360,8 +345,8 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
         real_space_pixel_size_ang,
     ).compile()
     raw_stem4d: STEM4D = stem4d_sharded_compiled(
-        shifted_beams,
-        scan_positions_pixels,
+        modes,
+        scan_positions,
         atom_coords,
         atom_types,
         slice_z_bounds,

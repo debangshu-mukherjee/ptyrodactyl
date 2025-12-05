@@ -27,9 +27,10 @@ use with JAX's pjit/shard_map for distributed execution across TPU/GPU pods.
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Tuple
+from beartype.typing import Optional, Tuple
 from jax import lax
 from jax.image import resize
+from jax.sharding import Mesh, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.tools import (
@@ -296,7 +297,6 @@ def clip_cbed(
 
 
 @jaxtyped(typechecker=beartype)
-@jax.jit
 def stem4d_sharded(
     probe_modes: Complex[Array, "H W M"],
     scan_positions_ang: Float[Array, "P 2"],
@@ -306,6 +306,7 @@ def stem4d_sharded(
     atom_potentials: Float[Array, "T H W"],
     voltage_kv: ScalarNumeric,
     calib_ang: ScalarFloat,
+    mesh: Optional[Mesh] = None,
 ) -> STEM4D:
     """Generate 4D-STEM data with on-the-fly beam shifting and slices.
 
@@ -336,6 +337,10 @@ def stem4d_sharded(
         Accelerating voltage in kilovolts.
     calib_ang : ScalarFloat
         Real space pixel size in angstroms.
+    mesh : Optional[Mesh]
+        JAX device mesh for multi-GPU parallelism. If provided, uses shard_map
+        to distribute computation across devices. If None, uses single-device
+        vmap.
 
     Returns
     -------
@@ -422,9 +427,24 @@ def stem4d_sharded(
         )
         return cbed_pattern
 
-    cbed_patterns: Float[Array, "P H W"] = jax.vmap(_process_single_position)(
-        scan_positions_ang
-    )
+    def _process_batch(
+        positions_batch: Float[Array, "B 2"]
+    ) -> Float[Array, "B H W"]:
+        """Process a batch of positions (one shard)."""
+        return jax.vmap(_process_single_position)(positions_batch)
+
+    if mesh is not None:
+        sharded_compute = jax.shard_map(
+            _process_batch,
+            mesh=mesh,
+            in_specs=(PartitionSpec("p", None),),
+            out_specs=PartitionSpec("p", None, None),
+        )
+        cbed_patterns: Float[Array, "P H W"] = sharded_compute(
+            scan_positions_ang
+        )
+    else:
+        cbed_patterns = jax.vmap(_process_single_position)(scan_positions_ang)
 
     real_space_fov: Float[Array, " "] = jnp.asarray(h * calib_ang)
     fourier_calib: Float[Array, " "] = 1.0 / real_space_fov

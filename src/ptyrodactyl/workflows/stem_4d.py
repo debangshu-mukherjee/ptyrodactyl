@@ -26,7 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
 from beartype.typing import Optional, Tuple
-from jax.sharding import Mesh, NamedSharding, PartitionSpec
+from jax.sharding import Mesh
 from jaxtyping import Array, Complex, Float, Int
 
 from ptyrodactyl.simul import (
@@ -322,38 +322,28 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
 
     if use_parallel:
         mesh = Mesh(np.array(devices), axis_names=("p",))
-        pos_sharding = NamedSharding(mesh, PartitionSpec("p", None))
-        replicated_3d = NamedSharding(mesh, PartitionSpec(None, None, None))
-        replicated_1d = NamedSharding(mesh, PartitionSpec(None))
-        replicated_2d = NamedSharding(mesh, PartitionSpec(None, None))
-
-        modes = jax.device_put(modes, replicated_3d)
-        scan_positions = jax.device_put(scan_positions, pos_sharding)
-        atom_coords = jax.device_put(atom_coords, replicated_2d)
-        atom_types = jax.device_put(atom_types, replicated_1d)
-        slice_z_bounds = jax.device_put(slice_z_bounds, replicated_2d)
-        atom_potentials = jax.device_put(atom_potentials, replicated_3d)
-
-    stem4d_sharded_compiled = stem4d_sharded.lower(
-        modes,
-        scan_positions,
-        atom_coords,
-        atom_types,
-        slice_z_bounds,
-        atom_potentials,
-        voltage_kv,
-        real_space_pixel_size_ang,
-    ).compile()
-    raw_stem4d: STEM4D = stem4d_sharded_compiled(
-        modes,
-        scan_positions,
-        atom_coords,
-        atom_types,
-        slice_z_bounds,
-        atom_potentials,
-        voltage_kv,
-        real_space_pixel_size_ang,
-    )
+        raw_stem4d: STEM4D = stem4d_sharded(
+            modes,
+            scan_positions,
+            atom_coords,
+            atom_types,
+            slice_z_bounds,
+            atom_potentials,
+            voltage_kv,
+            real_space_pixel_size_ang,
+            mesh=mesh,
+        )
+    else:
+        raw_stem4d = stem4d_sharded(
+            modes,
+            scan_positions,
+            atom_coords,
+            atom_types,
+            slice_z_bounds,
+            atom_potentials,
+            voltage_kv,
+            real_space_pixel_size_ang,
+        )
     fourier_calib_inv_ang: Float[Array, " "] = raw_stem4d.fourier_space_calib
 
     def _clip_single_cbed(cbed: Float[Array, "H W"]) -> Float[Array, "Ho Wo"]:

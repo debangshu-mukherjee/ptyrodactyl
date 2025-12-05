@@ -32,6 +32,8 @@ bessel_kv : function
     Modified Bessel function of second kind.
 cbed : function
     Generate convergent beam electron diffraction patterns.
+clip_cbed : function
+    Clip CBED patterns to mrad extent and resize to target shape.
 contrast_stretch : function
     Contrast stretch for visualization.
 decompose_beam_to_modes : function
@@ -95,7 +97,7 @@ from .geometry import (
     rotmatrix_axis,
     rotmatrix_vectors,
 )
-from .parallelized import stem4d_sharded
+from .parallelized import clip_cbed, stem4d_sharded
 from .preprocessing import (
     atomic_symbol,
     kirkland_potentials,
@@ -124,6 +126,7 @@ __all__: list[str] = [
     "atomic_symbol",
     "bessel_kv",
     "cbed",
+    "clip_cbed",
     "contrast_stretch",
     "decompose_beam_to_modes",
     "fourier_calib",

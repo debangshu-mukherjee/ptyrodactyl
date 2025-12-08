@@ -24,6 +24,8 @@ All functions are fully JAX-safe and JIT-compilable. They are designed for
 use with JAX's pjit/shard_map for distributed execution across TPU/GPU pods.
 """
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -50,7 +52,7 @@ jax.config.update("jax_enable_x64", True)
 
 
 @jaxtyped(typechecker=beartype)
-@jax.jit
+@partial(jax.jit, static_argnames=["grid_shape"])
 def _compute_slice_potential(
     atom_coords: Float[Array, "N 3"],
     atom_types: Int[Array, " N"],
@@ -59,6 +61,7 @@ def _compute_slice_potential(
     atom_potentials: Float[Array, "T H W"],
     grid_shape: Tuple[int, int],
     calib_ang: ScalarFloat,
+    atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Float[Array, "H W"]:
     """Compute potential slice on-the-fly by summing atom type contributions.
 
@@ -79,6 +82,9 @@ def _compute_slice_potential(
         Output grid shape (height, width).
     calib_ang : ScalarFloat
         Pixel size in angstroms.
+    atom_mask : Optional[Float[Array, " N"]]
+        Optional mask for atoms to include (1.0 = include, 0.0 = exclude).
+        If None, all atoms are included.
 
     Returns
     -------
@@ -93,6 +99,9 @@ def _compute_slice_potential(
     in_slice: Float[Array, " N"] = (
         (atom_coords[:, 2] >= z_min) & (atom_coords[:, 2] < z_max)
     ).astype(jnp.float64)
+
+    if atom_mask is not None:
+        in_slice = in_slice * atom_mask
 
     def _process_atom_type(
         atom_type_idx: ScalarInt,

@@ -34,6 +34,8 @@ venv/
 *.so
 
 # Distribution / packaging
+test_single_cbed.py
+test_tiled_workflow.py
 .Python
 .tox/
 build/

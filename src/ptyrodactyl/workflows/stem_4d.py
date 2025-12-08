@@ -13,6 +13,8 @@ _get_device_memory_gb : function, internal
     Get available memory on the first JAX device in GB.
 crystal2stem4d : function
     4D-STEM simulation from CrystalData with automatic sharding.
+crystal2stem4d_tiled : function
+    Tiled 4D-STEM simulation for large samples with fixed memory per tile.
 
 Notes
 -----
@@ -26,15 +28,16 @@ import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
 from beartype.typing import Optional, Tuple
-from jax.sharding import Mesh
-from jaxtyping import Array, Complex, Float, Int
+from jax import lax
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
+from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.simul import (
-    clip_cbed,
     make_probe,
     single_atom_potential,
     stem4d_sharded,
 )
+from ptyrodactyl.simul.parallelized import _cbed_from_potential_slices
 from ptyrodactyl.tools import (
     STEM4D,
     CrystalData,
@@ -124,7 +127,7 @@ def _get_device_memory_gb() -> float:
         return 16.0
 
 
-@beartype
+@jaxtyped(typechecker=beartype)
 def crystal2stem4d(  # noqa: PLR0913, PLR0915
     crystal_data: CrystalData,
     scan_positions: Float[Array, "P 2"],
@@ -300,16 +303,39 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
         atom_num: idx for idx, atom_num in enumerate(unique_atoms)
     }
 
+    potential_extent_ang: float = 10.0
+    kernel_size: int = int(
+        np.ceil(potential_extent_ang / real_space_pixel_size_ang)
+    )
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+
     atom_potentials_list: list[Float[Array, "H W"]] = []
     for atom_num in unique_atoms:
-        pot: Float[Array, "H W"] = single_atom_potential(
+        small_pot: Float[Array, "K K"] = single_atom_potential(
             atom_no=atom_num,
             pixel_size=real_space_pixel_size_ang,
-            grid_shape=(height, width),
+            grid_shape=(kernel_size, kernel_size),
             center_coords=jnp.array([0.0, 0.0]),
             supersampling=supersampling,
         )
-        atom_potentials_list.append(pot)
+        padded_pot: Float[Array, "H W"] = jnp.zeros(
+            (height, width), dtype=jnp.float64
+        )
+        half_k: int = kernel_size // 2
+        padded_pot = padded_pot.at[:half_k + 1, :half_k + 1].set(
+            small_pot[half_k:, half_k:]
+        )
+        padded_pot = padded_pot.at[:half_k + 1, -half_k:].set(
+            small_pot[half_k:, :half_k]
+        )
+        padded_pot = padded_pot.at[-half_k:, :half_k + 1].set(
+            small_pot[:half_k, half_k:]
+        )
+        padded_pot = padded_pot.at[-half_k:, -half_k:].set(
+            small_pot[:half_k, :half_k]
+        )
+        atom_potentials_list.append(padded_pot)
     atom_potentials: Float[Array, "T H W"] = jnp.stack(
         atom_potentials_list, axis=0
     )
@@ -344,17 +370,31 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
             voltage_kv,
             real_space_pixel_size_ang,
         )
-    fourier_calib_inv_ang: Float[Array, " "] = raw_stem4d.fourier_space_calib
+    fourier_calib_inv_ang: float = float(raw_stem4d.fourier_space_calib)
+    wavelength_ang_clip: float = 12.2643 / np.sqrt(
+        float(voltage_kv) * (1.0 + 0.978459e-3 * float(voltage_kv))
+    )
+    mrad_per_inv_ang_clip: float = wavelength_ang_clip * 1000.0
+    extent_inv_ang: float = float(cbed_extent_mrad) / mrad_per_inv_ang_clip
+    extent_pixels: int = int(np.ceil(extent_inv_ang / fourier_calib_inv_ang))
+
+    raw_h: int = raw_stem4d.data.shape[1]
+    raw_w: int = raw_stem4d.data.shape[2]
+    center_y: int = raw_h // 2
+    center_x: int = raw_w // 2
+    y_start: int = max(0, center_y - extent_pixels)
+    y_end: int = min(raw_h, center_y + extent_pixels)
+    x_start: int = max(0, center_x - extent_pixels)
+    x_end: int = min(raw_w, center_x + extent_pixels)
+    clip_h: int = y_end - y_start
+    clip_w: int = x_end - x_start
 
     def _clip_single_cbed(cbed: Float[Array, "H W"]) -> Float[Array, "Ho Wo"]:
         """Clip and resize a single CBED pattern."""
-        return clip_cbed(
-            cbed=cbed,
-            fourier_calib_inv_ang=fourier_calib_inv_ang,
-            voltage_kv=voltage_kv,
-            extent_mrad=cbed_extent_mrad,
-            output_shape=cbed_shape,
+        clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
+            cbed, (y_start, x_start), (clip_h, clip_w)
         )
+        return jax.image.resize(clipped, cbed_shape, method="linear")
 
     clipped_cbeds: Float[Array, "P Ho Wo"] = jax.vmap(_clip_single_cbed)(
         raw_stem4d.data
@@ -374,6 +414,335 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
         real_space_calib=real_space_pixel_size_ang,
         fourier_space_calib=output_fourier_calib_inv_ang,
         scan_positions=raw_stem4d.scan_positions,
+        voltage_kv=voltage_kv,
+    )
+    return stem4d_result
+
+
+_DEFAULT_TILE_SIZE_ANG: float = 40.0
+_DEFAULT_GRID_PIXELS: int = 4096
+_DEFAULT_PIXEL_SIZE_ANG: float = 0.02
+
+
+@jaxtyped(typechecker=beartype)
+def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
+    crystal_data: CrystalData,
+    scan_positions: Float[Array, "P 2"],
+    voltage_kv: ScalarNumeric,
+    cbed_aperture_mrad: ScalarNumeric,
+    cbed_extent_mrad: ScalarFloat = 50.0,
+    cbed_shape: Tuple[int, int] = (256, 256),
+    tile_size_ang: float = _DEFAULT_TILE_SIZE_ANG,
+    grid_pixels: int = _DEFAULT_GRID_PIXELS,
+    pixel_size_ang: float = _DEFAULT_PIXEL_SIZE_ANG,
+    slice_thickness: ScalarFloat = 1.0,
+    num_modes: int = 1,
+    probe_defocus: ScalarNumeric = 0.0,
+    probe_c3: ScalarNumeric = 0.0,
+    probe_c5: ScalarNumeric = 0.0,
+    supersampling: int = 4,
+) -> STEM4D:
+    """Tiled 4D-STEM simulation for arbitrarily large samples.
+
+    Divides the sample into tiles and computes CBEDs for each tile
+    independently. This approach has O(1) memory per tile regardless
+    of total sample size, enabling simulation of very large fields of view.
+
+    Parameters
+    ----------
+    crystal_data : CrystalData
+        Crystal structure data containing atomic positions and numbers.
+    scan_positions : Float[Array, "P 2"]
+        Array of (y, x) scan positions in Angstroms.
+    voltage_kv : ScalarNumeric
+        Accelerating voltage in kilovolts.
+    cbed_aperture_mrad : ScalarNumeric
+        Probe aperture size in milliradians.
+    cbed_extent_mrad : ScalarFloat, optional
+        Half-angle extent of output CBED in milliradians. Default is 50.0.
+    cbed_shape : Tuple[int, int], optional
+        Output CBED shape (height, width). Default is (256, 256).
+    tile_size_ang : float, optional
+        Active scan region size per tile in Angstroms. Default is 40.0 (4nm).
+        Beams scan within this central region of each tile.
+    grid_pixels : int, optional
+        Grid size in pixels (should be power of 2). Default is 4096.
+        Total grid covers tile_size + 2*padding.
+    pixel_size_ang : float, optional
+        Pixel size in Angstroms. Default is 0.02 (2pm).
+    slice_thickness : ScalarFloat, optional
+        Thickness of each slice in Angstroms. Default is 1.0.
+    num_modes : int, optional
+        Number of probe modes for partial coherence. Default is 1.
+    probe_defocus : ScalarNumeric, optional
+        Probe defocus in Angstroms. Default is 0.0.
+    probe_c3 : ScalarNumeric, optional
+        Third-order spherical aberration in Angstroms. Default is 0.0.
+    probe_c5 : ScalarNumeric, optional
+        Fifth-order spherical aberration in Angstroms. Default is 0.0.
+    supersampling : int, optional
+        Supersampling factor for atomic potentials. Default is 4.
+
+    Returns
+    -------
+    stem4d_result : STEM4D
+        Complete 4D-STEM dataset with uniform CBED patterns.
+
+    Notes
+    -----
+    Tiling scheme:
+    - Each tile has a fixed grid of grid_pixels x grid_pixels
+    - The central tile_size_ang x tile_size_ang region is the active scan area
+    - Surrounding padding accommodates beam spread from defocus
+    - Atoms within the full grid region are extracted for each tile
+
+    The padding is computed as:
+        padding = (grid_pixels * pixel_size_ang - tile_size_ang) / 2
+
+    For default values (4096 pixels, 0.02 Å, 40 Å tile):
+        total_grid = 4096 * 0.02 = 81.92 Å
+        padding = (81.92 - 40) / 2 = 20.96 Å per side
+
+    This provides ~21 Å padding, sufficient for:
+        - 50nm defocus with 30mrad aperture: spread = 1.5 Å
+        - Atom potential extent: ~5 Å
+        - Large safety margin for probe tails
+
+    Algorithm:
+    1. Compute grid parameters and padding
+    2. Precompute atom potentials (small kernel, shared across tiles)
+    3. Generate probe on fixed-size grid
+    4. For each scan position:
+       a. Determine which tile it belongs to
+       b. Extract atoms within tile region
+       c. Compute local beam shift within tile
+       d. Run multislice for that position
+    5. Clip and resize all CBEDs uniformly
+    """
+    grid_size_ang: float = grid_pixels * pixel_size_ang
+    padding_ang: float = (grid_size_ang - tile_size_ang) / 2.0
+
+    if padding_ang < 0:
+        msg = (
+            f"Tile size ({tile_size_ang} Å) exceeds grid size "
+            f"({grid_size_ang} Å). Increase grid_pixels or decrease "
+            f"tile_size_ang."
+        )
+        raise ValueError(msg)
+
+    z_coords: Float[Array, " N"] = crystal_data.positions[:, 2]
+    z_min: float = float(jnp.min(z_coords))
+    z_max: float = float(jnp.max(z_coords))
+    z_range: float = z_max - z_min
+    num_slices: int = max(1, int(np.ceil(z_range / slice_thickness)))
+
+    slice_boundaries: list[list[float]] = []
+    for i in range(num_slices):
+        z_start: float = z_min + i * float(slice_thickness)
+        z_end: float = z_start + float(slice_thickness)
+        slice_boundaries.append([z_start, z_end])
+    slice_z_bounds: Float[Array, "S 2"] = jnp.array(
+        slice_boundaries, dtype=jnp.float64
+    )
+
+    unique_atoms: list[int] = sorted(
+        {int(x) for x in crystal_data.atomic_numbers}
+    )
+    atom_type_map: dict[int, int] = {
+        atom_num: idx for idx, atom_num in enumerate(unique_atoms)
+    }
+
+    potential_extent_ang: float = 10.0
+    kernel_size: int = int(np.ceil(potential_extent_ang / pixel_size_ang))
+    if kernel_size % 2 == 0:
+        kernel_size += 1
+
+    atom_potentials_list: list[Float[Array, "H W"]] = []
+    for atom_num in unique_atoms:
+        small_pot: Float[Array, "K K"] = single_atom_potential(
+            atom_no=atom_num,
+            pixel_size=pixel_size_ang,
+            grid_shape=(kernel_size, kernel_size),
+            center_coords=jnp.array([0.0, 0.0]),
+            supersampling=supersampling,
+        )
+        padded_pot: Float[Array, "H W"] = jnp.zeros(
+            (grid_pixels, grid_pixels), dtype=jnp.float64
+        )
+        half_k: int = kernel_size // 2
+        padded_pot = padded_pot.at[:half_k + 1, :half_k + 1].set(
+            small_pot[half_k:, half_k:]
+        )
+        padded_pot = padded_pot.at[:half_k + 1, -half_k:].set(
+            small_pot[half_k:, :half_k]
+        )
+        padded_pot = padded_pot.at[-half_k:, :half_k + 1].set(
+            small_pot[:half_k, half_k:]
+        )
+        padded_pot = padded_pot.at[-half_k:, -half_k:].set(
+            small_pot[:half_k, :half_k]
+        )
+        atom_potentials_list.append(padded_pot)
+    atom_potentials: Float[Array, "T H W"] = jnp.stack(
+        atom_potentials_list, axis=0
+    )
+
+    atom_types_full: Int[Array, " N"] = jnp.array(
+        [atom_type_map[int(x)] for x in crystal_data.atomic_numbers],
+        dtype=jnp.int32,
+    )
+    atom_coords_full: Float[Array, "N 3"] = crystal_data.positions
+
+    image_size: Int[Array, " 2"] = jnp.array([grid_pixels, grid_pixels])
+    probe: Complex[Array, "H W"] = make_probe(
+        aperture=cbed_aperture_mrad,
+        voltage=voltage_kv,
+        image_size=image_size,
+        calibration_pm=pixel_size_ang * 100.0,
+        defocus=probe_defocus,
+        c3=probe_c3,
+        c5=probe_c5,
+    )
+
+    if num_modes > 1:
+        modes: Complex[Array, "H W M"] = jnp.stack(
+            [probe] * num_modes, axis=-1
+        )
+    else:
+        modes = probe[..., jnp.newaxis]
+
+    devices = jax.devices()
+    num_devices: int = len(devices)
+    mesh = Mesh(np.array(devices), axis_names=("p",))
+
+    tile_center_offset: float = grid_size_ang / 2.0
+
+    def _process_single_position(
+        position_ang: Float[Array, " 2"],
+    ) -> Float[Array, "H W"]:
+        """Process a single scan position within its tile."""
+        pos_y: ScalarFloat = position_ang[0]
+        pos_x: ScalarFloat = position_ang[1]
+
+        tile_min_y: Float[Array, " "] = pos_y - tile_center_offset
+        tile_max_y: Float[Array, " "] = pos_y + tile_center_offset
+        tile_min_x: Float[Array, " "] = pos_x - tile_center_offset
+        tile_max_x: Float[Array, " "] = pos_x + tile_center_offset
+
+        in_tile: Float[Array, " N"] = (
+            (atom_coords_full[:, 0] >= tile_min_x)
+            & (atom_coords_full[:, 0] < tile_max_x)
+            & (atom_coords_full[:, 1] >= tile_min_y)
+            & (atom_coords_full[:, 1] < tile_max_y)
+        ).astype(jnp.float64)
+
+        local_x: Float[Array, " N"] = (
+            atom_coords_full[:, 0] - tile_min_x
+        ) * in_tile
+        local_y: Float[Array, " N"] = (
+            atom_coords_full[:, 1] - tile_min_y
+        ) * in_tile
+        local_z: Float[Array, " N"] = atom_coords_full[:, 2]
+
+        local_coords: Float[Array, "N 3"] = jnp.stack(
+            [local_x, local_y, local_z], axis=-1
+        )
+
+        beam_local_y: Float[Array, " "] = tile_center_offset
+        beam_local_x: Float[Array, " "] = tile_center_offset
+        beam_position: Float[Array, " 2"] = jnp.array(
+            [beam_local_y, beam_local_x]
+        )
+
+        h: int = grid_pixels
+        w: int = grid_pixels
+        probe_k: Complex[Array, "H W M"] = jnp.fft.fft2(modes, axes=(0, 1))
+        qy: Float[Array, " H"] = jnp.fft.fftfreq(h, d=pixel_size_ang)
+        qx: Float[Array, " W"] = jnp.fft.fftfreq(w, d=pixel_size_ang)
+        qya: Float[Array, "H W"]
+        qxa: Float[Array, "H W"]
+        qya, qxa = jnp.meshgrid(qy, qx, indexing="ij")
+
+        y_shift: ScalarFloat = beam_position[0]
+        x_shift: ScalarFloat = beam_position[1]
+        phase: Float[Array, "H W"] = (
+            -2.0 * jnp.pi * ((qya * y_shift) + (qxa * x_shift))
+        )
+        phase_shift: Complex[Array, "H W"] = jnp.exp(1j * phase)
+        shifted_k: Complex[Array, "H W M"] = probe_k * phase_shift[..., None]
+        shifted_beam: Complex[Array, "H W M"] = jnp.fft.ifft2(
+            shifted_k, axes=(0, 1)
+        )
+
+        cbed: Float[Array, "H W"] = _cbed_from_potential_slices(
+            beam=shifted_beam,
+            atom_coords=local_coords,
+            atom_types=atom_types_full,
+            slice_z_bounds=slice_z_bounds,
+            atom_potentials=atom_potentials,
+            voltage_kv=voltage_kv,
+            calib_ang=pixel_size_ang,
+        )
+        return cbed
+
+    num_positions: int = scan_positions.shape[0]
+
+    if num_devices > 1 and num_positions >= num_devices:
+        in_sharding = NamedSharding(mesh, PartitionSpec("p", None))
+
+        @jax.jit
+        def _compute_all_cbeds(
+            positions: Float[Array, "P 2"],
+        ) -> Float[Array, "P H W"]:
+            """Compute CBEDs for all positions with sharding."""
+            return jax.vmap(_process_single_position)(positions)
+
+        sharded_positions = jax.device_put(scan_positions, in_sharding)
+        raw_cbeds: Float[Array, "P H W"] = _compute_all_cbeds(
+            sharded_positions
+        )
+    else:
+        raw_cbeds = jax.vmap(_process_single_position)(scan_positions)
+
+    fourier_calib_inv_ang: float = 1.0 / grid_size_ang
+    wavelength_ang: float = 12.2643 / np.sqrt(
+        float(voltage_kv) * (1.0 + 0.978459e-3 * float(voltage_kv))
+    )
+    mrad_per_inv_ang: float = wavelength_ang * 1000.0
+    extent_inv_ang: float = float(cbed_extent_mrad) / mrad_per_inv_ang
+    extent_pixels: int = int(np.ceil(extent_inv_ang / fourier_calib_inv_ang))
+
+    center: int = grid_pixels // 2
+    y_start: int = max(0, center - extent_pixels)
+    y_end: int = min(grid_pixels, center + extent_pixels)
+    x_start: int = max(0, center - extent_pixels)
+    x_end: int = min(grid_pixels, center + extent_pixels)
+    clip_h: int = y_end - y_start
+    clip_w: int = x_end - x_start
+
+    def _clip_single_cbed(cbed: Float[Array, "H W"]) -> Float[Array, "Ho Wo"]:
+        """Clip and resize a single CBED pattern."""
+        clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
+            cbed, (y_start, x_start), (clip_h, clip_w)
+        )
+        return jax.image.resize(clipped, cbed_shape, method="linear")
+
+    clipped_cbeds: Float[Array, "P Ho Wo"] = jax.vmap(_clip_single_cbed)(
+        raw_cbeds
+    )
+
+    output_fourier_calib_mrad: float = (
+        2.0 * float(cbed_extent_mrad) / cbed_shape[0]
+    )
+    output_fourier_calib_inv_ang: float = (
+        output_fourier_calib_mrad / mrad_per_inv_ang
+    )
+
+    stem4d_result: STEM4D = make_stem4d(
+        data=clipped_cbeds,
+        real_space_calib=pixel_size_ang,
+        fourier_space_calib=output_fourier_calib_inv_ang,
+        scan_positions=scan_positions,
         voltage_kv=voltage_kv,
     )
     return stem4d_result

@@ -15,11 +15,14 @@ Routine Listings
 ----------------
 crystal2stem4d : function
     4D-STEM simulation from CrystalData with automatic sharding.
+crystal2stem4d_tiled : function
+    Tiled 4D-STEM simulation for large samples with fixed memory per tile.
 
 """
 
-from .stem_4d import crystal2stem4d
+from .stem_4d import crystal2stem4d, crystal2stem4d_tiled
 
 __all__: list[str] = [
     "crystal2stem4d",
+    "crystal2stem4d_tiled",
 ]

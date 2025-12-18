@@ -15,6 +15,8 @@ rotate_structure : function
     Apply rotation transformations to crystal structures.
 reciprocal_lattice : function
     Compute reciprocal lattice vectors from real-space unit cell.
+tilt_crystal : function
+    Tilt CrystalData by alpha and beta angles (TEM stage-like tilts).
 
 Notes
 -----
@@ -28,7 +30,12 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Bool, Float, Real, jaxtyped
 
-from ptyrodactyl.tools import ScalarFloat, ScalarNumeric
+from ptyrodactyl.tools import (
+    CrystalData,
+    ScalarFloat,
+    ScalarNumeric,
+    make_crystal_data,
+)
 
 
 @jaxtyped(typechecker=beartype)
@@ -360,3 +367,80 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
     b2: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a3, a1) / vv
     b3: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a1, a2) / vv
     return jnp.stack([b1, b2, b3])
+
+
+@jaxtyped(typechecker=beartype)
+def tilt_crystal(
+    crystal_data: CrystalData,
+    alpha_rad: ScalarNumeric,
+    beta_rad: ScalarNumeric,
+) -> CrystalData:
+    """Tilt CrystalData by alpha and beta angles, mimicking TEM stage tilts.
+
+    Applies a combined rotation: first tilt around the x-axis by alpha,
+    then tilt around the y-axis by beta. This corresponds to typical
+    double-tilt TEM sample holder geometry.
+
+    Parameters
+    ----------
+    crystal_data : CrystalData
+        Input crystal structure data containing atomic positions.
+    alpha_rad : ScalarNumeric
+        Tilt angle around the x-axis in radians. Positive alpha tilts
+        the sample such that +z rotates toward +y.
+    beta_rad : ScalarNumeric
+        Tilt angle around the y-axis in radians. Positive beta tilts
+        the sample such that +z rotates toward -x.
+
+    Returns
+    -------
+    tilted_crystal : CrystalData
+        New CrystalData with rotated positions and lattice (if present).
+        All other fields (atomic_numbers, energy, etc.) are preserved.
+
+    Notes
+    -----
+    The rotation is applied as R = R_y(beta) @ R_x(alpha), meaning:
+
+    1. First rotate around x-axis by alpha
+    2. Then rotate around y-axis by beta
+
+    This ordering matches typical TEM double-tilt holder conventions
+    where alpha is the primary tilt and beta is the secondary tilt.
+
+    The function is fully differentiable with respect to alpha and beta,
+    enabling gradient-based optimization of sample orientation.
+
+    Algorithm:
+
+    1. Compute rotation matrix R_x for alpha tilt around x-axis
+    2. Compute rotation matrix R_y for beta tilt around y-axis
+    3. Combine rotations: R_total = R_y @ R_x
+    4. Apply R_total to all atomic positions
+    5. Apply R_total to lattice vectors (if present)
+    6. Return new CrystalData with rotated coordinates
+    """
+    x_axis: Float[Array, " 3"] = jnp.array([1.0, 0.0, 0.0])
+    y_axis: Float[Array, " 3"] = jnp.array([0.0, 1.0, 0.0])
+
+    r_x: Float[Array, "3 3"] = rotmatrix_axis(x_axis, alpha_rad)
+    r_y: Float[Array, "3 3"] = rotmatrix_axis(y_axis, beta_rad)
+
+    r_total: Float[Array, "3 3"] = r_y @ r_x
+
+    rotated_positions: Float[Array, "N 3"] = crystal_data.positions @ r_total.T
+
+    rotated_lattice: Float[Array, "3 3"] | None = None
+    if crystal_data.lattice is not None:
+        rotated_lattice = crystal_data.lattice @ r_total.T
+
+    tilted_crystal: CrystalData = make_crystal_data(
+        positions=rotated_positions,
+        atomic_numbers=crystal_data.atomic_numbers,
+        lattice=rotated_lattice,
+        stress=crystal_data.stress,
+        energy=crystal_data.energy,
+        properties=crystal_data.properties,
+        comment=crystal_data.comment,
+    )
+    return tilted_crystal

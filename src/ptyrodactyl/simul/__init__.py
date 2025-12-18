@@ -64,6 +64,8 @@ rotmatrix_axis : function
     Create rotation matrix from axis and angle.
 rotmatrix_vectors : function
     Create rotation matrix from two vectors.
+tilt_crystal : function
+    Tilt CrystalData by alpha and beta angles (TEM stage-like tilts).
 shift_beam_fourier : function
     Shift beam in Fourier space.
 single_atom_potential : function
@@ -96,6 +98,7 @@ from .geometry import (
     rotate_structure,
     rotmatrix_axis,
     rotmatrix_vectors,
+    tilt_crystal,
 )
 from .parallelized import clip_cbed, stem4d_sharded
 from .preprocessing import (
@@ -146,6 +149,7 @@ __all__: list[str] = [
     "single_atom_potential",
     "stem_4d",
     "stem4d_sharded",
+    "tilt_crystal",
     "transmission_func",
     "wavelength_ang",
 ]

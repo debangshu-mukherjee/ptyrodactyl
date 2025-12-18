@@ -149,6 +149,7 @@ def _cbed_from_potential_slices(
     atom_potentials: Float[Array, "T H W"],
     voltage_kv: ScalarNumeric,
     calib_ang: ScalarFloat,
+    atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Float[Array, "H W"]:
     """Compute CBED pattern with on-the-fly potential slice generation.
 
@@ -169,6 +170,10 @@ def _cbed_from_potential_slices(
         Accelerating voltage in kilovolts.
     calib_ang : ScalarFloat
         Pixel size in angstroms.
+    atom_mask : Optional[Float[Array, " N"]]
+        Optional mask for atoms to include (1.0 = include, 0.0 = exclude).
+        Used by tiled workflows to exclude atoms outside the current tile.
+        If None, all atoms are included.
 
     Returns
     -------
@@ -208,6 +213,7 @@ def _cbed_from_potential_slices(
             atom_potentials,
             grid_shape,
             calib_ang,
+            atom_mask,
         )
 
         trans_slice: Complex[Array, "H W"] = transmission_func(

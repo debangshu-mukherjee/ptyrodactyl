@@ -36,6 +36,7 @@ from ptyrodactyl.simul import (
     make_probe,
     single_atom_potential,
     stem4d_sharded,
+    wavelength_ang,
 )
 from ptyrodactyl.simul.parallelized import _cbed_from_potential_slices
 from ptyrodactyl.tools import (
@@ -435,6 +436,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     tile_size_ang: float = _DEFAULT_TILE_SIZE_ANG,
     grid_pixels: int = _DEFAULT_GRID_PIXELS,
     pixel_size_ang: float = _DEFAULT_PIXEL_SIZE_ANG,
+    fourier_pixels: Optional[int] = None,
     slice_thickness: ScalarFloat = 1.0,
     num_modes: int = 1,
     probe_defocus: ScalarNumeric = 0.0,
@@ -470,6 +472,11 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         Total grid covers tile_size + 2*padding.
     pixel_size_ang : float, optional
         Pixel size in Angstroms. Default is 0.02 (2pm).
+    fourier_pixels : int, optional
+        FFT grid size for Fourier-space sampling. If None, automatically
+        calculated from cbed_extent_mrad and cbed_shape to ensure proper
+        sampling. Larger values give finer Fourier resolution. Must be
+        >= grid_pixels.
     slice_thickness : ScalarFloat, optional
         Thickness of each slice in Angstroms. Default is 1.0.
     num_modes : int, optional
@@ -530,6 +537,33 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         )
         raise ValueError(msg)
 
+    # Calculate fft_pixels for proper Fourier sampling
+    fft_pixels: int
+    if fourier_pixels is None:
+        wavelength: float = float(wavelength_ang(voltage_kv))
+        target_mrad_per_pixel: float = (
+            2.0 * float(cbed_extent_mrad) / float(cbed_shape[0])
+        )
+        target_inv_ang_per_pixel: float = (
+            target_mrad_per_pixel / (wavelength * 1000.0)
+        )
+        required_grid_size_ang: float = 1.0 / target_inv_ang_per_pixel
+        computed_fourier_pixels: int = int(
+            np.ceil(required_grid_size_ang / pixel_size_ang)
+        )
+        fft_pixels = 1
+        while fft_pixels < computed_fourier_pixels:
+            fft_pixels *= 2
+        fft_pixels = max(fft_pixels, grid_pixels)
+    else:
+        if fourier_pixels < grid_pixels:
+            msg = (
+                f"fourier_pixels ({fourier_pixels}) must be >= grid_pixels "
+                f"({grid_pixels})."
+            )
+            raise ValueError(msg)
+        fft_pixels = fourier_pixels
+
     z_coords: Float[Array, " N"] = crystal_data.positions[:, 2]
     z_min: float = float(jnp.min(z_coords))
     z_max: float = float(jnp.max(z_coords))
@@ -567,7 +601,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             supersampling=supersampling,
         )
         padded_pot: Float[Array, "H W"] = jnp.zeros(
-            (grid_pixels, grid_pixels), dtype=jnp.float64
+            (fft_pixels, fft_pixels), dtype=jnp.float64
         )
         half_k: int = kernel_size // 2
         padded_pot = padded_pot.at[:half_k + 1, :half_k + 1].set(
@@ -593,11 +627,11 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     )
     atom_coords_full: Float[Array, "N 3"] = crystal_data.positions
 
-    image_size: Int[Array, " 2"] = jnp.array([grid_pixels, grid_pixels])
+    fft_image_size: Int[Array, " 2"] = jnp.array([fft_pixels, fft_pixels])
     probe: Complex[Array, "H W"] = make_probe(
         aperture=cbed_aperture_mrad,
         voltage=voltage_kv,
-        image_size=image_size,
+        image_size=fft_image_size,
         calibration_pm=pixel_size_ang * 100.0,
         defocus=probe_defocus,
         c3=probe_c3,
@@ -636,12 +670,10 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             & (atom_coords_full[:, 1] < tile_max_y)
         ).astype(jnp.float64)
 
-        local_x: Float[Array, " N"] = (
-            atom_coords_full[:, 0] - tile_min_x
-        ) * in_tile
-        local_y: Float[Array, " N"] = (
-            atom_coords_full[:, 1] - tile_min_y
-        ) * in_tile
+        # Convert to local tile coordinates (don't multiply by mask -
+        # the mask is passed separately to exclude out-of-tile atoms)
+        local_x: Float[Array, " N"] = atom_coords_full[:, 0] - tile_min_x
+        local_y: Float[Array, " N"] = atom_coords_full[:, 1] - tile_min_y
         local_z: Float[Array, " N"] = atom_coords_full[:, 2]
 
         local_coords: Float[Array, "N 3"] = jnp.stack(
@@ -654,8 +686,8 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             [beam_local_y, beam_local_x]
         )
 
-        h: int = grid_pixels
-        w: int = grid_pixels
+        h: int = fft_pixels
+        w: int = fft_pixels
         probe_k: Complex[Array, "H W M"] = jnp.fft.fft2(modes, axes=(0, 1))
         qy: Float[Array, " H"] = jnp.fft.fftfreq(h, d=pixel_size_ang)
         qx: Float[Array, " W"] = jnp.fft.fftfreq(w, d=pixel_size_ang)
@@ -682,6 +714,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             atom_potentials=atom_potentials,
             voltage_kv=voltage_kv,
             calib_ang=pixel_size_ang,
+            atom_mask=in_tile,
         )
         return cbed
 
@@ -704,19 +737,18 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     else:
         raw_cbeds = jax.vmap(_process_single_position)(scan_positions)
 
-    fourier_calib_inv_ang: float = 1.0 / grid_size_ang
-    wavelength_ang: float = 12.2643 / np.sqrt(
-        float(voltage_kv) * (1.0 + 0.978459e-3 * float(voltage_kv))
-    )
-    mrad_per_inv_ang: float = wavelength_ang * 1000.0
+    fft_grid_size_ang: float = fft_pixels * pixel_size_ang
+    fourier_calib_inv_ang: float = 1.0 / fft_grid_size_ang
+    e_lambda_ang: float = float(wavelength_ang(voltage_kv))
+    mrad_per_inv_ang: float = e_lambda_ang * 1000.0
     extent_inv_ang: float = float(cbed_extent_mrad) / mrad_per_inv_ang
     extent_pixels: int = int(np.ceil(extent_inv_ang / fourier_calib_inv_ang))
 
-    center: int = grid_pixels // 2
+    center: int = fft_pixels // 2
     y_start: int = max(0, center - extent_pixels)
-    y_end: int = min(grid_pixels, center + extent_pixels)
+    y_end: int = min(fft_pixels, center + extent_pixels)
     x_start: int = max(0, center - extent_pixels)
-    x_end: int = min(grid_pixels, center + extent_pixels)
+    x_end: int = min(fft_pixels, center + extent_pixels)
     clip_h: int = y_end - y_start
     clip_w: int = x_end - x_start
 

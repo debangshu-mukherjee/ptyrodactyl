@@ -48,10 +48,11 @@ os.environ.setdefault(
     "--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=0",
 )
 
-from . import invert, simul, tools, workflows
+from . import invert, jacobian, simul, tools, workflows
 
 __all__: list[str] = [
     "invert",
+    "jacobian",
     "simul",
     "tools",
     "workflows",

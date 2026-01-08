@@ -15,7 +15,27 @@ Submodules
     Nullspace analysis and gauge orbit characterization
 - `fisher`:
     Fisher information, Schur complements, and experiment design
+- `blocks`:
+    Block-based Gauss-Newton solver for ptychography
 """
+
+from .blocks import (
+    ExitWaveParams,
+    AberrationParams,
+    GeometryParams,
+    PositionParams,
+    ProbeModeParams,
+    PtychoParams,
+    make_ptycho_params,
+    split_params,
+    block_jacobian_operator,
+    block_vjp_operator,
+    block_jtj_operator,
+    cross_block_jtj_operator,
+    compute_block_gradient,
+    block_gauss_newton_step,
+    alternating_block_solve,
+)
 
 from .fisher import (
     fisher_information,
@@ -96,4 +116,19 @@ __all__ = [
     "optimal_weights_e_criterion",
     "condition_number",
     "information_gain",
+    "ExitWaveParams",
+    "AberrationParams",
+    "GeometryParams",
+    "PositionParams",
+    "ProbeModeParams",
+    "PtychoParams",
+    "make_ptycho_params",
+    "split_params",
+    "block_jacobian_operator",
+    "block_vjp_operator",
+    "block_jtj_operator",
+    "cross_block_jtj_operator",
+    "compute_block_gradient",
+    "block_gauss_newton_step",
+    "alternating_block_solve",
 ]

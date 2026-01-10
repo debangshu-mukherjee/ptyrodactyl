@@ -553,7 +553,7 @@ class TestPyTreeOperations(chex.TestCase):
                 return a1 + a2
             return a1
 
-        result = jax.tree_map(add_arrays, arr1, arr2)
+        result = jax.tree.map(add_arrays, arr1, arr2)
         assert jnp.allclose(result.data_array, 3.0)
 
     def test_tree_leaves_on_probe_modes(self) -> None:
@@ -564,7 +564,7 @@ class TestPyTreeOperations(chex.TestCase):
             0.1,
         )
 
-        leaves = jax.tree_leaves(probe)
+        leaves = jax.tree.leaves(probe)
         assert len(leaves) == 3
         assert leaves[0].shape == (10, 10, 2)
         assert leaves[1].shape == (2,)

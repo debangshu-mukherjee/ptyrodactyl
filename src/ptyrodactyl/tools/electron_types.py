@@ -434,7 +434,7 @@ class CrystalData(NamedTuple):
     properties: Optional[List[Dict[str, Union[str, int]]]]
     comment: Optional[str]
 
-    def tree_flatten(self) -> Tuple[Tuple[Any, ...], None]:
+    def tree_flatten(self) -> Tuple[Tuple[Any, ...], dict[str, Any]]:
         """Flatten CrystalData for JAX pytree serialization.
 
         Children (traced by JAX) are ``positions``,

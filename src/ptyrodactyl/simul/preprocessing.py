@@ -173,7 +173,7 @@ def _load_kirkland_csv(
     -----
     Uses numpy to load CSV then converts to JAX array for performance.
     """
-    kirkland_numpy: np.ndarray = np.loadtxt(
+    kirkland_numpy: np.ndarray = np.loadtxt(  # type: ignore[call-overload]
         file_path, delimiter=",", dtype=np.float64
     )
     if kirkland_numpy.shape != (103, 12):

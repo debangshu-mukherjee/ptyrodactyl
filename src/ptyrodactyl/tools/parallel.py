@@ -32,7 +32,7 @@ from jaxtyping import Array
 def shard_array(
     input_array: Array,
     shard_axes: int | Sequence[int],
-    devices: Sequence[jax.Device] = None,
+    devices: Sequence[jax.Device] | None = None,
 ) -> Array:
     """Shard an array across specified axes and devices.
 

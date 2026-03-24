@@ -43,7 +43,8 @@ from typing import Callable, Tuple, NamedTuple
 import jax
 import jax.numpy as jnp
 import jax.lax as lax
-from jaxtyping import Float, Int, Array, PyTree
+import jax.flatten_util
+from jaxtyping import Bool, Float, Int, Array, PyTree
 
 from ptyrodactyl.jacobian.operators import jtj_operator, vjp_operator
 
@@ -924,7 +925,7 @@ def singular_spectrum(
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
         return result_flat
 
-    key: jax.random.PRNGKey = jax.random.PRNGKey(random_seed)
+    key: Array = jax.random.PRNGKey(random_seed)
     initial_vector: Float[Array, "n"] = jax.random.normal(key, (n,))
 
     alpha, beta = lanczos_tridiagonal(jtj_flat_fn, initial_vector, num_lanczos_iterations)

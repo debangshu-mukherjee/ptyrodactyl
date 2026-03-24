@@ -1,5 +1,7 @@
 """Tests for electron_types module - PyTrees and factory functions."""
 
+import unittest
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -158,7 +160,7 @@ class TestProbeModes(chex.TestCase):
 
         probe = make_probe_modes(self.modes, self.weights, self.calib)
         normalized = self.variant(normalize_weights)(probe)
-        self.assertAlmostEqual(jnp.sum(normalized.weights), 1.0, places=6)
+        self.assertAlmostEqual(float(jnp.sum(normalized.weights)), 1.0, places=6)
 
     def test_invalid_inputs(self) -> None:
         """Test factory function with invalid inputs."""
@@ -174,11 +176,11 @@ class TestProbeModes(chex.TestCase):
             self.modes, jnp.array([-0.5, -0.3, -0.2]), self.calib
         )
         assert jnp.all(probe.weights >= 0)
-        self.assertAlmostEqual(jnp.sum(probe.weights), 1.0, places=6)
+        self.assertAlmostEqual(float(jnp.sum(probe.weights)), 1.0, places=6)
 
         probe = make_probe_modes(self.modes, jnp.zeros(self.m), self.calib)
         assert jnp.all(probe.weights >= 0)
-        self.assertAlmostEqual(jnp.sum(probe.weights), 1.0, places=6)
+        self.assertAlmostEqual(float(jnp.sum(probe.weights)), 1.0, places=6)
 
         probe = make_probe_modes(self.modes, self.weights, -0.1)
         assert probe.calib > 0
@@ -553,7 +555,7 @@ class TestPyTreeOperations(chex.TestCase):
                 return a1 + a2
             return a1
 
-        result = jax.tree_map(add_arrays, arr1, arr2)
+        result = jax.tree.map(add_arrays, arr1, arr2)
         assert jnp.allclose(result.data_array, 3.0)
 
     def test_tree_leaves_on_probe_modes(self) -> None:
@@ -564,7 +566,7 @@ class TestPyTreeOperations(chex.TestCase):
             0.1,
         )
 
-        leaves = jax.tree_leaves(probe)
+        leaves = jax.tree.leaves(probe)
         assert len(leaves) == 3
         assert leaves[0].shape == (10, 10, 2)
         assert leaves[1].shape == (2,)
@@ -603,4 +605,4 @@ class TestPyTreeOperations(chex.TestCase):
 
 
 if __name__ == "__main__":
-    chex.TestCase.main()
+    unittest.main()

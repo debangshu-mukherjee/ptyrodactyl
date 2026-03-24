@@ -43,6 +43,7 @@ Routine Listings
 
 from typing import Callable, Tuple, NamedTuple
 import jax
+import jax.flatten_util
 import jax.numpy as jnp
 import jax.lax as lax
 from jaxtyping import Float, Int, Array, PyTree
@@ -278,11 +279,11 @@ def fisher_diagonal(
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
         return result_flat
 
-    key: jax.random.PRNGKey = jax.random.PRNGKey(random_seed)
+    key: Array = jax.random.PRNGKey(random_seed)
 
     def hutchinson_sample(
         carry: Float[Array, "n"],
-        key_i: jax.random.PRNGKey,
+        key_i: Array,
     ) -> Tuple[Float[Array, "n"], None]:
         """Accumulate one Hutchinson diagonal sample."""
         z: Float[Array, "n"] = jax.random.rademacher(key_i, (n,)).astype(jnp.float32)
@@ -291,7 +292,7 @@ def fisher_diagonal(
         new_carry: Float[Array, "n"] = carry + sample
         return new_carry, None
 
-    keys: jax.random.PRNGKey = jax.random.split(key, num_hutchinson_samples)
+    keys: Array = jax.random.split(key, num_hutchinson_samples)
     diagonal_sum, _ = lax.scan(hutchinson_sample, jnp.zeros(n), keys)
     diagonal_mean: Float[Array, "n"] = diagonal_sum / num_hutchinson_samples
     fisher_diag_flat: Float[Array, "n"] = diagonal_mean / noise_variance
@@ -518,7 +519,7 @@ def fisher_eigenspectrum(
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
         return result_flat
 
-    key: jax.random.PRNGKey = jax.random.PRNGKey(random_seed)
+    key: Array = jax.random.PRNGKey(random_seed)
     v0: Float[Array, "n"] = jax.random.normal(key, (n,))
     v0_normalized: Float[Array, "n"] = v0 / jnp.linalg.norm(v0)
 

@@ -174,8 +174,8 @@ def propagation_func(
     prop : Complex[Array, " h w"]
         Fresnel propagation function in Fourier space.
     """
-    qy: Num[Array, " h"] = jnp.fft.fftfreq(imsize_y, d=calib_ang)
-    qx: Num[Array, " w"] = jnp.fft.fftfreq(imsize_x, d=calib_ang)
+    qy: Num[Array, " h"] = jnp.fft.fftfreq(int(imsize_y), d=calib_ang)
+    qx: Num[Array, " w"] = jnp.fft.fftfreq(int(imsize_x), d=calib_ang)
     lya: Num[Array, " h w"]
     lxa: Num[Array, " h w"]
     lya, lxa = jnp.meshgrid(qy, qx, indexing="ij")
@@ -244,7 +244,7 @@ def fourier_coords(
     inverse_array: Float[Array, " h w"] = inv_squared**0.5
     calib_inverse_y: Float[Array, " "] = inverse_arr_y[1] - inverse_arr_y[0]
     calib_inverse_x: Float[Array, " "] = inverse_arr_x[1] - inverse_arr_x[0]
-    inverse_space: Bool[Array, ""] = False
+    inverse_space: Bool[Array, ""] = jnp.array(False)
     calibrated_inverse_array: CalibratedArray = make_calibrated_array(
         inverse_array, calib_inverse_y, calib_inverse_x, inverse_space
     )
@@ -611,7 +611,7 @@ def cbed(
             w_k = w_k * slice_transmission[..., jnp.newaxis]
             return jnp.fft.ifft2(w_k, axes=(0, 1)).astype(dtype)
 
-        is_last_slice: Bool[Array, ""] = slice_idx == num_slices - 1
+        is_last_slice: Bool[Array, ""] = jnp.array(slice_idx == num_slices - 1)
         wave = lax.cond(is_last_slice, lambda w: w, _propagate, wave)
         return wave, None
 
@@ -884,10 +884,10 @@ def decompose_beam_to_modes(
     key2: PRNGKeyArray
     key1, key2 = jax.random.split(key)
     random_real: Float[Array, " tp mm"] = jax.random.normal(
-        key1, (tp, num_modes), dtype=jnp.float64
+        key1, (tp, int(num_modes)), dtype=jnp.float64
     )
     random_imag: Float[Array, " tp mm"] = jax.random.normal(
-        key2, (tp, num_modes), dtype=jnp.float64
+        key2, (tp, int(num_modes)), dtype=jnp.float64
     )
     random_matrix: Complex[Array, " tp mm"] = random_real + (1j * random_imag)
     qq: Complex[Array, " tp mm"]

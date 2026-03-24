@@ -1,5 +1,7 @@
 """Tests for atom_potentials module, specifically the bessel_kv and _slice_atoms functions."""
 
+import unittest
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -160,7 +162,7 @@ class TestBesselKv(chex.TestCase):
     )
     @parameterized.parameters(
         (jnp.float32,),
-        (jnp.float64,) if jax.config.x64_enabled else (jnp.float32,),
+        (jnp.float64,) if getattr(jax.config, "jax_enable_x64", False) else (jnp.float32,),
     )
     def test_bessel_k0_dtype_consistency(self, dtype) -> None:
         """Test that output dtype matches input dtype."""
@@ -443,7 +445,7 @@ class TestSliceAtoms(chex.TestCase):
         assert result_f32.dtype == jnp.float32
 
         # Test with float64 input if x64 is enabled
-        if jax.config.x64_enabled:
+        if getattr(jax.config, "jax_enable_x64", False):
             coords_f64 = jnp.array(
                 [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]], dtype=jnp.float64
             )
@@ -804,4 +806,4 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
 
 
 if __name__ == "__main__":
-    chex.TestCase.main()
+    unittest.main()

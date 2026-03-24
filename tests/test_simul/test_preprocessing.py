@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ptyrodactyl.electrons.preprocessing import (
+from ptyrodactyl.simul.preprocessing import (
     _ATOMIC_NUMBERS,
     _KIRKLAND_POTENTIALS,
     _parse_xyz_metadata,

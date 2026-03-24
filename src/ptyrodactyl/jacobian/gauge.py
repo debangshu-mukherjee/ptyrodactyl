@@ -30,6 +30,7 @@ Routine Listings
 
 from typing import Callable, Tuple
 import jax
+import jax.flatten_util
 import jax.numpy as jnp
 import jax.lax as lax
 from jaxtyping import Float, Int, Array, PyTree
@@ -202,7 +203,7 @@ def nullspace_vectors_lanczos(
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
         return result_flat
 
-    key: jax.random.PRNGKey = jax.random.PRNGKey(random_seed)
+    key: Array = jax.random.PRNGKey(random_seed)
     v0: Float[Array, "n"] = jax.random.normal(key, (n,))
     v0_norm: Float[Array, ""] = jnp.linalg.norm(v0)
     v0_normalized: Float[Array, "n"] = v0 / v0_norm
@@ -526,7 +527,7 @@ def effective_rank(
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
         return result_flat
 
-    key: jax.random.PRNGKey = jax.random.PRNGKey(random_seed)
+    key: Array = jax.random.PRNGKey(random_seed)
     v0: Float[Array, "n"] = jax.random.normal(key, (n,))
     v0_norm: Float[Array, ""] = jnp.linalg.norm(v0)
     v0_normalized: Float[Array, "n"] = v0 / v0_norm
@@ -703,7 +704,7 @@ def random_gauge_direction(
 
     is_nullspace: Float[Array, "num_vectors"] = (eigenvalues < threshold).astype(jnp.float32)
 
-    key: jax.random.PRNGKey = jax.random.PRNGKey(direction_seed)
+    key: Array = jax.random.PRNGKey(direction_seed)
     random_coeffs: Float[Array, "num_vectors"] = jax.random.normal(key, (num_vecs,))
     masked_coeffs: Float[Array, "num_vectors"] = random_coeffs * is_nullspace
 

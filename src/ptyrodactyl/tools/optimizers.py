@@ -90,12 +90,12 @@ class LRSchedulerState(NamedTuple):
         Initial learning rate value.
     """
 
-    step: int
-    learning_rate: float
-    initial_lr: float
+    step: int | Array
+    learning_rate: float | Array
+    initial_lr: float | Array
 
 
-SchedulerFn = Callable[[LRSchedulerState], tuple[float, LRSchedulerState]]
+SchedulerFn = Callable[[LRSchedulerState], tuple[float | Array, LRSchedulerState]]
 
 
 def create_cosine_scheduler(
@@ -149,7 +149,7 @@ def create_cosine_scheduler(
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float, LRSchedulerState]:
+    ) -> tuple[float | Array, LRSchedulerState]:
         """Apply cosine annealing to the learning rate.
 
         Parameters
@@ -217,7 +217,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float, LRSchedulerState]:
+    ) -> tuple[float | Array, LRSchedulerState]:
         """Apply step decay to the learning rate.
 
         Parameters
@@ -300,7 +300,7 @@ def create_warmup_cosine_scheduler(
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float, LRSchedulerState]:
+    ) -> tuple[float | Array, LRSchedulerState]:
         """Apply warmup then cosine decay to the learning rate.
 
         Parameters
@@ -375,7 +375,7 @@ class OptimizerState(NamedTuple):
 
     m: Array  # First moment estimate
     v: Array  # Second moment estimate
-    step: Array  # Step count
+    step: int | Array  # Step count
 
 
 class Optimizer(NamedTuple):
@@ -561,14 +561,14 @@ Tuple[Complex[Array, " ..."], ...]]
 def complex_adam(
     params: Complex[Array, " ..."],
     grads: Complex[Array, " ..."],
-    state: Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int],
+    state: Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int | Array],
     learning_rate: float = 0.001,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
 ) -> Tuple[
     Complex[Array, " ..."],
-    Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int],
+    Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int | Array],
 ]:
     r"""Perform one step of complex-valued Adam.
 

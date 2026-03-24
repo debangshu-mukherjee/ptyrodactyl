@@ -17,6 +17,7 @@ Submodules
     Fisher information, Schur complements, and experiment design
 - `blocks`:
     Block-based Gauss-Newton solver for ptychography
+    
 """
 
 from .blocks import (

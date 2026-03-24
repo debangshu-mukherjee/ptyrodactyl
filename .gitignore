@@ -4,8 +4,8 @@ __pycache__/
 *.pyc
 
 # AI Assistants
-.claude/
-.claude/CLAUDE.md
+.agents/
+.agents/CLAUDE.md
 .qodo/
 
 # Test data

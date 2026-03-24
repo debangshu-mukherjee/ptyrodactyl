@@ -1,31 +1,42 @@
-"""
-Module: ptyrodactyl.jacobian.solvers
-------------------------------------
+r"""Second-order solvers and spectral analysis for least-squares.
 
-Second-order solvers and spectral analysis for nonlinear least-squares.
+Extended Summary
+----------------
+Provides Gauss-Newton, Levenberg-Marquardt, and Krylov subspace
+methods that expose the Jacobian structure essential for
+understanding gauge freedom and observability in inverse
+problems.  All solvers operate on arbitrary JAX PyTree parameter
+structures and are fully JIT-compatible via :func:`jax.lax.scan`
+and :func:`jax.lax.fori_loop`.
 
-This module provides Gauss-Newton, Levenberg-Marquardt, and Krylov
-subspace methods that expose the Jacobian structure essential for
-understanding gauge freedom and observability in inverse problems.
-
-Functions
----------
-- `conjugate_gradient`:
-    Matrix-free CG solver for symmetric positive semi-definite systems
-- `gauss_newton_step`:
-    Single Gauss-Newton update step
-- `gauss_newton_solve`:
-    Full Gauss-Newton iteration to convergence
-- `levenberg_marquardt_step`:
-    Single LM update step with adaptive damping
-- `levenberg_marquardt_solve`:
-    Full LM iteration to convergence
-- `lanczos_tridiagonal`:
-    Lanczos algorithm for tridiagonalizing symmetric operators
-- `singular_spectrum`:
-    Estimate singular values of Jacobian via Lanczos on JᵀJ
-- `effective_nullspace_dimension`:
-    Count dimensions below noise threshold
+Routine Listings
+----------------
+:class:`CGState`
+    State container for conjugate gradient iteration.
+:class:`GNState`
+    State container for Gauss-Newton iteration.
+:class:`LMState`
+    State container for Levenberg-Marquardt iteration.
+:class:`LanczosState`
+    State container for Lanczos tridiagonalisation.
+:func:`conjugate_gradient`
+    Matrix-free CG solver for symmetric PSD systems.
+:func:`gauss_newton_step`
+    Single Gauss-Newton update step.
+:func:`gauss_newton_solve`
+    Full Gauss-Newton iteration to convergence.
+:func:`levenberg_marquardt_step`
+    Single LM update step with adaptive damping.
+:func:`levenberg_marquardt_solve`
+    Full LM iteration to convergence.
+:func:`lanczos_tridiagonal`
+    Lanczos algorithm for tridiagonalising symmetric
+    operators.
+:func:`singular_spectrum`
+    Estimate singular values of Jacobian via Lanczos on
+    J^T J.
+:func:`effective_nullspace_dimension`
+    Count dimensions below noise threshold.
 """
 
 from typing import Callable, Tuple, NamedTuple
@@ -38,7 +49,21 @@ from ptyrodactyl.jacobian.operators import jtj_operator, vjp_operator
 
 
 class CGState(NamedTuple):
-    """State for conjugate gradient iteration."""
+    """State container for conjugate gradient iteration.
+
+    Attributes
+    ----------
+    x : PyTree
+        Current solution estimate.
+    r : PyTree
+        Current residual b - A x.
+    p : PyTree
+        Current search direction.
+    r_dot_r : Float[Array, ""]
+        Squared residual norm <r, r>.
+    iteration : Int[Array, ""]
+        Current iteration index.
+    """
     x: PyTree
     r: PyTree
     p: PyTree
@@ -47,14 +72,36 @@ class CGState(NamedTuple):
 
 
 class GNState(NamedTuple):
-    """State for Gauss-Newton iteration."""
+    """State container for Gauss-Newton iteration.
+
+    Attributes
+    ----------
+    params : PyTree
+        Current parameter estimate.
+    residual_norm : Float[Array, ""]
+        L2 norm of the current residual.
+    iteration : Int[Array, ""]
+        Current iteration index.
+    """
     params: PyTree
     residual_norm: Float[Array, ""]
     iteration: Int[Array, ""]
 
 
 class LMState(NamedTuple):
-    """State for Levenberg-Marquardt iteration."""
+    """State container for Levenberg-Marquardt iteration.
+
+    Attributes
+    ----------
+    params : PyTree
+        Current parameter estimate.
+    residual_norm : Float[Array, ""]
+        L2 norm of the current residual.
+    damping : Float[Array, ""]
+        Current damping parameter :math:`\\lambda`.
+    iteration : Int[Array, ""]
+        Current iteration index.
+    """
     params: PyTree
     residual_norm: Float[Array, ""]
     damping: Float[Array, ""]
@@ -62,7 +109,21 @@ class LMState(NamedTuple):
 
 
 class LanczosState(NamedTuple):
-    """State for Lanczos tridiagonalization."""
+    """State container for Lanczos tridiagonalisation.
+
+    Attributes
+    ----------
+    v_prev : Float[Array, "n"]
+        Previous Lanczos vector.
+    v_curr : Float[Array, "n"]
+        Current Lanczos vector.
+    alpha : Float[Array, "k"]
+        Diagonal elements accumulated so far.
+    beta : Float[Array, "k"]
+        Off-diagonal elements accumulated so far.
+    iteration : Int[Array, ""]
+        Current iteration index.
+    """
     v_prev: Float[Array, "n"]
     v_curr: Float[Array, "n"]
     alpha: Float[Array, "k"]
@@ -74,21 +135,19 @@ def _tree_dot(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute inner product between two PyTrees with matching structure.
+    """Compute inner product between two PyTrees.
 
     Parameters
     ----------
-    - `tree_a` (PyTree):
+    tree_a : PyTree
         First PyTree operand.
-    - `tree_b` (PyTree):
-        Second PyTree operand with same structure as tree_a.
+    tree_b : PyTree
+        Second PyTree operand with same structure as
+        *tree_a*.
 
     Returns
     -------
-    - `result` (Float[Array, ""]):
+    result : Float[Array, ""]
         Sum of element-wise products across all leaves.
     """
     leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
@@ -102,21 +161,19 @@ def _tree_add(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Element-wise addition of two PyTrees with matching structure.
+    """Element-wise addition of two PyTrees.
 
     Parameters
     ----------
-    - `tree_a` (PyTree):
+    tree_a : PyTree
         First PyTree operand.
-    - `tree_b` (PyTree):
-        Second PyTree operand with same structure as tree_a.
+    tree_b : PyTree
+        Second PyTree operand with same structure as
+        *tree_a*.
 
     Returns
     -------
-    - `result` (PyTree):
+    result : PyTree
         PyTree with element-wise sum of leaves.
     """
     result: PyTree = jax.tree_util.tree_map(lambda a, b: a + b, tree_a, tree_b)
@@ -127,21 +184,18 @@ def _tree_scalar_mul(
     scalar: Float[Array, ""],
     tree: PyTree,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Multiply all leaves of a PyTree by a scalar.
+    """Multiply all leaves of a PyTree by a scalar.
 
     Parameters
     ----------
-    - `scalar` (Float[Array, ""]):
+    scalar : Float[Array, ""]
         Scalar multiplier.
-    - `tree` (PyTree):
+    tree : PyTree
         PyTree to scale.
 
     Returns
     -------
-    - `result` (PyTree):
+    result : PyTree
         Scaled PyTree.
     """
     result: PyTree = jax.tree_util.tree_map(lambda x: scalar * x, tree)
@@ -152,21 +206,18 @@ def _tree_sub(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Element-wise subtraction of two PyTrees with matching structure.
+    """Element-wise subtraction of two PyTrees.
 
     Parameters
     ----------
-    - `tree_a` (PyTree):
+    tree_a : PyTree
         First PyTree operand.
-    - `tree_b` (PyTree):
-        Second PyTree operand to subtract from tree_a.
+    tree_b : PyTree
+        Second PyTree operand to subtract from *tree_a*.
 
     Returns
     -------
-    - `result` (PyTree):
+    result : PyTree
         PyTree with element-wise difference of leaves.
     """
     result: PyTree = jax.tree_util.tree_map(lambda a, b: a - b, tree_a, tree_b)
@@ -176,20 +227,17 @@ def _tree_sub(
 def _tree_zeros_like(
     tree: PyTree,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Create a PyTree of zeros with same structure as input.
+    """Create a PyTree of zeros with same structure as input.
 
     Parameters
     ----------
-    - `tree` (PyTree):
+    tree : PyTree
         Template PyTree.
 
     Returns
     -------
-    - `result` (PyTree):
-        PyTree of zeros with matching structure.
+    result : PyTree
+        PyTree of zeros with matching structure and dtypes.
     """
     result: PyTree = jax.tree_util.tree_map(jnp.zeros_like, tree)
     return result
@@ -198,20 +246,18 @@ def _tree_zeros_like(
 def _tree_norm(
     tree: PyTree,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute L2 norm of a PyTree.
+    """Compute L2 norm of a PyTree.
 
     Parameters
     ----------
-    - `tree` (PyTree):
+    tree : PyTree
         Input PyTree.
 
     Returns
     -------
-    - `result` (Float[Array, ""]):
-        Square root of sum of squared elements across all leaves.
+    result : Float[Array, ""]
+        Square root of sum of squared elements across all
+        leaves.
     """
     dot_product: Float[Array, ""] = _tree_dot(tree, tree)
     result: Float[Array, ""] = jnp.sqrt(dot_product)
@@ -225,46 +271,54 @@ def conjugate_gradient(
     max_iterations: int = 100,
     tolerance: float = 1e-6,
 ) -> Tuple[PyTree, Int[Array, ""]]:
-    """
-    Description
-    -----------
-    Solve the linear system A @ x = b using conjugate gradient method.
+    r"""Solve A x = b via conjugate gradient.
 
-    The operator A must be symmetric positive semi-definite. This is
-    satisfied by JᵀJ operators arising from linearized least-squares.
+    Extended Summary
+    ----------------
+    The operator *A* must be symmetric positive semi-definite.
+    This is satisfied by :math:`J^\top J` operators arising
+    from linearised least-squares.  The iteration is executed
+    via :func:`jax.lax.scan` for JIT compatibility.
+
+    Implementation Logic
+    --------------------
+    1. **Initialise** --
+       r = b - A x0, p = r.
+    2. **CG loop** --
+       For each iteration:
+
+       a. Compute A p.
+       b. Step size :math:`\alpha = \langle r, r \rangle
+          / \langle p, A p \rangle`.
+       c. Update x = x + alpha * p.
+       d. Update r = r - alpha * A p.
+       e. Compute :math:`\beta = \langle r_{new}, r_{new}
+          \rangle / \langle r_{old}, r_{old} \rangle`.
+       f. Update p = r + beta * p.
+    3. **Convergence check** --
+       Freeze state once ||r|| < *tolerance*.
 
     Parameters
     ----------
-    - `linear_operator` (Callable[[PyTree], PyTree]):
-        Function computing A @ v for any vector v. Must be symmetric PSD.
-    - `rhs` (PyTree):
+    linear_operator : Callable[[PyTree], PyTree]
+        Function computing A @ v for any vector v.  Must be
+        symmetric PSD.
+    rhs : PyTree
         Right-hand side vector b.
-    - `x0` (PyTree):
-        Initial guess for solution.
-    - `max_iterations` (int):
-        Maximum number of CG iterations. Default 100.
-    - `tolerance` (float):
-        Convergence tolerance on residual norm. Default 1e-6.
+    x0 : PyTree
+        Initial guess for the solution.
+    max_iterations : int
+        Maximum number of CG iterations.  Default 100.
+    tolerance : float
+        Convergence tolerance on residual norm.
+        Default 1e-6.
 
     Returns
     -------
-    - `solution` (PyTree):
-        Approximate solution x satisfying A @ x ≈ b.
-    - `iterations` (Int[Array, ""]):
+    solution : PyTree
+        Approximate solution x satisfying A x ~ b.
+    iterations : Int[Array, ""]
         Number of iterations performed.
-
-    Flow
-    ----
-    1. Initialize residual r = b - A @ x0
-    2. Initialize search direction p = r
-    3. For each iteration:
-       a. Compute A @ p
-       b. Compute step size α = (r·r) / (p·Ap)
-       c. Update solution x = x + α*p
-       d. Update residual r = r - α*Ap
-       e. Compute β = (r_new·r_new) / (r_old·r_old)
-       f. Update search direction p = r + β*p
-    4. Terminate when ||r|| < tolerance or max_iterations reached
     """
     initial_residual: PyTree = _tree_sub(rhs, linear_operator(x0))
     initial_r_dot_r: Float[Array, ""] = _tree_dot(initial_residual, initial_residual)
@@ -283,6 +337,7 @@ def conjugate_gradient(
         state: CGState,
         _: None,
     ) -> Tuple[CGState, None]:
+        """Execute one CG iteration."""
         a_times_p: PyTree = linear_operator(state.p)
         p_dot_ap: Float[Array, ""] = _tree_dot(state.p, a_times_p)
         alpha: Float[Array, ""] = state.r_dot_r / (p_dot_ap + 1e-12)
@@ -321,42 +376,53 @@ def gauss_newton_step(
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
 ) -> Tuple[PyTree, Float[Array, ""]]:
-    """
-    Description
-    -----------
-    Compute a single Gauss-Newton update step for nonlinear least-squares.
+    r"""Compute a single Gauss-Newton update step.
 
-    Solves the linearized normal equations JᵀJ δ = Jᵀr using CG, where
-    J is the Jacobian at current params and r is the residual.
+    Extended Summary
+    ----------------
+    Solves the linearised normal equations
+    :math:`J^\top J \, \delta = J^\top r` using CG, where *J*
+    is the Jacobian at current params and *r* is the residual.
+
+    Implementation Logic
+    --------------------
+    1. **Compute residual** --
+       r = f(theta) - y.
+    2. **Compute gradient** --
+       g = J^T r via VJP.
+    3. **Construct J^T J** --
+       Build the normal equations operator.
+    4. **Solve for step** --
+       delta = CG(J^T J, g).
+    5. **Update** --
+       theta_new = theta - delta.
+    6. **Evaluate** --
+       Compute residual norm at theta_new.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Current parameter estimate.
-    - `data` (Float[Array, "..."]):
+    data : Float[Array, "..."]
         Observed measurements.
-    - `cg_max_iterations` (int):
-        Maximum CG iterations for inner solve. Default 50.
-    - `cg_tolerance` (float):
-        CG convergence tolerance. Default 1e-6.
+    cg_max_iterations : int
+        Maximum CG iterations for inner solve.  Default 50.
+    cg_tolerance : float
+        CG convergence tolerance.  Default 1e-6.
 
     Returns
     -------
-    - `new_params` (PyTree):
+    new_params : PyTree
         Updated parameter estimate after one GN step.
-    - `residual_norm` (Float[Array, ""]):
-        Norm of residual at new_params.
+    residual_norm : Float[Array, ""]
+        L2 norm of residual at *new_params*.
 
-    Flow
-    ----
-    1. Compute residual r = f(θ) - y
-    2. Compute gradient Jᵀr via VJP
-    3. Construct JᵀJ operator
-    4. Solve JᵀJ δ = Jᵀr via CG
-    5. Update θ_new = θ - δ
-    6. Return new params and residual norm
+    See Also
+    --------
+    :func:`gauss_newton_solve` : Iterative wrapper.
+    :func:`conjugate_gradient` : Inner linear solver.
     """
     prediction: Float[Array, "..."] = forward_fn(params)
     residual: Float[Array, "..."] = prediction - data
@@ -387,43 +453,49 @@ def gauss_newton_solve(
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
 ) -> Tuple[PyTree, GNState]:
-    """
-    Description
-    -----------
-    Solve nonlinear least-squares via iterated Gauss-Newton.
+    """Solve nonlinear least-squares via iterated Gauss-Newton.
+
+    Implementation Logic
+    --------------------
+    1. **Initialise** --
+       Evaluate residual norm at *params_init*.
+    2. **Iterate** --
+       For each iteration, compute a GN step and check
+       convergence.  Freeze state once the residual norm
+       drops below *tolerance*.
+    3. **Return** --
+       Final parameters and the :class:`GNState`.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params_init` (PyTree):
+    params_init : PyTree
         Initial parameter guess.
-    - `data` (Float[Array, "..."]):
+    data : Float[Array, "..."]
         Observed measurements.
-    - `max_iterations` (int):
-        Maximum number of GN iterations. Default 20.
-    - `tolerance` (float):
-        Convergence tolerance on residual norm. Default 1e-8.
-    - `cg_max_iterations` (int):
-        Maximum CG iterations per GN step. Default 50.
-    - `cg_tolerance` (float):
-        CG convergence tolerance. Default 1e-6.
+    max_iterations : int
+        Maximum number of GN iterations.  Default 20.
+    tolerance : float
+        Convergence tolerance on residual norm.
+        Default 1e-8.
+    cg_max_iterations : int
+        Maximum CG iterations per GN step.  Default 50.
+    cg_tolerance : float
+        CG convergence tolerance.  Default 1e-6.
 
     Returns
     -------
-    - `params_final` (PyTree):
-        Optimized parameters.
-    - `final_state` (GNState):
-        Final optimization state including residual norm and iteration count.
+    params_final : PyTree
+        Optimised parameters.
+    final_state : GNState
+        Final optimisation state including residual norm
+        and iteration count.
 
-    Flow
-    ----
-    1. Initialize state with params_init
-    2. For each iteration:
-       a. Compute GN step
-       b. Check convergence
-       c. Update state
-    3. Return final parameters and state
+    See Also
+    --------
+    :func:`gauss_newton_step` : Single-step primitive.
+    :func:`levenberg_marquardt_solve` : Damped variant.
     """
     initial_prediction: Float[Array, "..."] = forward_fn(params_init)
     initial_residual: Float[Array, "..."] = initial_prediction - data
@@ -439,6 +511,7 @@ def gauss_newton_solve(
         state: GNState,
         _: None,
     ) -> Tuple[GNState, None]:
+        """Execute one GN iteration with convergence check."""
         new_params, new_norm = gauss_newton_step(
             forward_fn, state.params, data, cg_max_iterations, cg_tolerance
         )
@@ -468,46 +541,57 @@ def levenberg_marquardt_step(
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
 ) -> Tuple[PyTree, Float[Array, ""], Float[Array, ""]]:
-    """
-    Description
-    -----------
-    Compute a single Levenberg-Marquardt update step.
+    r"""Compute a single Levenberg-Marquardt update step.
 
-    LM interpolates between Gauss-Newton (small damping) and gradient
-    descent (large damping). Solves (JᵀJ + λI) δ = Jᵀr.
+    Extended Summary
+    ----------------
+    LM interpolates between Gauss-Newton (small damping) and
+    gradient descent (large damping).  Solves
+    :math:`(J^\top J + \lambda I)\,\delta = J^\top r`.
+
+    Implementation Logic
+    --------------------
+    1. **Compute residual and gradient** --
+       r = f(theta) - y, g = J^T r.
+    2. **Build damped operator** --
+       A = J^T J + lambda * I.
+    3. **Solve for step** --
+       delta = CG(A, g).
+    4. **Gain ratio** --
+       rho = actual_reduction / predicted_reduction.
+    5. **Accept or reject** --
+       Accept step if rho > 0.
+    6. **Adapt damping** --
+       Decrease if rho > 0.75, increase if rho < 0.25.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Current parameter estimate.
-    - `data` (Float[Array, "..."]):
+    data : Float[Array, "..."]
         Observed measurements.
-    - `damping` (Float[Array, ""]):
-        Damping parameter λ. Larger values → more regularized step.
-    - `cg_max_iterations` (int):
-        Maximum CG iterations for inner solve. Default 50.
-    - `cg_tolerance` (float):
-        CG convergence tolerance. Default 1e-6.
+    damping : Float[Array, ""]
+        Damping parameter :math:`\lambda`.  Larger values
+        produce more regularised steps.
+    cg_max_iterations : int
+        Maximum CG iterations for inner solve.  Default 50.
+    cg_tolerance : float
+        CG convergence tolerance.  Default 1e-6.
 
     Returns
     -------
-    - `new_params` (PyTree):
+    new_params : PyTree
         Updated parameter estimate.
-    - `new_residual_norm` (Float[Array, ""]):
-        Residual norm at new_params.
-    - `new_damping` (Float[Array, ""]):
+    new_residual_norm : Float[Array, ""]
+        Residual norm at *new_params*.
+    new_damping : Float[Array, ""]
         Adapted damping for next iteration.
 
-    Flow
-    ----
-    1. Compute residual and gradient
-    2. Construct damped normal equations operator (JᵀJ + λI)
-    3. Solve for step via CG
-    4. Evaluate gain ratio ρ = actual_reduction / predicted_reduction
-    5. Accept step if ρ > 0, adjust damping based on ρ
-    6. Return new params and adapted damping
+    See Also
+    --------
+    :func:`levenberg_marquardt_solve` : Iterative wrapper.
     """
     prediction: Float[Array, "..."] = forward_fn(params)
     residual: Float[Array, "..."] = prediction - data
@@ -518,6 +602,7 @@ def levenberg_marquardt_step(
     jtj_fn: Callable = jtj_operator(forward_fn, params)
 
     def damped_operator(v: PyTree) -> PyTree:
+        """Apply (J^T J + lambda I) to v."""
         jtj_v: PyTree = jtj_fn(v)
         damped_term: PyTree = _tree_scalar_mul(damping, v)
         return _tree_add(jtj_v, damped_term)
@@ -575,46 +660,55 @@ def levenberg_marquardt_solve(
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
 ) -> Tuple[PyTree, LMState]:
-    """
-    Description
-    -----------
-    Solve nonlinear least-squares via Levenberg-Marquardt.
+    """Solve nonlinear least-squares via Levenberg-Marquardt.
 
-    LM is more robust than pure Gauss-Newton for ill-conditioned problems
-    or when far from the solution. Adaptively adjusts damping.
+    Extended Summary
+    ----------------
+    LM is more robust than pure Gauss-Newton for ill-conditioned
+    problems or when far from the solution.  Adaptively adjusts
+    the damping parameter between iterations.
+
+    Implementation Logic
+    --------------------
+    1. **Initialise** --
+       Evaluate residual norm and set initial damping.
+    2. **Iterate** --
+       For each iteration, compute an LM step with adaptive
+       damping.  Freeze state once converged.
+    3. **Return** --
+       Final parameters and the :class:`LMState`.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params_init` (PyTree):
+    params_init : PyTree
         Initial parameter guess.
-    - `data` (Float[Array, "..."]):
+    data : Float[Array, "..."]
         Observed measurements.
-    - `max_iterations` (int):
-        Maximum number of LM iterations. Default 50.
-    - `tolerance` (float):
-        Convergence tolerance on residual norm. Default 1e-8.
-    - `damping_init` (float):
-        Initial damping parameter. Default 1e-3.
-    - `cg_max_iterations` (int):
-        Maximum CG iterations per LM step. Default 50.
-    - `cg_tolerance` (float):
-        CG convergence tolerance. Default 1e-6.
+    max_iterations : int
+        Maximum number of LM iterations.  Default 50.
+    tolerance : float
+        Convergence tolerance on residual norm.
+        Default 1e-8.
+    damping_init : float
+        Initial damping parameter.  Default 1e-3.
+    cg_max_iterations : int
+        Maximum CG iterations per LM step.  Default 50.
+    cg_tolerance : float
+        CG convergence tolerance.  Default 1e-6.
 
     Returns
     -------
-    - `params_final` (PyTree):
-        Optimized parameters.
-    - `final_state` (LMState):
-        Final optimization state.
+    params_final : PyTree
+        Optimised parameters.
+    final_state : LMState
+        Final optimisation state.
 
-    Flow
-    ----
-    1. Initialize state with params_init and damping_init
-    2. For each iteration: compute LM step with adaptive damping
-    3. Check convergence, update state
-    4. Return final parameters and state
+    See Also
+    --------
+    :func:`levenberg_marquardt_step` : Single-step primitive.
+    :func:`gauss_newton_solve` : Undamped variant.
     """
     initial_prediction: Float[Array, "..."] = forward_fn(params_init)
     initial_residual: Float[Array, "..."] = initial_prediction - data
@@ -631,6 +725,7 @@ def levenberg_marquardt_solve(
         state: LMState,
         _: None,
     ) -> Tuple[LMState, None]:
+        """Execute one LM iteration with convergence check."""
         new_params, new_norm, new_damping = levenberg_marquardt_step(
             forward_fn, state.params, data, state.damping,
             cg_max_iterations, cg_tolerance
@@ -662,41 +757,48 @@ def lanczos_tridiagonal(
     initial_vector: Float[Array, "n"],
     num_iterations: int,
 ) -> Tuple[Float[Array, "k"], Float[Array, "k-1"]]:
-    """
-    Description
-    -----------
-    Compute the Lanczos tridiagonalization of a symmetric operator.
+    """Compute the Lanczos tridiagonalisation of a symmetric operator.
 
-    The Lanczos algorithm builds an orthonormal basis for the Krylov
-    subspace and produces a tridiagonal matrix whose eigenvalues
-    approximate the extremal eigenvalues of the original operator.
+    Extended Summary
+    ----------------
+    The Lanczos algorithm builds an orthonormal basis for the
+    Krylov subspace and produces a tridiagonal matrix whose
+    eigenvalues approximate the extremal eigenvalues of the
+    original operator.
+
+    Implementation Logic
+    --------------------
+    1. **Normalise starting vector** --
+       v_0 = initial_vector / ||initial_vector||.
+    2. **Lanczos loop** --
+       For each iteration:
+
+       a. Apply operator: w = A v_curr.
+       b. Compute diagonal: alpha = <w, v_curr>.
+       c. Orthogonalise: w = w - alpha v_curr - beta v_prev.
+       d. Compute off-diagonal: beta = ||w||.
+       e. Normalise: v_next = w / beta.
+    3. **Return** --
+       Diagonal (alpha) and off-diagonal (beta) arrays.
 
     Parameters
     ----------
-    - `linear_operator` (Callable[[Float[Array, "n"]], Float[Array, "n"]]):
-        Symmetric linear operator A. Must satisfy <Ax, y> = <x, Ay>.
-    - `initial_vector` (Float[Array, "n"]):
-        Starting vector for Krylov subspace. Should be random/non-sparse.
-    - `num_iterations` (int):
-        Number of Lanczos iterations. Determines size of tridiagonal matrix.
+    linear_operator : Callable[[Float[Array, "n"]], Float[Array, "n"]]
+        Symmetric linear operator A.  Must satisfy
+        <A x, y> = <x, A y>.
+    initial_vector : Float[Array, "n"]
+        Starting vector for Krylov subspace.  Should be
+        random or non-sparse.
+    num_iterations : int
+        Number of Lanczos iterations.  Determines size of
+        tridiagonal matrix.
 
     Returns
     -------
-    - `alpha` (Float[Array, "k"]):
-        Diagonal elements of tridiagonal matrix.
-    - `beta` (Float[Array, "k-1"]):
-        Off-diagonal elements of tridiagonal matrix.
-
-    Flow
-    ----
-    1. Normalize initial vector
-    2. For each iteration:
-       a. Apply operator: w = A @ v_curr
-       b. Compute α = <w, v_curr>
-       c. Orthogonalize: w = w - α*v_curr - β*v_prev
-       d. Compute β = ||w||
-       e. Normalize: v_next = w / β
-    3. Return diagonal (α) and off-diagonal (β) elements
+    alpha : Float[Array, "k"]
+        Diagonal elements of the tridiagonal matrix.
+    beta : Float[Array, "k-1"]
+        Off-diagonal elements of the tridiagonal matrix.
     """
     n: int = initial_vector.shape[0]
     k: int = num_iterations
@@ -716,6 +818,7 @@ def lanczos_tridiagonal(
         state: LanczosState,
         _: None,
     ) -> Tuple[LanczosState, None]:
+        """Execute one Lanczos iteration."""
         w: Float[Array, "n"] = linear_operator(state.v_curr)
         alpha_i: Float[Array, ""] = jnp.dot(w, state.v_curr)
 
@@ -758,40 +861,54 @@ def singular_spectrum(
     num_lanczos_iterations: int = 100,
     random_seed: int = 42,
 ) -> Float[Array, "k"]:
-    """
-    Description
-    -----------
-    Estimate the singular spectrum of the Jacobian via Lanczos on JᵀJ.
+    r"""Estimate the singular spectrum of the Jacobian.
 
-    The singular values σ_i of J equal the square roots of the eigenvalues
-    of JᵀJ. The Lanczos algorithm approximates extremal eigenvalues well,
-    giving accurate estimates of the largest and smallest singular values.
+    Extended Summary
+    ----------------
+    The singular values :math:`\sigma_i` of *J* equal the
+    square roots of the eigenvalues of :math:`J^\top J`.  The
+    Lanczos algorithm approximates extremal eigenvalues well,
+    giving accurate estimates of the largest and smallest
+    singular values.
+
+    Implementation Logic
+    --------------------
+    1. **Flatten parameters** --
+       Ravel to vector form.
+    2. **Construct J^T J** --
+       Build a flattened-space operator.
+    3. **Run Lanczos** --
+       Build the tridiagonal matrix.
+    4. **Eigendecompose** --
+       Compute eigenvalues of the tridiagonal matrix.
+    5. **Square-root and sort** --
+       Convert to singular values, sort descending,
+       return top *num_singular_values*.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `num_singular_values` (int):
-        Number of singular values to estimate. Default 50.
-    - `num_lanczos_iterations` (int):
-        Lanczos iterations. Should be ≥ num_singular_values. Default 100.
-    - `random_seed` (int):
-        Seed for random starting vector. Default 42.
+    num_singular_values : int
+        Number of singular values to estimate.  Default 50.
+    num_lanczos_iterations : int
+        Lanczos iterations.  Should be >=
+        *num_singular_values*.  Default 100.
+    random_seed : int
+        Seed for random starting vector.  Default 42.
 
     Returns
     -------
-    - `singular_values` (Float[Array, "k"]):
+    singular_values : Float[Array, "k"]
         Estimated singular values in descending order.
 
-    Flow
-    ----
-    1. Flatten params to vector form for Lanczos
-    2. Construct JᵀJ operator on flattened space
-    3. Run Lanczos to get tridiagonal matrix
-    4. Compute eigenvalues of tridiagonal matrix
-    5. Take square roots, sort descending, return top k
+    See Also
+    --------
+    :func:`lanczos_tridiagonal` : Core Lanczos routine.
+    :func:`effective_nullspace_dimension` : Threshold
+        counting.
     """
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
@@ -801,6 +918,7 @@ def singular_spectrum(
     def jtj_flat_fn(
         v_flat: Float[Array, "n"],
     ) -> Float[Array, "n"]:
+        """Apply J^T J in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = jtj_pytree_fn(v_pytree)
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
@@ -831,32 +949,38 @@ def effective_nullspace_dimension(
     singular_values: Float[Array, "k"],
     noise_floor: float,
 ) -> Int[Array, ""]:
-    """
-    Description
-    -----------
-    Count the number of singular values below the noise floor.
+    r"""Count singular values below the noise floor.
 
-    Directions with σ_i < noise_floor are effectively unobservable:
-    they contribute more noise amplification than signal recovery.
-    This count gives the effective dimension of the gauge subspace
-    under finite SNR.
+    Extended Summary
+    ----------------
+    Directions with :math:`\sigma_i < \eta` are effectively
+    unobservable: they contribute more noise amplification than
+    signal recovery.  This count gives the effective dimension
+    of the gauge subspace under finite SNR.
+
+    Implementation Logic
+    --------------------
+    1. **Threshold** --
+       Compare each singular value against *noise_floor*.
+    2. **Count** --
+       Sum the number below threshold.
 
     Parameters
     ----------
-    - `singular_values` (Float[Array, "k"]):
-        Singular values of the Jacobian (or estimates thereof).
-    - `noise_floor` (float):
-        Noise threshold η. Directions with σ < η are effectively null.
+    singular_values : Float[Array, "k"]
+        Singular values of the Jacobian (or estimates).
+    noise_floor : float
+        Noise threshold :math:`\eta`.  Directions with
+        :math:`\sigma < \eta` are effectively null.
 
     Returns
     -------
-    - `nullspace_dim` (Int[Array, ""]):
-        Number of singular values below noise_floor.
+    nullspace_dim : Int[Array, ""]
+        Number of singular values below *noise_floor*.
 
-    Flow
-    ----
-    1. Count singular values < noise_floor
-    2. Return count as effective nullspace dimension
+    See Also
+    --------
+    :func:`singular_spectrum` : Spectrum estimation.
     """
     below_threshold: Float[Array, "k"] = (singular_values < noise_floor).astype(jnp.int32)
     nullspace_dim: Int[Array, ""] = jnp.sum(below_threshold)

@@ -432,9 +432,9 @@ def _bessel_kv_large(
     sqrt_term: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
     exp_term: Float[Array, " ..."] = jnp.exp(-x)
 
-    v2: Float[Array, ""] = v * v
+    v2: Float[Array, ""] = jnp.asarray(v * v)
     four_v2: Float[Array, ""] = 4.0 * v2
-    a0: Float[Array, ""] = 1.0
+    a0: Float[Array, ""] = jnp.asarray(1.0)
     a1: Float[Array, ""] = (four_v2 - 1.0) / 8.0
     a2: Float[Array, ""] = (four_v2 - 1.0) * (four_v2 - 9.0) / (2.0 * 64.0)
     a3: Float[Array, ""] = (
@@ -736,16 +736,16 @@ def single_atom_potential(
     term1: Float[Array, ""] = 4.0 * (jnp.pi**2) * a0 * ek
     term2: Float[Array, ""] = 2.0 * (jnp.pi**2) * a0 * ek
     kirkland_array: Float[Array, " 103 12"] = kirkland_potentials()
-    atom_idx: Int[Array, ""] = (atom_no - 1).astype(jnp.int32)
+    atom_idx: Int[Array, ""] = jnp.asarray(atom_no - 1).astype(jnp.int32)
     kirk_params: Float[Array, " 12"] = jax.lax.dynamic_slice(
         kirkland_array, (atom_idx, jnp.int32(0)), (1, 12)
     )[0]
-    step_size: Float[Array, ""] = pixel_size / supersampling
+    step_size: Float[Array, ""] = jnp.asarray(pixel_size / supersampling)
     grid_height: int = grid_shape[0] * supersampling
     grid_width: int = grid_shape[1] * supersampling
     if center_coords is None:
-        center_x: Float[Array, ""] = 0.0
-        center_y: Float[Array, ""] = 0.0
+        center_x: Float[Array, ""] = jnp.asarray(0.0)
+        center_y: Float[Array, ""] = jnp.asarray(0.0)
     else:
         center_x: Float[Array, ""] = center_coords[0]
         center_y: Float[Array, ""] = center_coords[1]
@@ -1030,7 +1030,7 @@ def _process_all_slices(
             shift_x: ScalarFloat = pixel_x - center_x
             shift_y: ScalarFloat = pixel_y - center_y
 
-            atom_idx: int = atom_to_idx_array[atom_no]
+            atom_idx: Int[Array, ""] = atom_to_idx_array[atom_no]
             atom_pot: Float[Array, " h w"] = atomic_potentials[atom_idx]
             kx_sx: Float[Array, " h w"] = kx * shift_x
             ky_sy: Float[Array, " h w"] = ky * shift_y
@@ -1344,7 +1344,7 @@ def _build_potential_lookup(
 
     @jax.jit
     def _calc_single_potential_fixed_grid(
-        atom_no: ScalarInt, is_valid: Bool
+        atom_no: ScalarInt, is_valid: Bool[Array, ""]
     ) -> Float[Array, " h w"]:
         """Compute potential for one atom type on the fixed grid.
 
@@ -1491,6 +1491,7 @@ def kirkland_potentials_crystal(
     """
     positions: Float[Array, " N 3"] = crystal_data.positions
     atomic_numbers: Int[Array, " N"] = crystal_data.atomic_numbers
+    assert crystal_data.lattice is not None, "CrystalData.lattice must not be None"
     lattice: Float[Array, " 3 3"] = crystal_data.lattice
 
     positions, atomic_numbers = _apply_repeats_or_return(

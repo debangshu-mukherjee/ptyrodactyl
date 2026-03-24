@@ -834,8 +834,8 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             [local_x, local_y, local_z], axis=-1
         )
 
-        beam_local_y: Float[Array, " "] = tile_center_offset
-        beam_local_x: Float[Array, " "] = tile_center_offset
+        beam_local_y = jnp.asarray(tile_center_offset)
+        beam_local_x = jnp.asarray(tile_center_offset)
         beam_position: Float[Array, " 2"] = jnp.array(
             [beam_local_y, beam_local_x]
         )

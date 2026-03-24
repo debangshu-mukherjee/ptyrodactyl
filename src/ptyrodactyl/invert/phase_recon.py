@@ -94,11 +94,11 @@ def single_slice_ptychography(
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
     slice_thickness: ScalarNumeric,
-    save_every: Optional[ScalarInt] = 10,
-    num_iterations: Optional[ScalarInt] = 1000,
-    learning_rate: Optional[ScalarFloat] = 0.001,
-    loss_type: Optional[str] = "mse",
-    optimizer_name: Optional[str] = "adam",
+    save_every: ScalarInt = 10,
+    num_iterations: ScalarInt = 1000,
+    learning_rate: ScalarFloat = 0.001,
+    loss_type: str = "mse",
+    optimizer_name: str = "adam",
 ) -> Tuple[
     CalibratedArray,
     CalibratedArray,
@@ -190,7 +190,7 @@ def single_slice_ptychography(
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
-    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
 
     def _forward_fn(
@@ -215,7 +215,7 @@ def single_slice_ptychography(
             beam[None, ...],
             pos_list,
             slice_thickness,
-            voltage_kV,
+            voltage_kv,
             calib_ang,
         )
         return stem4d_result.data
@@ -371,11 +371,11 @@ def single_slice_poscorrected(
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
     slice_thickness: ScalarNumeric,
-    save_every: Optional[ScalarInt] = 10,
-    num_iterations: Optional[ScalarInt] = 1000,
-    learning_rate: Optional[Union[ScalarFloat, Float[Array, "2"]]] = 0.01,
-    loss_type: Optional[str] = "mse",
-    optimizer_name: Optional[str] = "adam",
+    save_every: ScalarInt = 10,
+    num_iterations: ScalarInt = 1000,
+    learning_rate: Union[ScalarFloat, Float[Array, "2"]] = 0.01,
+    loss_type: str = "mse",
+    optimizer_name: str = "adam",
 ) -> Tuple[
     CalibratedArray,
     CalibratedArray,
@@ -477,7 +477,7 @@ def single_slice_poscorrected(
         Adds multi-modal probe support.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
@@ -507,7 +507,7 @@ def single_slice_poscorrected(
             beam[None, ...],
             pos_list,
             slice_thickness,
-            voltage_kV,
+            voltage_kv,
             calib_ang,
         )
         return stem4d_result.data
@@ -651,7 +651,7 @@ def single_slice_poscorrected(
             beam_guess.shape[1],
             jnp.floor(num_iterations / save_every),
         ),
-        dtype=initial_beam.dtype,
+        dtype=beam_guess.dtype,
     )
     intermediate_positions: Float[Array, "P 2 S"] = jnp.zeros(
         shape=(
@@ -723,11 +723,11 @@ def single_slice_multi_modal(
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: ProbeModes,
     slice_thickness: ScalarNumeric,
-    save_every: Optional[ScalarInt] = 10,
-    num_iterations: Optional[ScalarInt] = 1000,
-    learning_rate: Optional[Union[ScalarFloat, Float[Array, "2"]]] = 0.01,
-    loss_type: Optional[str] = "mse",
-    optimizer_name: Optional[str] = "adam",
+    save_every: ScalarInt = 10,
+    num_iterations: ScalarInt = 1000,
+    learning_rate: Union[ScalarFloat, Float[Array, "2"]] = 0.01,
+    loss_type: str = "mse",
+    optimizer_name: str = "adam",
 ) -> Tuple[
     Complex[Array, "H W"],
     ProbeModes,
@@ -832,7 +832,7 @@ def single_slice_multi_modal(
         Multi-slice variant with position correction.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
@@ -862,7 +862,7 @@ def single_slice_multi_modal(
             beam,
             pos_list,
             slice_thickness,
-            voltage_kV,
+            voltage_kv,
             calib_ang,
         )
         return stem4d_result.data
@@ -1048,12 +1048,12 @@ def multi_slice_multi_modal(
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: Complex[Array, "H W"],
     slice_thickness: ScalarNumeric,
-    save_every: Optional[ScalarInt] = 10,
-    num_iterations: Optional[ScalarInt] = 1000,
-    learning_rate: Optional[ScalarFloat] = 0.001,
-    pos_learning_rate: Optional[ScalarFloat] = 0.01,
-    loss_type: Optional[str] = "mse",
-    optimizer_name: Optional[str] = "adam",
+    save_every: ScalarInt = 10,
+    num_iterations: ScalarInt = 1000,
+    learning_rate: ScalarFloat = 0.001,
+    pos_learning_rate: ScalarFloat = 0.01,
+    loss_type: str = "mse",
+    optimizer_name: str = "adam",
 ) -> Tuple[
     Complex[Array, "H W"],
     Complex[Array, "H W"],
@@ -1151,7 +1151,7 @@ def multi_slice_multi_modal(
         Single-slice with multi-modal probe.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
+    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
 
@@ -1181,7 +1181,7 @@ def multi_slice_multi_modal(
             beam[None, ...],
             pos_list,
             slice_thickness,
-            voltage_kV,
+            voltage_kv,
             calib_ang,
         )
         return stem4d_result.data

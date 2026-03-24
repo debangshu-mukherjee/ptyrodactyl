@@ -1,5 +1,7 @@
 """Tests for geometry module - rotation matrices and geometric transformations."""
 
+import unittest
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -7,7 +9,7 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.electrons.geometry import (
+from ptyrodactyl.simul.geometry import (
     reciprocal_lattice,
     rotate_structure,
     rotmatrix_axis,
@@ -602,4 +604,4 @@ class TestGeometryIntegration(chex.TestCase):
 
 
 if __name__ == "__main__":
-    chex.TestCase.main()
+    unittest.main()

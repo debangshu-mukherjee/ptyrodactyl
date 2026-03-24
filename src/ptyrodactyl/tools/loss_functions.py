@@ -2,20 +2,22 @@
 
 Extended Summary
 ----------------
-This module provides loss functions for comparing model outputs with experimental
-data in ptychography applications. All functions are JAX-compatible and support
-automatic differentiation for optimization.
+Provides loss functions for comparing model outputs with
+experimental data in ptychography applications. All functions
+are JAX-compatible and support automatic differentiation for
+optimization.
 
 Routine Listings
 ----------------
-create_loss_function : function
-    Creates a JIT-compatible loss function for comparing model output with
-    experimental data. Supports MAE, MSE, and RMSE loss types.
+:func:`create_loss_function`
+    Factory that creates a JIT-compiled loss function
+    supporting MAE, MSE, and RMSE loss types.
 
 Notes
 -----
-All loss functions are designed to work with JAX transformations including
-jit, grad, and vmap. The create_loss_function factory returns a JIT-compiled
+All loss functions are designed to work with JAX transformations
+including ``jit``, ``grad``, and ``vmap``. The
+:func:`create_loss_function` factory returns a JIT-compiled
 function that can be used with various optimization algorithms.
 """
 
@@ -30,53 +32,93 @@ def create_loss_function(
     experimental_data: Array,
     loss_type: str = "mae",
 ) -> Callable[..., Float[Array, ""]]:
-    """
-    Description
-    -----------
-    Create a JIT-compatible loss function for comparing model output with experimental data.
+    """Create a JIT-compiled loss function for ptychography.
 
-    This function returns a new function that computes the loss between the output
-    of a forward model and experimental data. The returned function is JIT-compatible
-    and can be used with various optimization algorithms.
+    Extended Summary
+    ----------------
+    Returns a new function that computes the loss between the
+    output of a forward model and experimental data. The
+    returned function is JIT-compiled and can be used directly
+    with gradient-based optimizers.
+
+    Implementation Logic
+    --------------------
+    1. **Define internal loss functions** --
+       ``mae_loss``, ``mse_loss``, and ``rmse_loss`` each take
+       a difference array and return a scalar.
+    2. **Select loss function** --
+       Look up *loss_type* in the function dictionary.
+    3. **Build JIT-compiled closure** --
+       Create ``loss_fn`` that runs the forward model, computes
+       the residual, and applies the selected loss.
 
     Parameters
     ----------
-    - `forward_function` (Callable[..., Array]):
-        The forward model function (e.g., stem_4d).
-    - `experimental_data` (Array):
+    forward_function : Callable[..., Array]
+        The forward model function (e.g., a STEM simulation).
+    experimental_data : Array
         The experimental data to compare against.
-    - `loss_type` (str):
-        The type of loss to use. Options are "mae" (Mean Absolute Error),
-        "mse" (Mean Squared Error), or "rmse" (Root Mean Squared Error).
-        Default is "mae".
+    loss_type : str, optional
+        Loss variant to use. One of ``"mae"`` (Mean Absolute
+        Error), ``"mse"`` (Mean Squared Error), or ``"rmse"``
+        (Root Mean Squared Error). Default is ``"mae"``.
 
     Returns
     -------
-    - `loss_fn` (Callable[[PyTree, ...], Float[Array, ""]]):
-        A JIT-compatible function that computes the loss given the model parameters
-        and any additional arguments required by the forward function.
+    loss_fn : Callable[[PyTree, ...], Float[Array, ""]]
+        A JIT-compiled function that computes the scalar loss
+        given model parameters and any additional arguments
+        required by the forward function.
 
-    Flow
-    ----
-    - Define internal loss functions (mae_loss, mse_loss, rmse_loss)
-    - Select the appropriate loss function based on loss_type
-    - Create a JIT-compiled function that:
-        - Computes the forward model output
-        - Calculates the difference between model and experimental data
-        - Applies the selected loss function
-    - Return the compiled loss function
+    See Also
+    --------
+    :func:`~ptyrodactyl.tools.optimizers.wirtinger_grad`
+        Wirtinger gradient for complex-valued optimisation.
     """
 
     def mae_loss(diff):
-        """Compute mean absolute error loss."""
+        """Compute mean absolute error from residuals.
+
+        Parameters
+        ----------
+        diff : Array
+            Residual array (model - experiment).
+
+        Returns
+        -------
+        loss : Float[Array, ""]
+            Scalar MAE value.
+        """
         return jnp.mean(jnp.abs(diff))
 
     def mse_loss(diff):
-        """Compute mean squared error loss."""
+        """Compute mean squared error from residuals.
+
+        Parameters
+        ----------
+        diff : Array
+            Residual array (model - experiment).
+
+        Returns
+        -------
+        loss : Float[Array, ""]
+            Scalar MSE value.
+        """
         return jnp.mean(jnp.square(diff))
 
     def rmse_loss(diff):
-        """Compute root mean squared error loss."""
+        """Compute root mean squared error from residuals.
+
+        Parameters
+        ----------
+        diff : Array
+            Residual array (model - experiment).
+
+        Returns
+        -------
+        loss : Float[Array, ""]
+            Scalar RMSE value.
+        """
         return jnp.sqrt(jnp.mean(jnp.square(diff)))
 
     loss_functions = {"mae": mae_loss, "mse": mse_loss, "rmse": rmse_loss}
@@ -85,7 +127,21 @@ def create_loss_function(
 
     @jax.jit
     def loss_fn(params: PyTree, *args: Any) -> Float[Array, ""]:
-        """Compute loss between forward model output and experimental data."""
+        """Evaluate forward model and return scalar loss.
+
+        Parameters
+        ----------
+        params : PyTree
+            Model parameters passed to the forward function.
+        *args : Any
+            Additional positional arguments for the forward
+            function.
+
+        Returns
+        -------
+        loss : Float[Array, ""]
+            Scalar loss value.
+        """
         model_output = forward_function(params, *args)
         diff = model_output - experimental_data
         return selected_loss_fn(diff)

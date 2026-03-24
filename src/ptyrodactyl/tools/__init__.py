@@ -2,106 +2,98 @@
 
 Extended Summary
 ----------------
-This package contains essential utilities for complex-valued optimization,
-loss functions, and parallel processing in ptychography applications.
-All functions are JAX-compatible and support automatic differentiation.
-This includes an implementation of the Wirtinger derivatives, which
-are used for creating complex valued Adam, Adagrad and RMSprop optimizers.
-
-Submodules
-----------
-electron_types
-    Data structures and type definitions for electron microscopy including
-    CalibratedArray, ProbeModes, PotentialSlices, and CrystalData PyTrees.
-factory
-    Factory functions for validating data before PyTree loading.
-loss_functions
-    Loss function implementations for ptychography including MAE, MSE, and RMSE
-    with support for complex-valued data and custom loss function creation.
-optimizers
-    Complex-valued optimizers with Wirtinger derivatives including Adam,
-    Adagrad, and RMSprop, plus learning rate schedulers for training.
-parallel
-    Parallel processing utilities for sharding arrays across multiple devices
-    and distributed computing in ptychography workflows.
+This package contains essential utilities for complex-valued
+optimization, loss functions, and parallel processing in
+ptychography applications. All functions are JAX-compatible and
+support automatic differentiation. This includes an implementation
+of the Wirtinger derivatives, which are used for creating complex
+valued Adam, Adagrad and RMSprop optimizers.
 
 Routine Listings
 ----------------
-CalibratedArray : PyTree
+:class:`CalibratedArray`
     Calibrated array data with spatial calibration.
-CrystalData : PyTree
-    Crystal data with atomic positions, lattice vectors, and metadata.
-CrystalStructure : PyTree
+:class:`CrystalData`
+    Crystal data with atomic positions, lattice vectors,
+    and metadata.
+:class:`CrystalStructure`
     Crystal structure with fractional and Cartesian coordinates.
-LRSchedulerState : NamedTuple
+:class:`LRSchedulerState`
     Learning rate scheduler state.
-NonJaxNumber : TypeAlias
-    Non-JAX numeric types (int, float).
-Optimizer : NamedTuple
+:class:`Optimizer`
     Optimizer configuration.
-OptimizerState : NamedTuple
+:class:`OptimizerState`
     Optimizer state for training.
-PotentialSlices : PyTree
+:class:`PotentialSlices`
     Potential slices for multi-slice simulations.
-ProbeModes : PyTree
+:class:`ProbeModes`
     Multimodal electron probe state.
-ScalarFloat : TypeAlias
+:class:`STEM4D`
+    4D-STEM data with diffraction patterns, calibrations,
+    and parameters.
+:data:`NonJaxNumber`
+    Non-JAX numeric types (int, float).
+:data:`ScalarFloat`
     Float or 0-dimensional Float array.
-ScalarInt : TypeAlias
+:data:`ScalarInt`
     Int or 0-dimensional Int array.
-ScalarNumeric : TypeAlias
+:data:`ScalarNumeric`
     Numeric types (int, float, or 0-dimensional Num array).
-STEM4D : PyTree
-    4D-STEM data with diffraction patterns, calibrations, and parameters.
-adagrad_update : function
+:func:`adagrad_update`
     Adagrad parameter update step.
-adam_update : function
+:func:`adam_update`
     Adam parameter update step.
-complex_adagrad : function
-    Adagrad optimizer with Wirtinger derivatives for complex parameters.
-complex_adam : function
-    Adam optimizer with Wirtinger derivatives for complex parameters.
-complex_rmsprop : function
-    RMSprop optimizer with Wirtinger derivatives for complex parameters.
-create_cosine_scheduler : function
+:func:`complex_adagrad`
+    Adagrad optimizer with Wirtinger derivatives for complex
+    parameters.
+:func:`complex_adam`
+    Adam optimizer with Wirtinger derivatives for complex
+    parameters.
+:func:`complex_rmsprop`
+    RMSprop optimizer with Wirtinger derivatives for complex
+    parameters.
+:func:`create_cosine_scheduler`
     Create cosine annealing learning rate scheduler.
-create_loss_function : function
+:func:`create_loss_function`
     Factory function to create custom loss functions.
-create_step_scheduler : function
+:func:`create_step_scheduler`
     Create step decay learning rate scheduler.
-create_warmup_cosine_scheduler : function
+:func:`create_warmup_cosine_scheduler`
     Create warmup cosine annealing learning rate scheduler.
-init_adagrad : function
+:func:`init_adagrad`
     Initialize Adagrad optimizer state.
-init_adam : function
+:func:`init_adam`
     Initialize Adam optimizer state.
-init_rmsprop : function
+:func:`init_rmsprop`
     Initialize RMSprop optimizer state.
-init_scheduler_state : function
+:func:`init_scheduler_state`
     Initialize learning rate scheduler state.
-make_calibrated_array : function
-    Creates a CalibratedArray instance with runtime type checking.
-make_crystal_data : function
-    Creates a CrystalData instance with runtime type checking.
-make_crystal_structure : function
-    Creates a CrystalStructure instance with runtime type checking.
-make_potential_slices : function
-    Creates a PotentialSlices instance with runtime type checking.
-make_probe_modes : function
-    Creates a ProbeModes instance with runtime type checking.
-make_stem4d : function
-    Creates a STEM4D instance with runtime type checking.
-rmsprop_update : function
+:func:`make_calibrated_array`
+    Creates a CalibratedArray with runtime type checking.
+:func:`make_crystal_data`
+    Creates a CrystalData with runtime type checking.
+:func:`make_crystal_structure`
+    Creates a CrystalStructure with runtime type checking.
+:func:`make_potential_slices`
+    Creates a PotentialSlices with runtime type checking.
+:func:`make_probe_modes`
+    Creates a ProbeModes with runtime type checking.
+:func:`make_stem4d`
+    Creates a STEM4D with runtime type checking.
+:func:`rmsprop_update`
     RMSprop parameter update step.
-shard_array : function
-    Shard arrays across multiple devices for parallel processing.
-wirtinger_grad : function
-    Compute Wirtinger gradients for complex-valued optimization.
+:func:`shard_array`
+    Shard arrays across multiple devices for parallel
+    processing.
+:func:`wirtinger_grad`
+    Compute Wirtinger gradients for complex-valued
+    optimization.
 
 Notes
 -----
-All optimizers and loss functions support JAX transformations including
-jit compilation, automatic differentiation, and vectorized mapping.
+All optimizers and loss functions support JAX transformations
+including jit compilation, automatic differentiation, and
+vectorized mapping.
 """
 
 from .electron_types import (

@@ -7,21 +7,25 @@ crystal structures in electron microscopy simulations.
 
 Routine Listings
 ----------------
-rotmatrix_vectors : function
-    Compute a rotation matrix that rotates one vector to align with another.
-rotmatrix_axis : function
-    Generate a rotation matrix for rotation around an arbitrary axis.
-rotate_structure : function
+:func:`rotmatrix_vectors`
+    Compute a rotation matrix that rotates one vector to align
+    with another.
+:func:`rotmatrix_axis`
+    Generate a rotation matrix for rotation around an arbitrary
+    axis.
+:func:`rotate_structure`
     Apply rotation transformations to crystal structures.
-reciprocal_lattice : function
-    Compute reciprocal lattice vectors from real-space unit cell.
-tilt_crystal : function
-    Tilt CrystalData by alpha and beta angles (TEM stage-like tilts).
+:func:`reciprocal_lattice`
+    Compute reciprocal lattice vectors from real-space unit
+    cell.
+:func:`tilt_crystal`
+    Tilt :class:`~ptyrodactyl.tools.CrystalData` by alpha and
+    beta angles (TEM stage-like tilts).
 
 Notes
 -----
-All functions use the Rodrigues rotation formula and are JAX-compatible
-for automatic differentiation.
+All functions use the Rodrigues rotation formula and are
+JAX-compatible for automatic differentiation.
 """
 
 import jax
@@ -43,50 +47,56 @@ from ptyrodactyl.tools import (
 def rotmatrix_vectors(
     v1: Real[Array, " 3"], v2: Real[Array, " 3"]
 ) -> Float[Array, "3 3"]:
-    """Compute a proper rotation matrix that rotates vector v1 to align with vector v2.
+    r"""Compute a rotation matrix that rotates v1 to align with v2.
+
+    Extended Summary
+    ----------------
+    Uses the Rodrigues rotation formula to compute a proper 3x3
+    rotation matrix. Handles special cases where vectors are
+    parallel or anti-parallel.
+
+    .. math::
+
+        R = I + \sin\theta\, K + (1 - \cos\theta)\, K^2
+
+    where :math:`K` is the skew-symmetric matrix of the unit
+    rotation axis.
+
+    Implementation Logic
+    --------------------
+    1. **Normalize input vectors** --
+       Divide v1 and v2 by their norms to get unit vectors.
+    2. **Compute rotation parameters** --
+       Cross product gives rotation axis direction, dot product
+       gives cosine of the rotation angle, and the norm of the
+       cross product gives sine of the angle.
+    3. **Handle parallel vectors** --
+       If ``sin_theta < 1e-8``, vectors are nearly parallel.
+       Return identity if same direction, or a 180-degree
+       rotation matrix if opposite.
+    4. **Apply Rodrigues formula** --
+       Construct skew-symmetric matrix K from the unit rotation
+       axis and compute
+       ``R = I + sin(theta) * K + (1 - cos(theta)) * K @ K``.
 
     Parameters
     ----------
     v1 : Real[Array, " 3"]
-        Initial 3D vector to be rotated
+        Initial 3D vector to be rotated.
     v2 : Real[Array, " 3"]
-        Target 3D vector that v1 should be rotated to align with
+        Target 3D vector that v1 should be rotated to align
+        with.
 
     Returns
     -------
-    Float[Array, "3 3"]
-        3x3 rotation matrix such that rotation_matrix @ v1 is parallel to v2
+    rotation_matrix : Float[Array, "3 3"]
+        3x3 rotation matrix such that
+        ``rotation_matrix @ v1`` is parallel to v2.
 
     Notes
     -----
-    Uses the Rodrigues rotation formula. Handles special cases where vectors are
-    parallel or anti-parallel.
-
-    Algorithm:
-    ---------
-    - Normalize input vectors:
-        - Divide v1 and v2 by their respective norms to get unit vectors
-        - This ensures the rotation is purely rotational without scaling
-    - Calculate rotation parameters:
-        - Compute cross product: cross = v1 * v2 (gives rotation axis direction)
-        - Compute dot product: dot = v1 · v2 (gives cosine of rotation angle)
-        - Calculate sin(θ) as the norm of the cross product
-    - Handle special cases:
-        - Check if vectors are nearly parallel (sin_theta < 1e-8)
-        - Check if vectors are nearly opposite (dot < -0.9999)
-    - Define fallback functions for special cases:
-        - fallback_parallel(): Returns identity matrix when vectors are already aligned
-        - fallback_opposite(): Handles 180° rotation case
-            - Choose an orthogonal axis to v1 (prefer x-axis unless v1 is nearly along x)
-            - Compute rotation axis as cross product of v1 and the orthogonal vector
-            - Use double application of skew-symmetric matrix for 180° rotation
-    - Compute general rotation matrix using Rodrigues formula:
-        - Normalize cross product to get unit rotation axis
-        - Construct skew-symmetric matrix K from rotation axis components
-        - Apply Rodrigues formula: rotation_matrix = I + sin(θ)K + (1-cos(θ))K²
-    - Use conditional logic to select appropriate computation:
-        - If vectors are parallel, check if they're opposite or same direction
-        - Return appropriate rotation matrix based on the case
+    Fully JIT-compilable. Uses ``jax.lax.cond`` for the
+    parallel/anti-parallel branching logic.
     """
     v1: Float[Array, " 3"] = v1 / jnp.linalg.norm(v1)
     v2: Float[Array, " 3"] = v2 / jnp.linalg.norm(v2)
@@ -95,16 +105,24 @@ def rotmatrix_vectors(
     sin_theta: Float[Array, " "] = jnp.linalg.norm(cross)
 
     def _fallback_parallel() -> Float[Array, "3 3"]:
-        """Return identity matrix when vectors are already parallel."""
+        """Return identity when vectors are already parallel.
+
+        Returns
+        -------
+        rotation_matrix_parallel : Float[Array, "3 3"]
+            3x3 identity matrix.
+        """
         rotation_matrix_parallel: Float[Array, "3 3"] = jnp.eye(3)
         return rotation_matrix_parallel
 
     def _fallback_opposite() -> Float[Array, "3 3"]:
-        """
-        Description
-        -----------
-        Compute a rotation matrix for a 180° rotation around an arbitrary axis.
-        This handles the case where the vectors are nearly opposite.
+        """Compute 180-degree rotation for anti-parallel vectors.
+
+        Returns
+        -------
+        rotation_matrix_opposite : Float[Array, "3 3"]
+            Rotation matrix for 180-degree rotation around an
+            axis orthogonal to v1.
         """
         magic_number: ScalarFloat = 0.9
         ortho: Float[Array, " 3"] = jnp.where(
@@ -127,7 +145,14 @@ def rotmatrix_vectors(
         return rotation_matrix_opposite
 
     def _compute() -> Float[Array, "3 3"]:
-        """Compute rotation matrix using Rodrigues formula for general case."""
+        """Compute rotation via Rodrigues formula.
+
+        Returns
+        -------
+        rotation_matrix_general : Float[Array, "3 3"]
+            Rotation matrix for the general (non-degenerate)
+            case.
+        """
         axis: Float[Array, " 3"] = cross / sin_theta
         kk: Float[Array, "3 3"] = jnp.array(
             [
@@ -160,50 +185,51 @@ def rotmatrix_vectors(
 def rotmatrix_axis(
     axis: Real[Array, " 3"], theta: ScalarNumeric
 ) -> Float[Array, "3 3"]:
-    """Generate a 3D rotation matrix for rotation around an arbitrary axis by a specified angle.
+    r"""Generate a rotation matrix around an arbitrary axis.
+
+    Extended Summary
+    ----------------
+    Uses the Rodrigues rotation formula to produce a right-handed
+    rotation when looking along the axis direction.
+
+    .. math::
+
+        R = I\cos\theta
+            + (1 - \cos\theta)\,\hat{n}\otimes\hat{n}
+            + \sin\theta\,[\hat{n}]_\times
+
+    Implementation Logic
+    --------------------
+    1. **Normalize rotation axis** --
+       Divide the axis vector by its norm.
+    2. **Compute trigonometric values** --
+       ``cos(theta)`` and ``sin(theta)``.
+    3. **Build rotation matrix** --
+       Assemble the 3x3 matrix from diagonal terms
+       ``cos(theta) + n_i^2 * (1 - cos(theta))``,
+       symmetric off-diagonal terms, and antisymmetric
+       terms proportional to ``sin(theta)``.
 
     Parameters
     ----------
     axis : Real[Array, " 3"]
-        3D vector defining the axis of rotation (will be normalized)
+        3D vector defining the axis of rotation (will be
+        normalized).
     theta : ScalarNumeric
-        Rotation angle in radians (positive for counter-clockwise rotation
-        when looking along the axis)
+        Rotation angle in radians. Positive for
+        counter-clockwise rotation when looking along the
+        axis.
 
     Returns
     -------
-    Float[Array, "3 3"]
-        3x3 rotation matrix that rotates vectors by theta radians around the axis
+    rot_matrix : Float[Array, "3 3"]
+        3x3 rotation matrix that rotates vectors by *theta*
+        radians around the axis.
 
     Notes
     -----
-    Uses the Rodrigues rotation formula. This creates a right-handed rotation
-    when looking along the axis direction.
-
-    Algorithm:
-    ---------
-    - Normalize the rotation axis:
-        - Divide axis vector by its norm to ensure unit length
-        - This guarantees the rotation matrix is orthogonal
-    - Calculate trigonometric values:
-        - Compute cos(theta) for diagonal and off-diagonal terms
-        - Compute sin(theta) for antisymmetric components
-    - Extract axis components:
-        - Unpack normalized axis into components (ux, uy, uz)
-        - These will be used to construct the rotation matrix
-    - Build rotation matrix using Rodrigues formula:
-        - The formula is: rotation_matrix = I*cos(θ) + (1-cos(θ))*n⊗n + sin(θ)*[n]×
-        - Where n is the unit axis vector and [n]× is the skew-symmetric matrix
-    - Matrix construction details:
-        - Diagonal terms: cos(θ) + n_i² * (1 - cos(θ))
-        - Off-diagonal symmetric part: n_i * n_j * (1 - cos(θ))
-        - Off-diagonal antisymmetric part: ±n_k * sin(θ) (follows right-hand rule)
-    - Explicit matrix elements:
-        - rotation_matrix[0,0] = cos(θ) + ux² * (1 - cos(θ))
-        - rotation_matrix[0,1] = ux * uy * (1 - cos(θ)) - uz * sin(θ)
-        - rotation_matrix[0,2] = ux * uz * (1 - cos(θ)) + uy * sin(θ)
-        - And similarly for other rows following the pattern
-    - Return the constructed 3x3 rotation matrix
+    Fully JIT-compilable. The resulting matrix is orthogonal
+    with determinant +1.
     """
     axis: Float[Array, " 3"] = axis / jnp.linalg.norm(axis)
     cos_theta: Float[Array, " "] = jnp.cos(theta)
@@ -242,54 +268,56 @@ def rotate_structure(
     rotation_matrix: Real[Array, "3 3"],
     theta: ScalarNumeric = 0,
 ) -> Tuple[Float[Array, " N 4"], Float[Array, "3 3"]]:
-    """Apply rotation transformations to a crystal structure.
+    """Apply rotation to a crystal structure.
+
+    Extended Summary
+    ----------------
+    Rotates both atomic coordinates and unit cell vectors by the
+    given rotation matrix. Optionally applies an additional
+    in-plane rotation around the z-axis.
+
+    Implementation Logic
+    --------------------
+    1. **Extract positions** --
+       Separate atom IDs (column 0) from xyz positions
+       (columns 1-3).
+    2. **Apply primary rotation** --
+       ``coords[:, 1:4] @ rotation_matrix.T``.
+    3. **Rotate unit cell** --
+       ``cell @ rotation_matrix.T``.
+    4. **Apply optional in-plane rotation** --
+       If ``theta != 0``, build a z-axis rotation via
+       :func:`rotmatrix_axis` and apply it to the already
+       rotated coordinates.
 
     Parameters
     ----------
     coords : Real[Array, " N 4"]
-        Atomic coordinates array where each row contains [atom_id, x, y, z].
-        First column is the atom identifier, remaining columns are 3D positions
+        Atomic coordinates where each row is
+        ``[atom_id, x, y, z]``. Positions in Angstroms.
     cell : Real[Array, "3 3"]
-        Unit cell matrix where rows represent the three lattice vectors a, b, c
+        Unit cell matrix where rows are lattice vectors
+        a, b, c in Angstroms.
     rotation_matrix : Real[Array, "3 3"]
-        Primary rotation matrix to apply to the structure
+        Primary rotation matrix to apply.
     theta : ScalarNumeric, optional
-        Additional rotation angle in radians for in-plane (z-axis) rotation.
-        Default is 0 (no additional rotation)
+        Additional in-plane (z-axis) rotation angle in
+        radians. Default is 0.
 
     Returns
     -------
-    rotated_coords : Float[Array, " N 4"]
-        Rotated atomic coordinates maintaining the same format as input
+    rotated_coords_final : Float[Array, " N 4"]
+        Rotated coordinates in ``[atom_id, x', y', z']``
+        format.
     rotated_cell : Float[Array, "3 3"]
-        Rotated unit cell matrix
+        Rotated unit cell matrix in Angstroms.
 
-    Notes
-    -----
-    Applies rotation transformations to both atomic coordinates and unit cell vectors.
-    Supports an optional additional in-plane rotation around the z-axis after the primary rotation.
-
-    Algorithm:
-    ---------
-    - Extract atomic positions:
-        - Separate atom IDs (first column) from position vectors (columns 1-3)
-        - This reserves atom type information during rotation
-    - Apply primary rotation to coordinates:
-        - Multiply position vectors by transpose of rotation matrix: coords @ rotation_matrix.T
-        - This rotates all atomic positions according to the given rotation
-    - Reconstruct coordinate array:
-        - Concatenate atom IDs with rotated positions
-        - Maintains original array structure [atom_id, x', y', z']
-    - Rotate unit cell:
-        - Apply same rotation to lattice vectors: cell @ rotation_matrix.T
-        - This ensures the crystal structure remains consistent
-    - Handle optional in-plane rotation (if theta ≠ 0):
-        - Create rotation matrix for z-axis rotation using rotmatrix_axis
-        - Apply this secondary rotation to already-rotated coordinates
-        - Extract positions, rotate, and reconstruct array as before
-    - Return transformed structure:
-        - Both atomic coordinates and unit cell are rotated consistently
-        - Crystal symmetry and relative positions are preserved
+    See Also
+    --------
+    :func:`rotmatrix_axis` : Build rotation matrix from axis
+        and angle.
+    :func:`rotmatrix_vectors` : Build rotation matrix from two
+        vectors.
     """
     rotated_coords: Real[Array, " N 3"] = coords[:, 1:4] @ rotation_matrix.T
     rotated_coords_with_ids: Float[Array, " N 4"] = jnp.hstack(
@@ -298,7 +326,13 @@ def rotate_structure(
     rotated_cell: Real[Array, "3 3"] = cell @ rotation_matrix.T
 
     def _apply_inplane_rotation() -> Float[Array, " N 4"]:
-        """Apply additional in-plane rotation around the z-axis."""
+        """Apply in-plane z-axis rotation to coordinates.
+
+        Returns
+        -------
+        Float[Array, " N 4"]
+            Coordinates after secondary z-axis rotation.
+        """
         in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(
             jnp.array([0.0, 0.0, 1.0]), theta
         )
@@ -310,7 +344,13 @@ def rotate_structure(
         )
 
     def _no_inplane_rotation() -> Float[Array, " N 4"]:
-        """Return coordinates without applying additional in-plane rotation."""
+        """Return coordinates unchanged (no-op branch).
+
+        Returns
+        -------
+        Float[Array, " N 4"]
+            Unmodified rotated coordinates.
+        """
         return rotated_coords_with_ids
 
     rotated_coords_final: Float[Array, " N 4"] = jax.lax.cond(
@@ -321,42 +361,43 @@ def rotate_structure(
 
 @jaxtyped(typechecker=beartype)
 def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
-    """Compute the reciprocal lattice vectors from a real-space unit cell matrix.
+    r"""Compute reciprocal lattice vectors from a real-space cell.
+
+    Extended Summary
+    ----------------
+    Computes the reciprocal lattice matrix satisfying
+    ``cell @ reciprocal.T = 2 pi I``. Fundamental for
+    diffraction pattern and Brillouin zone calculations.
+
+    .. math::
+
+        \mathbf{b}_i = \frac{2\pi\,
+        (\mathbf{a}_j \times \mathbf{a}_k)}{
+        \mathbf{a}_1 \cdot
+        (\mathbf{a}_2 \times \mathbf{a}_3)}
+
+    Implementation Logic
+    --------------------
+    1. **Extract lattice vectors** --
+       Unpack rows as a1, a2, a3.
+    2. **Compute cell volume** --
+       Scalar triple product ``V = a1 . (a2 x a3)``.
+    3. **Compute reciprocal vectors** --
+       ``bi = 2 pi (aj x ak) / V`` for cyclic permutations.
+    4. **Stack into matrix** --
+       Return ``[b1, b2, b3]`` as rows.
 
     Parameters
     ----------
     cell : Real[Array, "3 3"]
-        Real-space unit cell matrix where rows are lattice vectors a1, a2, a3
+        Real-space unit cell matrix where rows are lattice
+        vectors a1, a2, a3 in Angstroms.
 
     Returns
     -------
-    Float[Array, "3 3"]
-        Reciprocal lattice matrix where rows are reciprocal vectors b1, b2, b3
-
-    Notes
-    -----
-    The reciprocal lattice is fundamental for crystallography and diffraction calculations.
-
-    Algorithm:
-    ---------
-    - Extract lattice vectors:
-        - Unpack rows of cell matrix as individual lattice vectors a1, a2, a3
-        - These represent the fundamental periodicity of the crystal
-    - Calculate unit cell volume:
-        - Compute scalar triple product: V = a1 · (a2 × a3)
-        - This gives the volume of the parallelepiped formed by lattice vectors
-    - Compute reciprocal lattice vectors:
-        - b1 = 2π * (a2 × a3) / V
-        - b2 = 2π * (a3 × a1) / V
-        - b3 = 2π * (a1 × a2) / V
-        - Each reciprocal vector is perpendicular to two real-space vectors
-    - Assemble reciprocal lattice matrix:
-        - Stack reciprocal vectors as rows to form 3x3 matrix
-        - The resulting matrix satisfies: cell @ reciprocal_cell.T = 2π * I
-    - Return the reciprocal lattice matrix for use in:
-        - Fourier transforms between real and reciprocal space
-        - Diffraction pattern calculations
-        - Brillouin zone constructions
+    reciprocal_cell : Float[Array, "3 3"]
+        Reciprocal lattice matrix where rows are reciprocal
+        vectors b1, b2, b3 in inverse Angstroms.
     """
     a1: Float[Array, " 3"]
     a2: Float[Array, " 3"]
@@ -375,50 +416,60 @@ def tilt_crystal(
     alpha_rad: ScalarNumeric,
     beta_rad: ScalarNumeric,
 ) -> CrystalData:
-    """Tilt CrystalData by alpha and beta angles, mimicking TEM stage tilts.
+    r"""Tilt :class:`~ptyrodactyl.tools.CrystalData` by alpha and beta.
 
-    Applies a combined rotation: first tilt around the x-axis by alpha,
-    then tilt around the y-axis by beta. This corresponds to typical
-    double-tilt TEM sample holder geometry.
+    Extended Summary
+    ----------------
+    Applies a combined rotation mimicking a TEM double-tilt
+    holder: first tilt around the x-axis by *alpha*, then
+    around the y-axis by *beta*.
+
+    .. math::
+
+        R_{\text{total}} = R_y(\beta)\, R_x(\alpha)
+
+    The function is fully differentiable with respect to both
+    angles, enabling gradient-based orientation optimization.
+
+    Implementation Logic
+    --------------------
+    1. **Build individual rotation matrices** --
+       :func:`rotmatrix_axis` for x-axis (alpha) and y-axis
+       (beta).
+    2. **Combine rotations** --
+       ``R_total = R_y @ R_x``.
+    3. **Rotate positions** --
+       ``positions @ R_total.T``.
+    4. **Rotate lattice** --
+       ``lattice @ R_total.T`` if lattice is present.
+    5. **Return new CrystalData** --
+       Via :func:`~ptyrodactyl.tools.make_crystal_data` with
+       all other fields preserved.
 
     Parameters
     ----------
     crystal_data : CrystalData
-        Input crystal structure data containing atomic positions.
+        Input crystal structure data.
     alpha_rad : ScalarNumeric
-        Tilt angle around the x-axis in radians. Positive alpha tilts
-        the sample such that +z rotates toward +y.
+        Tilt angle around the x-axis in radians. Positive
+        alpha tilts +z toward +y.
     beta_rad : ScalarNumeric
-        Tilt angle around the y-axis in radians. Positive beta tilts
-        the sample such that +z rotates toward -x.
+        Tilt angle around the y-axis in radians. Positive
+        beta tilts +z toward -x.
 
     Returns
     -------
     tilted_crystal : CrystalData
-        New CrystalData with rotated positions and lattice (if present).
-        All other fields (atomic_numbers, energy, etc.) are preserved.
+        New :class:`~ptyrodactyl.tools.CrystalData` with
+        rotated positions and lattice. All other fields
+        (atomic_numbers, energy, etc.) are preserved.
 
-    Notes
-    -----
-    The rotation is applied as R = R_y(beta) @ R_x(alpha), meaning:
-
-    1. First rotate around x-axis by alpha
-    2. Then rotate around y-axis by beta
-
-    This ordering matches typical TEM double-tilt holder conventions
-    where alpha is the primary tilt and beta is the secondary tilt.
-
-    The function is fully differentiable with respect to alpha and beta,
-    enabling gradient-based optimization of sample orientation.
-
-    Algorithm:
-
-    1. Compute rotation matrix R_x for alpha tilt around x-axis
-    2. Compute rotation matrix R_y for beta tilt around y-axis
-    3. Combine rotations: R_total = R_y @ R_x
-    4. Apply R_total to all atomic positions
-    5. Apply R_total to lattice vectors (if present)
-    6. Return new CrystalData with rotated coordinates
+    See Also
+    --------
+    :func:`rotmatrix_axis` : Rotation matrix from axis and
+        angle.
+    :func:`rotate_structure` : Lower-level rotation for
+        coords + cell arrays.
     """
     x_axis: Float[Array, " 3"] = jnp.array([1.0, 0.0, 0.0])
     y_axis: Float[Array, " 3"] = jnp.array([0.0, 1.0, 0.0])

@@ -1,27 +1,33 @@
-"""Parallelized simulation functions for distributed electron microscopy.
+"""Parallelized simulation functions for distributed microscopy.
 
 Extended Summary
 ----------------
-This module provides sharded versions of simulation functions that leverage
-JAX's distributed computing capabilities for large-scale electron microscopy
-simulations. Functions accept pre-sharded arrays for efficient parallel
-execution across multiple devices.
+This module provides sharded versions of simulation functions
+that leverage JAX's distributed computing capabilities for
+large-scale electron microscopy simulations. Functions accept
+pre-sharded arrays for efficient parallel execution across
+multiple devices.
 
 Routine Listings
 ----------------
-_compute_slice_potential : function, internal
-    Compute potential slice on-the-fly by summing atom type contributions.
-_cbed_from_potential_slices : function, internal
-    Compute CBED pattern with on-the-fly potential slice generation.
-clip_cbed : function
-    Clip CBED patterns to mrad extent and resize to target shape.
-stem4d_sharded : function
-    Generate 4D-STEM data from sharded beams and atom coordinates.
+:func:`_compute_slice_potential`
+    Compute potential slice on-the-fly by summing atom type
+    contributions.
+:func:`_cbed_from_potential_slices`
+    Compute CBED pattern with on-the-fly potential slice
+    generation.
+:func:`clip_cbed`
+    Clip CBED patterns to mrad extent and resize to target
+    shape.
+:func:`stem4d_sharded`
+    Generate 4D-STEM data from sharded beams and atom
+    coordinates.
 
 Notes
 -----
-All functions are fully JAX-safe and JIT-compilable. They are designed for
-use with JAX's pjit/shard_map for distributed execution across TPU/GPU pods.
+All functions are fully JAX-safe and JIT-compilable. They are
+designed for use with JAX's ``shard_map`` for distributed
+execution across TPU/GPU pods.
 """
 
 from functools import partial

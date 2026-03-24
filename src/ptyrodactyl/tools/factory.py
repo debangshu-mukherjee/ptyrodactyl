@@ -48,8 +48,6 @@ from .electron_types import (
     ScalarNumeric,
 )
 
-jax.config.update("jax_enable_x64", True)
-
 
 @jaxtyped(typechecker=beartype)
 @jax.jit
@@ -963,6 +961,18 @@ def make_stem4d(
     --------
     :class:`~ptyrodactyl.tools.electron_types.STEM4D`
         Target PyTree class.
+
+    Notes
+    -----
+    Shape-based validation (dimensionality, scan-position
+    count) uses Python-level conditionals on static shapes,
+    not ``jax.lax.cond``.  These are compile-time checks:
+    JAX traces them once per distinct input shape and bakes
+    the results into the compiled graph.  Calling this
+    function with a new data shape (e.g. ``(200, 256, 256)``
+    after ``(100, 256, 256)``) will trigger a retrace.
+    This is expected JAX behaviour for factory functions
+    that perform structural validation.
     """
     data_arr: Float[Array, " P H W"] = jnp.asarray(data, dtype=jnp.float64)
     real_calib_arr: Float[Array, " "] = jnp.asarray(
@@ -977,6 +987,7 @@ def make_stem4d(
     )
     voltage_arr: Float[Array, " "] = jnp.asarray(voltage_kv, dtype=jnp.float64)
 
+    # Trace-time shape constants — JAX retraces on new shapes.
     has_shape: bool = len(data_arr.shape) >= 1
     num_scan_positions: int = data_arr.shape[0] if has_shape else 0
     num_scan_coords: int = 2

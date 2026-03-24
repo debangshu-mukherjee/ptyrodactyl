@@ -21,8 +21,6 @@ Routine Listings
     Create electron probe with specified aberrations.
 :func:`aberration`
     Calculate aberration phase for the electron probe.
-:func:`wavelength_ang`
-    Calculate relativistic electron wavelength.
 :func:`cbed`
     Simulate convergent beam electron diffraction patterns.
 :func:`shift_beam_fourier`
@@ -42,7 +40,6 @@ be properly typed and validated using the factory functions
 from :mod:`ptyrodactyl.tools`.
 """
 
-from functools import partial
 
 import jax
 import jax.numpy as jnp
@@ -64,7 +61,6 @@ from jaxtyping import (
 from ptyrodactyl.tools import (
     C_LIGHT,
     E_CHARGE,
-    H_PLANCK,
     M_E,
     STEM4D,
     CalibratedArray,
@@ -76,9 +72,8 @@ from ptyrodactyl.tools import (
     make_calibrated_array,
     make_probe_modes,
     make_stem4d,
+    relativistic_wavelength_ang,
 )
-
-jax.config.update("jax_enable_x64", True)
 
 
 @jaxtyped(typechecker=beartype)
@@ -121,7 +116,9 @@ def transmission_func(
     e_e: Float[Array, " "] = jnp.float64(E_CHARGE)
     c: Float[Array, " "] = jnp.float64(C_LIGHT)
     ev: Float[Array, " "] = jnp.multiply(e_e, voltage)
-    lambda_angstrom: Float[Array, " "] = wavelength_ang(voltage_kv)
+    lambda_angstrom: Float[Array, " "] = (
+        relativistic_wavelength_ang(voltage_kv)
+    )
     einstein_energy: Float[Array, " "] = jnp.multiply(
         jnp.float64(M_E), jnp.square(c)
     )
@@ -133,7 +130,7 @@ def transmission_func(
 
 
 @jaxtyped(typechecker=beartype)
-@partial(jax.jit, static_argnames=["imsize_y", "imsize_x"])
+@jax.jit(static_argnames=["imsize_y", "imsize_x"])
 def propagation_func(
     imsize_y: ScalarInt,
     imsize_x: ScalarInt,
@@ -185,7 +182,9 @@ def propagation_func(
     lxa: Num[Array, " h w"]
     lya, lxa = jnp.meshgrid(qy, qx, indexing="ij")
     l_sq: Num[Array, " h w"] = jnp.square(lxa) + jnp.square(lya)
-    lambda_angstrom: Float[Array, " "] = wavelength_ang(voltage_kv)
+    lambda_angstrom: Float[Array, " "] = (
+        relativistic_wavelength_ang(voltage_kv)
+    )
     prop: Complex[Array, " h w"] = jnp.exp(
         (-1j) * jnp.pi * lambda_angstrom * thickness_ang * l_sq
     )
@@ -351,7 +350,7 @@ def make_probe(
     :func:`aberration` : Compute the aberration phase.
     """
     aperture: Float[Array, " "] = jnp.asarray(aperture / 1000.0)
-    wavelength: Float[Array, " "] = wavelength_ang(voltage)
+    wavelength: Float[Array, " "] = relativistic_wavelength_ang(voltage)
     l_max: Float[Array, " "] = aperture / wavelength
     image_y: ScalarInt
     image_x: ScalarInt
@@ -447,56 +446,6 @@ def aberration(
     )
     chi_probe: Float[Array, " H W"] = (2 * jnp.pi * chi) / lambda_angstrom
     return chi_probe
-
-
-@jaxtyped(typechecker=beartype)
-@jax.jit
-def wavelength_ang(voltage_kv: ScalarNumeric) -> Float[Array, " "]:
-    r"""Calculate the relativistic electron wavelength.
-
-    Extended Summary
-    ----------------
-    Uses the relativistic de Broglie relation:
-
-    .. math::
-
-        \lambda = \frac{hc}{\sqrt{eV\,(2 m_e c^2 + eV)}}
-
-    Implementation Logic
-    --------------------
-    1. **Convert voltage** --
-       kV to eV then to Joules.
-    2. **Relativistic formula** --
-       Compute wavelength in metres.
-    3. **Convert to Angstroms** --
-       Multiply by :math:`10^{10}`.
-
-    Parameters
-    ----------
-    voltage_kv : ScalarNumeric
-        Accelerating voltage in kiloelectronvolts.
-
-    Returns
-    -------
-    lambda_angstroms : Float[Array, " "]
-        Electron wavelength in Angstroms.
-
-    Notes
-    -----
-    Assumes clean input (no negative or NaN values).
-    Validation should happen in preprocessing.
-    """
-    m: Float[Array, " "] = jnp.float64(M_E)
-    e: Float[Array, " "] = jnp.float64(E_CHARGE)
-    c: Float[Array, " "] = jnp.float64(C_LIGHT)
-    h: Float[Array, " "] = jnp.float64(H_PLANCK)
-
-    ev: Float[Array, " "] = jnp.float64(voltage_kv) * jnp.float64(1000.0) * e
-    numerator: Float[Array, " "] = jnp.square(h) * jnp.square(c)
-    denominator: Float[Array, " "] = ev * ((2 * m * jnp.square(c)) + ev)
-    wavelength_meters: Float[Array, " "] = jnp.sqrt(numerator / denominator)
-    lambda_angstroms: Float[Array, " "] = jnp.asarray(1e10) * wavelength_meters
-    return lambda_angstroms
 
 
 @jaxtyped(typechecker=beartype)
@@ -956,7 +905,9 @@ def annular_detector(
         Real-space STEM image with ``real_space = True``
         and calibrations in Angstroms per pixel.
     """
-    wavelength: Float[Array, " "] = wavelength_ang(stem4d_data.voltage_kv)
+    wavelength: Float[Array, " "] = (
+        relativistic_wavelength_ang(stem4d_data.voltage_kv)
+    )
     inner_angle_rad: Float[Array, " "] = collection_angles[0] / 1000.0
     outer_angle_rad: Float[Array, " "] = collection_angles[1] / 1000.0
     inner_k: Float[Array, " "] = inner_angle_rad / wavelength
@@ -1034,5 +985,4 @@ __all__: list[str] = [
     "shift_beam_fourier",
     "stem_4d",
     "transmission_func",
-    "wavelength_ang",
 ]

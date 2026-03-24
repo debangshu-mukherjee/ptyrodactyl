@@ -116,8 +116,7 @@ def relativistic_wavelength_ang(
 
     Notes
     -----
-    Matches :func:`ptyrodactyl.simul.simulations.wavelength_ang`
-    to machine precision. Uses CODATA 2018 constants.
+    Uses CODATA 2018 constants.
     """
     h: Float[Array, " "] = jnp.float64(H_PLANCK)
     m: Float[Array, " "] = jnp.float64(M_E)

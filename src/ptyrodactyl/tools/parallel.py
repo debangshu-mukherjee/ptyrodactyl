@@ -25,7 +25,7 @@ including ``jit``, ``grad``, and ``vmap``.
 from collections.abc import Sequence
 
 import jax
-from jax.sharding import Mesh, NamedSharding, PartitionSpec
+from jax.sharding import NamedSharding, PartitionSpec
 from jaxtyping import Array, Num
 
 
@@ -78,7 +78,10 @@ def shard_array(
         devices = jax.devices()
     if isinstance(shard_axes, int):
         shard_axes = [shard_axes]
-    mesh = Mesh(devices, ("devices",))
+    num_devices: int = len(devices)
+    mesh = jax.make_mesh(
+        (num_devices,), ("devices",),
+    )
     pspec = [None] * input_array.ndim
     for ax in shard_axes:
         if ax != -1 and ax < input_array.ndim:

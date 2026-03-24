@@ -35,14 +35,13 @@ import numpy as np
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jax import lax
-from jax.sharding import Mesh, NamedSharding, PartitionSpec
+from jax.sharding import NamedSharding, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.simul import (
     make_probe,
     single_atom_potential,
     stem4d_sharded,
-    wavelength_ang,
 )
 from ptyrodactyl.simul.parallelized import _cbed_from_potential_slices
 from ptyrodactyl.tools import (
@@ -51,9 +50,8 @@ from ptyrodactyl.tools import (
     ScalarFloat,
     ScalarNumeric,
     make_stem4d,
+    relativistic_wavelength_ang,
 )
-
-jax.config.update("jax_enable_x64", True)
 
 _LARGE_POSITION_THRESHOLD: int = 100
 
@@ -434,7 +432,9 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     atom_coords: Float[Array, "N 3"] = crystal_data.positions
 
     if use_parallel:
-        mesh = Mesh(np.array(devices), axis_names=("p",))
+        mesh = jax.make_mesh(
+            (len(devices),), ("p",),
+        )
         raw_stem4d: STEM4D = stem4d_sharded(
             modes,
             scan_positions,
@@ -458,8 +458,8 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
             real_space_pixel_size_ang,
         )
     fourier_calib_inv_ang: float = float(raw_stem4d.fourier_space_calib)
-    wavelength_ang_clip: float = 12.2643 / np.sqrt(
-        float(voltage_kv) * (1.0 + 0.978459e-3 * float(voltage_kv))
+    wavelength_ang_clip: float = float(
+        relativistic_wavelength_ang(voltage_kv)
     )
     mrad_per_inv_ang_clip: float = wavelength_ang_clip * 1000.0
     extent_inv_ang: float = float(cbed_extent_mrad) / mrad_per_inv_ang_clip
@@ -497,8 +497,8 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     clipped_cbeds: Float[Array, "P Ho Wo"] = jax.vmap(_clip_single_cbed)(
         raw_stem4d.data
     )
-    wavelength_ang: float = 12.2643 / np.sqrt(
-        float(voltage_kv) * (1.0 + 0.978459e-3 * float(voltage_kv))
+    wavelength_ang: float = float(
+        relativistic_wavelength_ang(voltage_kv)
     )
     mrad_per_inv_ang: float = wavelength_ang * 1000.0
     output_fourier_calib_mrad: float = (
@@ -683,7 +683,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     # Calculate fft_pixels for proper Fourier sampling
     fft_pixels: int
     if fourier_pixels is None:
-        wavelength: float = float(wavelength_ang(voltage_kv))
+        wavelength: float = float(relativistic_wavelength_ang(voltage_kv))
         target_mrad_per_pixel: float = (
             2.0 * float(cbed_extent_mrad) / float(cbed_shape[0])
         )
@@ -904,7 +904,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
 
     fft_grid_size_ang: float = fft_pixels * pixel_size_ang
     fourier_calib_inv_ang: float = 1.0 / fft_grid_size_ang
-    e_lambda_ang: float = float(wavelength_ang(voltage_kv))
+    e_lambda_ang: float = float(relativistic_wavelength_ang(voltage_kv))
     mrad_per_inv_ang: float = e_lambda_ang * 1000.0
     extent_inv_ang: float = float(cbed_extent_mrad) / mrad_per_inv_ang
     extent_pixels: int = int(np.ceil(extent_inv_ang / fourier_calib_inv_ang))

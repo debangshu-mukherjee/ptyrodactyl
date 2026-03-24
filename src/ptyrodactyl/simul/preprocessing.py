@@ -45,7 +45,6 @@ import json
 import re
 from pathlib import Path
 
-import jax
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
@@ -61,7 +60,6 @@ _ATOMS_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
 )
 
-jax.config.update("jax_enable_x64", True)
 
 
 @beartype

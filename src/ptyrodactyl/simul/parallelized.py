@@ -47,14 +47,13 @@ from ptyrodactyl.tools import (
     ScalarInt,
     ScalarNumeric,
     make_stem4d,
+    relativistic_wavelength_ang,
 )
 
 from .simulations import (
     propagation_func,
     transmission_func,
 )
-
-jax.config.update("jax_enable_x64", True)
 
 
 @jaxtyped(typechecker=beartype)
@@ -377,8 +376,8 @@ def clip_cbed(
     h: int = cbed.shape[0]
     w: int = cbed.shape[1]
 
-    wavelength_ang: Float[Array, " "] = 12.2643 / jnp.sqrt(
-        voltage_kv * (1.0 + 0.978459e-3 * voltage_kv)
+    wavelength_ang: Float[Array, " "] = (
+        relativistic_wavelength_ang(voltage_kv)
     )
     mrad_per_inv_ang: Float[Array, " "] = wavelength_ang * 1000.0
 

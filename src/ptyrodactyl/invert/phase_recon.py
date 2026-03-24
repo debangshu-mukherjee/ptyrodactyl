@@ -55,8 +55,6 @@ from ptyrodactyl.tools import (
     make_calibrated_array,
 )
 
-jax.config.update("jax_enable_x64", True)
-
 OPTIMIZERS: Dict[str, ptt.Optimizer] = {
     "adam": ptt.Optimizer(ptt.init_adam, ptt.adam_update),
     "adagrad": ptt.Optimizer(ptt.init_adagrad, ptt.adagrad_update),

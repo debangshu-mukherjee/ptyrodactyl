@@ -1134,3 +1134,13 @@ def make_stem4d(
         None,
     )
     return result
+
+
+__all__: list[str] = [
+    "make_calibrated_array",
+    "make_crystal_data",
+    "make_crystal_structure",
+    "make_potential_slices",
+    "make_probe_modes",
+    "make_stem4d",
+]

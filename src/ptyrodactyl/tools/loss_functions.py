@@ -24,12 +24,12 @@ function that can be used with various optimization algorithms.
 import jax
 import jax.numpy as jnp
 from beartype.typing import Any, Callable
-from jaxtyping import Array, Float, PyTree
+from jaxtyping import Array, Float, Num, PyTree
 
 
 def create_loss_function(
-    forward_function: Callable[..., Array],
-    experimental_data: Array,
+    forward_function: Callable[..., Num[Array, " ..."]],
+    experimental_data: Num[Array, " ..."],
     loss_type: str = "mae",
 ) -> Callable[..., Float[Array, ""]]:
     """Create a JIT-compiled loss function for ptychography.
@@ -76,7 +76,7 @@ def create_loss_function(
         Wirtinger gradient for complex-valued optimisation.
     """
 
-    def mae_loss(diff):
+    def mae_loss(diff: Num[Array, " ..."]) -> Float[Array, " "]:
         """Compute mean absolute error from residuals.
 
         Parameters
@@ -91,7 +91,7 @@ def create_loss_function(
         """
         return jnp.mean(jnp.abs(diff))
 
-    def mse_loss(diff):
+    def mse_loss(diff: Num[Array, " ..."]) -> Float[Array, " "]:
         """Compute mean squared error from residuals.
 
         Parameters
@@ -106,7 +106,7 @@ def create_loss_function(
         """
         return jnp.mean(jnp.square(diff))
 
-    def rmse_loss(diff):
+    def rmse_loss(diff: Num[Array, " ..."]) -> Float[Array, " "]:
         """Compute root mean squared error from residuals.
 
         Parameters
@@ -147,3 +147,8 @@ def create_loss_function(
         return selected_loss_fn(diff)
 
     return loss_fn
+
+
+__all__: list[str] = [
+    "create_loss_function",
+]

@@ -48,7 +48,11 @@ os.environ.setdefault(
     "--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=0",
 )
 
-from . import invert, jacobian, simul, tools, workflows
+import jax  # noqa: E402
+
+jax.config.update("jax_enable_x64", True)
+
+from . import invert, jacobian, simul, tools, workflows  # noqa: E402
 
 __all__: list[str] = [
     "born",

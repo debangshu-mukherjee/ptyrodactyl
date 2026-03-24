@@ -39,6 +39,20 @@ Routine Listings
     Int or 0-dimensional Int array.
 :data:`ScalarNumeric`
     Numeric types (int, float, or 0-dimensional Num array).
+:data:`A_BOHR`
+    Bohr radius in Angstroms.
+:data:`C_LIGHT`
+    Speed of light in m/s.
+:data:`E_CHARGE`
+    Elementary charge in C.
+:data:`H_PLANCK`
+    Planck constant in J·s.
+:data:`HBAR`
+    Reduced Planck constant in J·s.
+:data:`M0C2_EV`
+    Electron rest energy in eV.
+:data:`M_E`
+    Electron rest mass in kg.
 :func:`adagrad_update`
     Adagrad parameter update step.
 :func:`adam_update`
@@ -68,6 +82,8 @@ Routine Listings
     Initialize RMSprop optimizer state.
 :func:`init_scheduler_state`
     Initialize learning rate scheduler state.
+:func:`interaction_parameter`
+    Interaction parameter sigma in 1/(V·Angstrom).
 :func:`make_calibrated_array`
     Creates a CalibratedArray with runtime type checking.
 :func:`make_crystal_data`
@@ -80,6 +96,10 @@ Routine Listings
     Creates a ProbeModes with runtime type checking.
 :func:`make_stem4d`
     Creates a STEM4D with runtime type checking.
+:func:`relativistic_mass`
+    Relativistic electron mass in kg.
+:func:`relativistic_wavelength_ang`
+    Relativistic electron wavelength in Angstroms.
 :func:`rmsprop_update`
     RMSprop parameter update step.
 :func:`shard_array`
@@ -96,6 +116,18 @@ including jit compilation, automatic differentiation, and
 vectorized mapping.
 """
 
+from .constants import (
+    A_BOHR,
+    C_LIGHT,
+    E_CHARGE,
+    H_PLANCK,
+    HBAR,
+    M0C2_EV,
+    M_E,
+    interaction_parameter,
+    relativistic_mass,
+    relativistic_wavelength_ang,
+)
 from .electron_types import (
     STEM4D,
     CalibratedArray,
@@ -139,10 +171,17 @@ from .optimizers import (
 from .parallel import shard_array
 
 __all__: list[str] = [
+    "A_BOHR",
+    "C_LIGHT",
     "CalibratedArray",
     "CrystalData",
     "CrystalStructure",
+    "E_CHARGE",
+    "H_PLANCK",
+    "HBAR",
     "LRSchedulerState",
+    "M0C2_EV",
+    "M_E",
     "NonJaxNumber",
     "Optimizer",
     "OptimizerState",
@@ -165,12 +204,15 @@ __all__: list[str] = [
     "init_adam",
     "init_rmsprop",
     "init_scheduler_state",
+    "interaction_parameter",
     "make_calibrated_array",
     "make_crystal_data",
     "make_crystal_structure",
     "make_potential_slices",
     "make_probe_modes",
     "make_stem4d",
+    "relativistic_mass",
+    "relativistic_wavelength_ang",
     "rmsprop_update",
     "shard_array",
     "wirtinger_grad",

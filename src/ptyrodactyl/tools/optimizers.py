@@ -74,7 +74,7 @@ from beartype.typing import (
     Tuple,
     Union,
 )
-from jaxtyping import Array, Complex, Float
+from jaxtyping import Array, Complex, Float, Int, Num
 
 
 class LRSchedulerState(NamedTuple):
@@ -90,12 +90,15 @@ class LRSchedulerState(NamedTuple):
         Initial learning rate value.
     """
 
-    step: int | Array
-    learning_rate: float | Array
-    initial_lr: float | Array
+    step: int | Int[Array, " "]
+    learning_rate: float | Float[Array, " "]
+    initial_lr: float | Float[Array, " "]
 
 
-SchedulerFn = Callable[[LRSchedulerState], tuple[float | Array, LRSchedulerState]]
+SchedulerFn = Callable[
+    [LRSchedulerState],
+    tuple[float | Float[Array, " "], LRSchedulerState],
+]
 
 
 def create_cosine_scheduler(
@@ -149,7 +152,7 @@ def create_cosine_scheduler(
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float | Array, LRSchedulerState]:
+    ) -> tuple[float | Float[Array, " "], LRSchedulerState]:
         """Apply cosine annealing to the learning rate.
 
         Parameters
@@ -217,7 +220,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float | Array, LRSchedulerState]:
+    ) -> tuple[float | Float[Array, " "], LRSchedulerState]:
         """Apply step decay to the learning rate.
 
         Parameters
@@ -300,7 +303,7 @@ def create_warmup_cosine_scheduler(
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float | Array, LRSchedulerState]:
+    ) -> tuple[float | Float[Array, " "], LRSchedulerState]:
         """Apply warmup then cosine decay to the learning rate.
 
         Parameters
@@ -373,9 +376,9 @@ class OptimizerState(NamedTuple):
         Scalar step counter.
     """
 
-    m: Array  # First moment estimate
-    v: Array  # Second moment estimate
-    step: int | Array  # Step count
+    m: Num[Array, " ..."]  # First moment estimate
+    v: Num[Array, " ..."]  # Second moment estimate
+    step: int | Int[Array, " "]  # Step count
 
 
 class Optimizer(NamedTuple):
@@ -469,7 +472,7 @@ Tuple[Complex[Array, " ..."], ...]]
             Wirtinger gradient(s) for the selected arguments.
         """
 
-        def split_complex(args):
+        def split_complex(args: tuple) -> tuple:
             """Split complex args into real and imaginary parts.
 
             Parameters
@@ -489,7 +492,7 @@ Tuple[Complex[Array, " ..."], ...]]
                 for arg in args
             )
 
-        def combine_complex(r, i):
+        def combine_complex(r: tuple, i: tuple) -> tuple:
             """Recombine real and imaginary tuples.
 
             Parameters
@@ -512,12 +515,12 @@ Tuple[Complex[Array, " ..."], ...]]
         split_args = split_complex(args)
         n = len(args)
 
-        def f_real(*split_args):
+        def f_real(*split_args: Num[Array, " ..."]) -> Float[Array, " ..."]:
             """Return the real part of the function output.
 
             Parameters
             ----------
-            *split_args : Any
+            *split_args : Array
                 Split real/imaginary arguments.
 
             Returns
@@ -529,12 +532,12 @@ Tuple[Complex[Array, " ..."], ...]]
                 func2diff(*combine_complex(split_args[:n], split_args[n:]))
             )
 
-        def f_imag(*split_args):
+        def f_imag(*split_args: Num[Array, " ..."]) -> Float[Array, " ..."]:
             """Return the imaginary part of the function output.
 
             Parameters
             ----------
-            *split_args : Any
+            *split_args : Array
                 Split real/imaginary arguments.
 
             Returns
@@ -998,3 +1001,26 @@ def rmsprop_update(
         params, grads, v, learning_rate, decay_rate, eps
     )
     return new_params, OptimizerState(m=m, v=new_v, step=step + 1)
+
+
+__all__: list[str] = [
+    # Classes
+    "LRSchedulerState",
+    "Optimizer",
+    "OptimizerState",
+    # Functions
+    "adagrad_update",
+    "adam_update",
+    "complex_adagrad",
+    "complex_adam",
+    "complex_rmsprop",
+    "create_cosine_scheduler",
+    "create_step_scheduler",
+    "create_warmup_cosine_scheduler",
+    "init_adagrad",
+    "init_adam",
+    "init_rmsprop",
+    "init_scheduler_state",
+    "rmsprop_update",
+    "wirtinger_grad",
+]

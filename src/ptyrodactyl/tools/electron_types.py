@@ -581,3 +581,19 @@ class STEM4D(NamedTuple):
             Reconstructed instance.
         """
         return cls(*children)
+
+
+__all__: list[str] = [
+    # Classes
+    "CalibratedArray",
+    "CrystalData",
+    "CrystalStructure",
+    "PotentialSlices",
+    "ProbeModes",
+    "STEM4D",
+    # Type aliases
+    "NonJaxNumber",
+    "ScalarFloat",
+    "ScalarInt",
+    "ScalarNumeric",
+]

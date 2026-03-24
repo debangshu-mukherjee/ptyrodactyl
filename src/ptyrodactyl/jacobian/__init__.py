@@ -120,66 +120,62 @@ Routine Listings
 """
 
 from .blocks import (
-    ExitWaveParams,
     AberrationParams,
+    ExitWaveParams,
     GeometryParams,
     PositionParams,
     ProbeModeParams,
     PtychoParams,
+    alternating_block_solve,
+    block_gauss_newton_step,
+    block_jacobian_operator,
+    block_jtj_operator,
+    block_vjp_operator,
+    compute_block_gradient,
+    cross_block_jtj_operator,
     make_ptycho_params,
     split_params,
-    block_jacobian_operator,
-    block_vjp_operator,
-    block_jtj_operator,
-    cross_block_jtj_operator,
-    compute_block_gradient,
-    block_gauss_newton_step,
-    alternating_block_solve,
 )
-
 from .fisher import (
-    fisher_information,
-    fisher_information_operator,
-    fisher_diagonal,
-    schur_complement,
-    effective_fisher,
-    fisher_eigenspectrum,
     a_optimality,
+    condition_number,
     d_optimality,
     e_optimality,
-    stack_fisher,
-    optimal_weights_e_criterion,
-    condition_number,
+    effective_fisher,
+    fisher_diagonal,
+    fisher_eigenspectrum,
+    fisher_information,
+    fisher_information_operator,
     information_gain,
+    optimal_weights_e_criterion,
+    schur_complement,
+    stack_fisher,
 )
-
 from .gauge import (
-    nullspace_vectors_lanczos,
-    project_to_nullspace,
-    project_to_observable,
     decompose_gauge_observable,
     effective_rank,
     gauge_invariant_norm,
-    random_gauge_direction,
     gauge_orbit_distance,
+    nullspace_vectors_lanczos,
+    project_to_nullspace,
+    project_to_observable,
+    random_gauge_direction,
 )
-
 from .operators import (
     hvp_gauss_newton,
     jtj_operator,
     jvp_operator,
     vjp_operator,
 )
-
 from .solvers import (
     conjugate_gradient,
-    gauss_newton_step,
-    gauss_newton_solve,
-    levenberg_marquardt_step,
-    levenberg_marquardt_solve,
-    lanczos_tridiagonal,
-    singular_spectrum,
     effective_nullspace_dimension,
+    gauss_newton_solve,
+    gauss_newton_step,
+    lanczos_tridiagonal,
+    levenberg_marquardt_solve,
+    levenberg_marquardt_step,
+    singular_spectrum,
 )
 
 __all__ = [

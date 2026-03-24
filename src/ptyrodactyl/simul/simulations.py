@@ -62,6 +62,10 @@ from jaxtyping import (
 )
 
 from ptyrodactyl.tools import (
+    C_LIGHT,
+    E_CHARGE,
+    H_PLANCK,
+    M_E,
     STEM4D,
     CalibratedArray,
     PotentialSlices,
@@ -114,12 +118,13 @@ def transmission_func(
         Complex transmission function for the slice.
     """
     voltage: Float[Array, " "] = jnp.multiply(voltage_kv, jnp.asarray(1000.0))
-    m_e: Float[Array, " "] = jnp.asarray(9.109383e-31)
-    e_e: Float[Array, " "] = jnp.asarray(1.602177e-19)
-    c: Float[Array, " "] = jnp.asarray(299792458.0)
+    e_e: Float[Array, " "] = jnp.float64(E_CHARGE)
+    c: Float[Array, " "] = jnp.float64(C_LIGHT)
     ev: Float[Array, " "] = jnp.multiply(e_e, voltage)
     lambda_angstrom: Float[Array, " "] = wavelength_ang(voltage_kv)
-    einstein_energy: Float[Array, " "] = jnp.multiply(m_e, jnp.square(c))
+    einstein_energy: Float[Array, " "] = jnp.multiply(
+        jnp.float64(M_E), jnp.square(c)
+    )
     sigma: Float[Array, " "] = (
         (2 * jnp.pi / (lambda_angstrom * voltage)) * (einstein_energy + ev)
     ) / ((2 * einstein_energy) + ev)
@@ -481,18 +486,14 @@ def wavelength_ang(voltage_kv: ScalarNumeric) -> Float[Array, " "]:
     Assumes clean input (no negative or NaN values).
     Validation should happen in preprocessing.
     """
-    m: Float[Array, " "] = jnp.asarray(9.109383e-31)
-    e: Float[Array, " "] = jnp.asarray(1.602177e-19)
-    c: Float[Array, " "] = jnp.asarray(299792458.0)
-    h: Float[Array, " "] = jnp.asarray(6.62607e-34)
+    m: Float[Array, " "] = jnp.float64(M_E)
+    e: Float[Array, " "] = jnp.float64(E_CHARGE)
+    c: Float[Array, " "] = jnp.float64(C_LIGHT)
+    h: Float[Array, " "] = jnp.float64(H_PLANCK)
 
-    ev: Float[Array, " "] = (
-        jnp.float64(voltage_kv) * jnp.float64(1000.0) * jnp.float64(e)
-    )
-    numerator: Float[Array, " "] = jnp.multiply(jnp.square(h), jnp.square(c))
-    denominator: Float[Array, " "] = jnp.multiply(
-        ev, ((2 * m * jnp.square(c)) + ev)
-    )
+    ev: Float[Array, " "] = jnp.float64(voltage_kv) * jnp.float64(1000.0) * e
+    numerator: Float[Array, " "] = jnp.square(h) * jnp.square(c)
+    denominator: Float[Array, " "] = ev * ((2 * m * jnp.square(c)) + ev)
     wavelength_meters: Float[Array, " "] = jnp.sqrt(numerator / denominator)
     lambda_angstroms: Float[Array, " "] = jnp.asarray(1e10) * wavelength_meters
     return lambda_angstroms
@@ -1019,3 +1020,19 @@ def annular_detector(
     )
 
     return stem_image
+
+
+__all__: list[str] = [
+    "aberration",
+    "annular_detector",
+    "cbed",
+    "decompose_beam_to_modes",
+    "fourier_calib",
+    "fourier_coords",
+    "make_probe",
+    "propagation_func",
+    "shift_beam_fourier",
+    "stem_4d",
+    "transmission_func",
+    "wavelength_ang",
+]

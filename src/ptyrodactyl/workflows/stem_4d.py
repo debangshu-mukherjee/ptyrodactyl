@@ -2,25 +2,31 @@
 
 Extended Summary
 ----------------
-This module provides complete workflows that combine multiple simulation
-steps into convenient functions for common use cases.
+This module provides complete workflows that combine multiple
+simulation steps into convenient functions for common use
+cases such as simulating 4D-STEM datasets from crystal
+structure data.
 
 Routine Listings
 ----------------
-_estimate_memory_gb : function, internal
-    Estimate memory requirements for 4D-STEM simulation in GB.
-_get_device_memory_gb : function, internal
-    Get available memory on the first JAX device in GB.
-crystal2stem4d : function
-    4D-STEM simulation from CrystalData with automatic sharding.
-crystal2stem4d_tiled : function
-    Tiled 4D-STEM simulation for large samples with fixed memory per tile.
+:func:`_estimate_memory_gb`
+    Estimate memory requirements for 4D-STEM simulation
+    in gigabytes.
+:func:`_get_device_memory_gb`
+    Get available memory on the first JAX device in
+    gigabytes.
+:func:`crystal2stem4d`
+    4D-STEM simulation from :class:`CrystalData` with
+    automatic sharding.
+:func:`crystal2stem4d_tiled`
+    Tiled 4D-STEM simulation for large samples with fixed
+    memory per tile.
 
 Notes
 -----
-Workflows are designed as convenience functions that chain together
-lower-level simulation functions from the simulations and atom_potentials
-modules.
+Workflows are designed as convenience functions that chain
+together lower-level simulation functions from the
+``simulations`` and ``atom_potentials`` modules.
 """
 
 import jax
@@ -59,14 +65,33 @@ def _estimate_memory_gb(
     num_modes: int,
     num_slices: int,
 ) -> float:
-    """Estimate memory requirements for 4D-STEM simulation in GB.
+    r"""Estimate memory requirements for 4D-STEM simulation.
 
-    Computes estimated memory usage based on array sizes:
-    - Beams: P x H x W x M complex128 (16 bytes per element)
-    - CBED patterns: P x H x W float64 (8 bytes per element)
-    - Potential slices: H x W x S float64 (8 bytes per element)
+    Extended Summary
+    ----------------
+    Computes estimated memory usage based on the primary
+    array sizes involved in a multislice 4D-STEM simulation:
 
-    Applies a 2.5x overhead factor for FFT working memory and intermediates.
+    .. math::
+
+        M_{\text{total}} = 2.5 \times (M_{\text{beams}}
+        + M_{\text{CBED}} + M_{\text{slices}})
+
+    where the 2.5x overhead factor accounts for FFT working
+    memory and intermediate arrays.
+
+    Implementation Logic
+    --------------------
+    1. **Compute beam memory** --
+       beams = P * H * W * M * 16 bytes (complex128).
+    2. **Compute CBED memory** --
+       cbeds = P * H * W * 8 bytes (float64).
+    3. **Compute slice memory** --
+       slices = H * W * S * 8 bytes (float64).
+    4. **Apply overhead factor** --
+       total = 2.5 * (beams + cbeds + slices).
+    5. **Convert to gigabytes** --
+       memory_gb = total / 1024^3.
 
     Parameters
     ----------
@@ -85,6 +110,13 @@ def _estimate_memory_gb(
     -------
     memory_gb : float
         Estimated memory requirement in gigabytes.
+
+    See Also
+    --------
+    :func:`_get_device_memory_gb` :
+        Query actual device memory for comparison.
+    :func:`crystal2stem4d` :
+        Uses this estimate for auto-sharding decisions.
     """
     bytes_per_complex128: int = 16
     bytes_per_float64: int = 8
@@ -102,18 +134,37 @@ def _estimate_memory_gb(
 
 
 def _get_device_memory_gb() -> float:
-    """Get available memory on the first JAX device in GB.
+    """Get available memory on the first JAX device.
 
-    Attempts to query memory_stats from the first JAX device. This works
-    for GPU/TPU devices that expose memory information via the bytes_limit
-    key. Falls back to 16.0 GB for CPU or devices where memory stats are
-    unavailable.
+    Extended Summary
+    ----------------
+    Attempts to query ``memory_stats`` from the first JAX
+    device. This works for GPU/TPU devices that expose
+    memory information via the ``bytes_limit`` key. Falls
+    back to 16.0 GB for CPU or devices where memory stats
+    are unavailable.
+
+    Implementation Logic
+    --------------------
+    1. **Query JAX devices** --
+       Retrieve the list of available JAX devices.
+    2. **Read memory stats** --
+       Access ``bytes_limit`` from ``device.memory_stats()``.
+    3. **Convert to gigabytes** --
+       Divide bytes by 1024^3.
+    4. **Fallback** --
+       Return 16.0 GB if query fails or stats unavailable.
 
     Returns
     -------
     memory_gb : float
         Available device memory in gigabytes.
         Returns 16.0 as default if unable to determine.
+
+    See Also
+    --------
+    :func:`_estimate_memory_gb` :
+        Estimate simulation memory for comparison.
     """
     try:
         devices = jax.devices()
@@ -148,15 +199,42 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
 ) -> STEM4D:
     """4D-STEM simulation from crystal data with automatic sharding.
 
-    Takes a CrystalData PyTree, generates electron probe, computes atomic
-    potentials on-the-fly, and runs the 4D-STEM simulation. Automatically
-    shards data across devices when beneficial. Output CBED patterns are
-    clipped to the specified mrad extent and resized to the target shape.
+    Extended Summary
+    ----------------
+    Takes a :class:`CrystalData` PyTree, generates an electron
+    probe, computes atomic potentials on-the-fly, and runs the
+    4D-STEM simulation. Automatically shards data across devices
+    when beneficial. Output CBED patterns are clipped to the
+    specified milliradians extent and resized to the target
+    shape.
+
+    Implementation Logic
+    --------------------
+    1. **Calculate grid dimensions** --
+       Derive H, W, S directly from coordinate ranges and
+       ``real_space_pixel_size_ang``.
+    2. **Decide sharding strategy** --
+       Auto-select based on device count, estimated memory
+       (via :func:`_estimate_memory_gb`), and position count.
+    3. **Generate electron probe** --
+       Call :func:`make_probe` with specified aberrations.
+    4. **Compute slice z-boundaries** --
+       Divide z-range by ``slice_thickness``.
+    5. **Precompute 2D atomic potentials** --
+       Call :func:`single_atom_potential` per unique atom
+       type and wrap-pad into the simulation grid.
+    6. **Run sharded simulation** --
+       Call :func:`stem4d_sharded` to get raw CBED patterns
+       with on-the-fly slice generation.
+    7. **Clip and resize CBEDs** --
+       Clip to ``cbed_extent_mrad`` and resize to
+       ``cbed_shape`` via bilinear interpolation.
 
     Parameters
     ----------
     crystal_data : CrystalData
-        Crystal structure data containing atomic positions and numbers.
+        Crystal structure data containing atomic positions
+        and atomic numbers.
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms.
         P is the number of scan positions.
@@ -165,72 +243,80 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     cbed_aperture_mrad : ScalarNumeric
         Probe aperture size in milliradians.
     cbed_extent_mrad : ScalarFloat, optional
-        Half-angle extent of output CBED in milliradians. Default is 50.0.
+        Half-angle extent of output CBED in milliradians.
+        Default is 50.0 mrad.
     cbed_shape : Tuple[int, int], optional
-        Output CBED shape (height, width). Default is (256, 256).
+        Output CBED shape (height, width) in pixels.
+        Default is (256, 256).
     real_space_pixel_size_ang : ScalarFloat, optional
-        Real space pixel size in Angstroms for simulation. Default is 0.02
-        (2 pm), which provides fine sampling for accurate multislice.
+        Real-space pixel size in Angstroms. Default is 0.02
+        Angstroms (2 pm), providing fine sampling for
+        accurate multislice.
     slice_thickness : ScalarFloat, optional
-        Thickness of each slice in Angstroms. Default is 1.0.
+        Thickness of each slice in Angstroms. Default is
+        1.0 Angstroms.
     num_modes : int, optional
-        Number of probe modes for partial coherence. Default is 1.
+        Number of probe modes for partial coherence.
+        Default is 1.
     probe_defocus : ScalarNumeric, optional
         Probe defocus in Angstroms. Default is 0.0.
     probe_c3 : ScalarNumeric, optional
-        Third-order spherical aberration in Angstroms. Default is 0.0.
+        Third-order spherical aberration in Angstroms.
+        Default is 0.0.
     probe_c5 : ScalarNumeric, optional
-        Fifth-order spherical aberration in Angstroms. Default is 0.0.
+        Fifth-order spherical aberration in Angstroms.
+        Default is 0.0.
     padding : float, optional
-        Padding in Angstroms for potential calculation. Default is 4.0.
+        Padding in Angstroms for potential calculation.
+        Default is 4.0.
     supersampling : int, optional
-        Supersampling factor for atomic potentials. Default is 4.
+        Supersampling factor for atomic potentials.
+        Default is 4.
     force_parallel : bool, optional
-        If True, force sharding across devices. If False, no sharding.
-        If None (default), automatically select based on resources.
+        If ``True``, force sharding across devices. If
+        ``False``, no sharding. If ``None`` (default),
+        automatically select based on resources.
 
     Returns
     -------
     stem4d_result : STEM4D
         Complete 4D-STEM dataset containing:
+
         - data : Float[Array, "P Ho Wo"]
-            Clipped and resized diffraction patterns
+            Clipped and resized diffraction patterns.
         - real_space_calib : Float[Array, " "]
-            Real space calibration in angstroms per pixel
+            Real-space calibration in Angstroms per pixel.
         - fourier_space_calib : Float[Array, " "]
-            Fourier space calibration in inverse angstroms per pixel
+            Fourier-space calibration in inverse Angstroms
+            per pixel.
         - scan_positions : Float[Array, "P 2"]
-            Scan positions in angstroms
+            Scan positions in Angstroms.
         - voltage_kv : Float[Array, " "]
-            Accelerating voltage in kilovolts
+            Accelerating voltage in kilovolts.
 
     Notes
     -----
     The simulation grid is determined by the sample FOV and
-    real_space_pixel_size_ang. Output CBEDs are clipped to cbed_extent_mrad
-    and resized to cbed_shape.
+    ``real_space_pixel_size_ang``. Output CBEDs are clipped
+    to ``cbed_extent_mrad`` and resized to ``cbed_shape``.
 
-    Selection criteria for sharding (when force_parallel is None):
+    Selection criteria for sharding (when ``force_parallel``
+    is ``None``):
+
     1. Multiple devices available (GPU/TPU), OR
-    2. Estimated memory exceeds 50% of single device memory, OR
-    3. Large number of scan positions (>100)
-
-    Algorithm:
-    1. Calculate grid dimensions (H, W, S) directly from coordinate ranges
-    2. Generate electron probe with specified aberrations
-    3. Pre-shift beams to all scan positions using shift_beam_fourier
-    4. Compute slice z-boundaries from z-coordinate range and thickness
-    5. Precompute 2D atomic potentials for each unique atom type
-    6. Optionally shard data across devices based on use_parallel flag
-    7. Run stem4d_sharded to get raw CBED patterns (on-the-fly slice gen)
-    8. Clip CBEDs to cbed_extent_mrad and resize to cbed_shape
+    2. Estimated memory exceeds 50 % of device memory, OR
+    3. Large number of scan positions (>100).
 
     See Also
     --------
-    stem4d_sharded : Low-level JAX-safe 4D-STEM function with on-the-fly slices
-    single_atom_potential : Computes 2D atomic potentials for each type.
-    shift_beam_fourier : Pre-shifts beams to scan positions.
-    make_probe : Creates electron probe with aberrations.
+    :func:`stem4d_sharded` :
+        Low-level JAX-safe 4D-STEM with on-the-fly slices.
+    :func:`single_atom_potential` :
+        Computes 2D atomic potentials for each type.
+    :func:`make_probe` :
+        Creates electron probe with aberrations.
+    :func:`crystal2stem4d_tiled` :
+        Tiled variant for arbitrarily large samples.
     """
     x_coords: Float[Array, " N"] = crystal_data.positions[:, 0]
     y_coords: Float[Array, " N"] = crystal_data.positions[:, 1]
@@ -391,7 +477,18 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     clip_w: int = x_end - x_start
 
     def _clip_single_cbed(cbed: Float[Array, "H W"]) -> Float[Array, "Ho Wo"]:
-        """Clip and resize a single CBED pattern."""
+        """Clip a CBED to the extent region and resize.
+
+        Parameters
+        ----------
+        cbed : Float[Array, "H W"]
+            Raw CBED pattern in pixels.
+
+        Returns
+        -------
+        resized : Float[Array, "Ho Wo"]
+            Clipped and bilinearly resized CBED.
+        """
         clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
             cbed, (y_start, x_start), (clip_h, clip_w)
         )
@@ -444,16 +541,55 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     probe_c5: ScalarNumeric = 0.0,
     supersampling: int = 4,
 ) -> STEM4D:
-    """Tiled 4D-STEM simulation for arbitrarily large samples.
+    r"""Tiled 4D-STEM simulation for arbitrarily large samples.
 
-    Divides the sample into tiles and computes CBEDs for each tile
-    independently. This approach has O(1) memory per tile regardless
-    of total sample size, enabling simulation of very large fields of view.
+    Extended Summary
+    ----------------
+    Divides the sample into tiles and computes CBEDs for each
+    tile independently. This approach has O(1) memory per tile
+    regardless of total sample size, enabling simulation of
+    very large fields of view.
+
+    The padding per side is:
+
+    .. math::
+
+        p = \frac{N_{\text{grid}} \, \delta x
+        - L_{\text{tile}}}{2}
+
+    where :math:`N_{\text{grid}}` is ``grid_pixels``,
+    :math:`\delta x` is ``pixel_size_ang``, and
+    :math:`L_{\text{tile}}` is ``tile_size_ang``.
+
+    Implementation Logic
+    --------------------
+    1. **Compute grid parameters and padding** --
+       Derive real-space grid extent from ``grid_pixels``
+       and ``pixel_size_ang``; validate padding > 0.
+    2. **Determine Fourier grid size** --
+       Auto-calculate ``fft_pixels`` from
+       ``cbed_extent_mrad`` and ``cbed_shape`` to ensure
+       proper Fourier sampling, or use user-supplied value.
+    3. **Precompute atom potentials** --
+       Call :func:`single_atom_potential` per unique atom
+       type and wrap-pad into the FFT grid.
+    4. **Generate probe** --
+       Call :func:`make_probe` on the FFT-sized grid with
+       specified aberrations.
+    5. **Process each scan position** --
+       For each position, extract atoms within the tile
+       region, shift the beam to tile-local coordinates,
+       and run multislice via
+       :func:`_cbed_from_potential_slices`.
+    6. **Clip and resize all CBEDs** --
+       Clip to ``cbed_extent_mrad`` and resize to
+       ``cbed_shape`` via bilinear interpolation.
 
     Parameters
     ----------
     crystal_data : CrystalData
-        Crystal structure data containing atomic positions and numbers.
+        Crystal structure data containing atomic positions
+        and atomic numbers.
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms.
     voltage_kv : ScalarNumeric
@@ -461,70 +597,77 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     cbed_aperture_mrad : ScalarNumeric
         Probe aperture size in milliradians.
     cbed_extent_mrad : ScalarFloat, optional
-        Half-angle extent of output CBED in milliradians. Default is 50.0.
+        Half-angle extent of output CBED in milliradians.
+        Default is 50.0 mrad.
     cbed_shape : Tuple[int, int], optional
-        Output CBED shape (height, width). Default is (256, 256).
+        Output CBED shape (height, width) in pixels.
+        Default is (256, 256).
     tile_size_ang : float, optional
-        Active scan region size per tile in Angstroms. Default is 40.0 (4nm).
-        Beams scan within this central region of each tile.
+        Active scan region size per tile in Angstroms.
+        Default is 40.0 Angstroms (4 nm). Beams scan within
+        this central region of each tile.
     grid_pixels : int, optional
-        Grid size in pixels (should be power of 2). Default is 4096.
-        Total grid covers tile_size + 2*padding.
+        Grid size in pixels (should be power of 2).
+        Default is 4096. Total grid covers
+        tile_size + 2 * padding.
     pixel_size_ang : float, optional
-        Pixel size in Angstroms. Default is 0.02 (2pm).
+        Pixel size in Angstroms. Default is 0.02 Angstroms
+        (2 pm).
     fourier_pixels : int, optional
-        FFT grid size for Fourier-space sampling. If None, automatically
-        calculated from cbed_extent_mrad and cbed_shape to ensure proper
-        sampling. Larger values give finer Fourier resolution. Must be
-        >= grid_pixels.
+        FFT grid size for Fourier-space sampling. If
+        ``None``, automatically calculated from
+        ``cbed_extent_mrad`` and ``cbed_shape`` to ensure
+        proper sampling. Must be >= ``grid_pixels``.
     slice_thickness : ScalarFloat, optional
-        Thickness of each slice in Angstroms. Default is 1.0.
+        Thickness of each slice in Angstroms. Default is
+        1.0 Angstroms.
     num_modes : int, optional
-        Number of probe modes for partial coherence. Default is 1.
+        Number of probe modes for partial coherence.
+        Default is 1.
     probe_defocus : ScalarNumeric, optional
         Probe defocus in Angstroms. Default is 0.0.
     probe_c3 : ScalarNumeric, optional
-        Third-order spherical aberration in Angstroms. Default is 0.0.
+        Third-order spherical aberration in Angstroms.
+        Default is 0.0.
     probe_c5 : ScalarNumeric, optional
-        Fifth-order spherical aberration in Angstroms. Default is 0.0.
+        Fifth-order spherical aberration in Angstroms.
+        Default is 0.0.
     supersampling : int, optional
-        Supersampling factor for atomic potentials. Default is 4.
+        Supersampling factor for atomic potentials.
+        Default is 4.
 
     Returns
     -------
     stem4d_result : STEM4D
-        Complete 4D-STEM dataset with uniform CBED patterns.
+        Complete 4D-STEM dataset with uniform CBED
+        patterns.
+
+    Raises
+    ------
+    ValueError
+        If ``tile_size_ang`` exceeds grid size, or if
+        ``fourier_pixels`` < ``grid_pixels``.
 
     Notes
     -----
-    Tiling scheme:
-    - Each tile has a fixed grid of grid_pixels x grid_pixels
-    - The central tile_size_ang x tile_size_ang region is the active scan area
-    - Surrounding padding accommodates beam spread from defocus
-    - Atoms within the full grid region are extracted for each tile
+    For default values (4096 pixels, 0.02 Angstroms,
+    40 Angstroms tile):
 
-    The padding is computed as:
-        padding = (grid_pixels * pixel_size_ang - tile_size_ang) / 2
+    - total_grid = 4096 * 0.02 = 81.92 Angstroms
+    - padding = (81.92 - 40) / 2 = 20.96 Angstroms/side
 
-    For default values (4096 pixels, 0.02 Å, 40 Å tile):
-        total_grid = 4096 * 0.02 = 81.92 Å
-        padding = (81.92 - 40) / 2 = 20.96 Å per side
+    This provides ~21 Angstroms padding, sufficient for
+    50 nm defocus with 30 mrad aperture (spread ~1.5
+    Angstroms) and atom potential extent (~5 Angstroms).
 
-    This provides ~21 Å padding, sufficient for:
-        - 50nm defocus with 30mrad aperture: spread = 1.5 Å
-        - Atom potential extent: ~5 Å
-        - Large safety margin for probe tails
-
-    Algorithm:
-    1. Compute grid parameters and padding
-    2. Precompute atom potentials (small kernel, shared across tiles)
-    3. Generate probe on fixed-size grid
-    4. For each scan position:
-       a. Determine which tile it belongs to
-       b. Extract atoms within tile region
-       c. Compute local beam shift within tile
-       d. Run multislice for that position
-    5. Clip and resize all CBEDs uniformly
+    See Also
+    --------
+    :func:`crystal2stem4d` :
+        Non-tiled variant with automatic sharding.
+    :func:`single_atom_potential` :
+        Computes 2D atomic potentials for each type.
+    :func:`make_probe` :
+        Creates electron probe with aberrations.
     """
     grid_size_ang: float = grid_pixels * pixel_size_ang
     padding_ang: float = (grid_size_ang - tile_size_ang) / 2.0
@@ -654,7 +797,18 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     def _process_single_position(
         position_ang: Float[Array, " 2"],
     ) -> Float[Array, "H W"]:
-        """Process a single scan position within its tile."""
+        """Run multislice for one scan position in its tile.
+
+        Parameters
+        ----------
+        position_ang : Float[Array, " 2"]
+            (y, x) scan position in Angstroms.
+
+        Returns
+        -------
+        cbed : Float[Array, "H W"]
+            Raw CBED pattern on the FFT grid.
+        """
         pos_y: ScalarFloat = position_ang[0]
         pos_x: ScalarFloat = position_ang[1]
 
@@ -727,7 +881,18 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         def _compute_all_cbeds(
             positions: Float[Array, "P 2"],
         ) -> Float[Array, "P H W"]:
-            """Compute CBEDs for all positions with sharding."""
+            """Compute CBEDs for all positions with sharding.
+
+            Parameters
+            ----------
+            positions : Float[Array, "P 2"]
+                Sharded scan positions in Angstroms.
+
+            Returns
+            -------
+            cbeds : Float[Array, "P H W"]
+                Raw CBED patterns for all positions.
+            """
             return jax.vmap(_process_single_position)(positions)
 
         sharded_positions = jax.device_put(scan_positions, in_sharding)
@@ -753,7 +918,18 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     clip_w: int = x_end - x_start
 
     def _clip_single_cbed(cbed: Float[Array, "H W"]) -> Float[Array, "Ho Wo"]:
-        """Clip and resize a single CBED pattern."""
+        """Clip a CBED to the extent region and resize.
+
+        Parameters
+        ----------
+        cbed : Float[Array, "H W"]
+            Raw CBED pattern in pixels.
+
+        Returns
+        -------
+        resized : Float[Array, "Ho Wo"]
+            Clipped and bilinearly resized CBED.
+        """
         clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
             cbed, (y_start, x_start), (clip_h, clip_w)
         )

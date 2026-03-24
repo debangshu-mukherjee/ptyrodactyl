@@ -2,35 +2,32 @@
 
 Extended Summary
 ----------------
-This module contains functions for reconstructing sample potentials from
-experimental ptychography data using various optimization algorithms.
-All functions support both single-slice and multi-slice reconstructions,
-with options for position correction and multi-modal probe handling.
-
-Submodules
-----------
-phase_recon
-    Inverse algorithms for ptychography reconstruction including single-slice,
-    position-corrected, and multi-modal reconstruction methods.
+Provides gradient-based optimization routines for reconstructing
+sample electrostatic potentials and electron probe functions from
+experimental 4D-STEM ptychographic datasets. All functions use
+JAX-compatible optimizers and support automatic differentiation.
+Supports single-slice and multi-slice reconstructions with
+options for position correction and multi-modal probe handling.
 
 Routine Listings
 ----------------
-single_slice_ptychography : function
-    Performs single-slice ptychography reconstruction.
-single_slice_poscorrected : function
-    Performs single-slice reconstruction with position correction.
-single_slice_multi_modal : function
-    Performs single-slice reconstruction with multi-modal probe.
-multi_slice_multi_modal : function
-    Performs multi-slice reconstruction with multi-modal probe.
+:func:`multi_slice_multi_modal`
+    Multi-slice reconstruction with position correction.
+:func:`single_slice_multi_modal`
+    Single-slice reconstruction with multi-modal probe and
+    position correction.
+:func:`single_slice_poscorrected`
+    Single-slice reconstruction with position correction.
+:func:`single_slice_ptychography`
+    Single-slice ptychography reconstruction of potential and
+    beam.
 
 Notes
 -----
-All reconstruction functions use JAX-compatible optimizers and support
-automatic differentiation. The functions are designed to work with
-experimental data and can handle various noise levels and experimental
-conditions. Input data should be properly preprocessed and validated
-using the factory functions from the tools module.
+All reconstruction functions use JAX-compatible optimizers and
+support automatic differentiation. Input data should be properly
+preprocessed and validated using the factory functions from the
+:mod:`ptyrodactyl.tools` module.
 """
 
 from .phase_recon import (

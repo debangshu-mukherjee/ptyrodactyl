@@ -52,11 +52,15 @@ Routine Listings
     Solve via alternating block updates following a schedule.
 """
 
-from typing import Callable, Tuple, NamedTuple, List, Optional
+from collections.abc import Callable
+from typing import NamedTuple
+
 import jax
 import jax.numpy as jnp
-import jax.lax as lax
-from jaxtyping import Float, Complex, Int, Array, PyTree
+from jax import lax
+from jaxtyping import Array, Complex, Float, PyTree
+
+from ptyrodactyl.jacobian.solvers import conjugate_gradient
 
 
 class ExitWaveParams(NamedTuple):
@@ -78,6 +82,7 @@ class ExitWaveParams(NamedTuple):
     :func:`make_ptycho_params` : Factory that validates and
         wraps raw arrays into parameter blocks.
     """
+
     wave: Complex[Array, "h w"]
 
 
@@ -104,6 +109,7 @@ class AberrationParams(NamedTuple):
     --------
     :func:`make_ptycho_params` : Factory function.
     """
+
     zernike_coeffs: Float[Array, "num_zernike"]
     aperture_mrad: Float[Array, ""]
     aperture_softness: Float[Array, ""]
@@ -131,6 +137,7 @@ class GeometryParams(NamedTuple):
     --------
     :func:`make_ptycho_params` : Factory function.
     """
+
     rotation_rad: Float[Array, ""]
     center_offset: Float[Array, "2"]
     ellipticity: Float[Array, "2"]
@@ -154,6 +161,7 @@ class PositionParams(NamedTuple):
     --------
     :func:`make_ptycho_params` : Factory function.
     """
+
     position_offsets: Float[Array, "num_positions 2"]
 
 
@@ -178,6 +186,7 @@ class ProbeModeParams(NamedTuple):
     --------
     :func:`make_ptycho_params` : Factory function.
     """
+
     mode_weights: Float[Array, "num_modes"]
     mode_phases: Float[Array, "num_modes h w"]
 
@@ -211,6 +220,7 @@ class PtychoParams(NamedTuple):
     :func:`make_ptycho_params` : Factory function.
     :func:`split_params` : Inverse extraction.
     """
+
     exit_wave: ExitWaveParams
     aberrations: AberrationParams
     geometry: GeometryParams
@@ -315,7 +325,13 @@ def make_ptycho_params(
 
 def split_params(
     params: PtychoParams,
-) -> Tuple[ExitWaveParams, AberrationParams, GeometryParams, PositionParams, ProbeModeParams]:
+) -> tuple[
+    ExitWaveParams,
+    AberrationParams,
+    GeometryParams,
+    PositionParams,
+    ProbeModeParams,
+]:
     """Extract individual parameter blocks from combined params.
 
     Parameters
@@ -412,6 +428,7 @@ def block_jacobian_operator(
     --------
     :func:`block_vjp_operator` : Adjoint operator.
     """
+
     def jvp_fn(
         block_tangent: PyTree,
     ) -> Float[Array, "num_pos det_h det_w"]:
@@ -428,15 +445,15 @@ def block_jacobian_operator(
         tangent_pos: PositionParams = zero_pos
         tangent_modes: ProbeModeParams = zero_modes
 
-        if block_name == 'exit_wave':
+        if block_name == "exit_wave":
             tangent_exit = block_tangent
-        elif block_name == 'aberrations':
+        elif block_name == "aberrations":
             tangent_aberr = block_tangent
-        elif block_name == 'geometry':
+        elif block_name == "geometry":
             tangent_geom = block_tangent
-        elif block_name == 'positions':
+        elif block_name == "positions":
             tangent_pos = block_tangent
-        elif block_name == 'probe_modes':
+        elif block_name == "probe_modes":
             tangent_modes = block_tangent
 
         full_tangent: PtychoParams = PtychoParams(
@@ -498,19 +515,22 @@ def block_vjp_operator(
         cotangent: Float[Array, "num_pos det_h det_w"],
     ) -> PyTree:
         """Compute J_block^T @ cotangent."""
-        full_grad: Tuple[PtychoParams] = full_vjp_fn(cotangent)
+        full_grad: tuple[PtychoParams] = full_vjp_fn(cotangent)
         params_grad: PtychoParams = full_grad[0]
 
-        if block_name == 'exit_wave':
+        if block_name == "exit_wave":
             return params_grad.exit_wave
-        elif block_name == 'aberrations':
+        if block_name == "aberrations":
             return params_grad.aberrations
-        elif block_name == 'geometry':
+        if block_name == "geometry":
             return params_grad.geometry
-        elif block_name == 'positions':
+        if block_name == "positions":
             return params_grad.positions
-        elif block_name == 'probe_modes':
+        if block_name == "probe_modes":
             return params_grad.probe_modes
+
+        msg = f"Unknown block_name: {block_name}"
+        raise ValueError(msg)
 
     return vjp_fn
 
@@ -608,7 +628,9 @@ def cross_block_jtj_operator(
     --------
     :func:`block_jtj_operator` : Diagonal-block variant.
     """
-    jvp_fn: Callable = block_jacobian_operator(forward_fn, params, block_name_col)
+    jvp_fn: Callable = block_jacobian_operator(
+        forward_fn, params, block_name_col
+    )
     vjp_fn: Callable = block_vjp_operator(forward_fn, params, block_name_row)
 
     def cross_jtj_fn(
@@ -659,7 +681,7 @@ def block_gauss_newton_step(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params: PtychoParams,
     data: Float[Array, "num_pos det_h det_w"],
-    block_names: List[str],
+    block_names: list[str],
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
 ) -> PtychoParams:
@@ -708,8 +730,6 @@ def block_gauss_newton_step(
     --------
     :func:`alternating_block_solve` : Full iterative solver.
     """
-    from ptyrodactyl.jacobian.solvers import conjugate_gradient
-
     prediction: Float[Array, "num_pos det_h det_w"] = forward_fn(params)
     residual: Float[Array, "num_pos det_h det_w"] = prediction - data
 
@@ -720,45 +740,63 @@ def block_gauss_newton_step(
     new_probe_modes: ProbeModeParams = params.probe_modes
 
     for block_name in block_names:
-        gradient: PyTree = compute_block_gradient(forward_fn, params, residual, block_name)
+        gradient: PyTree = compute_block_gradient(
+            forward_fn, params, residual, block_name
+        )
         jtj_fn: Callable = block_jtj_operator(forward_fn, params, block_name)
 
-        if block_name == 'exit_wave':
+        if block_name == "exit_wave":
             x0: PyTree = _tree_zeros_like(params.exit_wave)
-            step, _ = conjugate_gradient(jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance)
+            step, _ = conjugate_gradient(
+                jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
+            )
             new_wave: Complex[Array, "h w"] = params.exit_wave.wave - step.wave
             new_exit_wave = ExitWaveParams(wave=new_wave)
 
-        elif block_name == 'aberrations':
+        elif block_name == "aberrations":
             x0 = _tree_zeros_like(params.aberrations)
-            step, _ = conjugate_gradient(jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance)
+            step, _ = conjugate_gradient(
+                jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
+            )
             new_aberrations = AberrationParams(
-                zernike_coeffs=params.aberrations.zernike_coeffs - step.zernike_coeffs,
-                aperture_mrad=params.aberrations.aperture_mrad - step.aperture_mrad,
-                aperture_softness=params.aberrations.aperture_softness - step.aperture_softness,
+                zernike_coeffs=params.aberrations.zernike_coeffs
+                - step.zernike_coeffs,
+                aperture_mrad=params.aberrations.aperture_mrad
+                - step.aperture_mrad,
+                aperture_softness=params.aberrations.aperture_softness
+                - step.aperture_softness,
             )
 
-        elif block_name == 'geometry':
+        elif block_name == "geometry":
             x0 = _tree_zeros_like(params.geometry)
-            step, _ = conjugate_gradient(jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance)
+            step, _ = conjugate_gradient(
+                jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
+            )
             new_geometry = GeometryParams(
                 rotation_rad=params.geometry.rotation_rad - step.rotation_rad,
-                center_offset=params.geometry.center_offset - step.center_offset,
+                center_offset=params.geometry.center_offset
+                - step.center_offset,
                 ellipticity=params.geometry.ellipticity - step.ellipticity,
             )
 
-        elif block_name == 'positions':
+        elif block_name == "positions":
             x0 = _tree_zeros_like(params.positions)
-            step, _ = conjugate_gradient(jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance)
+            step, _ = conjugate_gradient(
+                jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
+            )
             new_positions = PositionParams(
-                position_offsets=params.positions.position_offsets - step.position_offsets,
+                position_offsets=params.positions.position_offsets
+                - step.position_offsets,
             )
 
-        elif block_name == 'probe_modes':
+        elif block_name == "probe_modes":
             x0 = _tree_zeros_like(params.probe_modes)
-            step, _ = conjugate_gradient(jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance)
+            step, _ = conjugate_gradient(
+                jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
+            )
             new_probe_modes = ProbeModeParams(
-                mode_weights=params.probe_modes.mode_weights - step.mode_weights,
+                mode_weights=params.probe_modes.mode_weights
+                - step.mode_weights,
                 mode_phases=params.probe_modes.mode_phases - step.mode_phases,
             )
 
@@ -777,11 +815,11 @@ def alternating_block_solve(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params_init: PtychoParams,
     data: Float[Array, "num_pos det_h det_w"],
-    block_schedule: List[List[str]],
+    block_schedule: list[list[str]],
     num_outer_iterations: int = 10,
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
-) -> Tuple[PtychoParams, Float[Array, "num_outer"]]:
+) -> tuple[PtychoParams, Float[Array, "num_outer"]]:
     """Solve via alternating block updates following a schedule.
 
     Extended Summary
@@ -836,6 +874,7 @@ def alternating_block_solve(
     --------
     :func:`block_gauss_newton_step` : Single-step primitive.
     """
+
     def compute_residual_norm(
         params: PtychoParams,
     ) -> Float[Array, ""]:
@@ -845,20 +884,24 @@ def alternating_block_solve(
         return jnp.sqrt(jnp.sum(jnp.abs(residual) ** 2))
 
     def outer_iteration(
-        carry: Tuple[PtychoParams, int],
+        carry: tuple[PtychoParams, int],
         _: None,
-    ) -> Tuple[Tuple[PtychoParams, int], Float[Array, ""]]:
+    ) -> tuple[tuple[PtychoParams, int], Float[Array, ""]]:
         """Execute one full pass through block_schedule."""
         params, iteration = carry
 
         def inner_step(
             params_inner: PtychoParams,
-            block_group: List[str],
+            block_group: list[str],
         ) -> PtychoParams:
             """Apply block GN step for one group."""
             return block_gauss_newton_step(
-                forward_fn, params_inner, data, block_group,
-                cg_max_iterations, cg_tolerance
+                forward_fn,
+                params_inner,
+                data,
+                block_group,
+                cg_max_iterations,
+                cg_tolerance,
             )
 
         updated_params: PtychoParams = params
@@ -869,9 +912,30 @@ def alternating_block_solve(
 
         return (updated_params, iteration + 1), residual_norm
 
-    initial_carry: Tuple[PtychoParams, int] = (params_init, 0)
+    initial_carry: tuple[PtychoParams, int] = (params_init, 0)
     (final_params, _), residual_history = lax.scan(
         outer_iteration, initial_carry, None, length=num_outer_iterations
     )
 
     return final_params, residual_history
+
+
+__all__: list[str] = [
+    # Classes
+    "AberrationParams",
+    "ExitWaveParams",
+    "GeometryParams",
+    "PositionParams",
+    "ProbeModeParams",
+    "PtychoParams",
+    # Functions
+    "alternating_block_solve",
+    "block_gauss_newton_step",
+    "block_jacobian_operator",
+    "block_jtj_operator",
+    "block_vjp_operator",
+    "compute_block_gradient",
+    "cross_block_jtj_operator",
+    "make_ptycho_params",
+    "split_params",
+]

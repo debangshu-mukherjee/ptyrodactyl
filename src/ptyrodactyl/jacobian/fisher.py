@@ -41,14 +41,16 @@ Routine Listings
     Information gain from adding measurements.
 """
 
-from typing import Callable, Tuple, NamedTuple
+from collections.abc import Callable
+from typing import NamedTuple
+
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
-import jax.lax as lax
-from jaxtyping import Float, Int, Array, PyTree
+from jax import lax
+from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree
 
-from ptyrodactyl.jacobian.operators import jtj_operator, jvp_operator, vjp_operator
+from ptyrodactyl.jacobian.operators import jtj_operator
 
 
 class FisherState(NamedTuple):
@@ -61,6 +63,7 @@ class FisherState(NamedTuple):
     iteration : Int[Array, ""]
         Current iteration index.
     """
+
     fisher_matrix: Float[Array, "n n"]
     iteration: Int[Array, ""]
 
@@ -86,7 +89,9 @@ def _tree_dot(
     """
     leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
     leaves_b, _ = jax.tree_util.tree_flatten(tree_b)
-    products: list = [jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b)]
+    products: list = [
+        jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b, strict=False)
+    ]
     result: Float[Array, ""] = jnp.sum(jnp.array(products))
     return result
 
@@ -151,7 +156,9 @@ def fisher_information(
         _, jvp_result = jax.jvp(forward_fn, (params,), (tangent_pytree,))
         return jvp_result
 
-    jacobian_matrix: Float[Array, "m n"] = jax.vmap(jacobian_column)(jnp.arange(n)).T
+    jacobian_matrix: Float[Array, "m n"] = jax.vmap(jacobian_column)(
+        jnp.arange(n)
+    ).T
     jtj: Float[Array, "n n"] = jnp.dot(jacobian_matrix.T, jacobian_matrix)
     fisher_matrix: Float[Array, "n n"] = jtj / noise_variance
 
@@ -207,7 +214,9 @@ def fisher_information_operator(
     ) -> PyTree:
         """Apply (1/sigma^2) J^T J to *vector*."""
         jtj_v: PyTree = jtj_fn(vector)
-        result: PyTree = jax.tree_util.tree_map(lambda x: inv_variance * x, jtj_v)
+        result: PyTree = jax.tree_util.tree_map(
+            lambda x: inv_variance * x, jtj_v
+        )
         return result
 
     return fisher_op
@@ -276,23 +285,27 @@ def fisher_diagonal(
         """Apply J^T J in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = jtj_fn(v_pytree)
-        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
+        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(
+            result_pytree
+        )[0]
         return result_flat
 
-    key: Array = jax.random.PRNGKey(random_seed)
+    key: PRNGKeyArray = jax.random.PRNGKey(random_seed)
 
     def hutchinson_sample(
         carry: Float[Array, "n"],
-        key_i: Array,
-    ) -> Tuple[Float[Array, "n"], None]:
+        key_i: PRNGKeyArray,
+    ) -> tuple[Float[Array, "n"], None]:
         """Accumulate one Hutchinson diagonal sample."""
-        z: Float[Array, "n"] = jax.random.rademacher(key_i, (n,)).astype(jnp.float32)
+        z: Float[Array, "n"] = jax.random.rademacher(key_i, (n,)).astype(
+            jnp.float32
+        )
         jtj_z: Float[Array, "n"] = jtj_flat_fn(z)
         sample: Float[Array, "n"] = z * jtj_z
         new_carry: Float[Array, "n"] = carry + sample
         return new_carry, None
 
-    keys: Array = jax.random.split(key, num_hutchinson_samples)
+    keys: PRNGKeyArray = jax.random.split(key, num_hutchinson_samples)
     diagonal_sum, _ = lax.scan(hutchinson_sample, jnp.zeros(n), keys)
     diagonal_mean: Float[Array, "n"] = diagonal_sum / num_hutchinson_samples
     fisher_diag_flat: Float[Array, "n"] = diagonal_mean / noise_variance
@@ -415,8 +428,12 @@ def effective_fisher(
     :func:`schur_complement` : The marginalisation step.
     :func:`fisher_information` : Full Fisher matrix.
     """
-    flat_interest, unflatten_interest = jax.flatten_util.ravel_pytree(params_interest)
-    flat_nuisance, unflatten_nuisance = jax.flatten_util.ravel_pytree(params_nuisance)
+    flat_interest, unflatten_interest = jax.flatten_util.ravel_pytree(
+        params_interest
+    )
+    flat_nuisance, unflatten_nuisance = jax.flatten_util.ravel_pytree(
+        params_nuisance
+    )
     p: int = flat_interest.shape[0]
     q: int = flat_nuisance.shape[0]
     n: int = p + q
@@ -431,17 +448,23 @@ def effective_fisher(
         params_n: PyTree = unflatten_nuisance(nuisance_part)
         return forward_fn((params_i, params_n))
 
-    combined_params: Float[Array, "n"] = jnp.concatenate([flat_interest, flat_nuisance])
+    combined_params: Float[Array, "n"] = jnp.concatenate(
+        [flat_interest, flat_nuisance]
+    )
 
     def jacobian_column(
         index: int,
     ) -> Float[Array, "m"]:
         """Compute column *index* of the combined Jacobian."""
         basis_vector: Float[Array, "n"] = jnp.zeros(n).at[index].set(1.0)
-        _, jvp_result = jax.jvp(combined_forward, (combined_params,), (basis_vector,))
+        _, jvp_result = jax.jvp(
+            combined_forward, (combined_params,), (basis_vector,)
+        )
         return jvp_result
 
-    jacobian_matrix: Float[Array, "m n"] = jax.vmap(jacobian_column)(jnp.arange(n)).T
+    jacobian_matrix: Float[Array, "m n"] = jax.vmap(jacobian_column)(
+        jnp.arange(n)
+    ).T
     jtj: Float[Array, "n n"] = jnp.dot(jacobian_matrix.T, jacobian_matrix)
     full_fisher: Float[Array, "n n"] = jtj / noise_variance
 
@@ -508,7 +531,9 @@ def fisher_eigenspectrum(
     n: int = flat_params.shape[0]
     k: int = num_lanczos_iterations
 
-    fisher_op: Callable = fisher_information_operator(forward_fn, params, noise_variance)
+    fisher_op: Callable = fisher_information_operator(
+        forward_fn, params, noise_variance
+    )
 
     def fisher_flat_fn(
         v_flat: Float[Array, "n"],
@@ -516,10 +541,12 @@ def fisher_eigenspectrum(
         """Apply Fisher operator in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = fisher_op(v_pytree)
-        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
+        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(
+            result_pytree
+        )[0]
         return result_flat
 
-    key: Array = jax.random.PRNGKey(random_seed)
+    key: PRNGKeyArray = jax.random.PRNGKey(random_seed)
     v0: Float[Array, "n"] = jax.random.normal(key, (n,))
     v0_normalized: Float[Array, "n"] = v0 / jnp.linalg.norm(v0)
 
@@ -530,8 +557,18 @@ def fisher_eigenspectrum(
 
     def lanczos_step(
         iteration: int,
-        carry: Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]],
-    ) -> Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]]:
+        carry: tuple[
+            Float[Array, "n"],
+            Float[Array, "n"],
+            Float[Array, "k"],
+            Float[Array, "k"],
+        ],
+    ) -> tuple[
+        Float[Array, "n"],
+        Float[Array, "n"],
+        Float[Array, "k"],
+        Float[Array, "k"],
+    ]:
         """Execute one Lanczos iteration."""
         v_p, v_c, alphas, betas = carry
         w: Float[Array, "n"] = fisher_flat_fn(v_c)
@@ -552,12 +589,12 @@ def fisher_eigenspectrum(
 
         return (v_c, v_next, alphas_new, betas_new)
 
-    _, _, alpha, beta = lax.fori_loop(0, k, lanczos_step, (v_prev, v_curr, alpha, beta))
+    _, _, alpha, beta = lax.fori_loop(
+        0, k, lanczos_step, (v_prev, v_curr, alpha, beta)
+    )
 
     tridiag_matrix: Float[Array, "k k"] = (
-        jnp.diag(alpha) +
-        jnp.diag(beta[:-1], k=1) +
-        jnp.diag(beta[:-1], k=-1)
+        jnp.diag(alpha) + jnp.diag(beta[:-1], k=1) + jnp.diag(beta[:-1], k=-1)
     )
 
     eigenvalues_all: Float[Array, "k"] = jnp.linalg.eigvalsh(tridiag_matrix)
@@ -601,7 +638,9 @@ def a_optimality(
         A-optimality value (trace of inverse Fisher).
     """
     n: int = fisher_matrix.shape[0]
-    fisher_reg: Float[Array, "n n"] = fisher_matrix + regularization * jnp.eye(n)
+    fisher_reg: Float[Array, "n n"] = fisher_matrix + regularization * jnp.eye(
+        n
+    )
     fisher_inv: Float[Array, "n n"] = jnp.linalg.inv(fisher_reg)
     criterion: Float[Array, ""] = jnp.trace(fisher_inv)
     return criterion
@@ -643,9 +682,13 @@ def d_optimality(
         D-optimality value (log determinant of Fisher).
     """
     n: int = fisher_matrix.shape[0]
-    fisher_reg: Float[Array, "n n"] = fisher_matrix + regularization * jnp.eye(n)
+    fisher_reg: Float[Array, "n n"] = fisher_matrix + regularization * jnp.eye(
+        n
+    )
     eigenvalues: Float[Array, "n"] = jnp.linalg.eigvalsh(fisher_reg)
-    log_det: Float[Array, ""] = jnp.sum(jnp.log(jnp.maximum(eigenvalues, 1e-12)))
+    log_det: Float[Array, ""] = jnp.sum(
+        jnp.log(jnp.maximum(eigenvalues, 1e-12))
+    )
     return log_det
 
 
@@ -715,7 +758,9 @@ def stack_fisher(
     combined_fisher : Float[Array, "n n"]
         Weighted sum of Fisher matrices.
     """
-    weighted_matrices: Float[Array, "k n n"] = fisher_matrices * weights[:, None, None]
+    weighted_matrices: Float[Array, "k n n"] = (
+        fisher_matrices * weights[:, None, None]
+    )
     combined_fisher: Float[Array, "n n"] = jnp.sum(weighted_matrices, axis=0)
     return combined_fisher
 
@@ -782,15 +827,19 @@ def optimal_weights_e_criterion(
         """Project *weights* onto the probability simplex."""
         weights_clipped: Float[Array, "k"] = jnp.maximum(weights, 0.0)
         weights_sum: Float[Array, ""] = jnp.sum(weights_clipped)
-        weights_normalized: Float[Array, "k"] = weights_clipped / (weights_sum + 1e-12)
+        weights_normalized: Float[Array, "k"] = weights_clipped / (
+            weights_sum + 1e-12
+        )
         return weights_normalized
 
     def optimization_step(
-        iteration: int,
+        _iteration: int,
         weights: Float[Array, "k"],
     ) -> Float[Array, "k"]:
         """One projected gradient ascent step."""
-        combined_fisher: Float[Array, "n n"] = stack_fisher(fisher_matrices, weights)
+        combined_fisher: Float[Array, "n n"] = stack_fisher(
+            fisher_matrices, weights
+        )
         eigenvalues, eigenvectors = jnp.linalg.eigh(combined_fisher)
         min_idx: Int[Array, ""] = jnp.argmin(eigenvalues)
         min_eigenvector: Float[Array, "n"] = eigenvectors[:, min_idx]
@@ -801,7 +850,9 @@ def optimal_weights_e_criterion(
             """Compute v^T F_i v for min eigenvector v."""
             return jnp.dot(min_eigenvector, jnp.dot(fisher_i, min_eigenvector))
 
-        gradient: Float[Array, "k"] = jax.vmap(gradient_component)(fisher_matrices)
+        gradient: Float[Array, "k"] = jax.vmap(gradient_component)(
+            fisher_matrices
+        )
         weights_updated: Float[Array, "k"] = weights + learning_rate * gradient
         weights_projected: Float[Array, "k"] = project_simplex(weights_updated)
         return weights_projected
@@ -849,7 +900,9 @@ def condition_number(
     """
     eigenvalues: Float[Array, "n"] = jnp.linalg.eigvalsh(fisher_matrix)
     lambda_max: Float[Array, ""] = jnp.max(eigenvalues)
-    lambda_min: Float[Array, ""] = jnp.maximum(jnp.min(eigenvalues), regularization)
+    lambda_min: Float[Array, ""] = jnp.maximum(
+        jnp.min(eigenvalues), regularization
+    )
     kappa: Float[Array, ""] = lambda_max / lambda_min
     return kappa
 
@@ -898,3 +951,23 @@ def information_gain(
     log_det_after: Float[Array, ""] = d_optimality(fisher_after)
     gain: Float[Array, ""] = log_det_after - log_det_before
     return gain
+
+
+__all__: list[str] = [
+    # Classes
+    "FisherState",
+    # Functions
+    "a_optimality",
+    "condition_number",
+    "d_optimality",
+    "e_optimality",
+    "effective_fisher",
+    "fisher_diagonal",
+    "fisher_eigenspectrum",
+    "fisher_information",
+    "fisher_information_operator",
+    "information_gain",
+    "optimal_weights_e_criterion",
+    "schur_complement",
+    "stack_fisher",
+]

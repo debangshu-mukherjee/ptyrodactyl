@@ -1491,7 +1491,9 @@ def kirkland_potentials_crystal(
     """
     positions: Float[Array, " N 3"] = crystal_data.positions
     atomic_numbers: Int[Array, " N"] = crystal_data.atomic_numbers
-    assert crystal_data.lattice is not None, "CrystalData.lattice must not be None"
+    if crystal_data.lattice is None:
+        msg = "CrystalData.lattice must not be None"
+        raise ValueError(msg)
     lattice: Float[Array, " 3 3"] = crystal_data.lattice
 
     positions, atomic_numbers = _apply_repeats_or_return(
@@ -1552,3 +1554,11 @@ def kirkland_potentials_crystal(
         calib=pixel_size,
     )
     return pot_slices
+
+
+__all__: list[str] = [
+    "bessel_kv",
+    "contrast_stretch",
+    "kirkland_potentials_crystal",
+    "single_atom_potential",
+]

@@ -137,10 +137,14 @@ def atomic_symbol(symbol_string: str) -> ScalarInt:
 
     normalized_symbol: str = cleaned_symbol.capitalize()
     if normalized_symbol not in _ATOMIC_NUMBERS:
-        available_symbols: str = ", ".join(sorted(_ATOMIC_NUMBERS.keys()))
-        raise KeyError(
-            f"Atomic symbol '{symbol_string}' not found. Available symbols: {available_symbols}"
+        available: str = ", ".join(
+            sorted(_ATOMIC_NUMBERS.keys())
         )
+        msg = (
+            f"Atomic symbol '{symbol_string}' "
+            f"not found. Available symbols: {available}"
+        )
+        raise KeyError(msg)
 
     atomic_number: ScalarInt = _ATOMIC_NUMBERS[normalized_symbol]
     return atomic_number
@@ -643,3 +647,12 @@ def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
         pass
 
     return parse_poscar(file_path)
+
+
+__all__: list[str] = [
+    "atomic_symbol",
+    "kirkland_potentials",
+    "parse_crystal",
+    "parse_poscar",
+    "parse_xyz",
+]

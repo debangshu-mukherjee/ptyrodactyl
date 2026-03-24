@@ -954,3 +954,9 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         voltage_kv=voltage_kv,
     )
     return stem4d_result
+
+
+__all__: list[str] = [
+    "crystal2stem4d",
+    "crystal2stem4d_tiled",
+]

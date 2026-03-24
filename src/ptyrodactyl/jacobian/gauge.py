@@ -28,12 +28,13 @@ Routine Listings
     Distance between two points modulo gauge.
 """
 
-from typing import Callable, Tuple
+from collections.abc import Callable
+
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
-import jax.lax as lax
-from jaxtyping import Float, Int, Array, PyTree
+from jax import lax
+from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree
 
 from ptyrodactyl.jacobian.operators import jtj_operator
 
@@ -59,7 +60,9 @@ def _tree_dot(
     """
     leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
     leaves_b, _ = jax.tree_util.tree_flatten(tree_b)
-    products: list = [jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b)]
+    products: list = [
+        jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b, strict=False)
+    ]
     result: Float[Array, ""] = jnp.sum(jnp.array(products))
     return result
 
@@ -136,9 +139,9 @@ def nullspace_vectors_lanczos(
     params: PyTree,
     num_vectors: int = 10,
     num_lanczos_iterations: int = 100,
-    threshold: float = 1e-6,
+    threshold: float = 1e-6,  # noqa: ARG001
     random_seed: int = 42,
-) -> Tuple[Float[Array, "num_vectors n"], Float[Array, "num_vectors"]]:
+) -> tuple[Float[Array, "num_vectors n"], Float[Array, "num_vectors"]]:
     r"""Estimate basis vectors for the Jacobian nullspace.
 
     Extended Summary
@@ -200,10 +203,12 @@ def nullspace_vectors_lanczos(
         """Apply J^T J in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = jtj_pytree_fn(v_pytree)
-        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
+        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(
+            result_pytree
+        )[0]
         return result_flat
 
-    key: Array = jax.random.PRNGKey(random_seed)
+    key: PRNGKeyArray = jax.random.PRNGKey(random_seed)
     v0: Float[Array, "n"] = jax.random.normal(key, (n,))
     v0_norm: Float[Array, ""] = jnp.linalg.norm(v0)
     v0_normalized: Float[Array, "n"] = v0 / v0_norm
@@ -215,8 +220,10 @@ def nullspace_vectors_lanczos(
 
     def lanczos_body(
         iteration: int,
-        carry: Tuple[Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]],
-    ) -> Tuple[Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]]:
+        carry: tuple[
+            Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]
+        ],
+    ) -> tuple[Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]]:
         """Execute one Lanczos iteration."""
         vectors, alphas, betas = carry
         v_curr: Float[Array, "n"] = vectors[iteration]
@@ -253,24 +260,32 @@ def nullspace_vectors_lanczos(
     )
 
     tridiag_matrix: Float[Array, "k k"] = (
-        jnp.diag(alpha) +
-        jnp.diag(beta[:-1], k=1) +
-        jnp.diag(beta[:-1], k=-1)
+        jnp.diag(alpha) + jnp.diag(beta[:-1], k=1) + jnp.diag(beta[:-1], k=-1)
     )
 
     eigenvalues_tri, eigenvectors_tri = jnp.linalg.eigh(tridiag_matrix)
 
-    ritz_vectors: Float[Array, "k n"] = jnp.dot(eigenvectors_tri.T, lanczos_vectors)
+    ritz_vectors: Float[Array, "k n"] = jnp.dot(
+        eigenvectors_tri.T, lanczos_vectors
+    )
 
     sorted_indices: Int[Array, "k"] = jnp.argsort(eigenvalues_tri)
     eigenvalues_sorted: Float[Array, "k"] = eigenvalues_tri[sorted_indices]
     ritz_vectors_sorted: Float[Array, "k n"] = ritz_vectors[sorted_indices]
 
-    eigenvalues_out: Float[Array, "num_vectors"] = eigenvalues_sorted[:num_vectors]
-    nullspace_basis: Float[Array, "num_vectors n"] = ritz_vectors_sorted[:num_vectors]
+    eigenvalues_out: Float[Array, "num_vectors"] = eigenvalues_sorted[
+        :num_vectors
+    ]
+    nullspace_basis: Float[Array, "num_vectors n"] = ritz_vectors_sorted[
+        :num_vectors
+    ]
 
-    norms: Float[Array, "num_vectors"] = jnp.linalg.norm(nullspace_basis, axis=1, keepdims=True)
-    nullspace_basis_normalized: Float[Array, "num_vectors n"] = nullspace_basis / (norms + 1e-12)
+    norms: Float[Array, "num_vectors"] = jnp.linalg.norm(
+        nullspace_basis, axis=1, keepdims=True
+    )
+    nullspace_basis_normalized: Float[Array, "num_vectors n"] = (
+        nullspace_basis / (norms + 1e-12)
+    )
 
     return nullspace_basis_normalized, eigenvalues_out
 
@@ -329,20 +344,33 @@ def project_to_nullspace(
     :func:`nullspace_vectors_lanczos` : Basis computation.
     """
     nullspace_basis, eigenvalues = nullspace_vectors_lanczos(
-        forward_fn, params, num_nullspace_vectors,
-        num_lanczos_iterations=100, threshold=threshold, random_seed=random_seed
+        forward_fn,
+        params,
+        num_nullspace_vectors,
+        num_lanczos_iterations=100,
+        threshold=threshold,
+        random_seed=random_seed,
     )
 
-    flat_perturbation, unflatten_fn = jax.flatten_util.ravel_pytree(perturbation)
+    flat_perturbation, unflatten_fn = jax.flatten_util.ravel_pytree(
+        perturbation
+    )
     n: int = flat_perturbation.shape[0]
-    num_vecs: int = nullspace_basis.shape[0]
 
-    is_nullspace: Float[Array, "num_vectors"] = (eigenvalues < threshold).astype(jnp.float32)
+    is_nullspace: Float[Array, "num_vectors"] = (
+        eigenvalues < threshold
+    ).astype(jnp.float32)
 
-    coefficients: Float[Array, "num_vectors"] = jnp.dot(nullspace_basis, flat_perturbation)
-    masked_coefficients: Float[Array, "num_vectors"] = coefficients * is_nullspace
+    coefficients: Float[Array, "num_vectors"] = jnp.dot(
+        nullspace_basis, flat_perturbation
+    )
+    masked_coefficients: Float[Array, "num_vectors"] = (
+        coefficients * is_nullspace
+    )
 
-    gauge_component_flat: Float[Array, "n"] = jnp.dot(masked_coefficients, nullspace_basis)
+    gauge_component_flat: Float[Array, "n"] = jnp.dot(
+        masked_coefficients, nullspace_basis
+    )
     gauge_component: PyTree = unflatten_fn(gauge_component_flat)
 
     return gauge_component
@@ -396,8 +424,12 @@ def project_to_observable(
     :func:`project_to_nullspace` : Complementary projection.
     """
     gauge_component: PyTree = project_to_nullspace(
-        forward_fn, params, perturbation,
-        num_nullspace_vectors, threshold, random_seed
+        forward_fn,
+        params,
+        perturbation,
+        num_nullspace_vectors,
+        threshold,
+        random_seed,
     )
     observable_component: PyTree = _tree_sub(perturbation, gauge_component)
     return observable_component
@@ -410,7 +442,7 @@ def decompose_gauge_observable(
     num_nullspace_vectors: int = 20,
     threshold: float = 1e-6,
     random_seed: int = 42,
-) -> Tuple[PyTree, PyTree]:
+) -> tuple[PyTree, PyTree]:
     r"""Decompose a perturbation into gauge and observable parts.
 
     Extended Summary
@@ -461,8 +493,12 @@ def decompose_gauge_observable(
     :func:`project_to_observable` : Observable projection.
     """
     gauge_component: PyTree = project_to_nullspace(
-        forward_fn, params, perturbation,
-        num_nullspace_vectors, threshold, random_seed
+        forward_fn,
+        params,
+        perturbation,
+        num_nullspace_vectors,
+        threshold,
+        random_seed,
     )
     observable_component: PyTree = _tree_sub(perturbation, gauge_component)
     return gauge_component, observable_component
@@ -524,10 +560,12 @@ def effective_rank(
         """Apply J^T J in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = jtj_pytree_fn(v_pytree)
-        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
+        result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(
+            result_pytree
+        )[0]
         return result_flat
 
-    key: Array = jax.random.PRNGKey(random_seed)
+    key: PRNGKeyArray = jax.random.PRNGKey(random_seed)
     v0: Float[Array, "n"] = jax.random.normal(key, (n,))
     v0_norm: Float[Array, ""] = jnp.linalg.norm(v0)
     v0_normalized: Float[Array, "n"] = v0 / v0_norm
@@ -540,8 +578,18 @@ def effective_rank(
 
     def lanczos_step(
         iteration: int,
-        carry: Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]],
-    ) -> Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]]:
+        carry: tuple[
+            Float[Array, "n"],
+            Float[Array, "n"],
+            Float[Array, "k"],
+            Float[Array, "k"],
+        ],
+    ) -> tuple[
+        Float[Array, "n"],
+        Float[Array, "n"],
+        Float[Array, "k"],
+        Float[Array, "k"],
+    ]:
         """Execute one Lanczos iteration."""
         v_p, v_c, alphas, betas = carry
         w: Float[Array, "n"] = jtj_flat_fn(v_c)
@@ -567,9 +615,7 @@ def effective_rank(
     )
 
     tridiag_matrix: Float[Array, "k k"] = (
-        jnp.diag(alpha) +
-        jnp.diag(beta[:-1], k=1) +
-        jnp.diag(beta[:-1], k=-1)
+        jnp.diag(alpha) + jnp.diag(beta[:-1], k=1) + jnp.diag(beta[:-1], k=-1)
     )
 
     eigenvalues: Float[Array, "k"] = jnp.linalg.eigvalsh(tridiag_matrix)
@@ -577,7 +623,9 @@ def effective_rank(
     singular_values: Float[Array, "k"] = jnp.sqrt(eigenvalues_positive)
 
     threshold_squared: Float[Array, ""] = jnp.array(noise_floor)
-    above_threshold: Float[Array, "k"] = (singular_values > threshold_squared).astype(jnp.int32)
+    above_threshold: Float[Array, "k"] = (
+        singular_values > threshold_squared
+    ).astype(jnp.int32)
     rank: Int[Array, ""] = jnp.sum(above_threshold)
 
     return rank
@@ -631,10 +679,16 @@ def gauge_invariant_norm(
     :func:`project_to_observable` : The projection step.
     """
     observable_component: PyTree = project_to_observable(
-        forward_fn, params, perturbation,
-        num_nullspace_vectors, threshold, random_seed
+        forward_fn,
+        params,
+        perturbation,
+        num_nullspace_vectors,
+        threshold,
+        random_seed,
     )
-    norm_squared: Float[Array, ""] = _tree_dot(observable_component, observable_component)
+    norm_squared: Float[Array, ""] = _tree_dot(
+        observable_component, observable_component
+    )
     norm: Float[Array, ""] = jnp.sqrt(norm_squared)
     return norm
 
@@ -694,23 +748,33 @@ def random_gauge_direction(
     :func:`gauge_orbit_distance` : Distance modulo gauge.
     """
     nullspace_basis, eigenvalues = nullspace_vectors_lanczos(
-        forward_fn, params, num_nullspace_vectors,
-        num_lanczos_iterations=100, threshold=threshold, random_seed=random_seed
+        forward_fn,
+        params,
+        num_nullspace_vectors,
+        num_lanczos_iterations=100,
+        threshold=threshold,
+        random_seed=random_seed,
     )
 
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
     num_vecs: int = nullspace_basis.shape[0]
 
-    is_nullspace: Float[Array, "num_vectors"] = (eigenvalues < threshold).astype(jnp.float32)
+    is_nullspace: Float[Array, "num_vectors"] = (
+        eigenvalues < threshold
+    ).astype(jnp.float32)
 
     key: Array = jax.random.PRNGKey(direction_seed)
-    random_coeffs: Float[Array, "num_vectors"] = jax.random.normal(key, (num_vecs,))
+    random_coeffs: Float[Array, "num_vectors"] = jax.random.normal(
+        key, (num_vecs,)
+    )
     masked_coeffs: Float[Array, "num_vectors"] = random_coeffs * is_nullspace
 
     direction_flat: Float[Array, "n"] = jnp.dot(masked_coeffs, nullspace_basis)
     direction_norm: Float[Array, ""] = jnp.linalg.norm(direction_flat)
-    direction_normalized: Float[Array, "n"] = direction_flat / (direction_norm + 1e-12)
+    direction_normalized: Float[Array, "n"] = direction_flat / (
+        direction_norm + 1e-12
+    )
 
     gauge_direction: PyTree = unflatten_fn(direction_normalized)
     return gauge_direction
@@ -772,7 +836,23 @@ def gauge_orbit_distance(
         lambda a, b: 0.5 * (a + b), params_a, params_b
     )
     distance: Float[Array, ""] = gauge_invariant_norm(
-        forward_fn, midpoint, difference,
-        num_nullspace_vectors, threshold, random_seed
+        forward_fn,
+        midpoint,
+        difference,
+        num_nullspace_vectors,
+        threshold,
+        random_seed,
     )
     return distance
+
+
+__all__: list[str] = [
+    "decompose_gauge_observable",
+    "effective_rank",
+    "gauge_invariant_norm",
+    "gauge_orbit_distance",
+    "nullspace_vectors_lanczos",
+    "project_to_nullspace",
+    "project_to_observable",
+    "random_gauge_direction",
+]

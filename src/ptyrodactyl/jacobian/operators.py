@@ -19,10 +19,10 @@ Routine Listings
     Gauss-Newton Hessian-vector product for least-squares.
 """
 
-from typing import Callable, Tuple, Any
+from collections.abc import Callable
+
 import jax
-import jax.numpy as jnp
-from jaxtyping import Float, Array, PyTree
+from jaxtyping import Array, Float, PyTree
 
 
 def jvp_operator(
@@ -60,6 +60,7 @@ def jvp_operator(
     jvp_fn : Callable[[PyTree], Float[Array, "..."]]
         Function that computes J @ v for any tangent vector v.
     """
+
     def jvp_fn(
         tangent_vector: PyTree,
     ) -> Float[Array, "..."]:
@@ -113,7 +114,7 @@ def vjp_operator(
         cotangent_vector: Float[Array, "..."],
     ) -> PyTree:
         """Compute J^T @ cotangent_vector via reverse-mode AD."""
-        result_tuple: Tuple[PyTree, ...] = vjp_fn_raw(cotangent_vector)
+        result_tuple: tuple[PyTree, ...] = vjp_fn_raw(cotangent_vector)
         return result_tuple[0]
 
     return vjp_fn
@@ -162,7 +163,7 @@ def jtj_operator(
     ) -> PyTree:
         """Compute J^T J @ vector via JVP then VJP."""
         _, forward_tangent = jax.jvp(forward_fn, (params,), (vector,))
-        backward_result: Tuple[PyTree, ...] = vjp_fn_raw(forward_tangent)
+        backward_result: tuple[PyTree, ...] = vjp_fn_raw(forward_tangent)
         return backward_result[0]
 
     return jtj_fn
@@ -171,7 +172,7 @@ def jtj_operator(
 def hvp_gauss_newton(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
-    residual: Float[Array, "..."],
+    residual: Float[Array, "..."],  # noqa: ARG001
 ) -> Callable[[PyTree], PyTree]:
     r"""Construct the Gauss-Newton Hessian-vector product operator.
 
@@ -214,3 +215,11 @@ def hvp_gauss_newton(
     :func:`jtj_operator` : The underlying operator.
     """
     return jtj_operator(forward_fn, params)
+
+
+__all__: list[str] = [
+    "hvp_gauss_newton",
+    "jtj_operator",
+    "jvp_operator",
+    "vjp_operator",
+]

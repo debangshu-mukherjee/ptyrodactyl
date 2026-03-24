@@ -40,7 +40,7 @@ preprocessed and validated using the factory functions from
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Any, Dict, Optional, Tuple, Union
+from beartype.typing import Any, Dict, Tuple, Union
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 import ptyrodactyl.tools as ptt
@@ -1348,3 +1348,12 @@ def multi_slice_multi_modal(
             intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
 
     return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
+
+
+__all__: list[str] = [
+    "OPTIMIZERS",
+    "multi_slice_multi_modal",
+    "single_slice_multi_modal",
+    "single_slice_poscorrected",
+    "single_slice_ptychography",
+]

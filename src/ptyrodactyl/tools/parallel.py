@@ -26,14 +26,14 @@ from collections.abc import Sequence
 
 import jax
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
-from jaxtyping import Array
+from jaxtyping import Array, Num
 
 
 def shard_array(
-    input_array: Array,
+    input_array: Num[Array, " ..."],
     shard_axes: int | Sequence[int],
     devices: Sequence[jax.Device] | None = None,
-) -> Array:
+) -> Num[Array, " ..."]:
     """Shard an array across specified axes and devices.
 
     Extended Summary
@@ -87,3 +87,8 @@ def shard_array(
     sharding = NamedSharding(mesh, pspec)
     with mesh:
         return jax.device_put(input_array, sharding)
+
+
+__all__: list[str] = [
+    "shard_array",
+]

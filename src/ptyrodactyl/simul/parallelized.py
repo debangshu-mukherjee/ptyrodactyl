@@ -596,3 +596,9 @@ def stem4d_sharded(
     )
 
     return stem4d_data_sharded
+
+
+__all__: list[str] = [
+    "clip_cbed",
+    "stem4d_sharded",
+]

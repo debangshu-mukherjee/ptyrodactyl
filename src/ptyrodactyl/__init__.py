@@ -8,6 +8,8 @@ All functions are fully differentiable and JIT-compilable.
 
 Submodules
 ----------
+born
+    Convergent Born series simulations
 invert
     Electron microscopy reconstructions, ptychography and focal series.
 simul
@@ -51,6 +53,7 @@ os.environ.setdefault(
 from . import invert, jacobian, simul, tools, workflows
 
 __all__: list[str] = [
+    "born",
     "invert",
     "jacobian",
     "simul",

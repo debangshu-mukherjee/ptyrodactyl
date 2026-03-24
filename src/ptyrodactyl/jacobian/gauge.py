@@ -1,29 +1,31 @@
-"""
-Module: ptyrodactyl.jacobian.gauge
-----------------------------------
+r"""Gauge structure analysis for ptychographic inverse problems.
 
-Gauge structure analysis for ptychographic inverse problems.
+Extended Summary
+----------------
+The nullspace of the Jacobian defines the gauge subspace:
+directions in parameter space that produce no change in
+measurements.  This module provides tools to identify, project
+onto, and quotient out gauge freedom.
 
-The nullspace of the Jacobian defines the gauge subspace: directions
-in parameter space that produce no change in measurements. This module
-provides tools to identify, project onto, and quotient out gauge freedom.
-
-Functions
----------
-- `nullspace_vectors_lanczos`:
-    Estimate nullspace basis vectors via shifted inverse Lanczos
-- `project_to_nullspace`:
-    Project parameter perturbation onto gauge subspace
-- `project_to_observable`:
-    Project parameter perturbation onto observable subspace
-- `decompose_gauge_observable`:
-    Split vector into gauge and observable components
-- `effective_rank`:
-    Count observable dimensions above noise threshold
-- `gauge_invariant_norm`:
-    Compute norm in quotient space (modulo gauge)
-- `random_gauge_direction`:
-    Sample a random direction from the gauge subspace
+Routine Listings
+----------------
+:func:`nullspace_vectors_lanczos`
+    Estimate nullspace basis vectors via shifted inverse
+    Lanczos.
+:func:`project_to_nullspace`
+    Project parameter perturbation onto gauge subspace.
+:func:`project_to_observable`
+    Project parameter perturbation onto observable subspace.
+:func:`decompose_gauge_observable`
+    Split vector into gauge and observable components.
+:func:`effective_rank`
+    Count observable dimensions above noise threshold.
+:func:`gauge_invariant_norm`
+    Compute norm in quotient space (modulo gauge).
+:func:`random_gauge_direction`
+    Sample a random direction from the gauge subspace.
+:func:`gauge_orbit_distance`
+    Distance between two points modulo gauge.
 """
 
 from typing import Callable, Tuple
@@ -39,21 +41,19 @@ def _tree_dot(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute inner product between two PyTrees with matching structure.
+    """Compute inner product between two PyTrees.
 
     Parameters
     ----------
-    - `tree_a` (PyTree):
+    tree_a : PyTree
         First PyTree operand.
-    - `tree_b` (PyTree):
-        Second PyTree operand with same structure as tree_a.
+    tree_b : PyTree
+        Second PyTree operand with same structure as
+        *tree_a*.
 
     Returns
     -------
-    - `result` (Float[Array, ""]):
+    result : Float[Array, ""]
         Sum of element-wise products across all leaves.
     """
     leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
@@ -67,21 +67,19 @@ def _tree_add(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Element-wise addition of two PyTrees with matching structure.
+    """Element-wise addition of two PyTrees.
 
     Parameters
     ----------
-    - `tree_a` (PyTree):
+    tree_a : PyTree
         First PyTree operand.
-    - `tree_b` (PyTree):
-        Second PyTree operand with same structure as tree_a.
+    tree_b : PyTree
+        Second PyTree operand with same structure as
+        *tree_a*.
 
     Returns
     -------
-    - `result` (PyTree):
+    result : PyTree
         PyTree with element-wise sum of leaves.
     """
     result: PyTree = jax.tree_util.tree_map(lambda a, b: a + b, tree_a, tree_b)
@@ -92,21 +90,18 @@ def _tree_scalar_mul(
     scalar: Float[Array, ""],
     tree: PyTree,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Multiply all leaves of a PyTree by a scalar.
+    """Multiply all leaves of a PyTree by a scalar.
 
     Parameters
     ----------
-    - `scalar` (Float[Array, ""]):
+    scalar : Float[Array, ""]
         Scalar multiplier.
-    - `tree` (PyTree):
+    tree : PyTree
         PyTree to scale.
 
     Returns
     -------
-    - `result` (PyTree):
+    result : PyTree
         Scaled PyTree.
     """
     result: PyTree = jax.tree_util.tree_map(lambda x: scalar * x, tree)
@@ -117,21 +112,18 @@ def _tree_sub(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Element-wise subtraction of two PyTrees with matching structure.
+    """Element-wise subtraction of two PyTrees.
 
     Parameters
     ----------
-    - `tree_a` (PyTree):
+    tree_a : PyTree
         First PyTree operand.
-    - `tree_b` (PyTree):
-        Second PyTree operand to subtract from tree_a.
+    tree_b : PyTree
+        Second PyTree operand to subtract from *tree_a*.
 
     Returns
     -------
-    - `result` (PyTree):
+    result : PyTree
         PyTree with element-wise difference of leaves.
     """
     result: PyTree = jax.tree_util.tree_map(lambda a, b: a - b, tree_a, tree_b)
@@ -146,45 +138,54 @@ def nullspace_vectors_lanczos(
     threshold: float = 1e-6,
     random_seed: int = 42,
 ) -> Tuple[Float[Array, "num_vectors n"], Float[Array, "num_vectors"]]:
-    """
-    Description
-    -----------
-    Estimate basis vectors for the nullspace of the Jacobian.
+    r"""Estimate basis vectors for the Jacobian nullspace.
 
-    Uses Lanczos iteration on JᵀJ to find eigenvectors corresponding
-    to the smallest eigenvalues. Eigenvectors with eigenvalue below
-    threshold are considered nullspace (gauge) directions.
+    Extended Summary
+    ----------------
+    Uses Lanczos iteration on :math:`J^\top J` to find
+    eigenvectors corresponding to the smallest eigenvalues.
+    Eigenvectors with eigenvalue below *threshold* are
+    considered nullspace (gauge) directions.
+
+    Implementation Logic
+    --------------------
+    1. **Flatten parameters** --
+       Ravel to vector form for Lanczos.
+    2. **Construct J^T J** --
+       Build a flattened-space operator.
+    3. **Run Lanczos** --
+       Build the tridiagonal matrix from *k* iterations.
+    4. **Solve tridiagonal eigenproblem** --
+       Compute eigenpairs.
+    5. **Reconstruct Ritz vectors** --
+       Map tridiagonal eigenvectors back to parameter space.
+    6. **Sort and truncate** --
+       Return the *num_vectors* smallest eigenpairs,
+       normalised to unit length.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `num_vectors` (int):
-        Maximum number of nullspace vectors to return. Default 10.
-    - `num_lanczos_iterations` (int):
-        Number of Lanczos iterations. Default 100.
-    - `threshold` (float):
-        Eigenvalue threshold for nullspace membership. Default 1e-6.
-    - `random_seed` (int):
-        Seed for random starting vector. Default 42.
+    num_vectors : int
+        Maximum number of nullspace vectors to return.
+        Default 10.
+    num_lanczos_iterations : int
+        Number of Lanczos iterations.  Default 100.
+    threshold : float
+        Eigenvalue threshold for nullspace membership.
+        Default 1e-6.
+    random_seed : int
+        Seed for random starting vector.  Default 42.
 
     Returns
     -------
-    - `nullspace_basis` (Float[Array, "num_vectors n"]):
+    nullspace_basis : Float[Array, "num_vectors n"]
         Orthonormal basis vectors for approximate nullspace.
-    - `eigenvalues` (Float[Array, "num_vectors"]):
+    eigenvalues : Float[Array, "num_vectors"]
         Corresponding eigenvalues (squared singular values).
-
-    Flow
-    ----
-    1. Flatten params to vector representation
-    2. Construct JᵀJ operator on flattened space
-    3. Run Lanczos to build tridiagonal matrix
-    4. Compute eigenpairs of tridiagonal matrix
-    5. Reconstruct Ritz vectors for smallest eigenvalues
-    6. Filter by threshold, return nullspace basis
     """
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
@@ -195,6 +196,7 @@ def nullspace_vectors_lanczos(
     def jtj_flat_fn(
         v_flat: Float[Array, "n"],
     ) -> Float[Array, "n"]:
+        """Apply J^T J in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = jtj_pytree_fn(v_pytree)
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
@@ -214,6 +216,7 @@ def nullspace_vectors_lanczos(
         iteration: int,
         carry: Tuple[Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]],
     ) -> Tuple[Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]]:
+        """Execute one Lanczos iteration."""
         vectors, alphas, betas = carry
         v_curr: Float[Array, "n"] = vectors[iteration]
         w: Float[Array, "n"] = jtj_flat_fn(v_curr)
@@ -279,40 +282,50 @@ def project_to_nullspace(
     threshold: float = 1e-6,
     random_seed: int = 42,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Project a parameter perturbation onto the gauge (nullspace) subspace.
+    """Project a perturbation onto the gauge (nullspace) subspace.
 
-    The gauge component of a perturbation is the part that produces no
-    measurable change. This is the projection onto the nullspace of J.
+    Extended Summary
+    ----------------
+    The gauge component of a perturbation is the part that
+    produces no measurable change.  This is the projection
+    onto the nullspace of *J*.
+
+    Implementation Logic
+    --------------------
+    1. **Compute nullspace basis** --
+       Call :func:`nullspace_vectors_lanczos`.
+    2. **Filter by threshold** --
+       Mask basis vectors whose eigenvalue exceeds
+       *threshold*.
+    3. **Project** --
+       Compute coefficients and sum projections.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `perturbation` (PyTree):
+    perturbation : PyTree
         Perturbation vector to project.
-    - `num_nullspace_vectors` (int):
-        Number of nullspace basis vectors to use. Default 20.
-    - `threshold` (float):
-        Eigenvalue threshold for nullspace. Default 1e-6.
-    - `random_seed` (int):
-        Seed for Lanczos initialization. Default 42.
+    num_nullspace_vectors : int
+        Number of nullspace basis vectors to use.
+        Default 20.
+    threshold : float
+        Eigenvalue threshold for nullspace.  Default 1e-6.
+    random_seed : int
+        Seed for Lanczos initialisation.  Default 42.
 
     Returns
     -------
-    - `gauge_component` (PyTree):
-        Projection of perturbation onto nullspace (gauge subspace).
+    gauge_component : PyTree
+        Projection of perturbation onto nullspace (gauge
+        subspace).
 
-    Flow
-    ----
-    1. Compute nullspace basis via Lanczos
-    2. Filter basis vectors by eigenvalue threshold
-    3. Project perturbation onto each basis vector
-    4. Sum projections to get gauge component
+    See Also
+    --------
+    :func:`project_to_observable` : Complementary projection.
+    :func:`nullspace_vectors_lanczos` : Basis computation.
     """
     nullspace_basis, eigenvalues = nullspace_vectors_lanczos(
         forward_fn, params, num_nullspace_vectors,
@@ -342,39 +355,44 @@ def project_to_observable(
     threshold: float = 1e-6,
     random_seed: int = 42,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Project a parameter perturbation onto the observable (column) subspace.
+    """Project a perturbation onto the observable subspace.
 
-    The observable component is the part that produces measurable change.
-    This is the orthogonal complement of the nullspace projection.
+    Extended Summary
+    ----------------
+    The observable component is the part that produces
+    measurable change.  This is the orthogonal complement of
+    the nullspace projection.
+
+    Implementation Logic
+    --------------------
+    1. **Compute gauge component** --
+       Call :func:`project_to_nullspace`.
+    2. **Subtract** --
+       observable = perturbation - gauge.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `perturbation` (PyTree):
+    perturbation : PyTree
         Perturbation vector to project.
-    - `num_nullspace_vectors` (int):
-        Number of nullspace basis vectors to use. Default 20.
-    - `threshold` (float):
-        Eigenvalue threshold for nullspace. Default 1e-6.
-    - `random_seed` (int):
-        Seed for Lanczos initialization. Default 42.
+    num_nullspace_vectors : int
+        Number of nullspace basis vectors.  Default 20.
+    threshold : float
+        Eigenvalue threshold for nullspace.  Default 1e-6.
+    random_seed : int
+        Seed for Lanczos initialisation.  Default 42.
 
     Returns
     -------
-    - `observable_component` (PyTree):
+    observable_component : PyTree
         Projection of perturbation onto observable subspace.
 
-    Flow
-    ----
-    1. Compute gauge (nullspace) component
-    2. Subtract from original perturbation
-    3. Return observable component
+    See Also
+    --------
+    :func:`project_to_nullspace` : Complementary projection.
     """
     gauge_component: PyTree = project_to_nullspace(
         forward_fn, params, perturbation,
@@ -392,42 +410,54 @@ def decompose_gauge_observable(
     threshold: float = 1e-6,
     random_seed: int = 42,
 ) -> Tuple[PyTree, PyTree]:
-    """
-    Description
-    -----------
-    Decompose a perturbation into gauge and observable components.
+    r"""Decompose a perturbation into gauge and observable parts.
 
-    Any perturbation δθ can be uniquely decomposed as:
-        δθ = δθ_gauge + δθ_observable
-    where δθ_gauge ∈ null(J) and δθ_observable ∈ col(Jᵀ).
+    Extended Summary
+    ----------------
+    Any perturbation :math:`\delta\theta` can be uniquely
+    decomposed as
+
+    .. math::
+        \delta\theta = \delta\theta_{\text{gauge}}
+                     + \delta\theta_{\text{obs}}
+
+    where :math:`\delta\theta_{\text{gauge}} \in \ker(J)` and
+    :math:`\delta\theta_{\text{obs}} \in \operatorname{col}(
+    J^\top)`.
+
+    Implementation Logic
+    --------------------
+    1. **Gauge component** --
+       Call :func:`project_to_nullspace`.
+    2. **Observable component** --
+       Subtract gauge from the original perturbation.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `perturbation` (PyTree):
+    perturbation : PyTree
         Perturbation vector to decompose.
-    - `num_nullspace_vectors` (int):
-        Number of nullspace basis vectors. Default 20.
-    - `threshold` (float):
-        Eigenvalue threshold for nullspace. Default 1e-6.
-    - `random_seed` (int):
-        Seed for Lanczos initialization. Default 42.
+    num_nullspace_vectors : int
+        Number of nullspace basis vectors.  Default 20.
+    threshold : float
+        Eigenvalue threshold for nullspace.  Default 1e-6.
+    random_seed : int
+        Seed for Lanczos initialisation.  Default 42.
 
     Returns
     -------
-    - `gauge_component` (PyTree):
+    gauge_component : PyTree
         Projection onto nullspace (unobservable).
-    - `observable_component` (PyTree):
+    observable_component : PyTree
         Projection onto column space (observable).
 
-    Flow
-    ----
-    1. Compute gauge component via nullspace projection
-    2. Compute observable component as remainder
-    3. Return both components
+    See Also
+    --------
+    :func:`project_to_nullspace` : Gauge projection.
+    :func:`project_to_observable` : Observable projection.
     """
     gauge_component: PyTree = project_to_nullspace(
         forward_fn, params, perturbation,
@@ -444,38 +474,43 @@ def effective_rank(
     num_lanczos_iterations: int = 100,
     random_seed: int = 42,
 ) -> Int[Array, ""]:
-    """
-    Description
-    -----------
-    Count the number of observable dimensions above the noise floor.
+    r"""Count observable dimensions above the noise floor.
 
-    The effective rank is the number of singular values σ_i > noise_floor.
-    This is the dimension of the subspace that can be reliably recovered
-    from data at the given SNR.
+    Extended Summary
+    ----------------
+    The effective rank is the number of singular values
+    :math:`\sigma_i > \eta` where :math:`\eta` is the noise
+    floor.  This is the dimension of the subspace that can be
+    reliably recovered from data at the given SNR.
+
+    Implementation Logic
+    --------------------
+    1. **Estimate spectrum** --
+       Run Lanczos on :math:`J^\top J` to get eigenvalues.
+    2. **Take square roots** --
+       Convert eigenvalues to singular values.
+    3. **Count above threshold** --
+       Sum the number exceeding *noise_floor*.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `noise_floor` (float):
-        Noise threshold η. Singular values below this are unobservable.
-    - `num_lanczos_iterations` (int):
-        Lanczos iterations for spectrum estimation. Default 100.
-    - `random_seed` (int):
-        Seed for random initialization. Default 42.
+    noise_floor : float
+        Noise threshold :math:`\eta`.  Singular values below
+        this are unobservable.
+    num_lanczos_iterations : int
+        Lanczos iterations for spectrum estimation.
+        Default 100.
+    random_seed : int
+        Seed for random initialisation.  Default 42.
 
     Returns
     -------
-    - `rank` (Int[Array, ""]):
-        Number of singular values above noise_floor.
-
-    Flow
-    ----
-    1. Estimate singular spectrum via Lanczos
-    2. Count values above noise_floor
-    3. Return count as effective rank
+    rank : Int[Array, ""]
+        Number of singular values above *noise_floor*.
     """
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
@@ -485,6 +520,7 @@ def effective_rank(
     def jtj_flat_fn(
         v_flat: Float[Array, "n"],
     ) -> Float[Array, "n"]:
+        """Apply J^T J in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = jtj_pytree_fn(v_pytree)
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
@@ -505,6 +541,7 @@ def effective_rank(
         iteration: int,
         carry: Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]],
     ) -> Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]]:
+        """Execute one Lanczos iteration."""
         v_p, v_c, alphas, betas = carry
         w: Float[Array, "n"] = jtj_flat_fn(v_c)
         alpha_i: Float[Array, ""] = jnp.dot(w, v_c)
@@ -553,38 +590,44 @@ def gauge_invariant_norm(
     threshold: float = 1e-6,
     random_seed: int = 42,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute the norm of a perturbation in the quotient space modulo gauge.
+    """Compute the norm in quotient space modulo gauge.
 
-    This is the norm of the observable component only. Two perturbations
-    that differ by a gauge direction have the same gauge-invariant norm.
+    Extended Summary
+    ----------------
+    This is the L2 norm of the observable component only.  Two
+    perturbations that differ by a gauge direction have the same
+    gauge-invariant norm.
+
+    Implementation Logic
+    --------------------
+    1. **Project to observable** --
+       Remove the gauge component.
+    2. **Compute norm** --
+       Return the L2 norm of the remainder.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `perturbation` (PyTree):
+    perturbation : PyTree
         Perturbation vector.
-    - `num_nullspace_vectors` (int):
-        Number of nullspace basis vectors. Default 20.
-    - `threshold` (float):
-        Eigenvalue threshold for nullspace. Default 1e-6.
-    - `random_seed` (int):
-        Seed for Lanczos initialization. Default 42.
+    num_nullspace_vectors : int
+        Number of nullspace basis vectors.  Default 20.
+    threshold : float
+        Eigenvalue threshold for nullspace.  Default 1e-6.
+    random_seed : int
+        Seed for Lanczos initialisation.  Default 42.
 
     Returns
     -------
-    - `norm` (Float[Array, ""]):
+    norm : Float[Array, ""]
         L2 norm of the observable component.
 
-    Flow
-    ----
-    1. Project perturbation onto observable subspace
-    2. Compute and return L2 norm
+    See Also
+    --------
+    :func:`project_to_observable` : The projection step.
     """
     observable_component: PyTree = project_to_observable(
         forward_fn, params, perturbation,
@@ -603,40 +646,51 @@ def random_gauge_direction(
     random_seed: int = 42,
     direction_seed: int = 123,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Sample a random direction from the gauge (nullspace) subspace.
+    r"""Sample a random direction from the gauge subspace.
 
-    Useful for exploring the gauge orbit: params + α * gauge_direction
-    produces measurements identical to params for any α.
+    Extended Summary
+    ----------------
+    Useful for exploring the gauge orbit:
+    :math:`\theta + \alpha \, g` produces measurements
+    identical to :math:`\theta` for any :math:`\alpha`, where
+    *g* is the returned gauge direction.
+
+    Implementation Logic
+    --------------------
+    1. **Compute nullspace basis** --
+       Call :func:`nullspace_vectors_lanczos`.
+    2. **Generate random coefficients** --
+       Sample from a normal distribution.
+    3. **Mask non-null directions** --
+       Zero out coefficients for eigenvalues above
+       *threshold*.
+    4. **Form linear combination** --
+       Sum weighted basis vectors and normalise.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate the Jacobian.
-    - `num_nullspace_vectors` (int):
-        Number of nullspace basis vectors. Default 20.
-    - `threshold` (float):
-        Eigenvalue threshold for nullspace. Default 1e-6.
-    - `random_seed` (int):
-        Seed for Lanczos initialization. Default 42.
-    - `direction_seed` (int):
-        Seed for random direction coefficients. Default 123.
+    num_nullspace_vectors : int
+        Number of nullspace basis vectors.  Default 20.
+    threshold : float
+        Eigenvalue threshold for nullspace.  Default 1e-6.
+    random_seed : int
+        Seed for Lanczos initialisation.  Default 42.
+    direction_seed : int
+        Seed for random direction coefficients.  Default 123.
 
     Returns
     -------
-    - `gauge_direction` (PyTree):
+    gauge_direction : PyTree
         Unit-norm vector in the gauge subspace.
 
-    Flow
-    ----
-    1. Compute nullspace basis
-    2. Generate random coefficients
-    3. Form linear combination of basis vectors
-    4. Normalize to unit length
+    See Also
+    --------
+    :func:`nullspace_vectors_lanczos` : Basis computation.
+    :func:`gauge_orbit_distance` : Distance modulo gauge.
     """
     nullspace_basis, eigenvalues = nullspace_vectors_lanczos(
         forward_fn, params, num_nullspace_vectors,
@@ -669,39 +723,48 @@ def gauge_orbit_distance(
     threshold: float = 1e-6,
     random_seed: int = 42,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute distance between two points in quotient space modulo gauge.
+    """Compute distance between two points modulo gauge.
 
-    Two points on the same gauge orbit have distance zero. This measures
-    the physically meaningful difference between parameter configurations.
+    Extended Summary
+    ----------------
+    Two points on the same gauge orbit have distance zero.
+    This measures the physically meaningful difference between
+    parameter configurations by projecting the difference onto
+    the observable subspace and computing its norm.
+
+    Implementation Logic
+    --------------------
+    1. **Compute difference** --
+       difference = params_b - params_a.
+    2. **Linearise at midpoint** --
+       Evaluate the nullspace at the midpoint for symmetry.
+    3. **Compute gauge-invariant norm** --
+       Project difference onto observable subspace and
+       return its L2 norm.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to predictions.
-    - `params_a` (PyTree):
+    params_a : PyTree
         First parameter configuration.
-    - `params_b` (PyTree):
+    params_b : PyTree
         Second parameter configuration.
-    - `num_nullspace_vectors` (int):
-        Number of nullspace basis vectors. Default 20.
-    - `threshold` (float):
-        Eigenvalue threshold for nullspace. Default 1e-6.
-    - `random_seed` (int):
-        Seed for Lanczos initialization. Default 42.
+    num_nullspace_vectors : int
+        Number of nullspace basis vectors.  Default 20.
+    threshold : float
+        Eigenvalue threshold for nullspace.  Default 1e-6.
+    random_seed : int
+        Seed for Lanczos initialisation.  Default 42.
 
     Returns
     -------
-    - `distance` (Float[Array, ""]):
+    distance : Float[Array, ""]
         Distance in quotient space.
 
-    Flow
-    ----
-    1. Compute difference params_b - params_a
-    2. Project onto observable subspace
-    3. Return norm of observable component
+    See Also
+    --------
+    :func:`gauge_invariant_norm` : Norm computation.
     """
     difference: PyTree = _tree_sub(params_b, params_a)
     midpoint: PyTree = jax.tree_util.tree_map(

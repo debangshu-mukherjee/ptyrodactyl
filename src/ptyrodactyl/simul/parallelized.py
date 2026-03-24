@@ -69,33 +69,51 @@ def _compute_slice_potential(
     calib_ang: ScalarFloat,
     atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Float[Array, "H W"]:
-    """Compute potential slice on-the-fly by summing atom type contributions.
+    """Compute a potential slice by summing atom type contributions.
+
+    Extended Summary
+    ----------------
+    Generates a single potential slice on-the-fly by selecting
+    atoms within the z-range, scattering their positions onto
+    a grid per atom type, and FFT-convolving with precomputed
+    atomic potentials.
+
+    Implementation Logic
+    --------------------
+    1. **Select atoms in z-range** --
+       Mask atoms with ``z_min <= z < z_max``, optionally
+       combined with ``atom_mask``.
+    2. **Per-type convolution** --
+       For each atom type, scatter positions to a delta grid,
+       FFT-convolve with the precomputed potential kernel.
+    3. **Sum contributions** --
+       Sum convolved results across all atom types.
 
     Parameters
     ----------
     atom_coords : Float[Array, "N 3"]
-        Atom coordinates in angstroms with columns (x, y, z).
+        Atom coordinates in Angstroms, columns ``(x, y, z)``.
     atom_types : Int[Array, " N"]
         Atom type indices (0-indexed) for each atom.
     z_min : ScalarFloat
-        Minimum z coordinate for this slice in angstroms.
+        Minimum z coordinate for this slice in Angstroms.
     z_max : ScalarFloat
-        Maximum z coordinate for this slice in angstroms.
+        Maximum z coordinate for this slice in Angstroms.
     atom_potentials : Float[Array, "T H W"]
         Precomputed 2D atomic potentials for each atom type.
         T is the number of unique atom types.
     grid_shape : Tuple[int, int]
-        Output grid shape (height, width).
+        Output grid shape ``(height, width)``.
     calib_ang : ScalarFloat
-        Pixel size in angstroms.
+        Pixel size in Angstroms.
     atom_mask : Optional[Float[Array, " N"]]
-        Optional mask for atoms to include (1.0 = include, 0.0 = exclude).
-        If None, all atoms are included.
+        Mask for atoms to include (1.0 = include,
+        0.0 = exclude). If ``None``, all atoms are included.
 
     Returns
     -------
     slice_potential : Float[Array, "H W"]
-        The computed potential slice.
+        The computed potential slice in Kirkland units.
     """
     h: int
     w: int
@@ -112,7 +130,18 @@ def _compute_slice_potential(
     def _process_atom_type(
         atom_type_idx: ScalarInt,
     ) -> Float[Array, "H W"]:
-        """Process contribution from a single atom type."""
+        """Compute potential contribution from one atom type.
+
+        Parameters
+        ----------
+        atom_type_idx : ScalarInt
+            Index into ``atom_potentials`` for this type.
+
+        Returns
+        -------
+        convolved : Float[Array, "H W"]
+            FFT-convolved potential contribution.
+        """
         type_mask: Float[Array, " N"] = (
             atom_types == atom_type_idx
         ) * in_slice
@@ -157,34 +186,54 @@ def _cbed_from_potential_slices(
     calib_ang: ScalarFloat,
     atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Float[Array, "H W"]:
-    """Compute CBED pattern with on-the-fly potential slice generation.
+    """Compute CBED pattern with on-the-fly slice generation.
+
+    Extended Summary
+    ----------------
+    Propagates electron beam modes through the sample using
+    the multislice algorithm. Potential slices are generated
+    on-the-fly via :func:`_compute_slice_potential` rather
+    than pre-computed, enabling memory-efficient simulation.
+
+    Implementation Logic
+    --------------------
+    1. **Build propagator** --
+       Compute Fresnel propagator from slice thickness via
+       :func:`~ptyrodactyl.simul.simulations.propagation_func`.
+    2. **Scan over slices** --
+       For each slice, generate the potential on-the-fly,
+       compute the transmission function, multiply the wave,
+       and propagate (skip propagation on the last slice).
+    3. **Compute intensity** --
+       FFT to Fourier space, square modulus, sum over modes.
 
     Parameters
     ----------
     beam : Complex[Array, "H W M"]
         Electron beam modes in real space.
     atom_coords : Float[Array, "N 3"]
-        Atom coordinates in angstroms with columns (x, y, z).
+        Atom coordinates in Angstroms, columns ``(x, y, z)``.
     atom_types : Int[Array, " N"]
         Atom type indices (0-indexed) for each atom.
     slice_z_bounds : Float[Array, "S 2"]
-        Z boundaries for each slice with columns (z_min, z_max).
-        S is the number of slices.
+        Z boundaries for each slice, columns
+        ``(z_min, z_max)`` in Angstroms. S is the number of
+        slices.
     atom_potentials : Float[Array, "T H W"]
-        Precomputed 2D atomic potentials for each atom type.
+        Precomputed 2D atomic potentials per atom type.
     voltage_kv : ScalarNumeric
         Accelerating voltage in kilovolts.
     calib_ang : ScalarFloat
-        Pixel size in angstroms.
+        Pixel size in Angstroms.
     atom_mask : Optional[Float[Array, " N"]]
-        Optional mask for atoms to include (1.0 = include, 0.0 = exclude).
-        Used by tiled workflows to exclude atoms outside the current tile.
-        If None, all atoms are included.
+        Mask for atoms (1.0 = include, 0.0 = exclude). Used
+        by tiled workflows to exclude atoms outside the
+        current tile. If ``None``, all atoms are included.
 
     Returns
     -------
     cbed_pattern : Float[Array, "H W"]
-        The computed CBED intensity pattern.
+        Computed CBED intensity pattern (sum over modes).
     """
     h: int
     w: int
@@ -205,7 +254,22 @@ def _cbed_from_potential_slices(
     def _scan_fn(
         carry: Complex[Array, "H W M"], slice_idx: ScalarInt
     ) -> Tuple[Complex[Array, "H W M"], None]:
-        """Propagate wave through a single potential slice."""
+        """Propagate wave through one potential slice.
+
+        Parameters
+        ----------
+        carry : Complex[Array, "H W M"]
+            Current wave state.
+        slice_idx : ScalarInt
+            Index of the current slice.
+
+        Returns
+        -------
+        wave : Complex[Array, "H W M"]
+            Updated wave after transmission and propagation.
+        None
+            No stacked output.
+        """
         wave: Complex[Array, "H W M"] = carry
 
         z_min: Float[Array, " "] = slice_z_bounds[slice_idx, 0]
@@ -228,7 +292,18 @@ def _cbed_from_potential_slices(
         wave = wave * trans_slice[..., jnp.newaxis]
 
         def _propagate(w: Complex[Array, "H W M"]) -> Complex[Array, "H W M"]:
-            """Apply Fresnel propagation in Fourier space."""
+            """Apply Fresnel propagation in Fourier space.
+
+            Parameters
+            ----------
+            w : Complex[Array, "H W M"]
+                Wave in real space.
+
+            Returns
+            -------
+            Complex[Array, "H W M"]
+                Wave after Fresnel propagation.
+            """
             w_k: Complex[Array, "H W M"] = jnp.fft.fft2(w, axes=(0, 1))
             w_k = w_k * propagator[..., jnp.newaxis]
             return jnp.fft.ifft2(w_k, axes=(0, 1))
@@ -261,24 +336,42 @@ def clip_cbed(
     extent_mrad: ScalarFloat,
     output_shape: Tuple[int, int],
 ) -> Float[Array, "Ho Wo"]:
-    """Clip CBED pattern to mrad extent and resize to target shape.
+    """Clip CBED pattern to mrad extent and resize.
+
+    Extended Summary
+    ----------------
+    Extracts the central region of a CBED pattern corresponding
+    to a given angular extent in milliradians, then resizes to
+    the target output shape using bilinear interpolation.
+
+    Implementation Logic
+    --------------------
+    1. **Convert mrad to pixels** --
+       Use wavelength and Fourier calibration to convert
+       ``extent_mrad`` to a pixel radius.
+    2. **Extract central crop** --
+       ``lax.dynamic_slice`` around the pattern center.
+    3. **Resize** --
+       Bilinear resize to ``output_shape``.
 
     Parameters
     ----------
     cbed : Float[Array, "H W"]
         Input CBED pattern (fftshifted, centered).
     fourier_calib_inv_ang : ScalarFloat
-        Fourier space calibration in inverse angstroms per pixel.
+        Fourier space calibration in inverse Angstroms per
+        pixel.
     voltage_kv : ScalarNumeric
         Accelerating voltage in kilovolts.
     extent_mrad : ScalarFloat
-        Half-angle extent in milliradians (radius from center).
+        Half-angle extent in milliradians (radius from
+        center).
     output_shape : Tuple[int, int]
-        Target output shape (height, width).
+        Target output shape ``(height, width)``.
 
     Returns
     -------
-    clipped_cbed : Float[Array, "Ho Wo"]
+    resized : Float[Array, "Ho Wo"]
         Clipped and resized CBED pattern.
     """
     h: int = cbed.shape[0]
@@ -331,79 +424,70 @@ def stem4d_sharded(
 ) -> STEM4D:
     """Generate 4D-STEM data with on-the-fly beam shifting and slices.
 
-    This function accepts base probe modes and scan positions, then shifts the
-    beams on-the-fly for each position. Potential slices are also generated
-    on-the-fly, enabling memory-efficient simulation of large datasets.
+    Extended Summary
+    ----------------
+    Accepts base probe modes and scan positions, then shifts
+    the beams on-the-fly for each position. Potential slices
+    are also generated on-the-fly, enabling memory-efficient
+    simulation of large datasets. Fully JIT-compilable and
+    designed for use with JAX's sharding primitives.
+
+    Implementation Logic
+    --------------------
+    1. **Pre-compute Fourier quantities** --
+       FFT the probe and build frequency grids (once).
+    2. **Per-position processing** --
+       For each scan position, apply a Fourier phase ramp to
+       shift the probe, then compute the CBED pattern via
+       :func:`_cbed_from_potential_slices`.
+    3. **Distributed execution** --
+       If *mesh* is provided, use ``jax.shard_map`` to
+       distribute positions across devices; otherwise use
+       ``jax.vmap``.
+    4. **Build output** --
+       Return :class:`~ptyrodactyl.tools.STEM4D` PyTree with
+       data, calibrations, and scan positions.
 
     Parameters
     ----------
     probe_modes : Complex[Array, "H W M"]
-        Base electron probe modes (unshifted).
-        H and W are image dimensions, M is number of modes.
+        Base electron probe modes (unshifted). H and W are
+        image dimensions, M is number of modes.
     scan_positions_ang : Float[Array, "P 2"]
-        Scan positions in angstroms with columns (y, x).
-        P is number of positions. Can be sharded along the first axis.
+        Scan positions in Angstroms, columns ``(y, x)``.
+        P is the number of positions. Can be sharded along
+        the first axis.
     atom_coords : Float[Array, "N 3"]
-        Atom coordinates in angstroms with columns (x, y, z).
-        N is the total number of atoms.
+        Atom coordinates in Angstroms, columns ``(x, y, z)``.
     atom_types : Int[Array, " N"]
-        Atom type indices (0-indexed) for each atom, maps to atom_potentials.
+        Atom type indices (0-indexed), maps to
+        *atom_potentials*.
     slice_z_bounds : Float[Array, "S 2"]
-        Z boundaries for each slice with columns (z_min, z_max).
-        S is the number of slices through the sample.
+        Z boundaries per slice, columns ``(z_min, z_max)``
+        in Angstroms.
     atom_potentials : Float[Array, "T H W"]
-        Precomputed 2D atomic potentials for each unique atom type.
-        T is the number of unique atom types in the sample.
+        Precomputed 2D atomic potentials for each unique
+        atom type.
     voltage_kv : ScalarNumeric
         Accelerating voltage in kilovolts.
     calib_ang : ScalarFloat
-        Real space pixel size in angstroms.
+        Real-space pixel size in Angstroms.
     mesh : Optional[Mesh]
-        JAX device mesh for multi-GPU parallelism. If provided, uses shard_map
-        to distribute computation across devices. If None, uses single-device
-        vmap.
+        JAX device mesh for multi-GPU parallelism. If
+        provided, uses ``shard_map``. If ``None``, uses
+        single-device ``vmap``.
 
     Returns
     -------
     stem4d_data_sharded : STEM4D
-        Complete 4D-STEM dataset containing:
-        - data : Float[Array, "P H W"]
-            Diffraction patterns for each scan position
-            Sharded along the first axis (P) if input was sharded.
-        - real_space_calib : Float[Array, " "]
-            Real space calibration in angstroms per pixel.
-        - fourier_space_calib : Float[Array, " "]
-            Fourier space calibration in inverse angstroms per pixel.
-        - scan_positions : Float[Array, "P 2"]
-            Scan positions in angstroms.
-        - voltage_kv : Float[Array, " "]
-            Accelerating voltage in kilovolts.
-
-    Notes
-    -----
-    This function generates both beam shifts and potential slices on-the-fly
-    rather than pre-computing them, enabling memory-efficient simulation of
-    large scan grids and thick samples.
-
-    Algorithm:
-    1. Pre-compute probe in Fourier space and frequency grids (once)
-    2. For each scan position:
-       a. Apply Fourier shift to probe modes for current position
-       b. Compute CBED with on-the-fly slice generation
-    3. Each slice potential is computed by:
-       - Selecting atoms within the slice z-range
-       - Scattering atom positions to a grid by type
-       - FFT-convolving with precomputed atomic potentials
-       - Summing contributions from all atom types
-    4. Propagate beam through all slices using multislice algorithm
-    5. Return STEM4D PyTree with all data and calibrations
-
-    The function is fully JIT-compilable and designed for use with JAX's
-    sharding primitives for distributed execution.
+        Complete 4D-STEM dataset containing diffraction
+        patterns, real- and Fourier-space calibrations,
+        scan positions, and accelerating voltage.
 
     See Also
     --------
-    clip_cbed : Clip and resize CBED patterns to target mrad extent and shape.
+    :func:`clip_cbed` : Clip and resize CBED patterns to
+        target mrad extent and shape.
     """
     h: int = probe_modes.shape[0]
     w: int = probe_modes.shape[1]
@@ -418,7 +502,18 @@ def stem4d_sharded(
     def _shift_probe(
         position_ang: Float[Array, " 2"]
     ) -> Complex[Array, "H W M"]:
-        """Shift probe modes to a single position using Fourier phase ramp."""
+        """Shift probe modes via Fourier phase ramp.
+
+        Parameters
+        ----------
+        position_ang : Float[Array, " 2"]
+            Target position ``(y, x)`` in Angstroms.
+
+        Returns
+        -------
+        shifted_beam : Complex[Array, "H W M"]
+            Probe modes shifted to the target position.
+        """
         y_shift: ScalarFloat = position_ang[0]
         x_shift: ScalarFloat = position_ang[1]
         phase: Float[Array, "H W"] = (
@@ -434,7 +529,18 @@ def stem4d_sharded(
     def _process_single_position(
         position_ang: Float[Array, " 2"]
     ) -> Float[Array, "H W"]:
-        """Compute CBED pattern for a single scan position."""
+        """Compute CBED pattern for a single scan position.
+
+        Parameters
+        ----------
+        position_ang : Float[Array, " 2"]
+            Scan position ``(y, x)`` in Angstroms.
+
+        Returns
+        -------
+        cbed_pattern : Float[Array, "H W"]
+            CBED intensity pattern at this position.
+        """
         current_beam: Complex[Array, "H W M"] = _shift_probe(position_ang)
 
         cbed_pattern: Float[Array, "H W"] = _cbed_from_potential_slices(
@@ -451,7 +557,18 @@ def stem4d_sharded(
     def _process_batch(
         positions_batch: Float[Array, "B 2"]
     ) -> Float[Array, "B H W"]:
-        """Process a batch of positions (one shard)."""
+        """Process a batch of positions (one shard).
+
+        Parameters
+        ----------
+        positions_batch : Float[Array, "B 2"]
+            Batch of scan positions in Angstroms.
+
+        Returns
+        -------
+        Float[Array, "B H W"]
+            CBED patterns for the batch.
+        """
         return jax.vmap(_process_single_position)(positions_batch)
 
     if mesh is not None:

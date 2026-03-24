@@ -1,44 +1,45 @@
-"""Forward simulation functions for electron microscopy and ptychography.
+"""Forward simulation functions for electron microscopy.
 
 Extended Summary
 ----------------
-This module contains functions for simulating electron beam propagation,
-creating probes, calculating aberrations, and generating CBED patterns
-and 4D-STEM data. All functions are JAX-compatible and support automatic
-differentiation.
+Functions for simulating electron beam propagation, creating
+probes, calculating aberrations, and generating CBED patterns
+and 4D-STEM data. All functions are JAX-compatible and support
+automatic differentiation.
 
 Routine Listings
 ----------------
-transmission_func : function
-    Calculates transmission function for a given potential.
-propagation_func : function
-    Propagates electron wave through free space.
-fourier_coords : function
-    Generates Fourier space coordinates for diffraction calculations.
-fourier_calib : function
-    Calculates Fourier space calibration from real space parameters.
-make_probe : function
-    Creates electron probe with specified parameters and aberrations.
-aberration : function
-    Applies aberration phase to electron wave.
-wavelength_ang : function
-    Calculates electron wavelength from accelerating voltage.
-cbed : function
-    Simulates convergent beam electron diffraction patterns.
-shift_beam_fourier : function
-    Shifts electron beam in Fourier space for scanning.
-stem_4d : function
-    Generates 4D-STEM data with multiple probe positions.
-decompose_beam_to_modes : function
-    Decomposes electron beam into orthogonal modes.
-annular_detector : function
-    Simulates annular detector for STEM imaging from 4D data.
+:func:`transmission_func`
+    Calculate transmission function for a potential slice.
+:func:`propagation_func`
+    Compute Fresnel propagation function.
+:func:`fourier_coords`
+    Generate Fourier space coordinate arrays.
+:func:`fourier_calib`
+    Calculate Fourier space calibration from real space.
+:func:`make_probe`
+    Create electron probe with specified aberrations.
+:func:`aberration`
+    Calculate aberration phase for the electron probe.
+:func:`wavelength_ang`
+    Calculate relativistic electron wavelength.
+:func:`cbed`
+    Simulate convergent beam electron diffraction patterns.
+:func:`shift_beam_fourier`
+    Shift electron beam in Fourier space for scanning.
+:func:`stem_4d`
+    Generate 4D-STEM data with multiple probe positions.
+:func:`decompose_beam_to_modes`
+    Decompose electron beam into orthogonal modes.
+:func:`annular_detector`
+    Simulate annular detector for STEM imaging.
 
 Notes
 -----
-All functions are designed to work with JAX transformations including
-jit, grad, and vmap. Input arrays should be properly typed and validated
-using the factory functions from the tools module.
+All functions are designed to work with JAX transformations
+including ``jit``, ``grad``, and ``vmap``. Input arrays should
+be properly typed and validated using the factory functions
+from :mod:`ptyrodactyl.tools`.
 """
 
 from functools import partial
@@ -81,28 +82,36 @@ jax.config.update("jax_enable_x64", True)
 def transmission_func(
     pot_slice: Float[Array, " a b"], voltage_kv: ScalarNumeric
 ) -> Complex[Array, " a b"]:
-    """Calculate the complex transmission function of a single potential slice.
+    r"""Calculate the complex transmission function of a potential slice.
+
+    Extended Summary
+    ----------------
+    Computes the interaction constant :math:`\sigma` and
+    returns the phase object:
+
+    .. math::
+
+        T(\mathbf{r}) = \exp\bigl(i\,\sigma\,V(\mathbf{r})\bigr)
+
+    Implementation Logic
+    --------------------
+    1. **Compute interaction constant** --
+       :math:`\sigma = \frac{2\pi}{\lambda V}
+       \frac{m_e c^2 + eV}{2 m_e c^2 + eV}`.
+    2. **Apply complex exponential** --
+       ``exp(1j * sigma * pot_slice)``.
 
     Parameters
     ----------
     pot_slice : Float[Array, " a b"]
-        Potential slice in Kirkland units.
+        Projected potential slice in Kirkland units.
     voltage_kv : ScalarNumeric
         Microscope operating voltage in kiloelectronvolts.
 
     Returns
     -------
     trans : Complex[Array, " a b"]
-        The transmission function of a single crystal slice.
-
-    Notes
-    -----
-    Algorithm:
-    - Calculate the electron energy in electronVolts
-    - Calculate the wavelength in angstroms
-    - Calculate the Einstein energy
-    - Calculate the sigma value, which is the constant for the phase shift
-    - Calculate the transmission function as a complex exponential
+        Complex transmission function for the slice.
     """
     voltage: Float[Array, " "] = jnp.multiply(voltage_kv, jnp.asarray(1000.0))
     m_e: Float[Array, " "] = jnp.asarray(9.109383e-31)
@@ -127,34 +136,43 @@ def propagation_func(
     voltage_kv: ScalarNumeric,
     calib_ang: ScalarFloat,
 ) -> Complex[Array, " h w"]:
-    """Calculate the complex propagation function for multislice algorithm.
+    r"""Compute the Fresnel propagation function for multislice.
+
+    Extended Summary
+    ----------------
+    Computes the free-space propagator in Fourier space:
+
+    .. math::
+
+        P(\mathbf{q}) = \exp\bigl(
+        -i\pi\lambda\Delta z\,|\mathbf{q}|^2\bigr)
+
+    Implementation Logic
+    --------------------
+    1. **Build frequency grids** --
+       ``jnp.fft.fftfreq`` for both axes.
+    2. **Compute q-squared** --
+       ``qx^2 + qy^2``.
+    3. **Evaluate propagator** --
+       ``exp(-i pi lambda dz q^2)``.
 
     Parameters
     ----------
     imsize_y : ScalarInt
-        Size of the image of the propagator in y axis.
+        Grid size in pixels along the y-axis.
     imsize_x : ScalarInt
-        Size of the image of the propagator in x axis.
+        Grid size in pixels along the x-axis.
     thickness_ang : ScalarNumeric
-        Distance between the slices in angstroms.
+        Slice thickness (propagation distance) in Angstroms.
     voltage_kv : ScalarNumeric
         Accelerating voltage in kilovolts.
     calib_ang : ScalarFloat
-        Calibration or pixel size in angstroms.
+        Pixel size in Angstroms.
 
     Returns
     -------
     prop : Complex[Array, " h w"]
-        The propagation function of the same size given by imsize.
-
-    Notes
-    -----
-    Algorithm:
-    - Generate frequency arrays directly using fftfreq
-    - Create 2D meshgrid of frequencies
-    - Calculate squared sum of frequencies
-    - Calculate wavelength
-    - Compute the propagation function
+        Fresnel propagation function in Fourier space.
     """
     qy: Num[Array, " h"] = jnp.fft.fftfreq(imsize_y, d=calib_ang)
     qx: Num[Array, " w"] = jnp.fft.fftfreq(imsize_x, d=calib_ang)
@@ -174,38 +192,37 @@ def fourier_coords(
     calibration: ScalarFloat | Float[Array, " 2"],
     image_size: Int[Array, " 2"],
 ) -> CalibratedArray:
-    """Return the Fourier coordinates for diffraction calculations.
+    """Generate Fourier space coordinate arrays.
+
+    Extended Summary
+    ----------------
+    Builds a 2D array of radial Fourier-space frequencies
+    (in inverse Angstroms) suitable for diffraction
+    calculations, returned as a
+    :class:`~ptyrodactyl.tools.CalibratedArray`.
+
+    Implementation Logic
+    --------------------
+    1. **Compute field of view** --
+       ``image_size * calibration``.
+    2. **Build frequency axes** --
+       Centered arrays divided by field of view, then
+       ``fftshift``-ed via ``jnp.roll``.
+    3. **Radial frequency grid** --
+       ``sqrt(qx^2 + qy^2)`` on the meshgrid.
 
     Parameters
     ----------
     calibration : ScalarFloat or Float[Array, " 2"]
-        The pixel size in angstroms in real space.
+        Pixel size in Angstroms in real space.
     image_size : Int[Array, " 2"]
-        The size of the beam in pixels.
+        Grid size in pixels ``(H, W)``.
 
     Returns
     -------
     calibrated_inverse_array : CalibratedArray
-        The calibrated inverse array with the following attributes:
-        - data_array : Float[Array, " H W"]
-            The inverse array data
-        - calib_y : Float[Array, " "]
-            Inverse calibration in y direction
-        - calib_x : Float[Array, " "]
-            Inverse calibration in x direction
-        - real_space : bool
-            False, indicating reciprocal space coordinates
-
-    Notes
-    -----
-    Algorithm:
-    - Calculate the real space field of view in y and x
-    - Generate the inverse space array y and x
-    - Shift the inverse space array y and x
-    - Create meshgrid of shifted inverse space arrays
-    - Calculate the inverse array
-    - Calculate the calibration in y and x
-    - Return the calibrated array
+        Radial Fourier-space frequencies with calibrations
+        in inverse Angstroms. ``real_space`` is ``False``.
     """
     real_fov: Float[Array, " 2"] = jnp.multiply(image_size, calibration)
     inverse_arr_y: Float[Array, " h"] = (
@@ -239,25 +256,27 @@ def fourier_calib(
     real_space_calib: Float[Array, " "] | Float[Array, " 2"],
     sizebeam: Int[Array, " 2"],
 ) -> Float[Array, " 2"]:
-    """Generate the Fourier calibration for the beam.
+    """Compute Fourier-space calibration from real-space parameters.
+
+    Implementation Logic
+    --------------------
+    1. **Compute field of view** --
+       ``sizebeam * real_space_calib`` in Angstroms.
+    2. **Invert** --
+       ``1 / field_of_view`` gives inverse Angstroms per
+       pixel.
 
     Parameters
     ----------
     real_space_calib : Float[Array, " "] or Float[Array, " 2"]
-        The pixel size in angstroms in real space.
+        Pixel size in Angstroms in real space.
     sizebeam : Int[Array, " 2"]
-        The size of the beam in pixels.
+        Grid size in pixels ``(H, W)``.
 
     Returns
     -------
     inverse_space_calib : Float[Array, " 2"]
-        The Fourier calibration in inverse angstroms.
-
-    Notes
-    -----
-    Algorithm:
-    - Calculate the field of view in real space
-    - Calculate the inverse space calibration
+        Fourier calibration in inverse Angstroms per pixel.
     """
     field_of_view: Float[Array, " "] = jnp.multiply(
         jnp.float64(sizebeam), real_space_calib
@@ -276,43 +295,55 @@ def make_probe(
     c3: ScalarNumeric = 0.0,
     c5: ScalarNumeric = 0.0,
 ) -> Complex[Array, " h w"]:
-    """Calculate an electron probe with spherical aberrations.
+    """Create an electron probe with spherical aberrations.
+
+    Extended Summary
+    ----------------
+    Builds a probe wavefunction in Fourier space by applying
+    an aperture mask and aberration phase, then inverse-FFTs
+    to real space.
+
+    Implementation Logic
+    --------------------
+    1. **Convert aperture** --
+       From milliradians to radians, compute max spatial
+       frequency ``l_max = aperture / wavelength``.
+    2. **Build Fourier grid** --
+       Frequency arrays from pixel size and image dimensions.
+    3. **Apply aperture and aberrations** --
+       Binary mask at ``l_max``, multiply by
+       ``exp(-i * chi)`` from :func:`aberration`.
+    4. **Inverse FFT** --
+       ``ifftshift(ifft2(...))`` to obtain the real-space
+       probe.
 
     Parameters
     ----------
     aperture : ScalarNumeric
-        The aperture size in milliradians.
+        Aperture semi-angle in milliradians.
     voltage : ScalarNumeric
-        The microscope accelerating voltage in kiloelectronvolts.
+        Accelerating voltage in kiloelectronvolts.
     image_size : Int[Array, " 2"]
-        The size of the beam in pixels.
+        Grid size in pixels ``(H, W)``.
     calibration_pm : ScalarFloat
-        The calibration in picometers.
+        Real-space pixel size in picometers.
     defocus : ScalarNumeric, optional
-        The defocus value in angstroms. Default is 0.
+        Defocus in Angstroms. Default is 0.
     c3 : ScalarNumeric, optional
-        The C3 value in angstroms. Default is 0.
+        Third-order spherical aberration in Angstroms.
+        Default is 0.
     c5 : ScalarNumeric, optional
-        The C5 value in angstroms. Default is 0.
+        Fifth-order spherical aberration in Angstroms.
+        Default is 0.
 
     Returns
     -------
     probe_real_space : Complex[Array, " h w"]
-        The calculated electron probe in real space.
+        Electron probe wavefunction in real space.
 
-    Notes
-    -----
-    Algorithm:
-    - Convert the aperture to radians
-    - Calculate the wavelength in angstroms
-    - Calculate the maximum L value
-    - Calculate the field of view in x and y
-    - Generate the inverse space array y and x
-    - Shift the inverse space array y and x
-    - Create meshgrid of shifted inverse space arrays
-    - Calculate the inverse array
-    - Calculate the calibration in y and x
-    - Calculate the probe in real space
+    See Also
+    --------
+    :func:`aberration` : Compute the aberration phase.
     """
     aperture: Float[Array, " "] = jnp.asarray(aperture / 1000.0)
     wavelength: Float[Array, " "] = wavelength_ang(voltage)
@@ -359,32 +390,49 @@ def aberration(
     c3: ScalarFloat = 0.0,
     c5: ScalarFloat = 0.0,
 ) -> Float[Array, " H W"]:
-    """Calculate the aberration function for the electron probe.
+    r"""Calculate the aberration phase for the electron probe.
+
+    Extended Summary
+    ----------------
+    Evaluates the aberration function:
+
+    .. math::
+
+        \chi(\mathbf{q}) = \frac{2\pi}{\lambda}\left(
+        \frac{C_1\,\theta^2}{2}
+        + \frac{C_3\,\theta^4}{4}
+        + \frac{C_5\,\theta^6}{6}\right)
+
+    where :math:`\theta = \lambda\,|\mathbf{q}|`.
+
+    Implementation Logic
+    --------------------
+    1. **Compute scattering angle** --
+       ``p = lambda * fourier_coord``.
+    2. **Evaluate polynomial** --
+       Sum defocus, C3, and C5 terms.
+    3. **Scale by 2 pi / lambda** --
+       Converts from path-length to phase.
 
     Parameters
     ----------
     fourier_coord : Float[Array, " H W"]
-        The Fourier coordinates.
+        Radial Fourier-space frequency in inverse Angstroms.
     lambda_angstrom : ScalarFloat
-        The wavelength in angstroms.
+        Electron wavelength in Angstroms.
     defocus : ScalarFloat, optional
-        The defocus value in angstroms. Default is 0.0.
+        Defocus (C1) in Angstroms. Default is 0.0.
     c3 : ScalarFloat, optional
-        The C3 value in angstroms. Default is 0.0.
+        Third-order spherical aberration in Angstroms.
+        Default is 0.0.
     c5 : ScalarFloat, optional
-        The C5 value in angstroms. Default is 0.0.
+        Fifth-order spherical aberration in Angstroms.
+        Default is 0.0.
 
     Returns
     -------
     chi_probe : Float[Array, " H W"]
-        The calculated aberration function.
-
-    Notes
-    -----
-    Algorithm:
-    - Calculate the phase shift
-    - Calculate the chi value
-    - Calculate the chi probe value
+        Aberration phase in radians.
     """
     p_matrix: Float[Array, " H W"] = lambda_angstrom * fourier_coord
     chi: Float[Array, " H W"] = (
@@ -399,28 +447,39 @@ def aberration(
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def wavelength_ang(voltage_kv: ScalarNumeric) -> Float[Array, " "]:
-    """Calculate the relativistic electron wavelength in angstroms.
+    r"""Calculate the relativistic electron wavelength.
+
+    Extended Summary
+    ----------------
+    Uses the relativistic de Broglie relation:
+
+    .. math::
+
+        \lambda = \frac{hc}{\sqrt{eV\,(2 m_e c^2 + eV)}}
+
+    Implementation Logic
+    --------------------
+    1. **Convert voltage** --
+       kV to eV then to Joules.
+    2. **Relativistic formula** --
+       Compute wavelength in metres.
+    3. **Convert to Angstroms** --
+       Multiply by :math:`10^{10}`.
 
     Parameters
     ----------
     voltage_kv : ScalarNumeric
-        The microscope accelerating voltage in kiloelectronvolts.
-        Can be a scalar or array.
+        Accelerating voltage in kiloelectronvolts.
 
     Returns
     -------
     lambda_angstroms : Float[Array, " "]
-        The electron wavelength in angstroms with same shape as input.
+        Electron wavelength in Angstroms.
 
     Notes
     -----
-    Algorithm:
-    - Calculate the electron wavelength in meters
-    - Convert the wavelength to angstroms
-
-    Because this is JAX - you assume that the input is clean, and you
-    don't need to check for negative or NaN values. Your preprocessing
-    steps should check for them - not the function itself.
+    Assumes clean input (no negative or NaN values).
+    Validation should happen in preprocessing.
     """
     m: Float[Array, " "] = jnp.asarray(9.109383e-31)
     e: Float[Array, " "] = jnp.asarray(1.602177e-19)
@@ -446,56 +505,45 @@ def cbed(
     beam: ProbeModes,
     voltage_kv: ScalarNumeric,
 ) -> CalibratedArray:
-    """Calculate the CBED pattern for slices and beam modes.
+    """Simulate a CBED pattern via the multislice algorithm.
+
+    Extended Summary
+    ----------------
+    Propagates one or more beam modes through one or more
+    potential slices to produce a Convergent Beam Electron
+    Diffraction (CBED) intensity pattern.
+
+    Implementation Logic
+    --------------------
+    1. **Ensure 3D arrays** --
+       Promote single-slice / single-mode inputs.
+    2. **Build propagator** --
+       :func:`propagation_func` from slice thickness.
+    3. **Scan over slices** --
+       ``lax.scan``: transmit, then propagate (skip
+       propagation on the last slice).
+    4. **Compute intensity** --
+       FFT to Fourier space, square modulus, sum over modes.
 
     Parameters
     ----------
     pot_slices : PotentialSlices
-        The potential slice(s) with the following attributes:
-        - slices : Float[Array, " H W S"]
-            Individual potential slices in Kirkland units. S is slice count
-        - slice_thickness : ScalarNumeric
-            Thickness of each slice in angstroms
-        - calib : ScalarFloat
-            Pixel calibration
+        Potential slices. ``slices`` has shape ``(H, W, S)``
+        in Kirkland units; ``slice_thickness`` in Angstroms;
+        ``calib`` pixel size in Angstroms.
     beam : ProbeModes
-        The electron beam with the following attributes:
-        - modes : Complex[Array, " H W *M"]
-            M is number of modes
-        - weights : Float[Array, " M"]
-            Mode occupation numbers
-        - calib : ScalarFloat
-            Pixel calibration
+        Electron beam. ``modes`` has shape ``(H, W, M)``;
+        ``weights`` shape ``(M,)``; ``calib`` in Angstroms.
     voltage_kv : ScalarNumeric
-        The accelerating voltage in kilovolts.
+        Accelerating voltage in kilovolts.
 
     Returns
     -------
     cbed_pytree : CalibratedArray
-        The calculated CBED pattern with the following attributes:
-        - data_array : Float[Array, " H W"]
-            The calculated CBED pattern.
-        - calib_y : ScalarFloat
-            The calibration in y direction.
-        - calib_x : ScalarFloat
-            The calibration in x direction.
-        - real_space : bool
-            False, indicating reciprocal space data.
-
-    Notes
-    -----
-    This function computes the Convergent Beam Electron Diffraction (CBED)
-    pattern by propagating one or more beam modes through one or more
-    potential slices.
-
-    Algorithm:
-    - Ensure 3D arrays even for single slice/mode
-    - Calculate the transmission function for a single slice
-    - Initialize the convolution state
-    - Scan over all slices
-    - Compute the Fourier transform
-    - Compute the intensity for each mode
-    - Sum the intensities across all modes.
+        CBED intensity pattern as a
+        :class:`~ptyrodactyl.tools.CalibratedArray` with
+        Fourier-space calibrations. ``real_space`` is
+        ``False``.
     """
     calib_ang: Float[Array, ""] = jnp.amin(
         jnp.array([pot_slices.calib, beam.calib])
@@ -516,7 +564,22 @@ def cbed(
     def _scan_fn(
         carry: Complex[Array, " H W M"], slice_idx: ScalarInt
     ) -> Tuple[Complex[Array, " H W M"], None]:
-        """Propagate wave through a single potential slice."""
+        """Propagate wave through one potential slice.
+
+        Parameters
+        ----------
+        carry : Complex[Array, " H W M"]
+            Current wave state.
+        slice_idx : ScalarInt
+            Index of the current slice.
+
+        Returns
+        -------
+        wave : Complex[Array, " H W M"]
+            Updated wave.
+        None
+            No stacked output.
+        """
         wave: Complex[Array, " H W M"] = carry
         pot_single_slice: Float[Array, " H W 1"] = lax.dynamic_slice_in_dim(
             pot_slice, slice_idx, 1, axis=2
@@ -532,7 +595,18 @@ def cbed(
         def _propagate(
             w: Complex[Array, " H W M"],
         ) -> Complex[Array, " H W M"]:
-            """Apply Fresnel propagation in Fourier space."""
+            """Apply Fresnel propagation in Fourier space.
+
+            Parameters
+            ----------
+            w : Complex[Array, " H W M"]
+                Wave in real space.
+
+            Returns
+            -------
+            Complex[Array, " H W M"]
+                Wave after propagation.
+            """
             w_k: Complex[Array, " H W M"] = jnp.fft.fft2(w, axes=(0, 1))
             w_k = w_k * slice_transmission[..., jnp.newaxis]
             return jnp.fft.ifft2(w_k, axes=(0, 1)).astype(dtype)
@@ -567,29 +641,32 @@ def shift_beam_fourier(
     pos: Float[Array, " #pp 2"],
     calib_ang: ScalarFloat,
 ) -> Complex128[Array, "#pp hh ww #mm"]:
-    """Shift the beam to new position(s) using Fourier shifting.
+    """Shift beam to new position(s) via Fourier phase ramp.
+
+    Implementation Logic
+    --------------------
+    1. **FFT the beam** --
+       All modes to Fourier space.
+    2. **Per-position phase ramp** --
+       ``exp(-2 pi i (qy * dy + qx * dx))`` applied to
+       the Fourier-space beam.
+    3. **Inverse FFT** --
+       Back to real space for each position.
 
     Parameters
     ----------
     beam : Float[Array, " hh ww *mm"] or Complex[Array, " hh ww *mm"]
-        The electron beam modes.
+        Electron beam modes.
     pos : Float[Array, " #P 2"]
-        The (y, x) position(s) to shift to in pixels.
-        Can be a single position [2] or multiple [P, 2].
+        Shift position(s) ``(y, x)`` in Angstroms. Can be a
+        single ``[2]`` or multiple ``[P, 2]``.
     calib_ang : ScalarFloat
-        The calibration in angstroms.
+        Pixel size in Angstroms.
 
     Returns
     -------
     all_shifted_beams : Complex128[Array, "#P H W #M"]
-        The shifted beam(s) for all position(s) and mode(s).
-
-    Notes
-    -----
-    Algorithm:
-    - Convert positions from real space to Fourier space
-    - Create phase ramps in Fourier space for all positions
-    - Apply shifts to each mode for all positions
+        Shifted beam(s) for all positions and modes.
     """
     our_beam: Complex128[Array, "H W #M"] = jnp.atleast_3d(
         beam.astype(jnp.complex128)
@@ -609,7 +686,18 @@ def shift_beam_fourier(
     )
 
     def _apply_shift(position_idx: int) -> Complex128[Array, " hh ww #mm"]:
-        """Apply phase ramp shift in Fourier space for a single position."""
+        """Apply Fourier phase ramp shift for one position.
+
+        Parameters
+        ----------
+        position_idx : int
+            Index into the positions array.
+
+        Returns
+        -------
+        shifted_beam : Complex128[Array, " hh ww #mm"]
+            Beam shifted to the requested position.
+        """
         y_shift: ScalarNumeric
         x_shift: ScalarNumeric
         y_shift, x_shift = pos[position_idx, 0], pos[position_idx, 1]
@@ -643,46 +731,66 @@ def stem_4d(
     voltage_kv: ScalarNumeric,
     calib_ang: ScalarFloat,
 ) -> STEM4D:
-    """Simulate CBED patterns for multiple beam positions.
+    """Generate 4D-STEM data at multiple probe positions.
 
-    Shifts the beam and runs CBED simulations at each position.
+    Extended Summary
+    ----------------
+    Shifts the beam to each scan position and runs
+    :func:`cbed` for each, collecting diffraction patterns
+    into a :class:`~ptyrodactyl.tools.STEM4D` dataset.
+
+    Implementation Logic
+    --------------------
+    1. **Shift beam** --
+       :func:`shift_beam_fourier` to all positions at once.
+    2. **CBED per position** --
+       ``jax.vmap`` over positions.
+    3. **Build STEM4D** --
+       Combine patterns with calibrations and scan
+       positions.
 
     Parameters
     ----------
     pot_slice : PotentialSlices
-        The potential slice(s).
+        Potential slices for the sample.
     beam : ProbeModes
-        The electron beam mode(s).
+        Electron beam modes.
     positions : Num[Array, "#P 2"]
-        The (y, x) positions to shift the beam to.
-        With P being the number of positions.
+        Scan positions ``(y, x)`` in pixels. P is the number
+        of positions.
     voltage_kv : ScalarNumeric
-        The accelerating voltage in kilovolts.
+        Accelerating voltage in kilovolts.
     calib_ang : ScalarFloat
-        The calibration in angstroms.
+        Pixel size in Angstroms.
 
     Returns
     -------
     stem4d_data : STEM4D
-        Complete 4D-STEM dataset containing:
-        - Diffraction patterns for each scan position
-        - Real and Fourier space calibrations
-        - Scan positions in Angstroms
-        - Accelerating voltage
+        Complete 4D-STEM dataset with diffraction patterns,
+        calibrations, scan positions, and voltage.
 
-    Notes
-    -----
-    Algorithm:
-    1. Shift beam to all specified positions
-    2. For each position, run CBED simulation
-    3. Return STEM4D PyTree with all data and calibrations
+    See Also
+    --------
+    :func:`cbed` : Single-position CBED simulation.
+    :func:`shift_beam_fourier` : Fourier-space beam shifting.
     """
     shifted_beams: Complex[Array, " P H W #M"] = shift_beam_fourier(
         beam.modes, positions, calib_ang
     )
 
     def _process_single_position(pos_idx: ScalarInt) -> Float[Array, " H W"]:
-        """Compute CBED pattern for a single beam position."""
+        """Compute CBED pattern for a single beam position.
+
+        Parameters
+        ----------
+        pos_idx : ScalarInt
+            Index into the shifted beams array.
+
+        Returns
+        -------
+        Float[Array, " H W"]
+            CBED intensity pattern at this position.
+        """
         current_beam: Complex[Array, " H W #M"] = jnp.take(
             shifted_beams, pos_idx, axis=0
         )
@@ -727,39 +835,44 @@ def decompose_beam_to_modes(
     num_modes: ScalarInt,
     first_mode_weight: ScalarFloat = 0.6,
 ) -> ProbeModes:
-    """Decompose a single electron beam into multiple orthogonal modes while
-    preserving the total intensity.
+    """Decompose an electron beam into orthogonal modes.
+
+    Extended Summary
+    ----------------
+    Creates *num_modes* spatially orthogonal modes that
+    together preserve the total intensity of the input beam.
+    Useful for modelling partial spatial coherence.
+
+    Implementation Logic
+    --------------------
+    1. **Flatten beam** --
+       Reshape to 1D vector of length ``H * W``.
+    2. **Random orthogonal basis** --
+       QR decomposition of a random complex matrix gives
+       orthonormal columns.
+    3. **Weight and scale** --
+       First mode gets ``first_mode_weight``; remaining
+       weight is split equally. Each mode is scaled by
+       ``sqrt(weight) * sqrt(original_intensity)``.
+    4. **Reshape** --
+       Back to ``(H, W, M)`` spatial dimensions.
 
     Parameters
     ----------
     beam : CalibratedArray
-        The electron beam to decompose.
+        Electron beam to decompose.
     num_modes : ScalarInt
-        The number of modes to decompose into.
+        Number of modes to generate.
     first_mode_weight : ScalarFloat, optional
-        The weight of the first mode. Default is 0.6.
-        The remaining weight is divided equally among the other modes.
+        Weight of the first (dominant) mode. Default is 0.6.
         Must be below 1.0.
 
     Returns
     -------
     probe_modes : ProbeModes
-        The decomposed probe modes with the following attributes:
-        - modes : Complex[Array, " H W M"]
-            The orthogonal modes.
-        - weights : Float[Array, " M"]
-            The mode occupation numbers.
-        - calib : ScalarFloat
-            The pixel calibration.
-
-    Notes
-    -----
-    Algorithm:
-    - Flatten the 2D beam into a vector
-    - Create a random complex matrix
-    - Use QR decomposition to create orthogonal modes
-    - Scale the modes to preserve total intensity
-    - Reshape back to original spatial dimensions
+        Decomposed probe with ``modes`` shape ``(H, W, M)``,
+        ``weights`` shape ``(M,)``, and ``calib`` in
+        Angstroms.
     """
     hh: int
     ww: int
@@ -807,49 +920,40 @@ def annular_detector(
     stem4d_data: STEM4D,
     collection_angles: Float[Array, " 2"],
 ) -> CalibratedArray:
-    """Simulate an annular detector that integrates the CBED signal between
-    inner and outer collection angles to generate a STEM image.
+    """Integrate 4D-STEM data with an annular detector.
+
+    Extended Summary
+    ----------------
+    Creates a virtual annular detector between inner and outer
+    collection angles, integrates each diffraction pattern
+    within the annulus, and reshapes to a 2D STEM image.
+
+    Implementation Logic
+    --------------------
+    1. **Convert angles** --
+       mrad to inverse Angstroms via the electron wavelength.
+    2. **Build annular mask** --
+       Boolean mask on the Fourier-space coordinate grid.
+    3. **Integrate** --
+       ``vmap`` over patterns, sum within the mask.
+    4. **Reshape** --
+       Map 1D scan positions to a 2D image grid.
 
     Parameters
     ----------
     stem4d_data : STEM4D
-        The 4D-STEM data containing diffraction patterns:
-        - data : Float[Array, " P H W"]
-            4D-STEM data array where P is scan position count
-        - fourier_space_calib : Float[Array, " "]
-            Fourier space calibration in inverse Angstroms per pixel
-        - voltage_kv : Float[Array, " "]
-            Accelerating voltage in kilovolts
-        - real_space_calib : Float[Array, " "]
-            Real space calibration in Angstroms per pixel
-        - scan_positions : Float[Array, " P 2"]
-            Real space scan positions in Angstroms
+        4D-STEM dataset. ``data`` shape ``(P, H, W)``,
+        ``fourier_space_calib`` in inverse Angstroms per
+        pixel, ``voltage_kv`` in kilovolts.
     collection_angles : Float[Array, " 2"]
-        Inner and outer collection angles in milliradians [inner, outer].
+        Inner and outer collection angles in milliradians,
+        ``[inner, outer]``.
 
     Returns
     -------
     stem_image : CalibratedArray
-        STEM image from annular detector integration:
-        - data_array : Float[Array, " Ny Nx"]
-            The integrated STEM image
-        - calib_y : Float[Array, " "]
-            Real space calibration in y direction
-        - calib_x : Float[Array, " "]
-            Real space calibration in x direction
-        - real_space : bool
-            True, indicating real space image
-
-    Notes
-    -----
-    Algorithm:
-    - Calculate wavelength from accelerating voltage
-    - Convert collection angles from mrad to inverse Angstroms
-    - Create Fourier space coordinate grid for diffraction patterns
-    - Create annular mask based on collection angles
-    - Apply mask and integrate each diffraction pattern
-    - Reshape to 2D STEM image based on scan positions
-    - Return as calibrated array with real space calibrations
+        Real-space STEM image with ``real_space = True``
+        and calibrations in Angstroms per pixel.
     """
     wavelength: Float[Array, " "] = wavelength_ang(stem4d_data.voltage_kv)
     inner_angle_rad: Float[Array, " "] = collection_angles[0] / 1000.0
@@ -877,7 +981,18 @@ def annular_detector(
     def _integrate_pattern(
         pattern: Float[Array, " hh ww"],
     ) -> Float[Array, " "]:
-        """Integrate diffraction pattern within the annular mask."""
+        """Sum intensity within the annular mask.
+
+        Parameters
+        ----------
+        pattern : Float[Array, " hh ww"]
+            Single diffraction pattern.
+
+        Returns
+        -------
+        Float[Array, " "]
+            Integrated intensity.
+        """
         return jnp.sum(pattern * annular_mask)
 
     integrated_intensities: Float[Array, " pp"] = jax.vmap(_integrate_pattern)(

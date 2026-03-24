@@ -1,28 +1,44 @@
-"""Data preprocessing utilities for electron microscopy and ptychography.
+"""Data preprocessing utilities for electron microscopy.
 
 Extended Summary
 ----------------
-This module contains utilities for preprocessing electron microscopy data
-before analysis or reconstruction, including XYZ and POSCAR file parsing
-and atomic data lookups.
+This module contains utilities for preprocessing electron
+microscopy data before analysis or reconstruction, including
+XYZ and POSCAR file parsing and atomic data lookups.
 
 Routine Listings
 ----------------
-atomic_symbol : function
-    Returns atomic number for given atomic symbol string.
-kirkland_potentials : function
-    Returns preloaded Kirkland scattering factors as JAX array.
-parse_crystal : function
-    Parses XYZ or POSCAR file, auto-detecting format, returns CrystalData.
-parse_poscar : function
-    Parses a VASP POSCAR file and returns validated CrystalData PyTree.
-parse_xyz : function
-    Parses an XYZ file and returns validated CrystalData PyTree.
+:func:`_load_atomic_numbers`
+    Load atomic number mapping from JSON file.
+:data:`_ATOMIC_NUMBERS`
+    Module-level dict mapping symbols to atomic numbers.
+:func:`atomic_symbol`
+    Return atomic number for a given atomic symbol string.
+:func:`_load_kirkland_csv`
+    Load Kirkland potential parameters from CSV file.
+:data:`_KIRKLAND_POTENTIALS`
+    Module-level JAX array of Kirkland parameters.
+:func:`kirkland_potentials`
+    Return preloaded Kirkland scattering factors as JAX
+    array.
+:func:`_parse_xyz_metadata`
+    Extract metadata from the XYZ comment line.
+:func:`parse_xyz`
+    Parse an XYZ file and return validated
+    :class:`~ptyrodactyl.tools.CrystalData`.
+:func:`parse_poscar`
+    Parse a VASP POSCAR file and return validated
+    :class:`~ptyrodactyl.tools.CrystalData`.
+:func:`_extract_elements_from_comment`
+    Extract element symbols from POSCAR comment line.
+:func:`parse_crystal`
+    Parse XYZ or POSCAR file, auto-detecting format.
 
 Notes
 -----
-Internal functions (prefixed with underscore) handle loading atomic number
-mappings, Kirkland potentials from CSV, and parsing XYZ metadata.
+Internal functions (prefixed with underscore) handle loading
+atomic number mappings, Kirkland potentials from CSV, and
+parsing XYZ metadata.
 """
 
 import json
@@ -86,36 +102,33 @@ _ATOMIC_NUMBERS: Dict[str, int] = _load_atomic_numbers()
 
 @jaxtyped(typechecker=beartype)
 def atomic_symbol(symbol_string: str) -> ScalarInt:
-    """Return atomic number for given atomic symbol string.
+    """Return atomic number for a given atomic symbol string.
+
+    Implementation Logic
+    --------------------
+    1. **Strip and normalize** --
+       Remove whitespace and capitalize the symbol.
+    2. **Look up** --
+       Find atomic number in the preloaded
+       :data:`_ATOMIC_NUMBERS` mapping.
 
     Parameters
     ----------
     symbol_string : str
-        Chemical symbol for the element (e.g., "H", "He", "Li").
+        Chemical symbol for the element (e.g., ``"H"``,
+        ``"He"``, ``"Li"``).
 
     Returns
     -------
-    ScalarInt
+    atomic_number : ScalarInt
         Atomic number corresponding to the symbol.
 
     Raises
     ------
     KeyError
         If atomic symbol is not found in the mapping.
-    TypeError
-        If input is not a string.
     ValueError
         If atomic symbol is empty.
-
-    Notes
-    -----
-    Uses preloaded atomic number mapping for fast lookup.
-
-    Algorithm:
-    - Validate input is string
-    - Strip whitespace and ensure proper case
-    - Look up atomic number in preloaded mapping
-    - Return atomic number as scalar integer
     """
     cleaned_symbol: str = symbol_string.strip()
 
@@ -178,20 +191,17 @@ _KIRKLAND_POTENTIALS: Float[Array, "103 12"] = _load_kirkland_csv()
 
 @jaxtyped(typechecker=beartype)
 def kirkland_potentials() -> Float[Array, "103 12"]:
-    """Return preloaded Kirkland potential parameters as JAX array.
+    """Return preloaded Kirkland potential parameters.
 
     Returns
     -------
-    Float[Array, "103 12"]
-        Kirkland potential parameters for elements 1-103.
+    kirkland_data : Float[Array, "103 12"]
+        Kirkland potential parameters for elements 1--103.
 
     Notes
     -----
-    Data is loaded once at module import for optimal performance.
-
-    Algorithm:
-    - Return preloaded JAX array from module-level cache
-    - No file I/O operations for fast access
+    Data is loaded once at module import time from
+    :data:`_KIRKLAND_POTENTIALS`. No file I/O on each call.
     """
     return _KIRKLAND_POTENTIALS
 
@@ -208,7 +218,8 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
     Returns
     -------
     Dict[str, Any]
-        Parsed metadata with optional keys: lattice, stress, energy, properties.
+        Parsed metadata with optional keys: lattice,
+        stress, energy, properties.
 
     Raises
     ------
@@ -286,8 +297,9 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
 
     Notes
     -----
-    Supports both atomic symbols (e.g., "H", "Fe") and atomic numbers (e.g., "1", "26")
-    in the first column of atom data.
+    Supports both atomic symbols (e.g., ``"H"``, ``"Fe"``)
+    and atomic numbers (e.g., ``"1"``, ``"26"``) in the first
+    column of atom data.
     """
     with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()
@@ -402,28 +414,28 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
 
     Notes
     -----
-    POSCAR format:
-    1. Comment line
-    2. Universal scaling factor
-    3-5. Lattice vectors (3 lines, 3 values each)
-    6. Element symbols (VASP 5+) or atom counts (VASP 4)
-    7. Atom counts per element (if line 6 has symbols)
-    8. Optional: "Selective dynamics"
-    9. Coordinate type: "Direct"/"Cartesian" (or first letter)
-    10+. Atomic positions
+    POSCAR format (lines):
+    1. Comment, 2. Scaling factor, 3--5. Lattice vectors,
+    6. Element symbols (VASP 5+) or counts (VASP 4),
+    7. Counts (if line 6 has symbols), 8. Optional
+    ``Selective dynamics``, 9. Coordinate type, 10+. Positions.
 
-    Algorithm:
-    1. Read all lines from file
-    2. Parse comment and scaling factor
-    3. Parse 3x3 lattice vectors and apply scaling
-    4. Detect VASP version by checking if line 6 contains letters
-    5. Parse element symbols and atom counts
-    6. Check for optional "Selective dynamics" line
-    7. Parse coordinate type (Direct or Cartesian)
-    8. Read atomic positions
-    9. Convert fractional to Cartesian if Direct coordinates
-    10. Build atomic numbers array from element symbols and counts
-    11. Return CrystalData PyTree with positions, atomic numbers, lattice
+    Implementation Logic
+    --------------------
+    1. **Read file** -- Load all lines.
+    2. **Parse header** -- Comment and scaling factor.
+    3. **Parse lattice** -- 3x3 vectors, apply scaling.
+    4. **Detect VASP version** -- Letters on line 6 indicate
+       VASP 5+ with explicit element symbols.
+    5. **Parse elements and counts** -- Extract symbols and
+       per-element atom counts.
+    6. **Handle selective dynamics** -- Skip if present.
+    7. **Parse coordinates** -- Direct (fractional) or
+       Cartesian. Convert fractional to Cartesian via
+       ``positions @ lattice``.
+    8. **Build output** -- Construct atomic numbers array
+       and return
+       :class:`~ptyrodactyl.tools.CrystalData` PyTree.
     """
     with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()
@@ -590,26 +602,26 @@ def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
     FileNotFoundError
         If the specified file does not exist.
 
+    Implementation Logic
+    --------------------
+    1. **Check extension** --
+       ``.xyz`` dispatches to :func:`parse_xyz`.
+    2. **Check filename** --
+       Names containing ``POSCAR`` or ``CONTCAR`` dispatch
+       to :func:`parse_poscar`.
+    3. **Content heuristic** --
+       If the first line parses as an integer, assume XYZ;
+       otherwise fall back to POSCAR.
+
     Notes
     -----
-    Supported file formats:
-    - XYZ files: detected by .xyz extension
-    - POSCAR/CONTCAR: detected by filename containing "POSCAR" or "CONTCAR",
-      or by file extension (no extension or unrecognized extension with
-      POSCAR-like content)
-
-    Algorithm:
-    1. Convert file_path to Path object
-    2. Check if filename matches XYZ pattern (.xyz extension)
-    3. Check if filename matches POSCAR pattern (POSCAR/CONTCAR in name)
-    4. If neither, attempt to detect by examining file content
-    5. Call appropriate parser (parse_xyz or parse_poscar)
-    6. Return CrystalData PyTree
+    Supported formats: XYZ (``.xyz``), VASP POSCAR/CONTCAR.
 
     See Also
     --------
-    parse_xyz : Parser for XYZ format files.
-    parse_poscar : Parser for VASP POSCAR/CONTCAR files.
+    :func:`parse_xyz` : Parser for XYZ format files.
+    :func:`parse_poscar` : Parser for VASP POSCAR/CONTCAR
+        files.
     """
     path: Path = Path(file_path)
     filename: str = path.name.lower()

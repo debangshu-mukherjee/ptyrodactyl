@@ -1,23 +1,22 @@
-"""
-Module: ptyrodactyl.jacobian.operators
---------------------------------------
+r"""Jacobian operator primitives for matrix-free linear algebra.
 
-Jacobian operator primitives for matrix-free linear algebra.
+Extended Summary
+----------------
+Wraps JAX autodiff to provide building blocks for second-order
+optimisation and spectral analysis without ever forming the
+Jacobian matrix explicitly.  All operators work on arbitrary
+PyTree parameter structures and are fully JIT-compatible.
 
-These functions wrap JAX's autodiff to provide building blocks for
-second-order optimization and spectral analysis without ever forming
-the Jacobian matrix explicitly.
-
-Functions
----------
-- `jvp_operator`:
-    Jacobian-vector product J @ v
-- `vjp_operator`:
-    Vector-Jacobian product Jᵀ @ u
-- `jtj_operator`:
-    Normal equations operator JᵀJ @ v
-- `hvp_gauss_newton`:
-    Gauss-Newton Hessian-vector product for least-squares
+Routine Listings
+----------------
+:func:`jvp_operator`
+    Jacobian-vector product J @ v.
+:func:`vjp_operator`
+    Vector-Jacobian product J^T @ u.
+:func:`jtj_operator`
+    Normal equations operator J^T J @ v.
+:func:`hvp_gauss_newton`
+    Gauss-Newton Hessian-vector product for least-squares.
 """
 
 from typing import Callable, Tuple, Any
@@ -30,36 +29,41 @@ def jvp_operator(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
 ) -> Callable[[PyTree], Float[Array, "..."]]:
-    """
-    Description
-    -----------
-    Construct a function that computes the Jacobian-vector product J @ v
-    where J = ∂forward_fn/∂params evaluated at the given parameters.
+    r"""Construct a Jacobian-vector product operator J @ v.
 
-    The returned operator maps tangent vectors in parameter space to
-    tangent vectors in measurement space. This is forward-mode autodiff.
+    Extended Summary
+    ----------------
+    Builds a closure that computes
+    :math:`J \, v = \partial f / \partial \theta \; v`
+    evaluated at *params* using forward-mode autodiff.  The
+    returned operator maps tangent vectors in parameter space to
+    tangent vectors in measurement space.
+
+    Implementation Logic
+    --------------------
+    1. **Capture linearisation point** --
+       Close over *params* and *forward_fn*.
+    2. **Evaluate JVP** --
+       Call :func:`jax.jvp` with the supplied tangent vector.
+    3. **Return tangent output** --
+       Discard the primal output and return only the tangent.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to measurements.
-    - `params` (PyTree):
-        Point in parameter space at which to linearize.
+    params : PyTree
+        Point in parameter space at which to linearise.
 
     Returns
     -------
-    - `jvp_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    jvp_fn : Callable[[PyTree], Float[Array, "..."]]
         Function that computes J @ v for any tangent vector v.
-
-    Flow
-    ----
-    1. Capture params and forward_fn in closure
-    2. Return function that calls jax.jvp with given tangent
-    3. Extract and return only the tangent output (not primals)
     """
     def jvp_fn(
         tangent_vector: PyTree,
     ) -> Float[Array, "..."]:
+        """Compute J @ tangent_vector via forward-mode AD."""
         _, output_tangent = jax.jvp(forward_fn, (params,), (tangent_vector,))
         return output_tangent
 
@@ -70,38 +74,45 @@ def vjp_operator(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
 ) -> Callable[[Float[Array, "..."]], PyTree]:
-    """
-    Description
-    -----------
-    Construct a function that computes the vector-Jacobian product Jᵀ @ u
-    where J = ∂forward_fn/∂params evaluated at the given parameters.
+    r"""Construct a vector-Jacobian product operator J^T @ u.
 
-    The returned operator maps cotangent vectors in measurement space to
-    cotangent vectors in parameter space. This is reverse-mode autodiff.
+    Extended Summary
+    ----------------
+    Builds a closure that computes
+    :math:`J^\top u = (\partial f / \partial \theta)^\top u`
+    evaluated at *params* using reverse-mode autodiff.  The
+    returned operator maps cotangent vectors in measurement space
+    to cotangent vectors in parameter space.
+
+    Implementation Logic
+    --------------------
+    1. **Evaluate forward and capture VJP** --
+       Call :func:`jax.vjp` to obtain the pullback function.
+    2. **Apply pullback** --
+       The returned closure applies the pullback to any
+       cotangent vector.
+    3. **Unwrap tuple** --
+       Extract first element since :func:`jax.vjp` returns a
+       tuple of parameter gradients.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to measurements.
-    - `params` (PyTree):
-        Point in parameter space at which to linearize.
+    params : PyTree
+        Point in parameter space at which to linearise.
 
     Returns
     -------
-    - `vjp_fn` (Callable[[Float[Array, "..."]], PyTree]):
-        Function that computes Jᵀ @ u for any cotangent vector u.
-
-    Flow
-    ----
-    1. Evaluate forward_fn and capture VJP function via jax.vjp
-    2. Return function that applies captured VJP to cotangent
-    3. Extract first element since jax.vjp returns tuple
+    vjp_fn : Callable[[Float[Array, "..."]], PyTree]
+        Function that computes J^T @ u for any cotangent u.
     """
     _, vjp_fn_raw = jax.vjp(forward_fn, params)
 
     def vjp_fn(
         cotangent_vector: Float[Array, "..."],
     ) -> PyTree:
+        """Compute J^T @ cotangent_vector via reverse-mode AD."""
         result_tuple: Tuple[PyTree, ...] = vjp_fn_raw(cotangent_vector)
         return result_tuple[0]
 
@@ -112,38 +123,44 @@ def jtj_operator(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
 ) -> Callable[[PyTree], PyTree]:
-    """
-    Description
-    -----------
-    Construct the normal equations operator JᵀJ for the linearized forward model.
+    r"""Construct the normal equations operator J^T J.
 
-    This operator maps parameter-space vectors to parameter-space vectors
-    via v ↦ Jᵀ(J @ v). It is symmetric positive semi-definite. Its nullspace
-    is the gauge subspace. Its eigenvalues are the squared singular values of J.
+    Extended Summary
+    ----------------
+    Builds a closure that computes
+    :math:`J^\top J \, v` via a forward-mode JVP followed by a
+    reverse-mode VJP, without materialising J.  The operator is
+    symmetric positive semi-definite.  Its nullspace is the gauge
+    subspace.  Its eigenvalues are the squared singular values
+    of J.
+
+    Implementation Logic
+    --------------------
+    1. **Compute VJP closure** --
+       Pre-evaluate :func:`jax.vjp` to capture the pullback.
+    2. **Forward pass** --
+       Compute J @ v via :func:`jax.jvp`.
+    3. **Backward pass** --
+       Apply the cached pullback to get J^T (J v).
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to measurements.
-    - `params` (PyTree):
-        Point in parameter space at which to linearize.
+    params : PyTree
+        Point in parameter space at which to linearise.
 
     Returns
     -------
-    - `jtj_fn` (Callable[[PyTree], PyTree]):
-        Function that computes JᵀJ @ v for any vector v.
-
-    Flow
-    ----
-    1. Construct JVP operator for forward pass
-    2. Construct VJP operator for backward pass
-    3. Return composition: v → Jᵀ(J @ v)
+    jtj_fn : Callable[[PyTree], PyTree]
+        Function that computes J^T J @ v for any vector v.
     """
     _, vjp_fn_raw = jax.vjp(forward_fn, params)
 
     def jtj_fn(
         vector: PyTree,
     ) -> PyTree:
+        """Compute J^T J @ vector via JVP then VJP."""
         _, forward_tangent = jax.jvp(forward_fn, (params,), (vector,))
         backward_result: Tuple[PyTree, ...] = vjp_fn_raw(forward_tangent)
         return backward_result[0]
@@ -156,36 +173,44 @@ def hvp_gauss_newton(
     params: PyTree,
     residual: Float[Array, "..."],
 ) -> Callable[[PyTree], PyTree]:
-    """
-    Description
-    -----------
-    Construct the Gauss-Newton Hessian-vector product operator.
+    r"""Construct the Gauss-Newton Hessian-vector product operator.
 
-    For least-squares problems min ½||f(θ) - y||², the Gauss-Newton
-    approximation to the Hessian is JᵀJ, ignoring the residual-Hessian
-    term. This is exact at the solution when residuals are zero.
+    Extended Summary
+    ----------------
+    For least-squares problems
+    :math:`\min \tfrac{1}{2}\|f(\theta) - y\|^2`, the
+    Gauss-Newton approximation to the Hessian is
+    :math:`J^\top J`, dropping the residual-Hessian term.  This
+    approximation is exact at the solution when residuals vanish.
 
-    This function returns JᵀJ as an operator, identical to jtj_operator.
-    The residual argument is included for API consistency with full
-    Newton methods where it would be used.
+    The *residual* argument is accepted for API consistency with
+    full Newton methods but is unused in the GN approximation.
+
+    Implementation Logic
+    --------------------
+    1. **Drop residual-Hessian term** --
+       The GN approximation ignores the residual argument.
+    2. **Delegate to J^T J** --
+       Return :func:`jtj_operator` evaluated at *params*.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "..."]]):
+    forward_fn : Callable[[PyTree], Float[Array, "..."]]
         Forward model mapping parameters to measurements.
-    - `params` (PyTree):
+    params : PyTree
         Current parameter estimate.
-    - `residual` (Float[Array, "..."]):
-        Current residual f(params) - data. Unused in GN approximation.
+    residual : Float[Array, "..."]
+        Current residual f(params) - data.  Unused in the
+        Gauss-Newton approximation.
 
     Returns
     -------
-    - `hvp_fn` (Callable[[PyTree], PyTree]):
-        Function that computes the Gauss-Newton HVP for any vector v.
+    hvp_fn : Callable[[PyTree], PyTree]
+        Function that computes the GN Hessian-vector product
+        for any vector v.
 
-    Flow
-    ----
-    1. Ignore residual (GN drops the residual-Hessian term)
-    2. Return JᵀJ operator
+    See Also
+    --------
+    :func:`jtj_operator` : The underlying operator.
     """
     return jtj_operator(forward_fn, params)

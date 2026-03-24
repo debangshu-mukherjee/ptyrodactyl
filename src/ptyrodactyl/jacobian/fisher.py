@@ -1,39 +1,44 @@
-"""
-Module: ptyrodactyl.jacobian.fisher
------------------------------------
+r"""Fisher information for ptychographic experiment design.
 
-Fisher information for ptychographic experiment design.
+Extended Summary
+----------------
+The Fisher information matrix :math:`F = J^\top W J` quantifies
+how much information measurements provide about parameters.  Its
+eigenspectrum reveals which parameter combinations are
+well-constrained versus poorly constrained.  This module provides
+tools for computing, analysing, and optimising Fisher information
+across experimental conditions.
 
-The Fisher information matrix F = JᵀWJ quantifies how much information
-measurements provide about parameters. Its eigenspectrum reveals which
-parameter combinations are well-constrained versus poorly constrained.
-This module provides tools for computing, analyzing, and optimizing
-Fisher information across experimental conditions.
-
-Functions
----------
-- `fisher_information`:
-    Compute Fisher information matrix at a parameter point
-- `fisher_information_operator`:
-    Matrix-free Fisher information operator for large problems
-- `fisher_diagonal`:
-    Fast diagonal approximation of Fisher information
-- `schur_complement`:
-    Marginalize nuisance parameters via Schur complement
-- `effective_fisher`:
-    Fisher information after marginalizing nuisances
-- `fisher_eigenspectrum`:
-    Eigenvalues of Fisher matrix via Lanczos
-- `a_optimality`:
-    A-optimality criterion: trace(F⁻¹)
-- `d_optimality`:
-    D-optimality criterion: det(F)
-- `e_optimality`:
-    E-optimality criterion: λ_min(F)
-- `stack_fisher`:
-    Combine Fisher matrices from multiple experimental conditions
-- `optimal_weights`:
-    Compute optimal weights for stacking experiments
+Routine Listings
+----------------
+:class:`FisherState`
+    State container for iterative Fisher computation.
+:func:`fisher_information`
+    Compute Fisher information matrix at a parameter point.
+:func:`fisher_information_operator`
+    Matrix-free Fisher information operator for large problems.
+:func:`fisher_diagonal`
+    Fast diagonal approximation of Fisher information.
+:func:`schur_complement`
+    Marginalise nuisance parameters via Schur complement.
+:func:`effective_fisher`
+    Fisher information after marginalising nuisances.
+:func:`fisher_eigenspectrum`
+    Eigenvalues of Fisher matrix via Lanczos.
+:func:`a_optimality`
+    A-optimality criterion: trace(F^{-1}).
+:func:`d_optimality`
+    D-optimality criterion: log det(F).
+:func:`e_optimality`
+    E-optimality criterion: lambda_min(F).
+:func:`stack_fisher`
+    Combine Fisher matrices from multiple conditions.
+:func:`optimal_weights_e_criterion`
+    Optimal weights for stacking under E-optimality.
+:func:`condition_number`
+    Condition number of Fisher information matrix.
+:func:`information_gain`
+    Information gain from adding measurements.
 """
 
 from typing import Callable, Tuple, NamedTuple
@@ -46,7 +51,15 @@ from ptyrodactyl.jacobian.operators import jtj_operator, jvp_operator, vjp_opera
 
 
 class FisherState(NamedTuple):
-    """State for iterative Fisher computation."""
+    """State container for iterative Fisher computation.
+
+    Attributes
+    ----------
+    fisher_matrix : Float[Array, "n n"]
+        Current Fisher information matrix estimate.
+    iteration : Int[Array, ""]
+        Current iteration index.
+    """
     fisher_matrix: Float[Array, "n n"]
     iteration: Int[Array, ""]
 
@@ -55,21 +68,19 @@ def _tree_dot(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute inner product between two PyTrees with matching structure.
+    """Compute inner product between two PyTrees.
 
     Parameters
     ----------
-    - `tree_a` (PyTree):
+    tree_a : PyTree
         First PyTree operand.
-    - `tree_b` (PyTree):
-        Second PyTree operand with same structure as tree_a.
+    tree_b : PyTree
+        Second PyTree operand with same structure as
+        *tree_a*.
 
     Returns
     -------
-    - `result` (Float[Array, ""]):
+    result : Float[Array, ""]
         Sum of element-wise products across all leaves.
     """
     leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
@@ -84,35 +95,48 @@ def fisher_information(
     params: PyTree,
     noise_variance: Float[Array, ""] = jnp.array(1.0),
 ) -> Float[Array, "n n"]:
-    """
-    Description
-    -----------
-    Compute the Fisher information matrix F = (1/σ²) JᵀJ.
+    r"""Compute the Fisher information matrix.
 
-    For Gaussian noise with variance σ², the Fisher information equals
-    the inverse noise variance times the Gramian of the Jacobian. This
-    matrix encodes the information content of measurements about parameters.
+    Extended Summary
+    ----------------
+    For Gaussian noise with variance :math:`\sigma^2`, the
+    Fisher information equals
+
+    .. math::
+        F = \frac{1}{\sigma^2} J^\top J
+
+    where *J* is the Jacobian of *forward_fn* at *params*.
+    This matrix encodes the information content of measurements
+    about parameters.
+
+    Implementation Logic
+    --------------------
+    1. **Flatten parameters** --
+       Ravel the PyTree to obtain dimension *n*.
+    2. **Compute full Jacobian** --
+       Use vmap over canonical basis vectors to build J
+       column-by-column.
+    3. **Form Gramian** --
+       Compute :math:`J^\top J` and scale by
+       :math:`1 / \sigma^2`.
+    4. **Return** --
+       The (n, n) Fisher matrix.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "m"]]):
+    forward_fn : Callable[[PyTree], Float[Array, "m"]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate Fisher information.
-    - `noise_variance` (Float[Array, ""]):
-        Measurement noise variance σ². Default 1.0.
+    noise_variance : Float[Array, ""]
+        Measurement noise variance :math:`\sigma^2`.
+        Default 1.0.
 
     Returns
     -------
-    - `fisher_matrix` (Float[Array, "n n"]):
-        Fisher information matrix of shape (n_params, n_params).
-
-    Flow
-    ----
-    1. Flatten params to get dimension n
-    2. Compute full Jacobian via vmap over basis vectors
-    3. Form JᵀJ and scale by 1/σ²
-    4. Return Fisher matrix
+    fisher_matrix : Float[Array, "n n"]
+        Fisher information matrix of shape
+        ``(n_params, n_params)``.
     """
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
@@ -120,6 +144,7 @@ def fisher_information(
     def jacobian_column(
         index: int,
     ) -> Float[Array, "m"]:
+        """Compute column *index* of the Jacobian."""
         basis_vector: Float[Array, "n"] = jnp.zeros(n).at[index].set(1.0)
         tangent_pytree: PyTree = unflatten_fn(basis_vector)
         _, jvp_result = jax.jvp(forward_fn, (params,), (tangent_pytree,))
@@ -137,33 +162,41 @@ def fisher_information_operator(
     params: PyTree,
     noise_variance: Float[Array, ""] = jnp.array(1.0),
 ) -> Callable[[PyTree], PyTree]:
-    """
-    Description
-    -----------
-    Construct matrix-free Fisher information operator F @ v = (1/σ²) JᵀJ @ v.
+    r"""Construct a matrix-free Fisher information operator.
 
-    For large parameter spaces where forming the full matrix is infeasible,
-    this returns an operator that applies F to vectors without materialization.
+    Extended Summary
+    ----------------
+    For large parameter spaces where forming the full matrix is
+    infeasible, this returns an operator that applies
+
+    .. math::
+        F \, v = \frac{1}{\sigma^2} J^\top J \, v
+
+    without materialising :math:`J` or :math:`F`.
+
+    Implementation Logic
+    --------------------
+    1. **Construct J^T J operator** --
+       Delegate to :func:`jtj_operator`.
+    2. **Wrap with noise scaling** --
+       Multiply the result by :math:`1 / \sigma^2`.
+    3. **Return composed operator** --
+       A callable mapping PyTree to PyTree.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "m"]]):
+    forward_fn : Callable[[PyTree], Float[Array, "m"]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate Fisher information.
-    - `noise_variance` (Float[Array, ""]):
-        Measurement noise variance σ². Default 1.0.
+    noise_variance : Float[Array, ""]
+        Measurement noise variance :math:`\sigma^2`.
+        Default 1.0.
 
     Returns
     -------
-    - `fisher_op` (Callable[[PyTree], PyTree]):
+    fisher_op : Callable[[PyTree], PyTree]
         Operator that computes F @ v for any vector v.
-
-    Flow
-    ----
-    1. Construct JᵀJ operator
-    2. Wrap with 1/σ² scaling
-    3. Return composed operator
     """
     jtj_fn: Callable = jtj_operator(forward_fn, params)
     inv_variance: Float[Array, ""] = 1.0 / noise_variance
@@ -171,6 +204,7 @@ def fisher_information_operator(
     def fisher_op(
         vector: PyTree,
     ) -> PyTree:
+        """Apply (1/sigma^2) J^T J to *vector*."""
         jtj_v: PyTree = jtj_fn(vector)
         result: PyTree = jax.tree_util.tree_map(lambda x: inv_variance * x, jtj_v)
         return result
@@ -185,38 +219,50 @@ def fisher_diagonal(
     num_hutchinson_samples: int = 30,
     random_seed: int = 42,
 ) -> PyTree:
-    """
-    Description
-    -----------
-    Estimate diagonal of Fisher information via Hutchinson's estimator.
+    r"""Estimate diagonal of Fisher information via Hutchinson.
 
-    The diagonal F_ii indicates the information about each parameter
-    individually. This is faster than computing the full matrix.
+    Extended Summary
+    ----------------
+    The diagonal :math:`F_{ii}` indicates the information about
+    each parameter individually.  The Hutchinson trace estimator
+    approximates :math:`\operatorname{diag}(A)` via
+
+    .. math::
+        \operatorname{diag}(A) \approx
+        \frac{1}{S} \sum_{s=1}^{S} z_s \odot (A z_s)
+
+    where :math:`z_s` are Rademacher random vectors.
+
+    Implementation Logic
+    --------------------
+    1. **Generate Rademacher vectors** --
+       Draw *num_hutchinson_samples* random +/-1 vectors.
+    2. **Accumulate samples** --
+       For each z, compute z * (J^T J z) and sum.
+    3. **Average and scale** --
+       Divide by the number of samples and by
+       :math:`\sigma^2`.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "m"]]):
+    forward_fn : Callable[[PyTree], Float[Array, "m"]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate Fisher information.
-    - `noise_variance` (Float[Array, ""]):
-        Measurement noise variance σ². Default 1.0.
-    - `num_hutchinson_samples` (int):
-        Number of random vectors for Hutchinson estimator. Default 30.
-    - `random_seed` (int):
-        Seed for random vectors. Default 42.
+    noise_variance : Float[Array, ""]
+        Measurement noise variance :math:`\sigma^2`.
+        Default 1.0.
+    num_hutchinson_samples : int
+        Number of random vectors for Hutchinson estimator.
+        Default 30.
+    random_seed : int
+        Seed for random vectors.  Default 42.
 
     Returns
     -------
-    - `fisher_diag` (PyTree):
-        Diagonal of Fisher matrix as PyTree matching params structure.
-
-    Flow
-    ----
-    1. Generate random Rademacher vectors
-    2. For each vector z: compute z ⊙ (JᵀJ @ z)
-    3. Average over samples to estimate diagonal
-    4. Scale by 1/σ²
+    fisher_diag : PyTree
+        Diagonal of Fisher matrix as a PyTree matching
+        *params* structure.
     """
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
@@ -226,6 +272,7 @@ def fisher_diagonal(
     def jtj_flat_fn(
         v_flat: Float[Array, "n"],
     ) -> Float[Array, "n"]:
+        """Apply J^T J in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = jtj_fn(v_pytree)
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
@@ -237,6 +284,7 @@ def fisher_diagonal(
         carry: Float[Array, "n"],
         key_i: jax.random.PRNGKey,
     ) -> Tuple[Float[Array, "n"], None]:
+        """Accumulate one Hutchinson diagonal sample."""
         z: Float[Array, "n"] = jax.random.rademacher(key_i, (n,)).astype(jnp.float32)
         jtj_z: Float[Array, "n"] = jtj_flat_fn(z)
         sample: Float[Array, "n"] = z * jtj_z
@@ -256,35 +304,43 @@ def schur_complement(
     full_matrix: Float[Array, "n n"],
     num_params_of_interest: int,
 ) -> Float[Array, "p p"]:
-    """
-    Description
-    -----------
-    Compute Schur complement to marginalize nuisance parameters.
+    r"""Marginalise nuisance parameters via Schur complement.
 
-    Given a block matrix [[A, B], [C, D]] where A corresponds to parameters
-    of interest and D to nuisance parameters, the Schur complement
-    A - B D⁻¹ C gives the effective information about parameters of
-    interest after marginalizing out nuisances.
+    Extended Summary
+    ----------------
+    Given a block matrix
+
+    .. math::
+        \begin{bmatrix} A & B \\ C & D \end{bmatrix}
+
+    where *A* corresponds to parameters of interest and *D* to
+    nuisance parameters, the Schur complement
+    :math:`A - B D^{-1} C` gives the effective information
+    about parameters of interest after marginalising out
+    nuisances.
+
+    Implementation Logic
+    --------------------
+    1. **Extract blocks** --
+       Partition into A, B, C, D using
+       *num_params_of_interest*.
+    2. **Regularise D** --
+       Add 1e-8 * I for numerical stability.
+    3. **Compute complement** --
+       :math:`S = A - B D^{-1} C`.
 
     Parameters
     ----------
-    - `full_matrix` (Float[Array, "n n"]):
+    full_matrix : Float[Array, "n n"]
         Full Fisher information matrix.
-    - `num_params_of_interest` (int):
-        Number of parameters of interest (first p parameters).
-        Remaining (n - p) are treated as nuisances.
+    num_params_of_interest : int
+        Number of parameters of interest (first *p*
+        parameters).  Remaining n - p are nuisances.
 
     Returns
     -------
-    - `schur` (Float[Array, "p p"]):
+    schur : Float[Array, "p p"]
         Schur complement matrix for parameters of interest.
-
-    Flow
-    ----
-    1. Extract blocks A, B, C, D from full matrix
-    2. Compute D⁻¹ (with regularization for stability)
-    3. Compute Schur complement A - B D⁻¹ C
-    4. Return marginalized information matrix
     """
     p: int = num_params_of_interest
     n: int = full_matrix.shape[0]
@@ -309,37 +365,54 @@ def effective_fisher(
     params_nuisance: PyTree,
     noise_variance: Float[Array, ""] = jnp.array(1.0),
 ) -> Float[Array, "p p"]:
-    """
-    Description
-    -----------
-    Compute Fisher information for parameters of interest, marginalizing nuisances.
+    r"""Compute Fisher information after marginalising nuisances.
 
-    This implements F_eff = F_gg - F_gn F_nn⁻¹ F_ng where g denotes parameters
-    of interest and n denotes nuisance parameters (probe errors, position
-    errors, drift, etc.).
+    Extended Summary
+    ----------------
+    Implements
+
+    .. math::
+        F_{\text{eff}} = F_{gg} - F_{gn} F_{nn}^{-1} F_{ng}
+
+    where *g* denotes parameters of interest and *n* denotes
+    nuisance parameters (probe errors, position errors,
+    drift, etc.).
+
+    Implementation Logic
+    --------------------
+    1. **Flatten and concatenate** --
+       Ravel both PyTrees and concatenate into a single
+       vector of length *p + q*.
+    2. **Compute full Fisher** --
+       Build the (p+q, p+q) Fisher matrix.
+    3. **Apply Schur complement** --
+       Marginalise the last *q* parameters.
+    4. **Return** --
+       The (p, p) effective Fisher matrix.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "m"]]):
-        Forward model taking (params_interest, params_nuisance) tuple.
-    - `params_interest` (PyTree):
-        Parameters of interest (e.g., object potential).
-    - `params_nuisance` (PyTree):
-        Nuisance parameters (e.g., probe, positions).
-    - `noise_variance` (Float[Array, ""]):
-        Measurement noise variance σ². Default 1.0.
+    forward_fn : Callable[[PyTree], Float[Array, "m"]]
+        Forward model taking ``(params_interest,
+        params_nuisance)`` tuple.
+    params_interest : PyTree
+        Parameters of interest (e.g. object potential).
+    params_nuisance : PyTree
+        Nuisance parameters (e.g. probe, positions).
+    noise_variance : Float[Array, ""]
+        Measurement noise variance :math:`\sigma^2`.
+        Default 1.0.
 
     Returns
     -------
-    - `fisher_eff` (Float[Array, "p p"]):
-        Effective Fisher information for parameters of interest.
+    fisher_eff : Float[Array, "p p"]
+        Effective Fisher information for parameters of
+        interest.
 
-    Flow
-    ----
-    1. Combine params into single PyTree
-    2. Compute full Fisher matrix
-    3. Apply Schur complement to marginalize nuisances
-    4. Return effective information
+    See Also
+    --------
+    :func:`schur_complement` : The marginalisation step.
+    :func:`fisher_information` : Full Fisher matrix.
     """
     flat_interest, unflatten_interest = jax.flatten_util.ravel_pytree(params_interest)
     flat_nuisance, unflatten_nuisance = jax.flatten_util.ravel_pytree(params_nuisance)
@@ -350,6 +423,7 @@ def effective_fisher(
     def combined_forward(
         combined_params: Float[Array, "n"],
     ) -> Float[Array, "m"]:
+        """Evaluate forward model from concatenated vector."""
         interest_part: Float[Array, "p"] = combined_params[:p]
         nuisance_part: Float[Array, "q"] = combined_params[p:]
         params_i: PyTree = unflatten_interest(interest_part)
@@ -361,6 +435,7 @@ def effective_fisher(
     def jacobian_column(
         index: int,
     ) -> Float[Array, "m"]:
+        """Compute column *index* of the combined Jacobian."""
         basis_vector: Float[Array, "n"] = jnp.zeros(n).at[index].set(1.0)
         _, jvp_result = jax.jvp(combined_forward, (combined_params,), (basis_vector,))
         return jvp_result
@@ -382,41 +457,51 @@ def fisher_eigenspectrum(
     num_lanczos_iterations: int = 100,
     random_seed: int = 42,
 ) -> Float[Array, "k"]:
-    """
-    Description
-    -----------
-    Estimate eigenspectrum of Fisher information via Lanczos.
+    r"""Estimate eigenspectrum of Fisher information via Lanczos.
 
-    The eigenvalues indicate how much information measurements provide
-    about different parameter combinations. Small eigenvalues correspond
-    to poorly constrained directions.
+    Extended Summary
+    ----------------
+    The eigenvalues indicate how much information measurements
+    provide about different parameter combinations.  Small
+    eigenvalues correspond to poorly constrained (near-gauge)
+    directions.
+
+    Implementation Logic
+    --------------------
+    1. **Build Fisher operator** --
+       Construct matrix-free :math:`F = (1/\sigma^2) J^\top J`.
+    2. **Run Lanczos** --
+       Iterate to build a tridiagonal matrix.
+    3. **Solve tridiagonal eigenproblem** --
+       Compute eigenvalues of the tridiagonal matrix.
+    4. **Sort and truncate** --
+       Return the top *num_eigenvalues* in descending order.
 
     Parameters
     ----------
-    - `forward_fn` (Callable[[PyTree], Float[Array, "m"]]):
+    forward_fn : Callable[[PyTree], Float[Array, "m"]]
         Forward model mapping parameters to predictions.
-    - `params` (PyTree):
+    params : PyTree
         Point at which to evaluate Fisher information.
-    - `noise_variance` (Float[Array, ""]):
-        Measurement noise variance σ². Default 1.0.
-    - `num_eigenvalues` (int):
-        Number of eigenvalues to estimate. Default 50.
-    - `num_lanczos_iterations` (int):
-        Lanczos iterations. Default 100.
-    - `random_seed` (int):
-        Seed for random starting vector. Default 42.
+    noise_variance : Float[Array, ""]
+        Measurement noise variance :math:`\sigma^2`.
+        Default 1.0.
+    num_eigenvalues : int
+        Number of eigenvalues to estimate.  Default 50.
+    num_lanczos_iterations : int
+        Lanczos iterations.  Default 100.
+    random_seed : int
+        Seed for random starting vector.  Default 42.
 
     Returns
     -------
-    - `eigenvalues` (Float[Array, "k"]):
+    eigenvalues : Float[Array, "k"]
         Estimated eigenvalues in descending order.
 
-    Flow
-    ----
-    1. Construct matrix-free Fisher operator
-    2. Run Lanczos to build tridiagonal matrix
-    3. Compute eigenvalues of tridiagonal matrix
-    4. Sort descending and return top k
+    See Also
+    --------
+    :func:`fisher_information_operator` : The underlying
+        operator.
     """
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
@@ -427,6 +512,7 @@ def fisher_eigenspectrum(
     def fisher_flat_fn(
         v_flat: Float[Array, "n"],
     ) -> Float[Array, "n"]:
+        """Apply Fisher operator in flattened space."""
         v_pytree: PyTree = unflatten_fn(v_flat)
         result_pytree: PyTree = fisher_op(v_pytree)
         result_flat: Float[Array, "n"] = jax.flatten_util.ravel_pytree(result_pytree)[0]
@@ -445,6 +531,7 @@ def fisher_eigenspectrum(
         iteration: int,
         carry: Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]],
     ) -> Tuple[Float[Array, "n"], Float[Array, "n"], Float[Array, "k"], Float[Array, "k"]]:
+        """Execute one Lanczos iteration."""
         v_p, v_c, alphas, betas = carry
         w: Float[Array, "n"] = fisher_flat_fn(v_c)
         alpha_i: Float[Array, ""] = jnp.dot(w, v_c)
@@ -483,31 +570,34 @@ def a_optimality(
     fisher_matrix: Float[Array, "n n"],
     regularization: float = 1e-8,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute A-optimality criterion: trace(F⁻¹).
+    r"""Compute A-optimality criterion: trace(F^{-1}).
 
-    A-optimality minimizes the average variance of parameter estimates.
-    Lower values indicate better experimental design.
+    Extended Summary
+    ----------------
+    A-optimality minimises the average variance of parameter
+    estimates.  Lower values indicate better experimental design.
+
+    Implementation Logic
+    --------------------
+    1. **Regularise** --
+       Add *regularization* * I to the diagonal.
+    2. **Invert** --
+       Compute F^{-1}.
+    3. **Trace** --
+       Return trace(F^{-1}).
 
     Parameters
     ----------
-    - `fisher_matrix` (Float[Array, "n n"]):
+    fisher_matrix : Float[Array, "n n"]
         Fisher information matrix.
-    - `regularization` (float):
-        Small value added to diagonal for numerical stability. Default 1e-8.
+    regularization : float
+        Small value added to diagonal for numerical
+        stability.  Default 1e-8.
 
     Returns
     -------
-    - `criterion` (Float[Array, ""]):
+    criterion : Float[Array, ""]
         A-optimality value (trace of inverse Fisher).
-
-    Flow
-    ----
-    1. Add regularization to Fisher matrix
-    2. Compute inverse
-    3. Return trace
     """
     n: int = fisher_matrix.shape[0]
     fisher_reg: Float[Array, "n n"] = fisher_matrix + regularization * jnp.eye(n)
@@ -520,32 +610,36 @@ def d_optimality(
     fisher_matrix: Float[Array, "n n"],
     regularization: float = 1e-8,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute D-optimality criterion: log det(F).
+    r"""Compute D-optimality criterion: log det(F).
 
-    D-optimality maximizes the determinant of Fisher information,
-    minimizing the volume of the confidence ellipsoid. Higher values
-    indicate better experimental design.
+    Extended Summary
+    ----------------
+    D-optimality maximises the determinant of Fisher
+    information, minimising the volume of the confidence
+    ellipsoid.  Higher values indicate better experimental
+    design.
+
+    Implementation Logic
+    --------------------
+    1. **Regularise** --
+       Add *regularization* * I to the diagonal.
+    2. **Eigendecompose** --
+       Compute eigenvalues of the regularised matrix.
+    3. **Sum log eigenvalues** --
+       Return :math:`\sum \log \lambda_i`.
 
     Parameters
     ----------
-    - `fisher_matrix` (Float[Array, "n n"]):
+    fisher_matrix : Float[Array, "n n"]
         Fisher information matrix.
-    - `regularization` (float):
-        Small value added to diagonal for numerical stability. Default 1e-8.
+    regularization : float
+        Small value added to diagonal for numerical
+        stability.  Default 1e-8.
 
     Returns
     -------
-    - `criterion` (Float[Array, ""]):
+    criterion : Float[Array, ""]
         D-optimality value (log determinant of Fisher).
-
-    Flow
-    ----
-    1. Add regularization to Fisher matrix
-    2. Compute log determinant via eigenvalues
-    3. Return log det
     """
     n: int = fisher_matrix.shape[0]
     fisher_reg: Float[Array, "n n"] = fisher_matrix + regularization * jnp.eye(n)
@@ -557,29 +651,31 @@ def d_optimality(
 def e_optimality(
     fisher_matrix: Float[Array, "n n"],
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute E-optimality criterion: λ_min(F).
+    r"""Compute E-optimality criterion: lambda_min(F).
 
-    E-optimality maximizes the minimum eigenvalue of Fisher information,
-    ensuring no parameter direction is poorly constrained. Higher values
-    indicate better experimental design.
+    Extended Summary
+    ----------------
+    E-optimality maximises the minimum eigenvalue of Fisher
+    information, ensuring no parameter direction is poorly
+    constrained.  Higher values indicate better experimental
+    design.
+
+    Implementation Logic
+    --------------------
+    1. **Eigendecompose** --
+       Compute eigenvalues.
+    2. **Return minimum** --
+       The smallest eigenvalue is the criterion.
 
     Parameters
     ----------
-    - `fisher_matrix` (Float[Array, "n n"]):
+    fisher_matrix : Float[Array, "n n"]
         Fisher information matrix.
 
     Returns
     -------
-    - `criterion` (Float[Array, ""]):
+    criterion : Float[Array, ""]
         E-optimality value (minimum eigenvalue).
-
-    Flow
-    ----
-    1. Compute eigenvalues
-    2. Return minimum eigenvalue
     """
     eigenvalues: Float[Array, "n"] = jnp.linalg.eigvalsh(fisher_matrix)
     criterion: Float[Array, ""] = jnp.min(eigenvalues)
@@ -590,32 +686,33 @@ def stack_fisher(
     fisher_matrices: Float[Array, "k n n"],
     weights: Float[Array, "k"],
 ) -> Float[Array, "n n"]:
-    """
-    Description
-    -----------
-    Combine Fisher matrices from multiple experimental conditions.
+    """Combine Fisher matrices from multiple conditions.
 
-    When measurements are independent, Fisher information is additive.
-    Weighted stacking allows optimizing the allocation of measurement
-    effort across conditions.
+    Extended Summary
+    ----------------
+    When measurements are independent, Fisher information is
+    additive.  Weighted stacking allows optimising the
+    allocation of measurement effort across conditions.
+
+    Implementation Logic
+    --------------------
+    1. **Weight** --
+       Multiply each matrix by its scalar weight.
+    2. **Sum** --
+       Accumulate over the condition axis.
 
     Parameters
     ----------
-    - `fisher_matrices` (Float[Array, "k n n"]):
-        Fisher matrices from k experimental conditions.
-    - `weights` (Float[Array, "k"]):
-        Non-negative weights for each condition (e.g., exposure times).
+    fisher_matrices : Float[Array, "k n n"]
+        Fisher matrices from *k* experimental conditions.
+    weights : Float[Array, "k"]
+        Non-negative weights for each condition (e.g.
+        exposure times).
 
     Returns
     -------
-    - `combined_fisher` (Float[Array, "n n"]):
+    combined_fisher : Float[Array, "n n"]
         Weighted sum of Fisher matrices.
-
-    Flow
-    ----
-    1. Multiply each matrix by its weight
-    2. Sum over conditions
-    3. Return combined Fisher matrix
     """
     weighted_matrices: Float[Array, "k n n"] = fisher_matrices * weights[:, None, None]
     combined_fisher: Float[Array, "n n"] = jnp.sum(weighted_matrices, axis=0)
@@ -627,39 +724,51 @@ def optimal_weights_e_criterion(
     num_iterations: int = 100,
     learning_rate: float = 0.1,
 ) -> Float[Array, "k"]:
-    """
-    Description
-    -----------
-    Find optimal weights for stacking experiments under E-optimality.
+    r"""Find optimal weights under E-optimality.
 
-    Solves: max_{w} λ_min(Σ_i w_i F_i) subject to Σ_i w_i = 1, w_i ≥ 0.
+    Extended Summary
+    ----------------
+    Solves
 
-    This determines how to allocate measurement effort across experimental
-    conditions to maximize the worst-case information.
+    .. math::
+        \max_{w} \; \lambda_{\min}\!\bigl(
+        \textstyle\sum_i w_i F_i\bigr)
+        \quad\text{s.t.}\quad
+        \textstyle\sum_i w_i = 1,\; w_i \ge 0.
+
+    This determines how to allocate measurement effort across
+    experimental conditions to maximise the worst-case
+    information.
+
+    Implementation Logic
+    --------------------
+    1. **Initialise uniform** --
+       Set :math:`w_i = 1/k`.
+    2. **Gradient ascent** --
+       For each iteration, compute the gradient of
+       :math:`\lambda_{\min}` with respect to *w* and take a
+       projected step onto the probability simplex.
+    3. **Return weights** --
+       The converged weight vector.
 
     Parameters
     ----------
-    - `fisher_matrices` (Float[Array, "k n n"]):
-        Fisher matrices from k experimental conditions.
-    - `num_iterations` (int):
-        Number of optimization iterations. Default 100.
-    - `learning_rate` (float):
-        Step size for projected gradient ascent. Default 0.1.
+    fisher_matrices : Float[Array, "k n n"]
+        Fisher matrices from *k* experimental conditions.
+    num_iterations : int
+        Number of optimisation iterations.  Default 100.
+    learning_rate : float
+        Step size for projected gradient ascent.  Default 0.1.
 
     Returns
     -------
-    - `optimal_weights` (Float[Array, "k"]):
+    optimal_weights : Float[Array, "k"]
         Optimal weights summing to 1.
 
-    Flow
-    ----
-    1. Initialize uniform weights
-    2. For each iteration:
-       a. Compute combined Fisher
-       b. Find minimum eigenvector
-       c. Compute gradient of λ_min w.r.t. weights
-       d. Take gradient step and project to simplex
-    3. Return optimal weights
+    See Also
+    --------
+    :func:`stack_fisher` : Weighted combination step.
+    :func:`e_optimality` : The criterion being optimised.
     """
     k: int = fisher_matrices.shape[0]
     n: int = fisher_matrices.shape[1]
@@ -669,6 +778,7 @@ def optimal_weights_e_criterion(
     def project_simplex(
         weights: Float[Array, "k"],
     ) -> Float[Array, "k"]:
+        """Project *weights* onto the probability simplex."""
         weights_clipped: Float[Array, "k"] = jnp.maximum(weights, 0.0)
         weights_sum: Float[Array, ""] = jnp.sum(weights_clipped)
         weights_normalized: Float[Array, "k"] = weights_clipped / (weights_sum + 1e-12)
@@ -678,6 +788,7 @@ def optimal_weights_e_criterion(
         iteration: int,
         weights: Float[Array, "k"],
     ) -> Float[Array, "k"]:
+        """One projected gradient ascent step."""
         combined_fisher: Float[Array, "n n"] = stack_fisher(fisher_matrices, weights)
         eigenvalues, eigenvectors = jnp.linalg.eigh(combined_fisher)
         min_idx: Int[Array, ""] = jnp.argmin(eigenvalues)
@@ -686,6 +797,7 @@ def optimal_weights_e_criterion(
         def gradient_component(
             fisher_i: Float[Array, "n n"],
         ) -> Float[Array, ""]:
+            """Compute v^T F_i v for min eigenvector v."""
             return jnp.dot(min_eigenvector, jnp.dot(fisher_i, min_eigenvector))
 
         gradient: Float[Array, "k"] = jax.vmap(gradient_component)(fisher_matrices)
@@ -704,32 +816,35 @@ def condition_number(
     fisher_matrix: Float[Array, "n n"],
     regularization: float = 1e-12,
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute condition number of Fisher information matrix.
+    r"""Compute condition number of Fisher information matrix.
 
-    The condition number κ = λ_max / λ_min indicates how ill-posed the
-    inverse problem is. Large condition numbers mean some directions
-    are much harder to recover than others.
+    Extended Summary
+    ----------------
+    The condition number
+    :math:`\kappa = \lambda_{\max} / \lambda_{\min}` indicates
+    how ill-posed the inverse problem is.  Large condition
+    numbers mean some directions are much harder to recover
+    than others.
+
+    Implementation Logic
+    --------------------
+    1. **Eigendecompose** --
+       Compute eigenvalues.
+    2. **Extremal ratio** --
+       Return :math:`\lambda_{\max} / \max(\lambda_{\min},
+       \epsilon)`.
 
     Parameters
     ----------
-    - `fisher_matrix` (Float[Array, "n n"]):
+    fisher_matrix : Float[Array, "n n"]
         Fisher information matrix.
-    - `regularization` (float):
-        Floor for minimum eigenvalue. Default 1e-12.
+    regularization : float
+        Floor for minimum eigenvalue.  Default 1e-12.
 
     Returns
     -------
-    - `kappa` (Float[Array, ""]):
+    kappa : Float[Array, ""]
         Condition number.
-
-    Flow
-    ----
-    1. Compute eigenvalues
-    2. Find max and min eigenvalues
-    3. Return ratio
     """
     eigenvalues: Float[Array, "n"] = jnp.linalg.eigvalsh(fisher_matrix)
     lambda_max: Float[Array, ""] = jnp.max(eigenvalues)
@@ -742,30 +857,41 @@ def information_gain(
     fisher_before: Float[Array, "n n"],
     fisher_after: Float[Array, "n n"],
 ) -> Float[Array, ""]:
-    """
-    Description
-    -----------
-    Compute information gain from adding measurements.
+    r"""Compute information gain from adding measurements.
 
-    Uses log det ratio: log det(F_after) - log det(F_before).
-    Positive values indicate the new measurements added information.
+    Extended Summary
+    ----------------
+    Uses the log determinant ratio
+
+    .. math::
+        \Delta I = \log\det(F_{\text{after}})
+                 - \log\det(F_{\text{before}})
+
+    Positive values indicate the new measurements added
+    information.
+
+    Implementation Logic
+    --------------------
+    1. **Compute log dets** --
+       Evaluate D-optimality for both matrices.
+    2. **Difference** --
+       Return the log det ratio.
 
     Parameters
     ----------
-    - `fisher_before` (Float[Array, "n n"]):
+    fisher_before : Float[Array, "n n"]
         Fisher information before new measurements.
-    - `fisher_after` (Float[Array, "n n"]):
+    fisher_after : Float[Array, "n n"]
         Fisher information after new measurements.
 
     Returns
     -------
-    - `gain` (Float[Array, ""]):
+    gain : Float[Array, ""]
         Information gain in nats.
 
-    Flow
-    ----
-    1. Compute log det of both matrices
-    2. Return difference
+    See Also
+    --------
+    :func:`d_optimality` : The log det computation.
     """
     log_det_before: Float[Array, ""] = d_optimality(fisher_before)
     log_det_after: Float[Array, ""] = d_optimality(fisher_after)

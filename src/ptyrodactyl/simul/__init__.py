@@ -2,82 +2,96 @@
 
 Extended Summary
 ----------------
-This package implements various electron microscopy components and propagation
-models with JAX for automatic differentiation and acceleration. All functions
-are fully differentiable and JIT-compilable.
+This package implements various electron microscopy components
+and propagation models with JAX for automatic differentiation
+and acceleration. All functions are fully differentiable and
+JIT-compilable.
 
 Submodules
 ----------
 atom_potentials
-    Functions for generating atomic potentials and slices from coordinates.
+    Functions for generating atomic potentials and slices from
+    coordinates.
 geometry
-    Geometric transformations and operations for crystal structures.
+    Geometric transformations and operations for crystal
+    structures.
 parallelized
     Sharded simulation functions for distributed computing.
 preprocessing
-    Data preprocessing utilities and type definitions for microscopy data.
+    Data preprocessing utilities and type definitions for
+    microscopy data.
 simulations
-    Forward simulation functions for electron beam propagation, CBED
-    patterns, and 4D-STEM data generation with aberration calculations.
+    Forward simulation functions for electron beam propagation,
+    CBED patterns, and 4D-STEM data generation with aberration
+    calculations.
 
 Routine Listings
 ----------------
-aberration : function
+:func:`aberration`
     Calculate aberration phase from aberration coefficients.
-annular_detector : function
+:func:`annular_detector`
     Create annular detector mask for STEM imaging.
-atomic_symbol : function
+:func:`atomic_symbol`
     Convert atomic number to chemical symbol.
-bessel_kv : function
-    Modified Bessel function of second kind.
-cbed : function
+:func:`bessel_kv`
+    Modified Bessel function of the second kind.
+:func:`cbed`
     Generate convergent beam electron diffraction patterns.
-clip_cbed : function
-    Clip CBED patterns to mrad extent and resize to target shape.
-contrast_stretch : function
+:func:`clip_cbed`
+    Clip CBED patterns to mrad extent and resize to target
+    shape.
+:func:`contrast_stretch`
     Contrast stretch for visualization.
-decompose_beam_to_modes : function
+:func:`decompose_beam_to_modes`
     Decompose electron beam into orthogonal modes.
-fourier_calib : function
+:func:`fourier_calib`
     Calculate Fourier space calibration from real space.
-fourier_coords : function
+:func:`fourier_coords`
     Generate Fourier space coordinate arrays.
-kirkland_potentials : function
+:func:`kirkland_potentials`
     Kirkland atomic potential parameters lookup.
-kirkland_potentials_crystal : function
-    Generate atomic potentials from crystal data using Kirkland parameters.
-make_probe : function
+:func:`kirkland_potentials_crystal`
+    Generate atomic potentials from crystal data using
+    Kirkland parameters.
+:func:`make_probe`
     Create electron probe with specified aberrations.
-parse_crystal : function
-    Parse XYZ or POSCAR file, auto-detecting format, returns CrystalData.
-parse_poscar : function
-    Parse VASP POSCAR file and return validated structure data.
-parse_xyz : function
+:func:`parse_crystal`
+    Parse XYZ or POSCAR file, auto-detecting format,
+    returns :class:`~ptyrodactyl.tools.CrystalData`.
+:func:`parse_poscar`
+    Parse VASP POSCAR file and return validated structure
+    data.
+:func:`parse_xyz`
     Parse XYZ file and return validated structure data.
-propagation_func : function
+:func:`propagation_func`
     Compute Fresnel propagation function.
-reciprocal_lattice : function
-    Calculate reciprocal lattice vectors from real space lattice.
-rotate_structure : function
+:func:`reciprocal_lattice`
+    Calculate reciprocal lattice vectors from real space
+    lattice.
+:func:`rotate_structure`
     Rotate crystal structure by specified angles.
-rotmatrix_axis : function
+:func:`rotmatrix_axis`
     Create rotation matrix from axis and angle.
-rotmatrix_vectors : function
+:func:`rotmatrix_vectors`
     Create rotation matrix from two vectors.
-tilt_crystal : function
-    Tilt CrystalData by alpha and beta angles (TEM stage-like tilts).
-shift_beam_fourier : function
+:func:`shift_beam_fourier`
     Shift beam in Fourier space.
-single_atom_potential : function
-    Calculate single atom potential using Kirkland parameterization.
-stem_4d : function
+:func:`single_atom_potential`
+    Calculate single atom potential using Kirkland
+    parameterization.
+:func:`stem_4d`
     Generate 4D-STEM data from potential slices and probe.
-stem4d_sharded : function
-    Generate 4D-STEM data from sharded beams with on-the-fly slice generation.
-transmission_func : function
+:func:`stem4d_sharded`
+    Generate 4D-STEM data from sharded beams with on-the-fly
+    slice generation.
+:func:`tilt_crystal`
+    Tilt :class:`~ptyrodactyl.tools.CrystalData` by alpha
+    and beta angles (TEM stage-like tilts).
+:func:`transmission_func`
     Compute transmission function for a potential slice.
-wavelength_ang : function
-    Calculate electron wavelength in Angstroms from accelerating voltage.
+:func:`wavelength_ang`
+    Calculate electron wavelength in Angstroms from
+    accelerating voltage.
 
 Notes
 -----

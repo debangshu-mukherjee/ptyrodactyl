@@ -89,9 +89,6 @@ Routine Listings
     and beta angles (TEM stage-like tilts).
 :func:`transmission_func`
     Compute transmission function for a potential slice.
-:func:`wavelength_ang`
-    Calculate electron wavelength in Angstroms from
-    accelerating voltage.
 
 Notes
 -----
@@ -134,7 +131,6 @@ from .simulations import (
     shift_beam_fourier,
     stem_4d,
     transmission_func,
-    wavelength_ang,
 )
 
 __all__: list[str] = [
@@ -165,5 +161,4 @@ __all__: list[str] = [
     "stem4d_sharded",
     "tilt_crystal",
     "transmission_func",
-    "wavelength_ang",
 ]

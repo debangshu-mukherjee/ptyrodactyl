@@ -34,7 +34,6 @@ Routine Listings
     and parameters.
 """
 
-import jax
 from beartype.typing import (
     Any,
     Dict,
@@ -47,8 +46,6 @@ from beartype.typing import (
 )
 from jax.tree_util import register_pytree_node_class
 from jaxtyping import Array, Bool, Complex, Float, Int, Num
-
-jax.config.update("jax_enable_x64", True)
 
 ScalarNumeric: TypeAlias = Union[int, float, Num[Array, " "]]
 ScalarFloat: TypeAlias = Union[float, Float[Array, " "]]

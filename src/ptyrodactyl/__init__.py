@@ -41,6 +41,7 @@ for input validation and float64 casting.
 """
 
 import os
+from importlib.metadata import version
 
 # Enable multi-threaded CPU execution for JAX (must be set before JAX import)
 os.environ.setdefault(
@@ -52,7 +53,16 @@ import jax  # noqa: E402
 
 jax.config.update("jax_enable_x64", True)
 
-from . import invert, jacobian, simul, tools, workflows  # noqa: E402
+from . import (  # noqa: E402, I001
+    born, 
+    invert, 
+    jacobian, 
+    simul, 
+    tools, 
+    workflows,
+)
+
+__version__: str = version("ptyrodactyl")
 
 __all__: list[str] = [
     "born",

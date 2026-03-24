@@ -80,8 +80,6 @@ from ptyrodactyl.tools import (
 
 from .preprocessing import kirkland_potentials
 
-jax.config.update("jax_enable_x64", True)
-
 
 @jaxtyped(typechecker=beartype)
 @jax.jit

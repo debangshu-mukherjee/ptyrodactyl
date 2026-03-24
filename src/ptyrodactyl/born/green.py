@@ -1,21 +1,39 @@
-"""
-Module: lippmann.green
-----------------------
+r"""Fourier-space Green's function for the homogeneous Helmholtz equation.
 
-Green's function of the homogeneous Helmholtz equation in Fourier space.
-Precomputed once per simulation and reused across all Born iterations.
-Central to the convergent Born series of Osnabrugge et al. 2016.
+Extended Summary
+----------------
+Provides the free-space Green's function of the Helmholtz equation
+in reciprocal space, precomputed once per simulation and reused
+across all Born iterations. The Green's function is central to the
+convergent Born series of Osnabrugge et al. (2016):
 
-Functions
----------
-- `wavenumber_background`:
-    Background wavenumber k₀ centered between min and max of specimen k².
-- `convergence_parameter`:
-    Convergence parameter ε ≥ max|k²(r) − k₀²| guaranteeing ρ(M) < 1.
-- `reciprocal_coords`:
-    Reciprocal space coordinate arrays for an isotropic 3D grid.
-- `green_function_fourier`:
-    Green's function g̃₀(p) = 1/(|p|² − k₀² − iε) on the 3D Fourier grid.
+.. math::
+
+    \tilde{g}_0(\mathbf{p})
+        = \frac{1}{|\mathbf{p}|^2 - k_0^2 - i\varepsilon}
+
+The imaginary shift :math:`-i\varepsilon` moves the pole off the
+real axis, ensuring exponential decay in real space with decay
+length :math:`\lambda = k_0 / \varepsilon`.
+
+Routine Listings
+----------------
+:func:`wavenumber_background`
+    Background wavenumber :math:`k_0^2` centred between min and
+    max of the specimen :math:`k^2`.
+:func:`convergence_parameter`
+    Convergence parameter :math:`\varepsilon \geq \max|U(\mathbf{r})|`
+    guaranteeing :math:`\rho(M) < 1`.
+:func:`reciprocal_coords`
+    Reciprocal-space coordinate arrays for an isotropic 3-D grid.
+:func:`green_function_fourier`
+    Green's function
+    :math:`\tilde{g}_0(\mathbf{p})` on the 3-D Fourier grid.
+
+Notes
+-----
+All functions are JIT-compatible and operate on JAX arrays.
+Units are Angstroms and inverse Angstroms throughout.
 """
 
 import jax.numpy as jnp
@@ -25,33 +43,57 @@ from jaxtyping import Array, Complex, Float
 def wavenumber_background(
         k_squared: Float[Array, "Nx Ny Nz"],
 ) -> Float[Array, ""]:
-    """
-    Description
-    ------------
-    Compute the optimal background wavenumber k₀² as the midpoint between
-    the minimum and maximum of the real part of k²(r) over the simulation
-    volume. This choice minimises the convergence parameter ε and thereby
-    maximises the pseudo-propagation speed 2k₀/ε per iteration.
+    r"""Compute the optimal background wavenumber squared.
 
-    k₀² = (min_r Re{k²(r)} + max_r Re{k²(r)}) / 2
+    Extended Summary
+    ----------------
+    Computes :math:`k_0^2` as the midpoint between the minimum
+    and maximum of :math:`\operatorname{Re}\{k^2(\mathbf{r})\}`
+    over the simulation volume. This choice minimises the
+    convergence parameter :math:`\varepsilon` and thereby
+    maximises the pseudo-propagation speed
+    :math:`2 k_0 / \varepsilon` per iteration:
+
+    .. math::
+
+        k_0^2
+            = \frac{\min_{\mathbf{r}}
+              \operatorname{Re}\{k^2(\mathbf{r})\}
+              + \max_{\mathbf{r}}
+              \operatorname{Re}\{k^2(\mathbf{r})\}}{2}
+
+    Implementation Logic
+    --------------------
+    1. **Extract real part** --
+       Take the real part of ``k_squared`` to handle any
+       residual imaginary contributions.
+    2. **Find extrema** --
+       Compute the global minimum and maximum over all voxels.
+    3. **Compute midpoint** --
+       Return the arithmetic mean as the optimal background
+       wavenumber squared.
 
     Parameters
-    ------------
-    - `k_squared` (Float[Array, "Nx Ny Nz"]):
-        Squared wavenumber field k²(r) in Å⁻² including specimen potential
-        and absorbing boundary contributions. Real-valued; complex k² is
-        handled after adding the absorbing boundary imaginary part.
+    ----------
+    k_squared : Float[Array, "Nx Ny Nz"]
+        Squared wavenumber field :math:`k^2(\mathbf{r})` in
+        Angstrom :sup:`-2`, including specimen potential and
+        absorbing boundary contributions. Real-valued; complex
+        :math:`k^2` is handled after adding the absorbing
+        boundary imaginary part.
 
     Returns
-    --------
-    - `k0_squared` (Float[Array, ""]):
-        Background wavenumber squared k₀² in Å⁻², scalar.
+    -------
+    k0_squared : Float[Array, ""]
+        Background wavenumber squared :math:`k_0^2` in
+        Angstrom :sup:`-2`, scalar.
 
-    Flow
-    ----
-    1. Take real part to handle any residual imaginary contributions
-    2. Find global minimum and maximum over all voxels
-    3. Return arithmetic mean as optimal background
+    See Also
+    --------
+    :func:`convergence_parameter` :
+        Uses :math:`k_0^2` to compute the convergence bound.
+    :func:`green_function_fourier` :
+        Consumes :math:`k_0^2` to build the Green's function.
     """
     k_squared_real: Float[Array, "Nx Ny Nz"] = jnp.real(k_squared)
 
@@ -67,36 +109,60 @@ def convergence_parameter(
         scattering_potential: Complex[Array, "Nx Ny Nz"],
         safety_factor: float = 1.01,
 ) -> Float[Array, ""]:
-    """
-    Description
-    ------------
-    Compute the convergence parameter ε from the scattering potential
-    U(r) = k²(r) − k₀². The sufficient condition for convergence of the
-    Born series is ε ≥ max_r |U(r)| (Osnabrugge et al. 2016, Eq. 11).
+    r"""Compute the convergence parameter from the scattering potential.
 
-    A safety factor slightly above unity is applied to ensure strict
-    inequality and numerical stability at voxels where |U| = ε exactly.
+    Extended Summary
+    ----------------
+    Derives :math:`\varepsilon` from the scattering potential
+    :math:`U(\mathbf{r}) = k^2(\mathbf{r}) - k_0^2`. The
+    sufficient condition for convergence of the Born series is
+    (Osnabrugge et al. 2016, Eq. 11):
+
+    .. math::
+
+        \varepsilon \geq \max_{\mathbf{r}} |U(\mathbf{r})|
+
+    A safety factor slightly above unity is applied to ensure
+    strict inequality and numerical stability at voxels where
+    :math:`|U| = \varepsilon` exactly.
+
+    Implementation Logic
+    --------------------
+    1. **Compute complex modulus** --
+       Evaluate :math:`|U(\mathbf{r})|` pointwise.
+    2. **Find global maximum** --
+       Take the maximum over all voxels.
+    3. **Apply safety factor** --
+       Multiply by ``safety_factor`` to guarantee strict
+       convergence.
 
     Parameters
-    ------------
-    - `scattering_potential` (Complex[Array, "Nx Ny Nz"]):
-        Scattering potential U(r) = k²(r) − k₀² in Å⁻². Complex-valued
-        when absorbing boundary layers are present; the convergence
-        condition applies to the complex modulus |U(r)|.
-    - `safety_factor` (float):
-        Multiplicative factor applied to max|U(r)|. Must be > 1.0.
-        Default 1.01 provides a 1% margin above the strict bound.
+    ----------
+    scattering_potential : Complex[Array, "Nx Ny Nz"]
+        Scattering potential
+        :math:`U(\mathbf{r}) = k^2(\mathbf{r}) - k_0^2` in
+        Angstrom :sup:`-2`. Complex-valued when absorbing
+        boundary layers are present; the convergence condition
+        applies to the complex modulus :math:`|U(\mathbf{r})|`.
+    safety_factor : float
+        Multiplicative factor applied to
+        :math:`\max|U(\mathbf{r})|`. Must be > 1.0. Default
+        1.01 provides a 1 % margin above the strict bound.
 
     Returns
-    --------
-    - `epsilon` (Float[Array, ""]):
-        Convergence parameter ε in Å⁻², scalar. Guaranteed ≥ max|U(r)|.
+    -------
+    epsilon : Float[Array, ""]
+        Convergence parameter :math:`\varepsilon` in
+        Angstrom :sup:`-2`, scalar. Guaranteed
+        :math:`\geq \max|U(\mathbf{r})|`.
 
-    Flow
-    ----
-    1. Compute pointwise complex modulus |U(r)|
-    2. Find global maximum over all voxels
-    3. Apply safety factor to ensure strict convergence condition
+    See Also
+    --------
+    :func:`wavenumber_background` :
+        Computes :math:`k_0^2` used to form :math:`U`.
+    :func:`green_function_fourier` :
+        Consumes :math:`\varepsilon` to build the Green's
+        function.
     """
     modulus: Float[Array, "Nx Ny Nz"] = jnp.abs(scattering_potential)
 
@@ -115,39 +181,55 @@ def reciprocal_coords(
     Float[Array, "Nx Ny Nz"],
     Float[Array, "Nx Ny Nz"],
 ]:
-    """
-    Description
-    ------------
-    Construct 3D reciprocal space coordinate arrays for an isotropic
-    simulation grid. Coordinates are in units of Å⁻¹ and follow the
-    FFT frequency convention (zero at index 0, negative frequencies
-    in the upper half of the array), consistent with jnp.fft.fftn.
+    r"""Construct 3-D reciprocal-space coordinate arrays.
 
-    For an isotropic grid with spacing Δx, the reciprocal coordinate
-    along each axis n at index j is:
-        pₙ(j) = 2π · fftfreq(Nₙ, d=Δx)
+    Extended Summary
+    ----------------
+    Builds coordinate arrays for an isotropic simulation grid in
+    units of Angstrom :sup:`-1`, following the FFT frequency
+    convention (zero at index 0, negative frequencies in the
+    upper half), consistent with ``jnp.fft.fftn``.
+
+    For isotropic spacing :math:`\Delta x`, the reciprocal
+    coordinate along axis *n* at index *j* is:
+
+    .. math::
+
+        p_n(j) = 2\pi \cdot \texttt{fftfreq}(N_n,\;
+                 d = \Delta x)
+
+    Implementation Logic
+    --------------------
+    1. **Compute 1-D frequencies** --
+       Call ``jnp.fft.fftfreq`` along each axis.
+    2. **Scale to radians** --
+       Multiply by :math:`2\pi` to convert from
+       cycles/Angstrom to radians/Angstrom.
+    3. **Broadcast to 3-D** --
+       Use ``jnp.meshgrid`` with ``indexing="ij"`` to
+       produce full-volume arrays.
 
     Parameters
-    ------------
-    - `grid_shape` (tuple[int, int, int]):
-        Number of voxels (Nx, Ny, Nz) along each axis.
-    - `grid_spacing_ang` (float):
-        Isotropic voxel size in Ångström. At 10 pm this is 0.1 Å.
+    ----------
+    grid_shape : tuple[int, int, int]
+        Number of voxels ``(Nx, Ny, Nz)`` along each axis.
+    grid_spacing_ang : float
+        Isotropic voxel size in Angstrom. At 10 pm this is
+        0.1 Angstrom.
 
     Returns
-    --------
-    - `px` (Float[Array, "Nx Ny Nz"]):
-        Reciprocal coordinate along x axis in Å⁻¹.
-    - `py` (Float[Array, "Nx Ny Nz"]):
-        Reciprocal coordinate along y axis in Å⁻¹.
-    - `pz` (Float[Array, "Nx Ny Nz"]):
-        Reciprocal coordinate along z axis in Å⁻¹.
+    -------
+    px : Float[Array, "Nx Ny Nz"]
+        Reciprocal coordinate along *x* in Angstrom :sup:`-1`.
+    py : Float[Array, "Nx Ny Nz"]
+        Reciprocal coordinate along *y* in Angstrom :sup:`-1`.
+    pz : Float[Array, "Nx Ny Nz"]
+        Reciprocal coordinate along *z* in Angstrom :sup:`-1`.
 
-    Flow
-    ----
-    1. Compute 1D fftfreq arrays along each axis
-    2. Scale by 2π to convert cycles/Å to radians/Å
-    3. Broadcast to 3D grids via meshgrid with 'ij' indexing
+    See Also
+    --------
+    :func:`green_function_fourier` :
+        Consumes these coordinates to evaluate :math:`|p|^2`.
     """
     px_1d: Float[Array, "Nx"] = (
         jnp.fft.fftfreq(grid_shape[0], d=grid_spacing_ang) * 2.0 * jnp.pi
@@ -173,50 +255,83 @@ def green_function_fourier(
         k0_squared: Float[Array, ""],
         epsilon: Float[Array, ""],
 ) -> Complex[Array, "Nx Ny Nz"]:
-    """
-    Description
-    ------------
-    Construct the Fourier-space Green's function of the homogeneous
-    Helmholtz equation with complex wavenumber:
+    r"""Construct the Fourier-space Green's function.
 
-        g̃₀(p) = 1 / (|p|² − k₀² − iε)
+    Extended Summary
+    ----------------
+    Builds the Green's function of the homogeneous Helmholtz
+    equation with a complex wavenumber shift:
 
-    The imaginary shift −iε moves the pole off the real axis, ensuring
-    the Green's function decays exponentially in real space with decay
-    length λ_decay = k₀/ε. This localisation is the mathematical basis
-    for the convergence guarantee of the Born series: the Green's function
-    operator G has finite operator norm, enabling the preconditioned
-    iteration M = γGV − γ + 1 to satisfy ρ(M) < 1.
+    .. math::
 
-    The Green's function is precomputed once and reused for every Born
-    iteration step via Fourier-space convolution: G[f](r) = IFFT[g̃₀ · FFT[f]].
+        \tilde{g}_0(\mathbf{p})
+            = \frac{1}{|\mathbf{p}|^2 - k_0^2 - i\varepsilon}
 
-    No singularity handling is required: the iε term ensures the
-    denominator is never zero for real p.
+    The imaginary shift :math:`-i\varepsilon` moves the pole off
+    the real axis, ensuring the Green's function decays
+    exponentially in real space with decay length
+    :math:`\lambda = k_0 / \varepsilon`. This localisation is the
+    mathematical basis for the convergence guarantee of the Born
+    series: the operator :math:`G` has finite norm, enabling the
+    preconditioned iteration
+    :math:`M = \gamma G V - \gamma + 1` to satisfy
+    :math:`\rho(M) < 1`.
+
+    The Green's function is precomputed once and reused for every
+    Born iteration via Fourier-space convolution:
+
+    .. math::
+
+        G[f](\mathbf{r})
+            = \mathrm{IFFT}\!\bigl[
+              \tilde{g}_0 \cdot \mathrm{FFT}[f]
+              \bigr]
+
+    No singularity handling is required: the
+    :math:`i\varepsilon` term ensures the denominator is never
+    zero for real :math:`\mathbf{p}`.
+
+    Implementation Logic
+    --------------------
+    1. **Build reciprocal grids** --
+       Call :func:`reciprocal_coords` for
+       :math:`p_x, p_y, p_z`.
+    2. **Compute squared magnitude** --
+       :math:`|\mathbf{p}|^2 = p_x^2 + p_y^2 + p_z^2`.
+    3. **Evaluate Green's function** --
+       Pointwise division
+       :math:`1 / (|\mathbf{p}|^2 - k_0^2 - i\varepsilon)`.
 
     Parameters
-    ------------
-    - `grid_shape` (tuple[int, int, int]):
-        Number of voxels (Nx, Ny, Nz) along each axis.
-    - `grid_spacing_ang` (float):
-        Isotropic voxel size in Ångström.
-    - `k0_squared` (Float[Array, ""]):
-        Background wavenumber squared k₀² in Å⁻².
-    - `epsilon` (Float[Array, ""]):
-        Convergence parameter ε in Å⁻². Must satisfy ε ≥ max|U(r)|.
+    ----------
+    grid_shape : tuple[int, int, int]
+        Number of voxels ``(Nx, Ny, Nz)`` along each axis.
+    grid_spacing_ang : float
+        Isotropic voxel size in Angstrom.
+    k0_squared : Float[Array, ""]
+        Background wavenumber squared :math:`k_0^2` in
+        Angstrom :sup:`-2`.
+    epsilon : Float[Array, ""]
+        Convergence parameter :math:`\varepsilon` in
+        Angstrom :sup:`-2`. Must satisfy
+        :math:`\varepsilon \geq \max|U(\mathbf{r})|`.
 
     Returns
-    --------
-    - `g0_tilde` (Complex[Array, "Nx Ny Nz"]):
-        Green's function in Fourier space in Å². Complex128.
-        The real part captures propagation; imaginary part captures
-        the exponential decay enforced by ε.
+    -------
+    g0_tilde : Complex[Array, "Nx Ny Nz"]
+        Green's function in Fourier space in
+        Angstrom :sup:`2`. Complex128. The real part captures
+        propagation; the imaginary part captures exponential
+        decay enforced by :math:`\varepsilon`.
 
-    Flow
-    ----
-    1. Construct reciprocal coordinate grids
-    2. Compute |p|² = px² + py² + pz²
-    3. Evaluate 1 / (|p|² − k₀² − iε) pointwise
+    See Also
+    --------
+    :func:`wavenumber_background` :
+        Computes :math:`k_0^2`.
+    :func:`convergence_parameter` :
+        Computes :math:`\varepsilon`.
+    :func:`reciprocal_coords` :
+        Builds the reciprocal-space grids consumed here.
     """
     px: Float[Array, "Nx Ny Nz"]
     py: Float[Array, "Nx Ny Nz"]

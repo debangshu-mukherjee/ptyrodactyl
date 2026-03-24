@@ -2,44 +2,42 @@
 
 Extended Summary
 ----------------
-A comprehensive toolkit for electron ptychography simulations and
-reconstructions using JAX for automatic differentiation and acceleration.
-All functions are fully differentiable and JIT-compilable.
+A comprehensive toolkit for electron ptychography simulations
+and reconstructions using JAX for automatic differentiation and
+GPU acceleration. All functions are fully differentiable and
+JIT-compilable, supporting ``jax.jit``, ``jax.grad``,
+``jax.vmap``, and other JAX transformations. Complex-valued
+optimization is handled via Wirtinger calculus, and distributed
+computing is supported through device mesh parallelism. Type
+safety is enforced with jaxtyping and beartype.
 
-Submodules
-----------
-born
-    Convergent Born series simulations
-invert
-    Electron microscopy reconstructions, ptychography and focal series.
-simul
-    Electron microscopy simulations including 4D-STEM, CBED, and multislice.
-tools
-    Utility tools for optimization, loss functions, and parallel processing
-    including complex-valued optimizers with Wirtinger derivatives.
-workflows
-    High-level workflows combining simulation steps for common use cases
-    such as simulating 4D-STEM data from XYZ structure files.
-
-Key Features
-------------
-- JAX-compatible:
-    All functions support jit, grad, vmap, and other JAX transformations.
-- Automatic differentiation:
-    Full support for gradient-based optimization.
-- Complex-valued optimization:
-    Wirtinger calculus for complex parameters.
-- Parallel processing:
-    Device mesh support for distributed computing.
-- Type safety:
-    Comprehensive type checking with jaxtyping and beartype.
+Routine Listings
+----------------
+:data:`born`
+    Convergent Born series simulations.
+:data:`invert`
+    Electron microscopy reconstructions, ptychography and
+    focal series.
+:data:`jacobian`
+    Jacobian computation submodule.
+:data:`simul`
+    Electron microscopy simulations including 4D-STEM, CBED,
+    and multislice.
+:data:`tools`
+    Utility tools for optimization, loss functions, and
+    parallel processing including complex-valued optimizers
+    with Wirtinger derivatives.
+:data:`workflows`
+    High-level workflows combining simulation steps for common
+    use cases such as simulating 4D-STEM data from XYZ
+    structure files.
 
 Notes
 -----
-This package is designed for electron microscopy simulations and
-reconstructions. All functions are optimized for JAX transformations and
-support both CPU and GPU execution. For best performance, use JIT compilation
-and consider using the provided factory functions for data validation.
+All functions are optimized for JAX transformations and support
+both CPU and GPU execution. For best performance, use JIT
+compilation and consider using the provided factory functions
+for input validation and float64 casting.
 """
 
 import os

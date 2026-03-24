@@ -2,29 +2,39 @@
 
 Extended Summary
 ----------------
-This module contains functions for reconstructing sample potentials from
-experimental ptychography data using various optimization algorithms.
-All functions support both single-slice and multi-slice reconstructions,
-with options for position correction and multi-modal probe handling.
+Provides gradient-based optimization routines for reconstructing
+sample electrostatic potentials and electron probe functions from
+experimental 4D-STEM ptychographic datasets. Each public function
+constructs a differentiable forward model via
+:func:`ptyrodactyl.simul.simulations.stem_4d`, computes the loss
+and its gradients with ``jax.value_and_grad``, and iteratively
+updates the reconstruction variables using a first-order optimizer
+from :mod:`ptyrodactyl.tools`.
 
 Routine Listings
 ----------------
-single_slice_ptychography : function
-    Performs single-slice ptychography reconstruction.
-single_slice_poscorrected : function
-    Performs single-slice reconstruction with position correction.
-single_slice_multi_modal : function
-    Performs single-slice reconstruction with multi-modal probe.
-multi_slice_multi_modal : function
-    Performs multi-slice reconstruction with multi-modal probe.
+:data:`OPTIMIZERS`
+    Registry mapping optimizer name strings to
+    :class:`~ptyrodactyl.tools.Optimizer` instances.
+:func:`single_slice_ptychography`
+    Single-slice ptychography reconstruction of potential and
+    beam.
+:func:`single_slice_poscorrected`
+    Single-slice reconstruction with scan-position correction.
+:func:`single_slice_multi_modal`
+    Single-slice reconstruction with multi-modal probe and
+    position correction.
+:func:`multi_slice_multi_modal`
+    Multi-slice reconstruction with position correction.
 
 Notes
 -----
-All reconstruction functions use JAX-compatible optimizers and support
-automatic differentiation. The functions are designed to work with
-experimental data and can handle various noise levels and experimental
-conditions. Input data should be properly preprocessed and validated
-using the factory functions from the tools module.
+All reconstruction functions use JAX-compatible optimizers and
+support automatic differentiation. The functions are designed to
+work with experimental data and can handle various noise levels
+and experimental conditions. Input data should be properly
+preprocessed and validated using the factory functions from
+:mod:`ptyrodactyl.tools`.
 """
 
 import jax
@@ -56,6 +66,23 @@ OPTIMIZERS: Dict[str, ptt.Optimizer] = {
 
 @beartype
 def _get_optimizer(optimizer_name: str) -> ptt.Optimizer:
+    """Look up an optimizer by name from the registry.
+
+    Parameters
+    ----------
+    optimizer_name : str
+        Key into :data:`OPTIMIZERS` (e.g. ``"adam"``).
+
+    Returns
+    -------
+    optimizer : :class:`~ptyrodactyl.tools.Optimizer`
+        The corresponding optimizer namedtuple.
+
+    Raises
+    ------
+    ValueError
+        If *optimizer_name* is not a key in :data:`OPTIMIZERS`.
+    """
     if optimizer_name not in OPTIMIZERS:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
     return OPTIMIZERS[optimizer_name]
@@ -78,41 +105,88 @@ def single_slice_ptychography(
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
 ]:
-    """Single Slice Ptychography where the electrostatic potential slice and the beam guess are of the same size.
+    r"""Reconstruct potential and beam from 4D-STEM data.
+
+    Extended Summary
+    ----------------
+    Performs single-slice ptychography where the electrostatic
+    potential slice and the beam guess share the same spatial
+    dimensions.  The reconstruction minimises a pixel-wise loss
+    between experimental and simulated diffraction patterns:
+
+    .. math::
+
+        \mathcal{L}
+        = \sum_{p}
+          \bigl\lVert
+            I_p^{\mathrm{exp}}
+            - I_p^{\mathrm{sim}}(V, \psi)
+          \bigr\rVert^2
+
+    where :math:`V` is the potential slice and :math:`\psi` is the
+    probe wavefunction.
+
+    Implementation Logic
+    --------------------
+    1. **Build forward model** --
+       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d` to
+       map ``(pot_slice, beam)`` to simulated 4D-STEM data.
+    2. **Construct loss** --
+       Creates the loss via
+       :func:`~ptyrodactyl.tools.create_loss_function`.
+    3. **Iterate** --
+       At each step compute gradients with
+       ``jax.value_and_grad`` and update potential and beam with
+       the chosen optimizer.
+    4. **Snapshot** --
+       Every *save_every* iterations, store the current
+       potential and beam into intermediate arrays.
 
     Parameters
     ----------
-    experimental_data : STEM4D
-        Experimental 4D-STEM data PyTree containing diffraction patterns,
-        scan positions, and calibration information.
-    initial_potential : CalibratedArray
-        Initial guess for potential slice.
-    initial_beam : CalibratedArray
-        Initial guess for electron beam.
+    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+        Experimental 4D-STEM data PyTree containing diffraction
+        patterns, scan positions, and calibration information.
+    initial_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Initial guess for the electrostatic potential slice.
+    initial_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Initial guess for the electron beam.  If stored in
+        reciprocal space (``real_space=False``), an inverse FFT
+        is applied before optimisation.
     slice_thickness : ScalarNumeric
-        Thickness of each slice.
+        Thickness of the potential slice, in Angstroms.
     save_every : ScalarInt, optional
-        Save every nth iteration. Default is 10.
+        Store intermediate results every *save_every* iterations.
+        Default is ``10``.
     num_iterations : ScalarInt, optional
-        Number of optimization iterations. Default is 1000.
+        Total number of optimisation iterations.
+        Default is ``1000``.
     learning_rate : ScalarFloat, optional
-        Learning rate for optimization. Default is 0.001.
+        Step size for the optimizer.  Default is ``0.001``.
     loss_type : str, optional
-        Type of loss function to use. Default is "mse".
+        Loss function identifier passed to
+        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Default is ``"mse"``.
     optimizer_name : str, optional
-        Name of optimizer to use. Default is "adam".
+        Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
 
     Returns
     -------
-    tuple of (CalibratedArray, CalibratedArray, Complex[Array, "H W S"], Complex[Array, "H W S"])
-        - pot_slice : CalibratedArray
-            Optimized potential slice.
-        - beam : CalibratedArray
-            Optimized electron beam.
-        - intermediate_potslice : Complex[Array, "H W S"]
-            Intermediate potential slices.
-        - intermediate_beam : Complex[Array, "H W S"]
-            Intermediate electron beams.
+    final_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Optimised electrostatic potential slice.
+    final_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Optimised electron beam in real space.
+    intermediate_potslice : Complex[Array, "H W S"]
+        Potential snapshots at saved iterations.
+    intermediate_beam : Complex[Array, "H W S"]
+        Beam snapshots at saved iterations.
+
+    See Also
+    --------
+    :func:`single_slice_poscorrected` :
+        Adds scan-position refinement.
+    :func:`single_slice_multi_modal` :
+        Supports multi-modal probe modes.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
@@ -122,7 +196,20 @@ def single_slice_ptychography(
     def _forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Float[Array, "P H W"]:
-        """Forward model that simulates 4D-STEM data from potential and beam."""
+        """Simulate 4D-STEM patterns from potential and beam.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Electrostatic potential slice.
+        beam : Complex[Array, "H W"]
+            Probe wavefunction in real space.
+
+        Returns
+        -------
+        patterns : Float[Array, "P H W"]
+            Simulated diffraction patterns.
+        """
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
@@ -141,7 +228,23 @@ def single_slice_ptychography(
     def _loss_and_grad(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Tuple[Float[Array, " "], Dict[str, Complex[Array, "H W"]]]:
-        """Compute loss value and gradients with respect to potential and beam."""
+        """Compute loss and gradients for potential and beam.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice estimate.
+        beam : Complex[Array, "H W"]
+            Current beam estimate.
+
+        Returns
+        -------
+        loss : Float[Array, " "]
+            Scalar loss value.
+        grads : Dict[str, Complex[Array, "H W"]]
+            Gradient dictionary with keys ``"pot_slice"``
+            and ``"beam"``.
+        """
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(
             pot_slice, beam
         )
@@ -171,7 +274,32 @@ def single_slice_ptychography(
         Any,
         Float[Array, " "],
     ]:
-        """Perform one optimization step updating both potential and beam."""
+        """Perform one optimisation step for potential and beam.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice.
+        beam : Complex[Array, "H W"]
+            Current beam.
+        pot_slice_state : Any
+            Optimizer state for the potential.
+        beam_state : Any
+            Optimizer state for the beam.
+
+        Returns
+        -------
+        pot_slice : Complex[Array, "H W"]
+            Updated potential slice.
+        beam : Complex[Array, "H W"]
+            Updated beam.
+        pot_slice_state : Any
+            Updated optimizer state for the potential.
+        beam_state : Any
+            Updated optimizer state for the beam.
+        loss : Float[Array, " "]
+            Scalar loss after this step.
+        """
         loss: Float[Array, " "]
         grads: Dict[str, Complex[Array, "H W"]]
         loss, grads = _loss_and_grad(pot_slice, beam)
@@ -256,50 +384,97 @@ def single_slice_poscorrected(
     Complex[Array, "H W S"],
     Float[Array, "P 2 S"],
 ]:
-    """Create and run an optimization routine for 4D-STEM reconstruction with position correction.
+    r"""Reconstruct potential, beam, and positions from 4D-STEM data.
+
+    Extended Summary
+    ----------------
+    Single-slice ptychographic reconstruction that simultaneously
+    refines the electrostatic potential, the probe wavefunction,
+    and the scan positions.  Position correction compensates for
+    drift and scan distortions by treating the probe coordinates
+    as differentiable variables:
+
+    .. math::
+
+        \mathcal{L}
+        = \sum_{p}
+          \bigl\lVert
+            I_p^{\mathrm{exp}}
+            - I_p^{\mathrm{sim}}(V, \psi, \mathbf{r}_p)
+          \bigr\rVert^2
+
+    where :math:`\mathbf{r}_p` are the corrected scan positions.
+
+    Implementation Logic
+    --------------------
+    1. **Build forward model** --
+       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d` to
+       map ``(pot_slice, beam, pos_list)`` to simulated 4D-STEM.
+    2. **Construct loss** --
+       Creates the loss via
+       :func:`~ptyrodactyl.tools.create_loss_function`.
+    3. **Parse learning rate** --
+       If scalar, reuse for both potential/beam and positions;
+       if length-2 array, element 0 is for potential/beam and
+       element 1 is for positions.
+    4. **Iterate** --
+       At each step compute gradients with
+       ``jax.value_and_grad`` over all three variable groups
+       and apply the chosen optimizer.
+    5. **Snapshot** --
+       Every *save_every* iterations, store the current
+       potential, beam, and positions into intermediate arrays.
 
     Parameters
     ----------
-    experimental_data : STEM4D
-        Experimental 4D-STEM data PyTree containing diffraction patterns,
-        scan positions, and calibration information.
-    initial_potential : CalibratedArray
-        Initial guess for potential slice.
-    initial_beam : CalibratedArray
-        Initial guess for electron beam.
+    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+        Experimental 4D-STEM data PyTree containing diffraction
+        patterns, scan positions, and calibration information.
+    initial_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Initial guess for the electrostatic potential slice.
+    initial_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Initial guess for the electron beam.
     slice_thickness : ScalarNumeric
-        Thickness of each slice.
+        Thickness of the potential slice, in Angstroms.
     save_every : ScalarInt, optional
-        Save every nth iteration. Default is 10.
+        Store intermediate results every *save_every* iterations.
+        Default is ``10``.
     num_iterations : ScalarInt, optional
-        Number of optimization iterations. Default is 1000.
+        Total number of optimisation iterations.
+        Default is ``1000``.
     learning_rate : ScalarFloat or Float[Array, "2"], optional
-        Learning rate for potential slice and beam optimization.
-        If the learning rate is a scalar, it is used for both
-        potential slice and position optimization. If it is an array,
-        the first element is used for potential slice and beam optimization,
-        and the second element is used for position optimization.
-        Default is 0.01.
+        Step size(s) for the optimizer.  If scalar, the same
+        rate is used for potential/beam and positions.  If a
+        length-2 array, element 0 controls potential/beam and
+        element 1 controls positions.  Default is ``0.01``.
     loss_type : str, optional
-        Type of loss function to use. Default is "mse".
+        Loss function identifier passed to
+        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Default is ``"mse"``.
     optimizer_name : str, optional
-        Name of optimizer to use. Default is "adam".
+        Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
 
     Returns
     -------
-    tuple of (CalibratedArray, CalibratedArray, Float[Array, "P 2"], Complex[Array, "H W S"], Complex[Array, "H W S"], Float[Array, "P 2 S"])
-        - final_potential : CalibratedArray
-            Optimized potential slice.
-        - final_beam : CalibratedArray
-            Optimized electron beam.
-        - pos_guess : Float[Array, "P 2"]
-            Optimized list of probe positions.
-        - intermediate_potslices : Complex[Array, "H W S"]
-            Intermediate potential slices.
-        - intermediate_beams : Complex[Array, "H W S"]
-            Intermediate electron beams.
-        - intermediate_positions : Float[Array, "P 2 S"]
-            Intermediate probe positions.
+    final_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Optimised electrostatic potential slice.
+    final_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+        Optimised electron beam in real space.
+    pos_guess : Float[Array, "P 2"]
+        Refined scan positions, in Angstroms.
+    intermediate_potslices : Complex[Array, "H W S"]
+        Potential snapshots at saved iterations.
+    intermediate_beams : Complex[Array, "H W S"]
+        Beam snapshots at saved iterations.
+    intermediate_positions : Float[Array, "P 2 S"]
+        Position snapshots at saved iterations.
+
+    See Also
+    --------
+    :func:`single_slice_ptychography` :
+        Variant without position correction.
+    :func:`single_slice_multi_modal` :
+        Adds multi-modal probe support.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
@@ -311,7 +486,22 @@ def single_slice_poscorrected(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        """Forward model that simulates 4D-STEM data from potential, beam, and positions with position correction."""
+        """Simulate 4D-STEM with position-corrected scan.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Electrostatic potential slice.
+        beam : Complex[Array, "H W"]
+            Probe wavefunction in real space.
+        pos_list : Float[Array, "P 2"]
+            Scan positions, in Angstroms.
+
+        Returns
+        -------
+        patterns : Float[Array, "P H W"]
+            Simulated diffraction patterns.
+        """
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
@@ -332,7 +522,25 @@ def single_slice_poscorrected(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
-        """Compute loss value and gradients with respect to potential, beam, and positions for single-slice position correction."""
+        """Compute loss and gradients for potential, beam, and positions.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice estimate.
+        beam : Complex[Array, "H W"]
+            Current beam estimate.
+        pos_list : Float[Array, "P 2"]
+            Current scan positions, in Angstroms.
+
+        Returns
+        -------
+        loss : Float[Array, " "]
+            Scalar loss value.
+        grads : Dict[str, Array]
+            Gradient dictionary with keys ``"pot_slice"``,
+            ``"beam"``, and ``"pos_list"``.
+        """
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
@@ -369,7 +577,40 @@ def single_slice_poscorrected(
         Any,
         Float[Array, " "],
     ]:
-        """Perform one optimization step updating potential, beam, and positions for single-slice position correction."""
+        """Update potential, beam, and positions by one step.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice.
+        beam : Complex[Array, "H W"]
+            Current beam.
+        pos_list : Float[Array, "P 2"]
+            Current scan positions, in Angstroms.
+        pot_slice_state : Any
+            Optimizer state for the potential.
+        beam_state : Any
+            Optimizer state for the beam.
+        pos_state : Any
+            Optimizer state for the positions.
+
+        Returns
+        -------
+        pot_slice : Complex[Array, "H W"]
+            Updated potential slice.
+        beam : Complex[Array, "H W"]
+            Updated beam.
+        pos_list : Float[Array, "P 2"]
+            Updated scan positions.
+        pot_slice_state : Any
+            Updated optimizer state for the potential.
+        beam_state : Any
+            Updated optimizer state for the beam.
+        pos_state : Any
+            Updated optimizer state for positions.
+        loss : Float[Array, " "]
+            Scalar loss after this step.
+        """
         loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
@@ -494,48 +735,101 @@ def single_slice_multi_modal(
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
 ]:
-    """Create and run an optimization routine for 4D-STEM reconstruction with multi-modal probe.
+    r"""Reconstruct potential, multi-modal beam, and positions.
+
+    Extended Summary
+    ----------------
+    Single-slice ptychographic reconstruction that models the
+    probe as a superposition of coherent modes stored in a
+    :class:`~ptyrodactyl.tools.ProbeModes` PyTree.  The
+    optimiser simultaneously refines the potential, all probe
+    modes, and the scan positions:
+
+    .. math::
+
+        \mathcal{L}
+        = \sum_{p}
+          \bigl\lVert
+            I_p^{\mathrm{exp}}
+            - \sum_{m} w_m \,
+              \lvert \mathcal{F}\{
+                \psi_m \cdot t(V, \mathbf{r}_p)
+              \} \rvert^2
+          \bigr\rVert^2
+
+    where :math:`\psi_m` are the probe modes with weights
+    :math:`w_m` and :math:`t` is the transmission function.
+
+    Implementation Logic
+    --------------------
+    1. **Build forward model** --
+       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d`
+       accepting ``(pot_slice, beam, pos_list)`` where *beam*
+       is a :class:`~ptyrodactyl.tools.ProbeModes` instance.
+    2. **Construct loss** --
+       Creates the loss via
+       :func:`~ptyrodactyl.tools.create_loss_function`.
+    3. **Parse learning rate** --
+       Scalar is broadcast to both groups; length-2 array
+       splits into potential/beam (index 0) and positions
+       (index 1).
+    4. **Iterate** --
+       Gradients are computed for the potential array, the
+       ``modes`` field of :class:`~ptyrodactyl.tools.ProbeModes`,
+       and positions, then applied with the chosen optimizer.
+    5. **Snapshot** --
+       Every *save_every* iterations, store the current
+       potential and beam modes into intermediate arrays.
 
     Parameters
     ----------
-    experimental_data : STEM4D
-        Experimental 4D-STEM data PyTree containing diffraction patterns,
-        scan positions, and calibration information.
+    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+        Experimental 4D-STEM data PyTree containing diffraction
+        patterns, scan positions, and calibration information.
     initial_pot_slice : Complex[Array, "H W"]
-        Initial guess for potential slice.
-    initial_beam : ProbeModes
-        Initial guess for electron beam with multiple probe modes.
+        Initial guess for the electrostatic potential slice.
+    initial_beam : :class:`~ptyrodactyl.tools.ProbeModes`
+        Initial multi-modal probe containing mode arrays,
+        weights, and calibration.
     slice_thickness : ScalarNumeric
-        Thickness of each slice.
+        Thickness of the potential slice, in Angstroms.
     save_every : ScalarInt, optional
-        Save every nth iteration. Default is 10.
+        Store intermediate results every *save_every* iterations.
+        Default is ``10``.
     num_iterations : ScalarInt, optional
-        Number of optimization iterations. Default is 1000.
+        Total number of optimisation iterations.
+        Default is ``1000``.
     learning_rate : ScalarFloat or Float[Array, "2"], optional
-        Learning rate for potential slice and beam optimization.
-        If the learning rate is a scalar, it is used for both
-        potential slice and position optimization. If it is an array,
-        the first element is used for potential slice and beam optimization,
-        and the second element is used for position optimization.
-        Default is 0.01.
+        Step size(s) for the optimizer.  If scalar, the same
+        rate is used for potential/beam and positions.  If a
+        length-2 array, element 0 controls potential/beam and
+        element 1 controls positions.  Default is ``0.01``.
     loss_type : str, optional
-        Type of loss function to use. Default is "mse".
+        Loss function identifier passed to
+        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Default is ``"mse"``.
     optimizer_name : str, optional
-        Name of optimizer to use. Default is "adam".
+        Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
 
     Returns
     -------
-    tuple of (Complex[Array, "H W"], ProbeModes, Float[Array, "P 2"], Complex[Array, "H W S"], Complex[Array, "H W S"])
-        - pot_slice : Complex[Array, "H W"]
-            Optimized potential slice.
-        - beam : ProbeModes
-            Optimized electron beam.
-        - pos_list : Float[Array, "P 2"]
-            Optimized list of probe positions.
-        - intermediate_potslice : Complex[Array, "H W S"]
-            Intermediate potential slices.
-        - intermediate_beam : Complex[Array, "H W S"]
-            Intermediate electron beams.
+    pot_slice : Complex[Array, "H W"]
+        Optimised electrostatic potential slice.
+    beam : :class:`~ptyrodactyl.tools.ProbeModes`
+        Optimised multi-modal probe.
+    pos_list : Float[Array, "P 2"]
+        Refined scan positions, in Angstroms.
+    intermediate_potslice : Complex[Array, "H W S"]
+        Potential snapshots at saved iterations.
+    intermediate_beam : Complex[Array, "H W M S"]
+        Beam-mode snapshots at saved iterations.
+
+    See Also
+    --------
+    :func:`single_slice_ptychography` :
+        Single-mode, fixed-position variant.
+    :func:`multi_slice_multi_modal` :
+        Multi-slice variant with position correction.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
@@ -547,7 +841,22 @@ def single_slice_multi_modal(
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        """Forward model that simulates 4D-STEM data from potential, multi-modal beam, and positions."""
+        """Simulate 4D-STEM with multi-modal probe.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Electrostatic potential slice.
+        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+            Multi-modal probe.
+        pos_list : Float[Array, "P 2"]
+            Scan positions, in Angstroms.
+
+        Returns
+        -------
+        patterns : Float[Array, "P H W"]
+            Simulated diffraction patterns.
+        """
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam,
@@ -568,7 +877,25 @@ def single_slice_multi_modal(
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Any]]:
-        """Compute loss value and gradients with respect to potential, multi-modal beam, and positions."""
+        """Compute loss and gradients for potential, modes, positions.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice estimate.
+        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+            Current multi-modal probe estimate.
+        pos_list : Float[Array, "P 2"]
+            Current scan positions, in Angstroms.
+
+        Returns
+        -------
+        loss : Float[Array, " "]
+            Scalar loss value.
+        grads : Dict[str, Any]
+            Gradient dictionary with keys ``"pot_slice"``,
+            ``"beam"``, and ``"pos_list"``.
+        """
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
@@ -604,7 +931,40 @@ def single_slice_multi_modal(
         Any,
         Float[Array, " "],
     ]:
-        """Perform one optimization step updating potential, multi-modal beam, and positions."""
+        """Update potential, multi-modal beam, and positions.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice.
+        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+            Current multi-modal probe.
+        pos_list : Float[Array, "P 2"]
+            Current scan positions, in Angstroms.
+        pot_slice_state : Any
+            Optimizer state for the potential.
+        beam_state : Any
+            Optimizer state for the beam modes.
+        pos_state : Any
+            Optimizer state for the positions.
+
+        Returns
+        -------
+        pot_slice : Complex[Array, "H W"]
+            Updated potential slice.
+        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+            Updated multi-modal probe.
+        pos_list : Float[Array, "P 2"]
+            Updated scan positions.
+        pot_slice_state : Any
+            Updated optimizer state for the potential.
+        beam_state : Any
+            Updated optimizer state for beam modes.
+        pos_state : Any
+            Updated optimizer state for positions.
+        loss : Float[Array, " "]
+            Scalar loss after this step.
+        """
         loss: Float[Array, " "]
         grads: Dict[str, Any]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
@@ -701,45 +1061,94 @@ def multi_slice_multi_modal(
     Complex[Array, "H W S"],
     Complex[Array, "H W S"],
 ]:
-    """Create and run an optimization routine for multi-slice 4D-STEM reconstruction with position correction.
+    r"""Reconstruct potential, beam, and positions with multi-slice.
+
+    Extended Summary
+    ----------------
+    Multi-slice ptychographic reconstruction that propagates the
+    probe through multiple identical potential slices while
+    simultaneously refining the potential, the probe
+    wavefunction, and the scan positions.  Separate learning
+    rates are used for the potential/beam group and the position
+    group:
+
+    .. math::
+
+        \mathcal{L}
+        = \sum_{p}
+          \bigl\lVert
+            I_p^{\mathrm{exp}}
+            - I_p^{\mathrm{sim}}(V, \psi, \mathbf{r}_p)
+          \bigr\rVert^2
+
+    where the forward model applies the multislice algorithm
+    through repeated transmission and propagation steps.
+
+    Implementation Logic
+    --------------------
+    1. **Build forward model** --
+       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d`
+       accepting ``(pot_slice, beam, pos_list)``.
+    2. **Construct loss** --
+       Creates the loss via
+       :func:`~ptyrodactyl.tools.create_loss_function`.
+    3. **Iterate** --
+       Gradients are computed for all three variable groups;
+       potential and beam use *learning_rate* while positions
+       use *pos_learning_rate*.
+    4. **Snapshot** --
+       Every *save_every* iterations, store the current
+       potential and beam into intermediate arrays.
 
     Parameters
     ----------
-    experimental_data : STEM4D
-        Experimental 4D-STEM data PyTree containing diffraction patterns,
-        scan positions, and calibration information.
+    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+        Experimental 4D-STEM data PyTree containing diffraction
+        patterns, scan positions, and calibration information.
     initial_pot_slice : Complex[Array, "H W"]
-        Initial guess for potential slice.
+        Initial guess for the electrostatic potential slice.
     initial_beam : Complex[Array, "H W"]
-        Initial guess for electron beam.
+        Initial guess for the electron beam.
     slice_thickness : ScalarNumeric
-        Thickness of each slice.
+        Thickness of each potential slice, in Angstroms.
     save_every : ScalarInt, optional
-        Save every nth iteration. Default is 10.
+        Store intermediate results every *save_every* iterations.
+        Default is ``10``.
     num_iterations : ScalarInt, optional
-        Number of optimization iterations. Default is 1000.
+        Total number of optimisation iterations.
+        Default is ``1000``.
     learning_rate : ScalarFloat, optional
-        Learning rate for potential slice and beam optimization. Default is 0.001.
+        Step size for potential and beam updates.
+        Default is ``0.001``.
     pos_learning_rate : ScalarFloat, optional
-        Learning rate for position optimization. Default is 0.01.
+        Step size for position updates.
+        Default is ``0.01``.
     loss_type : str, optional
-        Type of loss function to use. Default is "mse".
+        Loss function identifier passed to
+        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Default is ``"mse"``.
     optimizer_name : str, optional
-        Name of optimizer to use. Default is "adam".
+        Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
 
     Returns
     -------
-    tuple of (Complex[Array, "H W"], Complex[Array, "H W"], Float[Array, "P 2"], Complex[Array, "H W S"], Complex[Array, "H W S"])
-        - pot_slice : Complex[Array, "H W"]
-            Optimized potential slice.
-        - beam : Complex[Array, "H W"]
-            Optimized electron beam.
-        - pos_list : Float[Array, "P 2"]
-            Optimized list of probe positions.
-        - intermediate_potslice : Complex[Array, "H W S"]
-            Intermediate potential slices.
-        - intermediate_beam : Complex[Array, "H W S"]
-            Intermediate electron beams.
+    pot_slice : Complex[Array, "H W"]
+        Optimised electrostatic potential slice.
+    beam : Complex[Array, "H W"]
+        Optimised electron beam.
+    pos_list : Float[Array, "P 2"]
+        Refined scan positions, in Angstroms.
+    intermediate_potslice : Complex[Array, "H W S"]
+        Potential snapshots at saved iterations.
+    intermediate_beam : Complex[Array, "H W S"]
+        Beam snapshots at saved iterations.
+
+    See Also
+    --------
+    :func:`single_slice_ptychography` :
+        Single-slice, single-mode variant.
+    :func:`single_slice_multi_modal` :
+        Single-slice with multi-modal probe.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     voltage_kV: Float[Array, " "] = experimental_data.voltage_kV
@@ -751,7 +1160,22 @@ def multi_slice_multi_modal(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        """Forward model that simulates multi-slice 4D-STEM data from potential, beam, and positions."""
+        """Simulate multi-slice 4D-STEM from potential and beam.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Electrostatic potential slice.
+        beam : Complex[Array, "H W"]
+            Probe wavefunction in real space.
+        pos_list : Float[Array, "P 2"]
+            Scan positions, in Angstroms.
+
+        Returns
+        -------
+        patterns : Float[Array, "P H W"]
+            Simulated diffraction patterns.
+        """
         stem4d_result = stem_4d(
             pot_slice[None, ...],
             beam[None, ...],
@@ -772,7 +1196,25 @@ def multi_slice_multi_modal(
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
-        """Compute loss value and gradients with respect to potential, beam, and positions for multi-slice."""
+        """Compute loss and gradients for multi-slice reconstruction.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice estimate.
+        beam : Complex[Array, "H W"]
+            Current beam estimate.
+        pos_list : Float[Array, "P 2"]
+            Current scan positions, in Angstroms.
+
+        Returns
+        -------
+        loss : Float[Array, " "]
+            Scalar loss value.
+        grads : Dict[str, Array]
+            Gradient dictionary with keys ``"pot_slice"``,
+            ``"beam"``, and ``"pos_list"``.
+        """
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
@@ -804,7 +1246,40 @@ def multi_slice_multi_modal(
         Any,
         Float[Array, " "],
     ]:
-        """Perform one optimization step updating potential, beam, and positions for multi-slice."""
+        """Update potential, beam, and positions for multi-slice.
+
+        Parameters
+        ----------
+        pot_slice : Complex[Array, "H W"]
+            Current potential slice.
+        beam : Complex[Array, "H W"]
+            Current beam.
+        pos_list : Float[Array, "P 2"]
+            Current scan positions, in Angstroms.
+        pot_slice_state : Any
+            Optimizer state for the potential.
+        beam_state : Any
+            Optimizer state for the beam.
+        pos_state : Any
+            Optimizer state for the positions.
+
+        Returns
+        -------
+        pot_slice : Complex[Array, "H W"]
+            Updated potential slice.
+        beam : Complex[Array, "H W"]
+            Updated beam.
+        pos_list : Float[Array, "P 2"]
+            Updated scan positions.
+        pot_slice_state : Any
+            Updated optimizer state for the potential.
+        beam_state : Any
+            Updated optimizer state for the beam.
+        pos_state : Any
+            Updated optimizer state for positions.
+        loss : Float[Array, " "]
+            Scalar loss after this step.
+        """
         loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)

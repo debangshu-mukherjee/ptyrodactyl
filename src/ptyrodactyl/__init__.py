@@ -38,12 +38,19 @@ All functions are optimized for JAX transformations and support
 both CPU and GPU execution. For best performance, use JIT
 compilation and consider using the provided factory functions
 for input validation and float64 casting.
+
+Multi-node distributed execution is supported via
+``jax.distributed.initialize()``. To enable, set the
+environment variable ``PTYRODACTYL_DISTRIBUTED=1`` before
+launching with ``srun`` or equivalent. An optional
+``PTYRODACTYL_COORDINATOR_ADDRESS`` environment variable
+overrides automatic SLURM coordinator detection, which is
+required on some ROCm clusters.
 """
 
 import os
 from importlib.metadata import version
 
-# Enable multi-threaded CPU execution for JAX (must be set before JAX import)
 os.environ.setdefault(
     "XLA_FLAGS",
     "--xla_cpu_multi_thread_eigen=true intra_op_parallelism_threads=0",
@@ -51,14 +58,26 @@ os.environ.setdefault(
 
 import jax  # noqa: E402
 
+if (
+    os.environ.get("PTYRODACTYL_DISTRIBUTED", "0") == "1"
+    and int(os.environ.get("SLURM_NTASKS", "1")) > 1
+):
+    coordinator_address: str | None = os.environ.get(
+        "PTYRODACTYL_COORDINATOR_ADDRESS"
+    )
+    if coordinator_address is not None:
+        jax.distributed.initialize(coordinator_address=coordinator_address)
+    else:
+        jax.distributed.initialize()
+
 jax.config.update("jax_enable_x64", True)
 
 from . import (  # noqa: E402, I001
-    born, 
-    invert, 
-    jacobian, 
-    simul, 
-    tools, 
+    born,
+    invert,
+    jacobian,
+    simul,
+    tools,
     workflows,
 )
 

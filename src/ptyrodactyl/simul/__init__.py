@@ -9,18 +9,18 @@ JIT-compilable.
 
 Submodules
 ----------
-atom_potentials
+- :mod:`atom_potentials`
     Functions for generating atomic potentials and slices from
     coordinates.
-geometry
+- :mod:`geometry`
     Geometric transformations and operations for crystal
     structures.
-parallelized
+- :mod:`parallelized`
     Sharded simulation functions for distributed computing.
-preprocessing
+- :mod:`preprocessing`
     Data preprocessing utilities and type definitions for
     microscopy data.
-simulations
+- :mod:`simulations`
     Forward simulation functions for electron beam propagation,
     CBED patterns, and 4D-STEM data generation with aberration
     calculations.

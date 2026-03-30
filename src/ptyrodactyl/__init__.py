@@ -13,21 +13,21 @@ safety is enforced with jaxtyping and beartype.
 
 Routine Listings
 ----------------
-:data:`born`
+- :mod:`born`
     Convergent Born series simulations.
-:data:`invert`
+- :mod:`invert`
     Electron microscopy reconstructions, ptychography and
     focal series.
-:data:`jacobian`
+- :mod:`jacobian`
     Jacobian computation submodule.
-:data:`simul`
+- :mod:`simul`
     Electron microscopy simulations including 4D-STEM, CBED,
     and multislice.
-:data:`tools`
+- :mod:`tools`
     Utility tools for optimization, loss functions, and
     parallel processing including complex-valued optimizers
     with Wirtinger derivatives.
-:data:`workflows`
+- :mod:`workflows`
     High-level workflows combining simulation steps for common
     use cases such as simulating 4D-STEM data from XYZ
     structure files.

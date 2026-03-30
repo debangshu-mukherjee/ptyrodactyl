@@ -9,6 +9,21 @@ support automatic differentiation. This includes an implementation
 of the Wirtinger derivatives, which are used for creating complex
 valued Adam, Adagrad and RMSprop optimizers.
 
+The submodules are organized as following:
+
+- :mod:`constants`
+    Physical constants and derived quantities for electron microscopy.
+- :mod:`electron_types`
+    Data structures and type definitions for electron microscopy.
+- :mod:`factory`
+    Factory functions for validating data before PyTree loading.
+- :mod:`loss_functions`
+    s function implementations for ptychography optimization.
+- :mod:`optimizers`
+    Complex-valued optimizers with Wirtinger derivatives.
+- :mod:`parallel`
+    Parallel processing utilities for distributed ptychography.
+
 Routine Listings
 ----------------
 :class:`CalibratedArray`

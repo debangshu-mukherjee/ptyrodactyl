@@ -1071,7 +1071,7 @@ def _process_all_slices(
 def _build_shift_masks(
     repeats: Int[Array, " 3"],
     max_n: int = 20,
-) -> Tuple[Bool[Array, " max_n^3"], Int[Array, " max_n^3 3"]]:
+) -> Tuple[Bool[Array, " s"], Int[Array, " s 3"]]:
     """Build shift indices and validity masks for periodic repeats.
 
     Parameters
@@ -1127,9 +1127,9 @@ def _build_shift_masks(
 def _tile_positions_with_shifts(
     positions: Float[Array, " N 3"],
     atomic_numbers: Int[Array, " N"],
-    shift_vectors: Float[Array, "max_n^3 3"],
-    mask_flat: Bool[Array, " max_n^3"],
-) -> Tuple[Float[Array, "max_n^3*N 3"], Int[Array, " max_n^3*N"]]:
+    shift_vectors: Float[Array, " s 3"],
+    mask_flat: Bool[Array, " s"],
+) -> Tuple[Float[Array, " sn 3"], Int[Array, " sn"]]:
     """Tile atomic positions by adding shift vectors.
 
     Parameters
@@ -1215,9 +1215,15 @@ def _apply_repeats_or_return(
     Returns
     -------
     positions_out : Float[Array, " M 3"]
-        Tiled (or padded) positions.
+        Tiled positions when ``repeats`` exceeds ``[1, 1, 1]``,
+        otherwise the original positions unchanged.
     atomic_numbers_out : Int[Array, " M"]
-        Tiled (or padded) atomic numbers.
+        Tiled atomic numbers, or the original numbers unchanged.
+
+    Notes
+    -----
+    Branches on a concrete ``repeats`` value, so this helper
+    runs eagerly rather than under ``jit``.
     """
 
     def _apply_repeats_with_lattice(
@@ -1259,49 +1265,10 @@ def _apply_repeats_or_return(
             positions, atomic_numbers, shift_vectors, mask_flat
         )
 
-    def _return_unchanged(
-        positions: Float[Array, " N 3"],
-        atomic_numbers: Int[Array, " N"],
-    ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
-        """Return positions padded to match tiled shape.
-
-        Parameters
-        ----------
-        positions : Float[Array, " N 3"]
-            Original positions.
-        atomic_numbers : Int[Array, " N"]
-            Original atomic numbers.
-
-        Returns
-        -------
-        tuple
-            Zero-padded positions and atomic numbers.
-        """
-        n_atoms: int = positions.shape[0]
-        max_n: int = 20
-        max_shifts: int = max_n * max_n * max_n
-        max_total: int = max_shifts * n_atoms
-
-        positions_padded: Float[Array, " M 3"] = jnp.zeros((max_total, 3))
-        atomic_numbers_padded: Int[Array, " M"] = jnp.zeros(
-            max_total, dtype=jnp.int32
-        )
-
-        positions_padded = positions_padded.at[:n_atoms].set(positions)
-        atomic_numbers_padded = atomic_numbers_padded.at[:n_atoms].set(
-            atomic_numbers
-        )
-
-        return (positions_padded, atomic_numbers_padded)
-
-    return jax.lax.cond(
-        jnp.any(repeats > 1),
-        lambda pos, an, lat: _apply_repeats_with_lattice(pos, an, lat),
-        lambda pos, an, _: _return_unchanged(pos, an),
-        positions,
-        atomic_numbers,
-        lattice,
-    )
+    needs_repeats: bool = bool(jnp.any(repeats > 1))
+    if needs_repeats:
+        return _apply_repeats_with_lattice(positions, atomic_numbers, lattice)
+    return positions, atomic_numbers
 
 
 @jaxtyped(typechecker=beartype)
@@ -1364,7 +1331,6 @@ def _build_potential_lookup(
             grid_shape=(height, width),
             center_coords=jnp.array([0.0, 0.0]),
             supersampling=supersampling,
-            potential_extent=4.0,
         )
         return jnp.where(is_valid, potential, jnp.zeros((height, width)))
 
@@ -1411,7 +1377,6 @@ def _build_potential_lookup(
 
 
 @jaxtyped(typechecker=beartype)
-@partial(jax.jit, static_argnames=["grid_shape", "supersampling"])
 def kirkland_potentials_crystal(
     crystal_data: CrystalData,
     pixel_size: ScalarFloat,

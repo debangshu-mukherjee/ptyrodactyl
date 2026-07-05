@@ -75,6 +75,7 @@ if (
 jax.config.update("jax_enable_x64", True)
 
 from . import (  # noqa: E402, I001
+    bloch,
     born,
     invert,
     jacobian,
@@ -86,6 +87,7 @@ from . import (  # noqa: E402, I001
 __version__: str = version("ptyrodactyl")
 
 __all__: list[str] = [
+    "bloch",
     "born",
     "invert",
     "jacobian",

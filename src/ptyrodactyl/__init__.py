@@ -13,6 +13,8 @@ safety is enforced with jaxtyping and beartype.
 
 Routine Listings
 ----------------
+- :mod:`bloch`
+    Bloch wave simulations.
 - :mod:`born`
     Convergent Born series simulations.
 - :mod:`invert`

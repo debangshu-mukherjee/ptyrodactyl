@@ -55,6 +55,28 @@ Routine Listings
     Crystal structure with fractional and Cartesian coordinates.
 :class:`CrystalData`
     Crystal data with atomic positions, lattice vectors, and metadata.
+:class:`ExitWaveParams`
+    Complex exit wave array.
+:class:`AberrationParams`
+    Zernike coefficients and soft aperture cutoff.
+:class:`GeometryParams`
+    Rotation angle, centre offset, ellipticity.
+:class:`PositionParams`
+    Per-scan-point position corrections.
+:class:`ProbeModeParams`
+    Probe mode weights and shapes.
+:class:`PtychoParams`
+    Combined parameter container for all blocks.
+:class:`FisherState`
+    State container for iterative Fisher computation.
+:class:`CGState`
+    State container for conjugate gradient iteration.
+:class:`GNState`
+    State container for Gauss-Newton iteration.
+:class:`LMState`
+    State container for Levenberg-Marquardt iteration.
+:class:`LanczosState`
+    State container for Lanczos tridiagonalisation.
 :func:`create_calibrated_array`
     Create a CalibratedArray with runtime validation.
 :func:`create_probe_modes`
@@ -67,6 +89,8 @@ Routine Listings
     Create a CrystalStructure with runtime validation.
 :func:`create_crystal_data`
     Create a CrystalData with runtime validation.
+:func:`create_ptycho_params`
+    Construct combined PtychoParams from components.
 """
 
 from .constants import A_BOHR, C_LIGHT, E_CHARGE, H_PLANCK, HBAR, M0C2_EV, M_E
@@ -97,25 +121,51 @@ from .electron_types import (
     create_probe_modes,
     create_stem4d,
 )
+from .jacobian_types import (
+    AberrationParams,
+    CGState,
+    ExitWaveParams,
+    FisherState,
+    GeometryParams,
+    GNState,
+    LanczosState,
+    LMState,
+    PositionParams,
+    ProbeModeParams,
+    PtychoParams,
+    create_ptycho_params,
+)
 
 __all__: list[str] = [
     "A_BOHR",
+    "AberrationParams",
     "C_LIGHT",
+    "CGState",
     "CalibratedArray",
     "CrystalData",
     "CrystalStructure",
     "E_CHARGE",
+    "ExitWaveParams",
+    "FisherState",
+    "GNState",
+    "GeometryParams",
     "H_PLANCK",
     "HBAR",
+    "LMState",
+    "LanczosState",
     "M0C2_EV",
     "M_E",
+    "PositionParams",
     "PotentialSlices",
+    "ProbeModeParams",
     "ProbeModes",
+    "PtychoParams",
     "STEM4D",
     "create_calibrated_array",
     "create_crystal_data",
     "create_crystal_structure",
     "create_potential_slices",
+    "create_ptycho_params",
     "create_probe_modes",
     "create_stem4d",
     "float_jax_image",

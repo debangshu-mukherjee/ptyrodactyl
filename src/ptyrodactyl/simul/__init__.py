@@ -25,6 +25,19 @@ Submodules
     CBED patterns, and 4D-STEM data generation with aberration
     calculations.
 
+The submodules are organized as follows:
+
+- :mod:`atom_potentials`
+    Atomic potential calculations for electron microscopy.
+- :mod:`geometry`
+    Geometric transformations and operations for crystal structures.
+- :mod:`parallelized`
+    Parallelized simulation functions for distributed microscopy.
+- :mod:`preprocessing`
+    Data preprocessing utilities for electron microscopy.
+- :mod:`simulations`
+    Forward simulation functions for electron microscopy.
+
 Routine Listings
 ----------------
 :func:`aberration`

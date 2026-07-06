@@ -1,5 +1,10 @@
 """Convergent Born series simulations.
 
+The submodules are organized as follows:
+
+- :mod:`green`
+    Fourier-space Green's function for the homogeneous Helmholtz equation.
+
 Routine Listings
 ----------------
 :func:`convergence_parameter`

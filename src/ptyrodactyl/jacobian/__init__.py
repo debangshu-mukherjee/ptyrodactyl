@@ -19,6 +19,19 @@ The submodules are organised by concern:
 - :mod:`blocks` -- Block-based Gauss-Newton solver for
   ptychography.
 
+The submodules are organized as follows:
+
+- :mod:`blocks`
+    Block-structured parameter management for ptychography.
+- :mod:`fisher`
+    Fisher information for ptychographic experiment design.
+- :mod:`gauge`
+    Gauge structure analysis for ptychographic inverse problems.
+- :mod:`operators`
+    Jacobian operator primitives for matrix-free linear algebra.
+- :mod:`solvers`
+    Second-order solvers and spectral analysis for least-squares.
+
 Routine Listings
 ----------------
 :class:`AberrationParams`

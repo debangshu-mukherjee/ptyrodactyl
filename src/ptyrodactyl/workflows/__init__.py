@@ -5,6 +5,11 @@ Extended Summary
 This package implements combined workflows, which takes in
 multiple functions together and gives you a big global function.
 
+The submodules are organized as follows:
+
+- :mod:`stem_4d`
+    High-level workflows for electron microscopy simulations.
+
 Routine Listings
 ----------------
 :func:`crystal2stem4d`

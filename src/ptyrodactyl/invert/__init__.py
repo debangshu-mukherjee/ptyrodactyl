@@ -9,6 +9,11 @@ JAX-compatible optimizers and support automatic differentiation.
 Supports single-slice and multi-slice reconstructions with
 options for position correction and multi-modal probe handling.
 
+The submodules are organized as follows:
+
+- :mod:`phase_recon`
+    Inverse reconstruction algorithms for electron ptychography.
+
 Routine Listings
 ----------------
 :func:`multi_slice_multi_modal`

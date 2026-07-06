@@ -1,5 +1,10 @@
 """Convergent Born series simulations.
 
+The submodules are organized as follows:
+
+- :mod:`bloch_forward`
+    Bloch-wave forward solver for dynamical electron diffraction.
+
 Routine Listings
 ----------------
 :func:`structure_matrix`:

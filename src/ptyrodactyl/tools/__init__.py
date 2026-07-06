@@ -18,7 +18,7 @@ The submodules are organized as following:
 - :mod:`factory`
     Factory functions for validating data before PyTree loading.
 - :mod:`loss_functions`
-    s function implementations for ptychography optimization.
+    Loss function implementations for ptychography optimization.
 - :mod:`optimizers`
     Complex-valued optimizers with Wirtinger derivatives.
 - :mod:`parallel`

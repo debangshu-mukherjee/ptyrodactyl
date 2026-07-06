@@ -58,7 +58,8 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl.tools import (
+from ptyrodactyl.tools import relativistic_wavelength_ang
+from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
     M_E,
@@ -66,14 +67,20 @@ from ptyrodactyl.tools import (
     CalibratedArray,
     PotentialSlices,
     ProbeModes,
-    ScalarFloat,
-    ScalarInt,
-    ScalarNumeric,
-    make_calibrated_array,
-    make_probe_modes,
-    make_stem4d,
-    relativistic_wavelength_ang,
+    create_calibrated_array,
+    create_probe_modes,
+    create_stem4d,
+    scalar_float,
+    scalar_int,
+    scalar_num,
 )
+
+ScalarFloat = scalar_float
+ScalarInt = scalar_int
+ScalarNumeric = scalar_num
+make_calibrated_array = create_calibrated_array
+make_probe_modes = create_probe_modes
+make_stem4d = create_stem4d
 
 
 @jaxtyped(typechecker=beartype)

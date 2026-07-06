@@ -35,8 +35,6 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-MOTT_BETHE_VOLT_ANGSTROM_SQ: float = 47.87801
-
 
 @jaxtyped(typechecker=beartype)
 def excitation_errors(

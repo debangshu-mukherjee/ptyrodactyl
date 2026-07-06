@@ -5,6 +5,19 @@ Extended Summary
 This package is the canonical import surface for shared type
 aliases and physical constants used throughout ptyrodactyl.
 
+The submodules are organized as follows:
+
+- :mod:`custom_types`
+    Custom type aliases for scalar and image data.
+- :mod:`constants`
+    Physical constants for electron microscopy.
+- :mod:`electron_types`
+    Electron microscopy carriers and factories.
+- :mod:`crystal_types`
+    Crystal carriers and factories.
+- :mod:`jacobian_types`
+    Jacobian parameter and solver-state carriers.
+
 Routine Listings
 ----------------
 :obj:`scalar_float`
@@ -43,6 +56,8 @@ Routine Listings
     Bohr radius in Angstroms.
 :obj:`M0C2_EV`
     Electron rest energy in eV.
+:obj:`MOTT_BETHE_VOLT_ANGSTROM_SQ`
+    Mott-Bethe constant h²/(2π m₀ e) in V·Å².
 :class:`CalibratedArray`
     Calibrated array data with spatial calibration.
 :class:`ProbeModes`
@@ -93,7 +108,16 @@ Routine Listings
     Construct combined PtychoParams from components.
 """
 
-from .constants import A_BOHR, C_LIGHT, E_CHARGE, H_PLANCK, HBAR, M0C2_EV, M_E
+from .constants import (
+    A_BOHR,
+    C_LIGHT,
+    E_CHARGE,
+    H_PLANCK,
+    HBAR,
+    M0C2_EV,
+    M_E,
+    MOTT_BETHE_VOLT_ANGSTROM_SQ,
+)
 from .crystal_types import (
     CrystalData,
     CrystalStructure,
@@ -154,6 +178,7 @@ __all__: list[str] = [
     "LMState",
     "LanczosState",
     "M0C2_EV",
+    "MOTT_BETHE_VOLT_ANGSTROM_SQ",
     "M_E",
     "PositionParams",
     "PotentialSlices",

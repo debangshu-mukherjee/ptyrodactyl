@@ -6,8 +6,8 @@ your contributions match the existing standards.
 
 > **A note on target conventions.** This guide codifies the conventions the project is
 > converging to under the `plans/` roadmap (plans 00–12). A few structural items — the
-> single `ptyrodactyl.types` home, `eqx.Module` carriers, the `simul_multislice` /
-> `simul_born` split, and the `recon` inverse-problem package — are **mid-rollout**: write
+> single `ptyrodactyl.types` home, `eqx.Module` carriers, the `multislice`/`born`/`bloch`
+> forward families, and the `recon` inverse-problem package — are **mid-rollout**: write
 > *new* code to the target conventions below, and follow the migration in `plans/` when
 > touching code that has not yet been moved.
 
@@ -96,8 +96,9 @@ The target module map (see `plans/future/00_rheedium_parity_roadmap.md` §2 and
 ptyrodactyl/
 ├── src/ptyrodactyl/
 │   ├── types/             # The single home for every carrier, alias, constant, create_* factory
-│   ├── simul_multislice/  # Legacy multislice / projected-potential forward model (CBED, 4D-STEM) — faster
-│   ├── simul_born/        # Convergent Born Series forward model (exact 3D) — the headline; TEM/CBED/4D-STEM terminals
+│   ├── multislice/        # Legacy multislice / projected-potential forward model (CBED, 4D-STEM) — faster
+│   ├── born/              # Convergent Born Series forward model (exact) — the headline; owns Schwartz (born/schwartz.py)
+│   ├── bloch/             # Bloch-wave forward family — periodic-crystal reference / cross-validation
 │   ├── recon/             # Inverse problem: ReconProblem/ReconResult, solve(), losses, transforms, uncertainty, gauge, distributed Schwartz
 │   ├── audit/             # Physics-invariant audit suite + reference benchmarking
 │   ├── harness/           # Agent-runnable automaton process-boundary contract

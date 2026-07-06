@@ -1,0 +1,83 @@
+"""Custom type aliases for scalar and image data.
+
+Extended Summary
+----------------
+This module defines shared scalar and image type aliases for
+JAX-compatible electron microscopy code. Scalar aliases accept
+standard Python scalars and 0-dimensional JAX arrays so public
+APIs can be called naturally from Python while remaining traceable
+under JAX transformations.
+
+Routine Listings
+----------------
+:obj:`scalar_float`
+    Union type for scalar float values (float or JAX scalar
+    array).
+:obj:`scalar_int`
+    Union type for scalar integer values (int or JAX scalar
+    array).
+:obj:`scalar_bool`
+    Union type for scalar boolean values (bool or JAX scalar
+    array).
+:obj:`scalar_num`
+    Union type for scalar numeric values (int, float, or JAX
+    scalar array).
+:obj:`non_jax_number`
+    Union type for non-JAX numeric values (int or float).
+:obj:`float_jax_image`
+    Type alias for 2D JAX float array (H, W).
+:obj:`int_jax_image`
+    Type alias for 2D JAX integer array (H, W).
+:obj:`float_np_image`
+    Type alias for 2D numpy float array (H, W).
+:obj:`int_np_image`
+    Type alias for 2D numpy integer array (H, W).
+
+Notes
+-----
+These aliases are re-exported from :mod:`ptyrodactyl.types` as the
+canonical type import path for the package.
+"""
+
+from beartype.typing import TypeAlias, Union
+from jaxtyping import Array, Bool, Float, Int, Num
+from numpy.typing import NDArray
+
+scalar_float: TypeAlias = Union[float, Float[Array, " "]]
+"""Scalar float accepted as a Python float or 0-dimensional JAX array."""
+
+scalar_int: TypeAlias = Union[int, Int[Array, " "]]
+"""Scalar integer accepted as a Python int or 0-dimensional JAX array."""
+
+scalar_bool: TypeAlias = Union[bool, Bool[Array, " "]]
+"""Scalar boolean accepted as a Python bool or 0-dimensional JAX array."""
+
+scalar_num: TypeAlias = Union[int, float, Num[Array, " "]]
+"""Scalar numeric value accepted as Python numeric or JAX scalar array."""
+
+non_jax_number: TypeAlias = Union[int, float]
+"""Non-JAX numeric scalar accepted as a Python int or float."""
+
+float_jax_image: TypeAlias = Float[Array, " H W"]
+"""2-dimensional JAX floating-point image array."""
+
+int_jax_image: TypeAlias = Int[Array, " H W"]
+"""2-dimensional JAX integer image array."""
+
+float_np_image: TypeAlias = Float[NDArray, " H W"]
+"""2-dimensional numpy floating-point image array."""
+
+int_np_image: TypeAlias = Int[NDArray, " H W"]
+"""2-dimensional numpy integer image array."""
+
+__all__: list[str] = [
+    "float_jax_image",
+    "float_np_image",
+    "int_jax_image",
+    "int_np_image",
+    "non_jax_number",
+    "scalar_bool",
+    "scalar_float",
+    "scalar_int",
+    "scalar_num",
+]

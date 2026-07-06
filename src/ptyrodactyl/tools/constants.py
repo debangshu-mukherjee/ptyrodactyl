@@ -44,7 +44,7 @@ from beartype import beartype
 from jax import Array
 from jaxtyping import Float, jaxtyped
 
-from .electron_types import ScalarNumeric
+from ptyrodactyl.types import scalar_num
 
 HBAR: float = 1.054571817e-34
 """Reduced Planck constant in J·s."""
@@ -71,7 +71,7 @@ M0C2_EV: float = 510998.95
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def relativistic_wavelength_ang(
-    voltage_kv: ScalarNumeric,
+    voltage_kv: scalar_num,
 ) -> Float[Array, " "]:
     r"""Relativistic electron wavelength in Angstroms.
 
@@ -134,7 +134,7 @@ def relativistic_wavelength_ang(
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def interaction_parameter(
-    voltage_kv: ScalarNumeric,
+    voltage_kv: scalar_num,
 ) -> Float[Array, " "]:
     r"""Interaction parameter sigma in 1/(V·Angstrom).
 
@@ -196,7 +196,7 @@ def interaction_parameter(
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def relativistic_mass(
-    voltage_kv: ScalarNumeric,
+    voltage_kv: scalar_num,
 ) -> Float[Array, " "]:
     r"""Relativistic electron mass in kg.
 

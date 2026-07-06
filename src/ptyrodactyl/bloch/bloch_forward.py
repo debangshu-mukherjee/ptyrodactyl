@@ -35,8 +35,6 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-jax.config.update("jax_enable_x64", True)
-
 MOTT_BETHE_VOLT_ANGSTROM_SQ: float = 47.87801
 
 

@@ -92,11 +92,11 @@ Routine Listings
 :func:`single_atom_potential`
     Calculate single atom potential using Kirkland
     parameterization.
-:func:`stem_4d`
-    Generate 4D-STEM data from potential slices and probe.
 :func:`stem4d_sharded`
     Generate 4D-STEM data from sharded beams with on-the-fly
     slice generation.
+:func:`stem_4d`
+    Generate 4D-STEM data from potential slices and probe.
 :func:`tilt_crystal`
     Tilt :class:`~ptyrodactyl.tools.CrystalData` by alpha
     and beta angles (TEM stage-like tilts).

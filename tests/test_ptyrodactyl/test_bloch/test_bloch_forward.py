@@ -21,8 +21,9 @@ from absl.testing import parameterized
 from beartype import beartype
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
+from ptyrodactyl.types import MOTT_BETHE_VOLT_ANGSTROM_SQ
+
 from ptyrodactyl.bloch.bloch_forward import (
-    MOTT_BETHE_VOLT_ANGSTROM_SQ,
     bloch_beam_amplitudes,
     bloch_thickness_series,
     excitation_errors,

@@ -276,7 +276,11 @@ Each module starts with a one-line summary, an `Extended Summary`, a `Routine Li
 section cross-referencing every public object, and a `Notes` section where relevant.
 **Package `__init__.py` docstrings additionally include a submodule-organization block** in the
 Extended Summary — "The submodules are organized as follows:" with one ``- :mod:`name```
-bullet + one-line description per submodule, matching each submodule's own summary line. Use the
+bullet + one-line description per submodule, matching each submodule's own summary line.
+**Ordering is normative:** submodule entries in the Extended Summary block are alphabetical; and
+`Routine Listings` entries are grouped **classes first, then functions, then objects** —
+alphabetical within each group. Classes and functions never appear in the Extended Summary;
+submodules never appear in Routine Listings. Use the
 correct Sphinx role in `Routine Listings`: `:func:` for functions, `:class:` for
 classes/PyTrees, `:obj:` for type aliases and constants, and `:mod:` for submodules.
 

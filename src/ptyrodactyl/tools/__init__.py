@@ -46,28 +46,6 @@ Routine Listings
 :class:`STEM4D`
     4D-STEM data with diffraction patterns, calibrations,
     and parameters.
-:data:`NonJaxNumber`
-    Non-JAX numeric types (int, float).
-:data:`ScalarFloat`
-    Float or 0-dimensional Float array.
-:data:`ScalarInt`
-    Int or 0-dimensional Int array.
-:data:`ScalarNumeric`
-    Numeric types (int, float, or 0-dimensional Num array).
-:data:`A_BOHR`
-    Bohr radius in Angstroms.
-:data:`C_LIGHT`
-    Speed of light in m/s.
-:data:`E_CHARGE`
-    Elementary charge in C.
-:data:`H_PLANCK`
-    Planck constant in J·s.
-:data:`HBAR`
-    Reduced Planck constant in J·s.
-:data:`M0C2_EV`
-    Electron rest energy in eV.
-:data:`M_E`
-    Electron rest mass in kg.
 :func:`adagrad_update`
     Adagrad parameter update step.
 :func:`adam_update`
@@ -123,6 +101,28 @@ Routine Listings
 :func:`wirtinger_grad`
     Compute Wirtinger gradients for complex-valued
     optimization.
+:data:`A_BOHR`
+    Bohr radius in Angstroms.
+:data:`C_LIGHT`
+    Speed of light in m/s.
+:data:`E_CHARGE`
+    Elementary charge in C.
+:data:`HBAR`
+    Reduced Planck constant in J·s.
+:data:`H_PLANCK`
+    Planck constant in J·s.
+:data:`M0C2_EV`
+    Electron rest energy in eV.
+:data:`M_E`
+    Electron rest mass in kg.
+:data:`NonJaxNumber`
+    Non-JAX numeric types (int, float).
+:data:`ScalarFloat`
+    Float or 0-dimensional Float array.
+:data:`ScalarInt`
+    Int or 0-dimensional Int array.
+:data:`ScalarNumeric`
+    Numeric types (int, float, or 0-dimensional Num array).
 
 Notes
 -----

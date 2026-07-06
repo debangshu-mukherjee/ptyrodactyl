@@ -1,5 +1,7 @@
 """Convergent Born series simulations.
 
+Extended Summary
+----------------
 The submodules are organized as follows:
 
 - :mod:`green`
@@ -16,6 +18,7 @@ Routine Listings
 :func:`wavenumber_background`
     Background wavenumber for the Helmholtz equation.
 """
+
 
 from .green import (
     convergence_parameter,

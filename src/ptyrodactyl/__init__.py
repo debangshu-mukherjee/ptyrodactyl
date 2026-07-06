@@ -11,8 +11,8 @@ optimization is handled via Wirtinger calculus, and distributed
 computing is supported through device mesh parallelism. Type
 safety is enforced with jaxtyping and beartype.
 
-Routine Listings
-----------------
+The submodules are organized as follows:
+
 - :mod:`bloch`
     Bloch wave simulations.
 - :mod:`born`
@@ -29,6 +29,9 @@ Routine Listings
     Utility tools for optimization, loss functions, and
     parallel processing including complex-valued optimizers
     with Wirtinger derivatives.
+- :mod:`types`
+    Single home for carriers, type aliases, physical constants,
+    and validated create_* factories.
 - :mod:`workflows`
     High-level workflows combining simulation steps for common
     use cases such as simulating 4D-STEM data from XYZ
@@ -81,6 +84,7 @@ from . import (  # noqa: E402, I001
     jacobian,
     simul,
     tools,
+    types,
     workflows,
 )
 
@@ -93,5 +97,6 @@ __all__: list[str] = [
     "jacobian",
     "simul",
     "tools",
+    "types",
     "workflows",
 ]

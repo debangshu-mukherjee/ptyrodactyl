@@ -41,13 +41,13 @@ from jax.image import resize
 from jax.sharding import Mesh, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-from ptyrodactyl.tools import (
+from ptyrodactyl.tools import relativistic_wavelength_ang
+from ptyrodactyl.types import (
     STEM4D,
-    ScalarFloat,
-    ScalarInt,
-    ScalarNumeric,
-    make_stem4d,
-    relativistic_wavelength_ang,
+    create_stem4d,
+    scalar_float,
+    scalar_int,
+    scalar_num,
 )
 
 from .simulations import (
@@ -61,11 +61,11 @@ from .simulations import (
 def _compute_slice_potential(
     atom_coords: Float[Array, "N 3"],
     atom_types: Int[Array, " N"],
-    z_min: ScalarFloat,
-    z_max: ScalarFloat,
+    z_min: scalar_float,
+    z_max: scalar_float,
     atom_potentials: Float[Array, "T H W"],
     grid_shape: Tuple[int, int],
-    calib_ang: ScalarFloat,
+    calib_ang: scalar_float,
     atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Float[Array, "H W"]:
     """Compute a potential slice by summing atom type contributions.
@@ -94,16 +94,16 @@ def _compute_slice_potential(
         Atom coordinates in Angstroms, columns ``(x, y, z)``.
     atom_types : Int[Array, " N"]
         Atom type indices (0-indexed) for each atom.
-    z_min : ScalarFloat
+    z_min : scalar_float
         Minimum z coordinate for this slice in Angstroms.
-    z_max : ScalarFloat
+    z_max : scalar_float
         Maximum z coordinate for this slice in Angstroms.
     atom_potentials : Float[Array, "T H W"]
         Precomputed 2D atomic potentials for each atom type.
         T is the number of unique atom types.
     grid_shape : Tuple[int, int]
         Output grid shape ``(height, width)``.
-    calib_ang : ScalarFloat
+    calib_ang : scalar_float
         Pixel size in Angstroms.
     atom_mask : Optional[Float[Array, " N"]]
         Mask for atoms to include (1.0 = include,
@@ -127,13 +127,13 @@ def _compute_slice_potential(
         in_slice = in_slice * atom_mask
 
     def _process_atom_type(
-        atom_type_idx: ScalarInt,
+        atom_type_idx: scalar_int,
     ) -> Float[Array, "H W"]:
         """Compute potential contribution from one atom type.
 
         Parameters
         ----------
-        atom_type_idx : ScalarInt
+        atom_type_idx : scalar_int
             Index into ``atom_potentials`` for this type.
 
         Returns
@@ -181,8 +181,8 @@ def _cbed_from_potential_slices(
     atom_types: Int[Array, " N"],
     slice_z_bounds: Float[Array, "S 2"],
     atom_potentials: Float[Array, "T H W"],
-    voltage_kv: ScalarNumeric,
-    calib_ang: ScalarFloat,
+    voltage_kv: scalar_num,
+    calib_ang: scalar_float,
     atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Float[Array, "H W"]:
     """Compute CBED pattern with on-the-fly slice generation.
@@ -220,9 +220,9 @@ def _cbed_from_potential_slices(
         slices.
     atom_potentials : Float[Array, "T H W"]
         Precomputed 2D atomic potentials per atom type.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
-    calib_ang : ScalarFloat
+    calib_ang : scalar_float
         Pixel size in Angstroms.
     atom_mask : Optional[Float[Array, " N"]]
         Mask for atoms (1.0 = include, 0.0 = exclude). Used
@@ -251,7 +251,7 @@ def _cbed_from_potential_slices(
     init_wave: Complex[Array, "H W M"] = beam
 
     def _scan_fn(
-        carry: Complex[Array, "H W M"], slice_idx: ScalarInt
+        carry: Complex[Array, "H W M"], slice_idx: scalar_int
     ) -> Tuple[Complex[Array, "H W M"], None]:
         """Propagate wave through one potential slice.
 
@@ -259,7 +259,7 @@ def _cbed_from_potential_slices(
         ----------
         carry : Complex[Array, "H W M"]
             Current wave state.
-        slice_idx : ScalarInt
+        slice_idx : scalar_int
             Index of the current slice.
 
         Returns
@@ -330,9 +330,9 @@ def _cbed_from_potential_slices(
 @jax.jit
 def clip_cbed(
     cbed: Float[Array, "H W"],
-    fourier_calib_inv_ang: ScalarFloat,
-    voltage_kv: ScalarNumeric,
-    extent_mrad: ScalarFloat,
+    fourier_calib_inv_ang: scalar_float,
+    voltage_kv: scalar_num,
+    extent_mrad: scalar_float,
     output_shape: Tuple[int, int],
 ) -> Float[Array, "Ho Wo"]:
     """Clip CBED pattern to mrad extent and resize.
@@ -357,12 +357,12 @@ def clip_cbed(
     ----------
     cbed : Float[Array, "H W"]
         Input CBED pattern (fftshifted, centered).
-    fourier_calib_inv_ang : ScalarFloat
+    fourier_calib_inv_ang : scalar_float
         Fourier space calibration in inverse Angstroms per
         pixel.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
-    extent_mrad : ScalarFloat
+    extent_mrad : scalar_float
         Half-angle extent in milliradians (radius from
         center).
     output_shape : Tuple[int, int]
@@ -417,8 +417,8 @@ def stem4d_sharded(
     atom_types: Int[Array, " N"],
     slice_z_bounds: Float[Array, "S 2"],
     atom_potentials: Float[Array, "T H W"],
-    voltage_kv: ScalarNumeric,
-    calib_ang: ScalarFloat,
+    voltage_kv: scalar_num,
+    calib_ang: scalar_float,
     mesh: Optional[Mesh] = None,
 ) -> STEM4D:
     """Generate 4D-STEM data with on-the-fly beam shifting and slices.
@@ -444,7 +444,7 @@ def stem4d_sharded(
        distribute positions across devices; otherwise use
        ``jax.vmap``.
     4. **Build output** --
-       Return :class:`~ptyrodactyl.tools.STEM4D` PyTree with
+       Return :class:`~ptyrodactyl.types.STEM4D` PyTree with
        data, calibrations, and scan positions.
 
     Parameters
@@ -467,9 +467,9 @@ def stem4d_sharded(
     atom_potentials : Float[Array, "T H W"]
         Precomputed 2D atomic potentials for each unique
         atom type.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
-    calib_ang : ScalarFloat
+    calib_ang : scalar_float
         Real-space pixel size in Angstroms.
     mesh : Optional[Mesh]
         JAX device mesh for multi-GPU parallelism. If
@@ -513,8 +513,8 @@ def stem4d_sharded(
         shifted_beam : Complex[Array, "H W M"]
             Probe modes shifted to the target position.
         """
-        y_shift: ScalarFloat = position_ang[0]
-        x_shift: ScalarFloat = position_ang[1]
+        y_shift: scalar_float = position_ang[0]
+        x_shift: scalar_float = position_ang[1]
         phase: Float[Array, "H W"] = (
             -2.0 * jnp.pi * ((qya * y_shift) + (qxa * x_shift))
         )
@@ -586,7 +586,7 @@ def stem4d_sharded(
     real_space_fov: Float[Array, " "] = jnp.asarray(h * calib_ang)
     fourier_calib: Float[Array, " "] = 1.0 / real_space_fov
 
-    stem4d_data_sharded: STEM4D = make_stem4d(
+    stem4d_data_sharded: STEM4D = create_stem4d(
         data=cbed_patterns,
         real_space_calib=calib_ang,
         fourier_space_calib=fourier_calib,

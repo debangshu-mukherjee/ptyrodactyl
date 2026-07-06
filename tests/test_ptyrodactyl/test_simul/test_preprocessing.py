@@ -9,6 +9,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import pytest
+from equinox import EquinoxRuntimeError
 
 from ptyrodactyl.simul.preprocessing import (
     _ATOMIC_NUMBERS,
@@ -726,7 +727,7 @@ Negative test
 
         try:
             with pytest.raises(
-                ValueError, match="atomic_numbers must be non-negative"
+                EquinoxRuntimeError, match="atomic_numbers must be non-negative"
             ):
                 parse_xyz(xyz_path)
         finally:
@@ -742,7 +743,9 @@ N   1.0   NaN   1.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(ValueError):
+            with pytest.raises(
+                EquinoxRuntimeError, match="non-finite"
+            ):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()

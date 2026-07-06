@@ -1,22 +1,16 @@
-"""Utility tools for JAX ptychography.
+"""Numerical utilities for ptychography workflows.
 
 Extended Summary
 ----------------
-This package contains essential utilities for complex-valued
-optimization, loss functions, and parallel processing in
-ptychography applications. All functions are JAX-compatible and
-support automatic differentiation. This includes an implementation
-of the Wirtinger derivatives, which are used for creating complex
-valued Adam, Adagrad and RMSprop optimizers.
+This package exposes numerical helpers for loss construction,
+complex-valued optimization, derived electron-optics quantities, and
+array sharding. Shared carriers, scalar aliases, constants, and
+validated factories are exported only from :mod:`ptyrodactyl.types`.
 
-The submodules are organized as following:
+The submodules are organized as follows:
 
 - :mod:`constants`
-    Physical constants and derived quantities for electron microscopy.
-- :mod:`electron_types`
-    Data structures and type definitions for electron microscopy.
-- :mod:`factory`
-    Factory functions for validating data before PyTree loading.
+    Derived electron-optics quantities.
 - :mod:`loss_functions`
     Loss function implementations for ptychography optimization.
 - :mod:`optimizers`
@@ -26,43 +20,26 @@ The submodules are organized as following:
 
 Routine Listings
 ----------------
-:class:`CalibratedArray`
-    Calibrated array data with spatial calibration.
-:class:`CrystalData`
-    Crystal data with atomic positions, lattice vectors,
-    and metadata.
-:class:`CrystalStructure`
-    Crystal structure with fractional and Cartesian coordinates.
 :class:`LRSchedulerState`
     Learning rate scheduler state.
 :class:`Optimizer`
     Optimizer configuration.
 :class:`OptimizerState`
     Optimizer state for training.
-:class:`PotentialSlices`
-    Potential slices for multi-slice simulations.
-:class:`ProbeModes`
-    Multimodal electron probe state.
-:class:`STEM4D`
-    4D-STEM data with diffraction patterns, calibrations,
-    and parameters.
 :func:`adagrad_update`
     Adagrad parameter update step.
 :func:`adam_update`
     Adam parameter update step.
 :func:`complex_adagrad`
-    Adagrad optimizer with Wirtinger derivatives for complex
-    parameters.
+    Adagrad optimizer with Wirtinger derivatives for complex parameters.
 :func:`complex_adam`
-    Adam optimizer with Wirtinger derivatives for complex
-    parameters.
+    Adam optimizer with Wirtinger derivatives for complex parameters.
 :func:`complex_rmsprop`
-    RMSprop optimizer with Wirtinger derivatives for complex
-    parameters.
+    RMSprop optimizer with Wirtinger derivatives for complex parameters.
 :func:`create_cosine_scheduler`
     Create cosine annealing learning rate scheduler.
 :func:`create_loss_function`
-    Factory function to create custom loss functions.
+    Factory that creates a JIT-compiled loss function.
 :func:`create_step_scheduler`
     Create step decay learning rate scheduler.
 :func:`create_warmup_cosine_scheduler`
@@ -77,18 +54,6 @@ Routine Listings
     Initialize learning rate scheduler state.
 :func:`interaction_parameter`
     Interaction parameter sigma in 1/(V·Angstrom).
-:func:`make_calibrated_array`
-    Creates a CalibratedArray with runtime type checking.
-:func:`make_crystal_data`
-    Creates a CrystalData with runtime type checking.
-:func:`make_crystal_structure`
-    Creates a CrystalStructure with runtime type checking.
-:func:`make_potential_slices`
-    Creates a PotentialSlices with runtime type checking.
-:func:`make_probe_modes`
-    Creates a ProbeModes with runtime type checking.
-:func:`make_stem4d`
-    Creates a STEM4D with runtime type checking.
 :func:`relativistic_mass`
     Relativistic electron mass in kg.
 :func:`relativistic_wavelength_ang`
@@ -96,72 +61,20 @@ Routine Listings
 :func:`rmsprop_update`
     RMSprop parameter update step.
 :func:`shard_array`
-    Shard arrays across multiple devices for parallel
-    processing.
+    Shard arrays across multiple devices for parallel processing.
 :func:`wirtinger_grad`
-    Compute Wirtinger gradients for complex-valued
-    optimization.
-:data:`A_BOHR`
-    Bohr radius in Angstroms.
-:data:`C_LIGHT`
-    Speed of light in m/s.
-:data:`E_CHARGE`
-    Elementary charge in C.
-:data:`HBAR`
-    Reduced Planck constant in J·s.
-:data:`H_PLANCK`
-    Planck constant in J·s.
-:data:`M0C2_EV`
-    Electron rest energy in eV.
-:data:`M_E`
-    Electron rest mass in kg.
-:data:`NonJaxNumber`
-    Non-JAX numeric types (int, float).
-:data:`ScalarFloat`
-    Float or 0-dimensional Float array.
-:data:`ScalarInt`
-    Int or 0-dimensional Int array.
-:data:`ScalarNumeric`
-    Numeric types (int, float, or 0-dimensional Num array).
+    Compute Wirtinger gradients for complex-valued optimization.
 
 Notes
 -----
-All optimizers and loss functions support JAX transformations
-including jit compilation, automatic differentiation, and
-vectorized mapping.
+All exported functions are JAX-compatible and designed for use with
+``jit``, ``grad``, and ``vmap`` where applicable.
 """
 
 from .constants import (
-    A_BOHR,
-    C_LIGHT,
-    E_CHARGE,
-    H_PLANCK,
-    HBAR,
-    M0C2_EV,
-    M_E,
     interaction_parameter,
     relativistic_mass,
     relativistic_wavelength_ang,
-)
-from .electron_types import (
-    STEM4D,
-    CalibratedArray,
-    CrystalData,
-    CrystalStructure,
-    NonJaxNumber,
-    PotentialSlices,
-    ProbeModes,
-    ScalarFloat,
-    ScalarInt,
-    ScalarNumeric,
-)
-from .factory import (
-    make_calibrated_array,
-    make_crystal_data,
-    make_crystal_structure,
-    make_potential_slices,
-    make_probe_modes,
-    make_stem4d,
 )
 from .loss_functions import create_loss_function
 from .optimizers import (
@@ -186,26 +99,9 @@ from .optimizers import (
 from .parallel import shard_array
 
 __all__: list[str] = [
-    "A_BOHR",
-    "C_LIGHT",
-    "CalibratedArray",
-    "CrystalData",
-    "CrystalStructure",
-    "E_CHARGE",
-    "H_PLANCK",
-    "HBAR",
     "LRSchedulerState",
-    "M0C2_EV",
-    "M_E",
-    "NonJaxNumber",
     "Optimizer",
     "OptimizerState",
-    "PotentialSlices",
-    "ProbeModes",
-    "ScalarFloat",
-    "ScalarInt",
-    "ScalarNumeric",
-    "STEM4D",
     "adagrad_update",
     "adam_update",
     "complex_adagrad",
@@ -220,12 +116,6 @@ __all__: list[str] = [
     "init_rmsprop",
     "init_scheduler_state",
     "interaction_parameter",
-    "make_calibrated_array",
-    "make_crystal_data",
-    "make_crystal_structure",
-    "make_potential_slices",
-    "make_probe_modes",
-    "make_stem4d",
     "relativistic_mass",
     "relativistic_wavelength_ang",
     "rmsprop_update",

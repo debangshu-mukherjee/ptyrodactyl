@@ -25,10 +25,10 @@ Routine Listings
     Extract metadata from the XYZ comment line.
 :func:`parse_xyz`
     Parse an XYZ file and return validated
-    :class:`~ptyrodactyl.tools.CrystalData`.
+    :class:`~ptyrodactyl.types.CrystalData`.
 :func:`parse_poscar`
     Parse a VASP POSCAR file and return validated
-    :class:`~ptyrodactyl.tools.CrystalData`.
+    :class:`~ptyrodactyl.types.CrystalData`.
 :func:`_extract_elements_from_comment`
     Extract element symbols from POSCAR comment line.
 :func:`parse_crystal`
@@ -51,7 +51,7 @@ from beartype import beartype
 from beartype.typing import Any, Dict, List, Optional, Union
 from jaxtyping import Array, Float, Int, jaxtyped
 
-from ptyrodactyl.tools import CrystalData, ScalarInt, make_crystal_data
+from ptyrodactyl.types import CrystalData, create_crystal_data, scalar_int
 
 _KIRKLAND_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
@@ -99,7 +99,7 @@ _ATOMIC_NUMBERS: Dict[str, int] = _load_atomic_numbers()
 
 
 @jaxtyped(typechecker=beartype)
-def atomic_symbol(symbol_string: str) -> ScalarInt:
+def atomic_symbol(symbol_string: str) -> scalar_int:
     """Return atomic number for a given atomic symbol string.
 
     Implementation Logic
@@ -118,7 +118,7 @@ def atomic_symbol(symbol_string: str) -> ScalarInt:
 
     Returns
     -------
-    atomic_number : ScalarInt
+    atomic_number : scalar_int
         Atomic number corresponding to the symbol.
 
     Raises
@@ -144,7 +144,7 @@ def atomic_symbol(symbol_string: str) -> ScalarInt:
         )
         raise KeyError(msg)
 
-    atomic_number: ScalarInt = _ATOMIC_NUMBERS[normalized_symbol]
+    atomic_number: scalar_int = _ATOMIC_NUMBERS[normalized_symbol]
     return atomic_number
 
 
@@ -363,7 +363,7 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
     )
     atomic_z_arr: Int[Array, " N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
 
-    return make_crystal_data(
+    return create_crystal_data(
         positions=positions_arr,
         atomic_numbers=atomic_z_arr,
         lattice=metadata.get("lattice"),
@@ -437,7 +437,7 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
        ``positions @ lattice``.
     8. **Build output** -- Construct atomic numbers array
        and return
-       :class:`~ptyrodactyl.tools.CrystalData` PyTree.
+       :class:`~ptyrodactyl.types.CrystalData` PyTree.
     """
     with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()
@@ -539,7 +539,7 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
         atomic_numbers_list, dtype=jnp.int32
     )
 
-    return make_crystal_data(
+    return create_crystal_data(
         positions=positions_arr,
         atomic_numbers=atomic_z_arr,
         lattice=lattice,

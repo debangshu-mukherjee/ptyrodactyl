@@ -70,7 +70,7 @@ Routine Listings
     Create electron probe with specified aberrations.
 :func:`parse_crystal`
     Parse XYZ or POSCAR file, auto-detecting format,
-    returns :class:`~ptyrodactyl.tools.CrystalData`.
+    returns :class:`~ptyrodactyl.types.CrystalData`.
 :func:`parse_poscar`
     Parse VASP POSCAR file and return validated structure
     data.
@@ -98,7 +98,7 @@ Routine Listings
 :func:`stem_4d`
     Generate 4D-STEM data from potential slices and probe.
 :func:`tilt_crystal`
-    Tilt :class:`~ptyrodactyl.tools.CrystalData` by alpha
+    Tilt :class:`~ptyrodactyl.types.CrystalData` by alpha
     and beta angles (TEM stage-like tilts).
 :func:`transmission_func`
     Compute transmission function for a potential slice.

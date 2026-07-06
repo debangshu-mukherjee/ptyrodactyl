@@ -51,8 +51,8 @@ Routine Listings
 :func:`_build_potential_lookup`
     Build lookup table for atomic potentials.
 :func:`kirkland_potentials_crystal`
-    Convert :class:`~ptyrodactyl.tools.CrystalData` to
-    :class:`~ptyrodactyl.tools.PotentialSlices`.
+    Convert :class:`~ptyrodactyl.types.CrystalData` to
+    :class:`~ptyrodactyl.types.PotentialSlices`.
 
 Notes
 -----
@@ -69,13 +69,13 @@ from beartype import beartype
 from beartype.typing import Optional, Tuple, Union
 from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
-from ptyrodactyl.tools import (
+from ptyrodactyl.types import (
     CrystalData,
     PotentialSlices,
-    ScalarFloat,
-    ScalarInt,
-    ScalarNumeric,
-    make_potential_slices,
+    create_potential_slices,
+    scalar_float,
+    scalar_int,
+    scalar_num,
 )
 
 from .preprocessing import kirkland_potentials
@@ -167,13 +167,13 @@ def contrast_stretch(
 
 
 def _bessel_iv_series(
-    v_order: ScalarFloat, x_val: Float[Array, " ..."], dtype: jnp.dtype
+    v_order: scalar_float, x_val: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
     r"""Compute :math:`I_v(x)` via 20-term series expansion.
 
     Parameters
     ----------
-    v_order : ScalarFloat
+    v_order : scalar_float
         Order of the Bessel function.
     x_val : Float[Array, " ..."]
         Positive real input values.
@@ -327,7 +327,7 @@ def _bessel_kn_recurrence(
 
 
 def _bessel_kv_small_non_integer(
-    v: ScalarFloat, x: Float[Array, " ..."], dtype: jnp.dtype
+    v: scalar_float, x: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
     r"""Compute :math:`K_v(x)` for small x and non-integer v.
 
@@ -336,7 +336,7 @@ def _bessel_kv_small_non_integer(
 
     Parameters
     ----------
-    v : ScalarFloat
+    v : scalar_float
         Non-integer order.
     x : Float[Array, " ..."]
         Positive real input (small regime, x <= 2).
@@ -409,7 +409,7 @@ def _bessel_kv_small_integer(
 
 
 def _bessel_kv_large(
-    v: ScalarFloat, x: Float[Array, " ..."]
+    v: scalar_float, x: Float[Array, " ..."]
 ) -> Float[Array, " ..."]:
     r"""Asymptotic expansion for :math:`K_v(x)` at large x.
 
@@ -417,7 +417,7 @@ def _bessel_kv_large(
 
     Parameters
     ----------
-    v : ScalarFloat
+    v : scalar_float
         Order of the Bessel function.
     x : Float[Array, " ..."]
         Positive real input (large regime, x > 2).
@@ -474,7 +474,10 @@ def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 
 @jaxtyped(typechecker=beartype)
 @jax.jit
-def bessel_kv(v: ScalarFloat, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
+def bessel_kv(
+    v: scalar_float,
+    x: Float[Array, " ..."],
+) -> Float[Array, " ..."]:
     r"""Compute the modified Bessel function :math:`K_v(x)`.
 
     Extended Summary
@@ -500,7 +503,7 @@ def bessel_kv(v: ScalarFloat, x: Float[Array, " ..."]) -> Float[Array, " ..."]:
 
     Parameters
     ----------
-    v : ScalarFloat
+    v : scalar_float
         Order of the Bessel function (:math:`v \geq 0`).
     x : Float[Array, " ..."]
         Positive real input array.
@@ -667,8 +670,8 @@ def _downsample_potential(
 @jaxtyped(typechecker=beartype)
 @partial(jax.jit, static_argnames=["grid_shape", "supersampling"])
 def single_atom_potential(
-    atom_no: ScalarInt,
-    pixel_size: ScalarFloat,
+    atom_no: scalar_int,
+    pixel_size: scalar_float,
     grid_shape: Tuple[int, int],
     center_coords: Optional[Float[Array, " 2"]] = None,
     supersampling: int = 4,
@@ -711,9 +714,9 @@ def single_atom_potential(
 
     Parameters
     ----------
-    atom_no : ScalarInt
+    atom_no : scalar_int
         Atomic number (1-indexed).
-    pixel_size : ScalarFloat
+    pixel_size : scalar_float
         Real-space pixel size in Angstroms.
     grid_shape : Tuple[int, int]
         Output grid shape ``(height, width)``.
@@ -788,7 +791,7 @@ single_atom_potential = jax.jit(
 def _slice_atoms(
     coords: Float[Array, " N 3"],
     atom_numbers: Int[Array, " N"],
-    slice_thickness: ScalarNumeric,
+    slice_thickness: scalar_num,
 ) -> Float[Array, " N 4"]:
     """Partition atoms into slices along the z-axis.
 
@@ -813,7 +816,7 @@ def _slice_atoms(
         Atomic positions ``(x, y, z)`` in Angstroms.
     atom_numbers : Int[Array, " N"]
         Atomic numbers for each atom.
-    slice_thickness : ScalarNumeric
+    slice_thickness : scalar_num
         Thickness of each slice in Angstroms.
 
     Returns
@@ -852,8 +855,8 @@ default_repeats: Int[Array, " 3"] = jnp.array([1, 1, 1])
 def _compute_grid_dimensions(
     x_coords: Float[Array, " N"],
     y_coords: Float[Array, " N"],
-    padding: ScalarFloat,
-    pixel_size: ScalarFloat,
+    padding: scalar_float,
+    pixel_size: scalar_float,
     grid_height: Optional[int] = None,
     grid_width: Optional[int] = None,
 ) -> Tuple[Float[Array, ""], Float[Array, ""], int, int]:
@@ -865,9 +868,9 @@ def _compute_grid_dimensions(
         X coordinates of all atoms in Angstroms.
     y_coords : Float[Array, " N"]
         Y coordinates of all atoms in Angstroms.
-    padding : ScalarFloat
+    padding : scalar_float
         Padding added to each side in Angstroms.
-    pixel_size : ScalarFloat
+    pixel_size : scalar_float
         Pixel size in Angstroms.
     grid_height : int, optional
         Fixed grid height (for JIT). If ``None``, computed
@@ -923,9 +926,9 @@ def _process_all_slices(
         Int[Array, " 119"],  # atom_to_idx_array
     ],
     grid_params: Tuple[
-        ScalarFloat,  # x_min
-        ScalarFloat,  # y_min
-        ScalarFloat,  # pixel_size
+        scalar_float,  # x_min
+        scalar_float,  # y_min
+        scalar_float,  # pixel_size
         int,  # height
         int,  # width
     ],
@@ -996,7 +999,12 @@ def _process_all_slices(
 
         def _add_atom_contribution(
             carry: Float[Array, " h w"],
-            atom_data: Tuple[ScalarFloat, ScalarFloat, ScalarInt, ScalarInt],
+            atom_data: Tuple[
+                scalar_float,
+                scalar_float,
+                scalar_int,
+                scalar_int,
+            ],
         ) -> Tuple[Float[Array, " h w"], None]:
             """Add one atom's FFT-shifted potential to the slice.
 
@@ -1015,18 +1023,18 @@ def _process_all_slices(
                 No stacked output.
             """
             slice_pot: Float[Array, " h w"] = carry
-            x: ScalarFloat
-            y: ScalarFloat
-            atom_no: ScalarInt
-            atom_slice_idx: ScalarInt
+            x: scalar_float
+            y: scalar_float
+            atom_no: scalar_int
+            atom_slice_idx: scalar_int
             x, y, atom_no, atom_slice_idx = atom_data
 
-            x_offset: ScalarFloat = x - x_min
-            y_offset: ScalarFloat = y - y_min
-            pixel_x: ScalarFloat = x_offset / pixel_size
-            pixel_y: ScalarFloat = y_offset / pixel_size
-            shift_x: ScalarFloat = pixel_x - center_x
-            shift_y: ScalarFloat = pixel_y - center_y
+            x_offset: scalar_float = x - x_min
+            y_offset: scalar_float = y - y_min
+            pixel_x: scalar_float = x_offset / pixel_size
+            pixel_y: scalar_float = y_offset / pixel_size
+            shift_x: scalar_float = pixel_x - center_x
+            shift_y: scalar_float = pixel_y - center_y
 
             atom_idx: Int[Array, ""] = atom_to_idx_array[atom_no]
             atom_pot: Float[Array, " h w"] = atomic_potentials[atom_idx]
@@ -1276,8 +1284,8 @@ def _build_potential_lookup(
     atom_nums: Int[Array, " N"],
     height: int,
     width: int,
-    pixel_size: ScalarFloat,
-    supersampling: ScalarInt,
+    pixel_size: scalar_float,
+    supersampling: scalar_int,
 ) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
     """Build lookup table of precomputed atomic potentials.
 
@@ -1289,9 +1297,9 @@ def _build_potential_lookup(
         Grid height in pixels.
     width : int
         Grid width in pixels.
-    pixel_size : ScalarFloat
+    pixel_size : scalar_float
         Pixel size in Angstroms.
-    supersampling : ScalarInt
+    supersampling : scalar_int
         Supersampling factor.
 
     Returns
@@ -1309,13 +1317,13 @@ def _build_potential_lookup(
 
     @jax.jit
     def _calc_single_potential_fixed_grid(
-        atom_no: ScalarInt, is_valid: Bool[Array, ""]
+        atom_no: scalar_int, is_valid: Bool[Array, ""]
     ) -> Float[Array, " h w"]:
         """Compute potential for one atom type on the fixed grid.
 
         Parameters
         ----------
-        atom_no : ScalarInt
+        atom_no : scalar_int
             Atomic number.
         is_valid : Bool
             Whether this slot contains a real element.
@@ -1343,7 +1351,7 @@ def _build_potential_lookup(
     atom_indices: Int[Array, " 118"] = jnp.where(valid_mask, unique_atoms, -1)
 
     def _update_mapping2(
-        carry: Int[Array, " 119"], idx_atom: Tuple[ScalarInt, ScalarInt]
+        carry: Int[Array, " 119"], idx_atom: Tuple[scalar_int, scalar_int]
     ) -> Tuple[Int[Array, " 119"], None]:
         """Update atomic-number-to-index mapping.
 
@@ -1362,8 +1370,8 @@ def _build_potential_lookup(
             No stacked output.
         """
         mapping_array: Int[Array, " 119"] = carry
-        idx: ScalarInt
-        atom: ScalarInt
+        idx: scalar_int
+        atom: scalar_int
         idx, atom = idx_atom
         mapping_array = jnp.where(
             atom >= 0, mapping_array.at[atom].set(idx), mapping_array
@@ -1379,14 +1387,14 @@ def _build_potential_lookup(
 @jaxtyped(typechecker=beartype)
 def kirkland_potentials_crystal(
     crystal_data: CrystalData,
-    pixel_size: ScalarFloat,
-    slice_thickness: ScalarFloat = 1.0,
+    pixel_size: scalar_float,
+    slice_thickness: scalar_float = 1.0,
     repeats: Int[Array, " 3"] = default_repeats,
-    padding: ScalarFloat = 4.0,
-    supersampling: ScalarInt = 4,
+    padding: scalar_float = 4.0,
+    supersampling: scalar_int = 4,
     grid_shape: Optional[Tuple[int, int, int]] = None,
 ) -> PotentialSlices:
-    """Convert :class:`~ptyrodactyl.tools.CrystalData` to potential slices.
+    """Convert :class:`~ptyrodactyl.types.CrystalData` to potential slices.
 
     Extended Summary
     ----------------
@@ -1417,16 +1425,16 @@ def kirkland_potentials_crystal(
     ----------
     crystal_data : CrystalData
         Input crystal structure.
-    pixel_size : ScalarFloat
+    pixel_size : scalar_float
         Pixel size in Angstroms.
-    slice_thickness : ScalarFloat, optional
+    slice_thickness : scalar_float, optional
         Thickness per slice in Angstroms. Default is 1.0.
     repeats : Int[Array, " 3"], optional
         Unit cell repeats ``[nx, ny, nz]``. Default
         ``[1, 1, 1]``.
-    padding : ScalarFloat, optional
+    padding : scalar_float, optional
         Padding on each side in Angstroms. Default is 4.0.
-    supersampling : ScalarInt, optional
+    supersampling : scalar_int, optional
         Supersampling factor. Default is 4.
     grid_shape : Tuple[int, int, int], optional
         Static ``(height, width, n_slices)`` for JIT. If
@@ -1449,8 +1457,8 @@ def kirkland_potentials_crystal(
     --------
     :func:`single_atom_potential` : Projected potential for one
         atom.
-    :func:`~ptyrodactyl.tools.make_potential_slices` : Factory
-        for :class:`~ptyrodactyl.tools.PotentialSlices`.
+    :func:`~ptyrodactyl.types.create_potential_slices` : Factory
+        for :class:`~ptyrodactyl.types.PotentialSlices`.
     """
     positions: Float[Array, " N 3"] = crystal_data.positions
     atomic_numbers: Int[Array, " N"] = crystal_data.atomic_numbers
@@ -1511,7 +1519,7 @@ def kirkland_potentials_crystal(
             (output_height, output_width, n_slices_out),
         )
     )
-    pot_slices: PotentialSlices = make_potential_slices(
+    pot_slices: PotentialSlices = create_potential_slices(
         slices=cropped_slices,
         slice_thickness=slice_thickness,
         calib=pixel_size,

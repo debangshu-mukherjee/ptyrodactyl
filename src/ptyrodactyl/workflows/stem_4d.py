@@ -44,13 +44,13 @@ from ptyrodactyl.simul import (
     stem4d_sharded,
 )
 from ptyrodactyl.simul.parallelized import _cbed_from_potential_slices
-from ptyrodactyl.tools import (
+from ptyrodactyl.tools import relativistic_wavelength_ang
+from ptyrodactyl.types import (
     STEM4D,
     CrystalData,
-    ScalarFloat,
-    ScalarNumeric,
-    make_stem4d,
-    relativistic_wavelength_ang,
+    create_stem4d,
+    scalar_float,
+    scalar_num,
 )
 
 _LARGE_POSITION_THRESHOLD: int = 100
@@ -181,16 +181,16 @@ def _get_device_memory_gb() -> float:
 def crystal2stem4d(  # noqa: PLR0913, PLR0915
     crystal_data: CrystalData,
     scan_positions: Float[Array, "P 2"],
-    voltage_kv: ScalarNumeric,
-    cbed_aperture_mrad: ScalarNumeric,
-    cbed_extent_mrad: ScalarFloat = 50.0,
+    voltage_kv: scalar_num,
+    cbed_aperture_mrad: scalar_num,
+    cbed_extent_mrad: scalar_float = 50.0,
     cbed_shape: Tuple[int, int] = (256, 256),
-    real_space_pixel_size_ang: ScalarFloat = 0.02,
-    slice_thickness: ScalarFloat = 1.0,
+    real_space_pixel_size_ang: scalar_float = 0.02,
+    slice_thickness: scalar_float = 1.0,
     num_modes: int = 1,
-    probe_defocus: ScalarNumeric = 0.0,
-    probe_c3: ScalarNumeric = 0.0,
-    probe_c5: ScalarNumeric = 0.0,
+    probe_defocus: scalar_num = 0.0,
+    probe_c3: scalar_num = 0.0,
+    probe_c5: scalar_num = 0.0,
     padding: float = 4.0,
     supersampling: int = 4,
     force_parallel: Optional[bool] = None,
@@ -236,32 +236,32 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms.
         P is the number of scan positions.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
-    cbed_aperture_mrad : ScalarNumeric
+    cbed_aperture_mrad : scalar_num
         Probe aperture size in milliradians.
-    cbed_extent_mrad : ScalarFloat, optional
+    cbed_extent_mrad : scalar_float, optional
         Half-angle extent of output CBED in milliradians.
         Default is 50.0 mrad.
     cbed_shape : Tuple[int, int], optional
         Output CBED shape (height, width) in pixels.
         Default is (256, 256).
-    real_space_pixel_size_ang : ScalarFloat, optional
+    real_space_pixel_size_ang : scalar_float, optional
         Real-space pixel size in Angstroms. Default is 0.02
         Angstroms (2 pm), providing fine sampling for
         accurate multislice.
-    slice_thickness : ScalarFloat, optional
+    slice_thickness : scalar_float, optional
         Thickness of each slice in Angstroms. Default is
         1.0 Angstroms.
     num_modes : int, optional
         Number of probe modes for partial coherence.
         Default is 1.
-    probe_defocus : ScalarNumeric, optional
+    probe_defocus : scalar_num, optional
         Probe defocus in Angstroms. Default is 0.0.
-    probe_c3 : ScalarNumeric, optional
+    probe_c3 : scalar_num, optional
         Third-order spherical aberration in Angstroms.
         Default is 0.0.
-    probe_c5 : ScalarNumeric, optional
+    probe_c5 : scalar_num, optional
         Fifth-order spherical aberration in Angstroms.
         Default is 0.0.
     padding : float, optional
@@ -507,7 +507,7 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     output_fourier_calib_inv_ang: float = (
         output_fourier_calib_mrad / mrad_per_inv_ang
     )
-    stem4d_result: STEM4D = make_stem4d(
+    stem4d_result: STEM4D = create_stem4d(
         data=clipped_cbeds,
         real_space_calib=real_space_pixel_size_ang,
         fourier_space_calib=output_fourier_calib_inv_ang,
@@ -526,19 +526,19 @@ _DEFAULT_PIXEL_SIZE_ANG: float = 0.02
 def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     crystal_data: CrystalData,
     scan_positions: Float[Array, "P 2"],
-    voltage_kv: ScalarNumeric,
-    cbed_aperture_mrad: ScalarNumeric,
-    cbed_extent_mrad: ScalarFloat = 50.0,
+    voltage_kv: scalar_num,
+    cbed_aperture_mrad: scalar_num,
+    cbed_extent_mrad: scalar_float = 50.0,
     cbed_shape: Tuple[int, int] = (256, 256),
     tile_size_ang: float = _DEFAULT_TILE_SIZE_ANG,
     grid_pixels: int = _DEFAULT_GRID_PIXELS,
     pixel_size_ang: float = _DEFAULT_PIXEL_SIZE_ANG,
     fourier_pixels: Optional[int] = None,
-    slice_thickness: ScalarFloat = 1.0,
+    slice_thickness: scalar_float = 1.0,
     num_modes: int = 1,
-    probe_defocus: ScalarNumeric = 0.0,
-    probe_c3: ScalarNumeric = 0.0,
-    probe_c5: ScalarNumeric = 0.0,
+    probe_defocus: scalar_num = 0.0,
+    probe_c3: scalar_num = 0.0,
+    probe_c5: scalar_num = 0.0,
     supersampling: int = 4,
 ) -> STEM4D:
     r"""Tiled 4D-STEM simulation for arbitrarily large samples.
@@ -592,11 +592,11 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         and atomic numbers.
     scan_positions : Float[Array, "P 2"]
         Array of (y, x) scan positions in Angstroms.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
-    cbed_aperture_mrad : ScalarNumeric
+    cbed_aperture_mrad : scalar_num
         Probe aperture size in milliradians.
-    cbed_extent_mrad : ScalarFloat, optional
+    cbed_extent_mrad : scalar_float, optional
         Half-angle extent of output CBED in milliradians.
         Default is 50.0 mrad.
     cbed_shape : Tuple[int, int], optional
@@ -618,18 +618,18 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         ``None``, automatically calculated from
         ``cbed_extent_mrad`` and ``cbed_shape`` to ensure
         proper sampling. Must be >= ``grid_pixels``.
-    slice_thickness : ScalarFloat, optional
+    slice_thickness : scalar_float, optional
         Thickness of each slice in Angstroms. Default is
         1.0 Angstroms.
     num_modes : int, optional
         Number of probe modes for partial coherence.
         Default is 1.
-    probe_defocus : ScalarNumeric, optional
+    probe_defocus : scalar_num, optional
         Probe defocus in Angstroms. Default is 0.0.
-    probe_c3 : ScalarNumeric, optional
+    probe_c3 : scalar_num, optional
         Third-order spherical aberration in Angstroms.
         Default is 0.0.
-    probe_c5 : ScalarNumeric, optional
+    probe_c5 : scalar_num, optional
         Fifth-order spherical aberration in Angstroms.
         Default is 0.0.
     supersampling : int, optional
@@ -809,8 +809,8 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         cbed : Float[Array, "H W"]
             Raw CBED pattern on the FFT grid.
         """
-        pos_y: ScalarFloat = position_ang[0]
-        pos_x: ScalarFloat = position_ang[1]
+        pos_y: scalar_float = position_ang[0]
+        pos_x: scalar_float = position_ang[1]
 
         tile_min_y: Float[Array, " "] = pos_y - tile_center_offset
         tile_max_y: Float[Array, " "] = pos_y + tile_center_offset
@@ -849,8 +849,8 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         qxa: Float[Array, "H W"]
         qya, qxa = jnp.meshgrid(qy, qx, indexing="ij")
 
-        y_shift: ScalarFloat = beam_position[0]
-        x_shift: ScalarFloat = beam_position[1]
+        y_shift: scalar_float = beam_position[0]
+        x_shift: scalar_float = beam_position[1]
         phase: Float[Array, "H W"] = (
             -2.0 * jnp.pi * ((qya * y_shift) + (qxa * x_shift))
         )
@@ -946,7 +946,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         output_fourier_calib_mrad / mrad_per_inv_ang
     )
 
-    stem4d_result: STEM4D = make_stem4d(
+    stem4d_result: STEM4D = create_stem4d(
         data=clipped_cbeds,
         real_space_calib=pixel_size_ang,
         fourier_space_calib=output_fourier_calib_inv_ang,

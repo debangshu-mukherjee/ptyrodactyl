@@ -4,10 +4,9 @@ Extended Summary
 ----------------
 These tests verify that the jacobian parameter and solver-state
 carriers exposed from :mod:`ptyrodactyl.types` are Equinox modules with
-the same dynamic PyTree leaf behavior as the legacy jacobian
-NamedTuples. The factory test pins valid-output parity against the
-legacy ``make_ptycho_params`` constructor while checking the new
-two-tier validation contract.
+the expected dynamic PyTree leaf behavior. The factory tests pin the
+field assembly contract while checking the new two-tier validation
+behavior.
 
 Notes
 -----
@@ -23,7 +22,6 @@ import pytest
 from beartype.typing import Any
 from jaxtyping import Array, Float
 
-from ptyrodactyl.jacobian.blocks import make_ptycho_params
 from ptyrodactyl.types import (
     CGState,
     GNState,
@@ -51,8 +49,7 @@ def _ptycho_inputs(rng_key: jax.Array) -> dict[str, Any]:
     Returns
     -------
     inputs : dict[str, Any]
-        Keyword arguments accepted by ``create_ptycho_params`` and the
-        legacy ``make_ptycho_params`` constructor.
+        Keyword arguments accepted by ``create_ptycho_params``.
     """
     wave_real_key, wave_imag_key, position_key, phase_key = jax.random.split(
         rng_key,
@@ -404,39 +401,38 @@ class TestCreatePtychoParams:
 
     Extended Summary
     ----------------
-    This suite checks valid-output parity with the legacy jacobian
-    factory and verifies that structural errors are raised as
-    ``ValueError`` while data-dependent violations raise through
-    ``eqx.error_if``.
+    This suite checks valid-output field assembly and verifies that
+    structural errors are raised as ``ValueError`` while data-dependent
+    violations raise through ``eqx.error_if``.
     """
 
-    def test_matches_legacy_make_ptycho_params(
+    def test_assembles_parameter_blocks(
         self,
         rng_key: jax.Array,
     ) -> None:
-        """Compare valid factory leaves with the legacy constructor.
+        """Compare valid factory leaves with directly built blocks.
 
         Extended Summary
         ----------------
-        A shared input dictionary is passed to both constructors. The new
-        Equinox carrier tree must expose leaves numerically equal to the
-        legacy NamedTuple tree in the same order.
+        A shared input dictionary is passed to the factory and to direct
+        Equinox carrier construction. The factory tree must expose leaves
+        numerically equal to the expected block tree in field order.
 
         Notes
         -----
-        The comparison intentionally checks leaves, not tree definitions,
-        because the carrier classes differ during this migration phase.
+        The comparison intentionally checks leaves so field ordering and
+        scalar conversion behavior stay pinned.
         """
         inputs: dict[str, Any] = _ptycho_inputs(rng_key)
-        legacy_params = make_ptycho_params(**inputs)
+        expected_blocks = _parameter_blocks(inputs)
         params: PtychoParams = create_ptycho_params(**inputs)
 
         assert isinstance(params, PtychoParams)
         assert isinstance(params, eqx.Module)
-        legacy_leaves = jax.tree_util.tree_leaves(legacy_params)
+        expected_leaves = jax.tree_util.tree_leaves(expected_blocks)
         new_leaves = jax.tree_util.tree_leaves(params)
-        assert len(new_leaves) == len(legacy_leaves)
-        chex.assert_trees_all_close(new_leaves, legacy_leaves)
+        assert len(new_leaves) == len(expected_leaves)
+        chex.assert_trees_all_close(new_leaves, expected_leaves)
 
     def test_rejects_wrong_rank_with_value_error(
         self,

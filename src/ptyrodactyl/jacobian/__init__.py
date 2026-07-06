@@ -2,22 +2,9 @@
 
 Extended Summary
 ----------------
-Provides tools for characterizing the observable subspace,
-computing singular spectra, and solving nonlinear least-squares
-problems using second-order methods that expose gauge structure.
-
-The submodules are organised by concern:
-
-- :mod:`operators` -- JVP, VJP, and Hessian-vector product
-  primitives.
-- :mod:`solvers` -- Gauss-Newton, Levenberg-Marquardt, Lanczos,
-  and Krylov methods.
-- :mod:`gauge` -- Nullspace analysis and gauge orbit
-  characterisation.
-- :mod:`fisher` -- Fisher information, Schur complements, and
-  experiment design.
-- :mod:`blocks` -- Block-based Gauss-Newton solver for
-  ptychography.
+Provides tools for characterizing observable subspaces, computing
+singular spectra, and solving nonlinear least-squares problems using
+second-order methods that expose gauge structure.
 
 The submodules are organized as follows:
 
@@ -34,18 +21,6 @@ The submodules are organized as follows:
 
 Routine Listings
 ----------------
-:class:`AberrationParams`
-    Probe aberration parameters (NamedTuple).
-:class:`ExitWaveParams`
-    Exit wave parameters (NamedTuple).
-:class:`GeometryParams`
-    Geometric calibration parameters (NamedTuple).
-:class:`PositionParams`
-    Scan position error parameters (NamedTuple).
-:class:`ProbeModeParams`
-    Probe mode parameters for partial coherence (NamedTuple).
-:class:`PtychoParams`
-    Combined parameter container for all blocks (NamedTuple).
 :func:`a_optimality`
     A-optimality criterion: trace(F^{-1}).
 :func:`alternating_block_solve`
@@ -108,8 +83,6 @@ Routine Listings
     Full Levenberg-Marquardt iteration to convergence.
 :func:`levenberg_marquardt_step`
     Single LM update step with adaptive damping.
-:func:`make_ptycho_params`
-    Construct combined PtychoParams from components.
 :func:`nullspace_vectors_lanczos`
     Estimate nullspace basis via shifted inverse Lanczos.
 :func:`optimal_weights_e_criterion`
@@ -132,14 +105,7 @@ Routine Listings
     Vector-Jacobian product J^T @ u.
 """
 
-
 from .blocks import (
-    AberrationParams,
-    ExitWaveParams,
-    GeometryParams,
-    PositionParams,
-    ProbeModeParams,
-    PtychoParams,
     alternating_block_solve,
     block_gauss_newton_step,
     block_jacobian_operator,
@@ -147,7 +113,6 @@ from .blocks import (
     block_vjp_operator,
     compute_block_gradient,
     cross_block_jtj_operator,
-    make_ptycho_params,
     split_params,
 )
 from .fisher import (
@@ -192,53 +157,46 @@ from .solvers import (
     singular_spectrum,
 )
 
-__all__ = [
-    "jvp_operator",
-    "vjp_operator",
-    "jtj_operator",
-    "hvp_gauss_newton",
+__all__: list[str] = [
+    "a_optimality",
+    "alternating_block_solve",
+    "block_gauss_newton_step",
+    "block_jacobian_operator",
+    "block_jtj_operator",
+    "block_vjp_operator",
+    "compute_block_gradient",
+    "condition_number",
     "conjugate_gradient",
-    "gauss_newton_step",
-    "gauss_newton_solve",
-    "levenberg_marquardt_step",
-    "levenberg_marquardt_solve",
-    "lanczos_tridiagonal",
-    "singular_spectrum",
-    "effective_nullspace_dimension",
-    "nullspace_vectors_lanczos",
-    "project_to_nullspace",
-    "project_to_observable",
+    "cross_block_jtj_operator",
+    "d_optimality",
     "decompose_gauge_observable",
+    "e_optimality",
+    "effective_fisher",
+    "effective_nullspace_dimension",
     "effective_rank",
-    "gauge_invariant_norm",
-    "random_gauge_direction",
-    "gauge_orbit_distance",
+    "fisher_diagonal",
+    "fisher_eigenspectrum",
     "fisher_information",
     "fisher_information_operator",
-    "fisher_diagonal",
-    "schur_complement",
-    "effective_fisher",
-    "fisher_eigenspectrum",
-    "a_optimality",
-    "d_optimality",
-    "e_optimality",
-    "stack_fisher",
-    "optimal_weights_e_criterion",
-    "condition_number",
+    "gauge_invariant_norm",
+    "gauge_orbit_distance",
+    "gauss_newton_solve",
+    "gauss_newton_step",
+    "hvp_gauss_newton",
     "information_gain",
-    "ExitWaveParams",
-    "AberrationParams",
-    "GeometryParams",
-    "PositionParams",
-    "ProbeModeParams",
-    "PtychoParams",
-    "make_ptycho_params",
+    "jtj_operator",
+    "jvp_operator",
+    "lanczos_tridiagonal",
+    "levenberg_marquardt_solve",
+    "levenberg_marquardt_step",
+    "nullspace_vectors_lanczos",
+    "optimal_weights_e_criterion",
+    "project_to_nullspace",
+    "project_to_observable",
+    "random_gauge_direction",
+    "schur_complement",
+    "singular_spectrum",
     "split_params",
-    "block_jacobian_operator",
-    "block_vjp_operator",
-    "block_jtj_operator",
-    "cross_block_jtj_operator",
-    "compute_block_gradient",
-    "block_gauss_newton_step",
-    "alternating_block_solve",
+    "stack_fisher",
+    "vjp_operator",
 ]

@@ -37,7 +37,7 @@ Notes
 All functions are designed to work with JAX transformations
 including ``jit``, ``grad``, and ``vmap``. Input arrays should
 be properly typed and validated using the factory functions
-from :mod:`ptyrodactyl.tools`.
+from :mod:`ptyrodactyl.types`.
 """
 
 
@@ -75,18 +75,11 @@ from ptyrodactyl.types import (
     scalar_num,
 )
 
-ScalarFloat = scalar_float
-ScalarInt = scalar_int
-ScalarNumeric = scalar_num
-make_calibrated_array = create_calibrated_array
-make_probe_modes = create_probe_modes
-make_stem4d = create_stem4d
-
 
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def transmission_func(
-    pot_slice: Float[Array, " a b"], voltage_kv: ScalarNumeric
+    pot_slice: Float[Array, " a b"], voltage_kv: scalar_num
 ) -> Complex[Array, " a b"]:
     r"""Calculate the complex transmission function of a potential slice.
 
@@ -111,7 +104,7 @@ def transmission_func(
     ----------
     pot_slice : Float[Array, " a b"]
         Projected potential slice in Kirkland units.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Microscope operating voltage in kiloelectronvolts.
 
     Returns
@@ -139,11 +132,11 @@ def transmission_func(
 @jaxtyped(typechecker=beartype)
 @jax.jit(static_argnames=["imsize_y", "imsize_x"])
 def propagation_func(
-    imsize_y: ScalarInt,
-    imsize_x: ScalarInt,
-    thickness_ang: ScalarNumeric,
-    voltage_kv: ScalarNumeric,
-    calib_ang: ScalarFloat,
+    imsize_y: scalar_int,
+    imsize_x: scalar_int,
+    thickness_ang: scalar_num,
+    voltage_kv: scalar_num,
+    calib_ang: scalar_float,
 ) -> Complex[Array, " h w"]:
     r"""Compute the Fresnel propagation function for multislice.
 
@@ -167,15 +160,15 @@ def propagation_func(
 
     Parameters
     ----------
-    imsize_y : ScalarInt
+    imsize_y : scalar_int
         Grid size in pixels along the y-axis.
-    imsize_x : ScalarInt
+    imsize_x : scalar_int
         Grid size in pixels along the x-axis.
-    thickness_ang : ScalarNumeric
+    thickness_ang : scalar_num
         Slice thickness (propagation distance) in Angstroms.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
-    calib_ang : ScalarFloat
+    calib_ang : scalar_float
         Pixel size in Angstroms.
 
     Returns
@@ -200,7 +193,7 @@ def propagation_func(
 
 @jaxtyped(typechecker=beartype)
 def fourier_coords(
-    calibration: ScalarFloat | Float[Array, " 2"],
+    calibration: scalar_float | Float[Array, " 2"],
     image_size: Int[Array, " 2"],
 ) -> CalibratedArray:
     """Generate Fourier space coordinate arrays.
@@ -210,7 +203,7 @@ def fourier_coords(
     Builds a 2D array of radial Fourier-space frequencies
     (in inverse Angstroms) suitable for diffraction
     calculations, returned as a
-    :class:`~ptyrodactyl.tools.CalibratedArray`.
+    :class:`~ptyrodactyl.types.CalibratedArray`.
 
     Implementation Logic
     --------------------
@@ -224,7 +217,7 @@ def fourier_coords(
 
     Parameters
     ----------
-    calibration : ScalarFloat or Float[Array, " 2"]
+    calibration : scalar_float or Float[Array, " 2"]
         Pixel size in Angstroms in real space.
     image_size : Int[Array, " 2"]
         Grid size in pixels ``(H, W)``.
@@ -256,7 +249,7 @@ def fourier_coords(
     calib_inverse_y: Float[Array, " "] = inverse_arr_y[1] - inverse_arr_y[0]
     calib_inverse_x: Float[Array, " "] = inverse_arr_x[1] - inverse_arr_x[0]
     inverse_space: Bool[Array, ""] = jnp.array(False)
-    calibrated_inverse_array: CalibratedArray = make_calibrated_array(
+    calibrated_inverse_array: CalibratedArray = create_calibrated_array(
         inverse_array, calib_inverse_y, calib_inverse_x, inverse_space
     )
     return calibrated_inverse_array
@@ -298,13 +291,13 @@ def fourier_calib(
 
 @jaxtyped(typechecker=beartype)
 def make_probe(
-    aperture: ScalarNumeric,
-    voltage: ScalarNumeric,
+    aperture: scalar_num,
+    voltage: scalar_num,
     image_size: Int[Array, " 2"],
-    calibration_pm: ScalarFloat,
-    defocus: ScalarNumeric = 0.0,
-    c3: ScalarNumeric = 0.0,
-    c5: ScalarNumeric = 0.0,
+    calibration_pm: scalar_float,
+    defocus: scalar_num = 0.0,
+    c3: scalar_num = 0.0,
+    c5: scalar_num = 0.0,
 ) -> Complex[Array, " h w"]:
     """Create an electron probe with spherical aberrations.
 
@@ -330,20 +323,20 @@ def make_probe(
 
     Parameters
     ----------
-    aperture : ScalarNumeric
+    aperture : scalar_num
         Aperture semi-angle in milliradians.
-    voltage : ScalarNumeric
+    voltage : scalar_num
         Accelerating voltage in kiloelectronvolts.
     image_size : Int[Array, " 2"]
         Grid size in pixels ``(H, W)``.
-    calibration_pm : ScalarFloat
+    calibration_pm : scalar_float
         Real-space pixel size in picometers.
-    defocus : ScalarNumeric, optional
+    defocus : scalar_num, optional
         Defocus in Angstroms. Default is 0.
-    c3 : ScalarNumeric, optional
+    c3 : scalar_num, optional
         Third-order spherical aberration in Angstroms.
         Default is 0.
-    c5 : ScalarNumeric, optional
+    c5 : scalar_num, optional
         Fifth-order spherical aberration in Angstroms.
         Default is 0.
 
@@ -359,19 +352,19 @@ def make_probe(
     aperture: Float[Array, " "] = jnp.asarray(aperture / 1000.0)
     wavelength: Float[Array, " "] = relativistic_wavelength_ang(voltage)
     l_max: Float[Array, " "] = aperture / wavelength
-    image_y: ScalarInt
-    image_x: ScalarInt
+    image_y: scalar_int
+    image_x: scalar_int
     image_y, image_x = image_size
     x_fov: Float[Array, " "] = image_x * 0.01 * calibration_pm
     y_fov: Float[Array, " "] = image_y * 0.01 * calibration_pm
     qx: Float[Array, " w"] = (
         jnp.arange((-image_x / 2), (image_x / 2), 1)
     ) / x_fov
-    x_shifter: ScalarInt = image_x // 2
+    x_shifter: scalar_int = image_x // 2
     qy: Float[Array, " h"] = (
         jnp.arange((-image_y / 2), (image_y / 2), 1)
     ) / y_fov
-    y_shifter: ScalarInt = image_y // 2
+    y_shifter: scalar_int = image_y // 2
     lx: Float[Array, " w"] = jnp.roll(qx, x_shifter)
     ly: Float[Array, " h"] = jnp.roll(qy, y_shifter)
     lya: Float[Array, " h w"]
@@ -396,10 +389,10 @@ def make_probe(
 @jax.jit
 def aberration(
     fourier_coord: Float[Array, " H W"],
-    lambda_angstrom: ScalarFloat,
-    defocus: ScalarFloat = 0.0,
-    c3: ScalarFloat = 0.0,
-    c5: ScalarFloat = 0.0,
+    lambda_angstrom: scalar_float,
+    defocus: scalar_float = 0.0,
+    c3: scalar_float = 0.0,
+    c5: scalar_float = 0.0,
 ) -> Float[Array, " H W"]:
     r"""Calculate the aberration phase for the electron probe.
 
@@ -429,14 +422,14 @@ def aberration(
     ----------
     fourier_coord : Float[Array, " H W"]
         Radial Fourier-space frequency in inverse Angstroms.
-    lambda_angstrom : ScalarFloat
+    lambda_angstrom : scalar_float
         Electron wavelength in Angstroms.
-    defocus : ScalarFloat, optional
+    defocus : scalar_float, optional
         Defocus (C1) in Angstroms. Default is 0.0.
-    c3 : ScalarFloat, optional
+    c3 : scalar_float, optional
         Third-order spherical aberration in Angstroms.
         Default is 0.0.
-    c5 : ScalarFloat, optional
+    c5 : scalar_float, optional
         Fifth-order spherical aberration in Angstroms.
         Default is 0.0.
 
@@ -460,7 +453,7 @@ def aberration(
 def cbed(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
-    voltage_kv: ScalarNumeric,
+    voltage_kv: scalar_num,
 ) -> CalibratedArray:
     """Simulate a CBED pattern via the multislice algorithm.
 
@@ -491,14 +484,14 @@ def cbed(
     beam : ProbeModes
         Electron beam. ``modes`` has shape ``(H, W, M)``;
         ``weights`` shape ``(M,)``; ``calib`` in Angstroms.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
 
     Returns
     -------
     cbed_pytree : CalibratedArray
         CBED intensity pattern as a
-        :class:`~ptyrodactyl.tools.CalibratedArray` with
+        :class:`~ptyrodactyl.types.CalibratedArray` with
         Fourier-space calibrations. ``real_space`` is
         ``False``.
     """
@@ -519,7 +512,7 @@ def cbed(
     init_wave: Complex[Array, " H W M"] = jnp.copy(beam_modes)
 
     def _scan_fn(
-        carry: Complex[Array, " H W M"], slice_idx: ScalarInt
+        carry: Complex[Array, " H W M"], slice_idx: scalar_int
     ) -> Tuple[Complex[Array, " H W M"], None]:
         """Propagate wave through one potential slice.
 
@@ -527,7 +520,7 @@ def cbed(
         ----------
         carry : Complex[Array, " H W M"]
             Current wave state.
-        slice_idx : ScalarInt
+        slice_idx : scalar_int
             Index of the current slice.
 
         Returns
@@ -585,7 +578,7 @@ def cbed(
         beam_modes.shape[0], calib_ang
     )
     inverse_space_calib: Float[Array, " "] = 1 / real_space_fov
-    cbed_pytree: CalibratedArray = make_calibrated_array(
+    cbed_pytree: CalibratedArray = create_calibrated_array(
         cbed_pattern, inverse_space_calib, inverse_space_calib, False
     )
     return cbed_pytree
@@ -596,7 +589,7 @@ def cbed(
 def shift_beam_fourier(
     beam: Union[Float[Array, " hh ww *mm"], Complex[Array, " hh ww *mm"]],
     pos: Float[Array, " #pp 2"],
-    calib_ang: ScalarFloat,
+    calib_ang: scalar_float,
 ) -> Complex128[Array, "#pp hh ww #mm"]:
     """Shift beam to new position(s) via Fourier phase ramp.
 
@@ -617,7 +610,7 @@ def shift_beam_fourier(
     pos : Float[Array, " #P 2"]
         Shift position(s) ``(y, x)`` in Angstroms. Can be a
         single ``[2]`` or multiple ``[P, 2]``.
-    calib_ang : ScalarFloat
+    calib_ang : scalar_float
         Pixel size in Angstroms.
 
     Returns
@@ -655,8 +648,8 @@ def shift_beam_fourier(
         shifted_beam : Complex128[Array, " hh ww #mm"]
             Beam shifted to the requested position.
         """
-        y_shift: ScalarNumeric
-        x_shift: ScalarNumeric
+        y_shift: scalar_num
+        x_shift: scalar_num
         y_shift, x_shift = pos[position_idx, 0], pos[position_idx, 1]
         phase: Float[Array, " hh ww"] = (
             -2.0 * jnp.pi * ((qya * y_shift) + (qxa * x_shift))
@@ -685,8 +678,8 @@ def stem_4d(
     pot_slice: PotentialSlices,
     beam: ProbeModes,
     positions: Num[Array, "#P 2"],
-    voltage_kv: ScalarNumeric,
-    calib_ang: ScalarFloat,
+    voltage_kv: scalar_num,
+    calib_ang: scalar_float,
 ) -> STEM4D:
     """Generate 4D-STEM data at multiple probe positions.
 
@@ -694,7 +687,7 @@ def stem_4d(
     ----------------
     Shifts the beam to each scan position and runs
     :func:`cbed` for each, collecting diffraction patterns
-    into a :class:`~ptyrodactyl.tools.STEM4D` dataset.
+    into a :class:`~ptyrodactyl.types.STEM4D` dataset.
 
     Implementation Logic
     --------------------
@@ -715,9 +708,9 @@ def stem_4d(
     positions : Num[Array, "#P 2"]
         Scan positions ``(y, x)`` in pixels. P is the number
         of positions.
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kilovolts.
-    calib_ang : ScalarFloat
+    calib_ang : scalar_float
         Pixel size in Angstroms.
 
     Returns
@@ -735,12 +728,12 @@ def stem_4d(
         beam.modes, positions, calib_ang
     )
 
-    def _process_single_position(pos_idx: ScalarInt) -> Float[Array, " H W"]:
+    def _process_single_position(pos_idx: scalar_int) -> Float[Array, " H W"]:
         """Compute CBED pattern for a single beam position.
 
         Parameters
         ----------
-        pos_idx : ScalarInt
+        pos_idx : scalar_int
             Index into the shifted beams array.
 
         Returns
@@ -776,7 +769,7 @@ def stem_4d(
     )
     fourier_calib: Float[Array, " "] = first_cbed.calib_y
     scan_positions_ang: Float[Array, " P 2"] = positions * calib_ang
-    stem4d_data: STEM4D = make_stem4d(
+    stem4d_data: STEM4D = create_stem4d(
         data=cbed_patterns,
         real_space_calib=calib_ang,
         fourier_space_calib=fourier_calib,
@@ -789,8 +782,8 @@ def stem_4d(
 @jaxtyped(typechecker=beartype)
 def decompose_beam_to_modes(
     beam: CalibratedArray,
-    num_modes: ScalarInt,
-    first_mode_weight: ScalarFloat = 0.6,
+    num_modes: scalar_int,
+    first_mode_weight: scalar_float = 0.6,
 ) -> ProbeModes:
     """Decompose an electron beam into orthogonal modes.
 
@@ -818,9 +811,9 @@ def decompose_beam_to_modes(
     ----------
     beam : CalibratedArray
         Electron beam to decompose.
-    num_modes : ScalarInt
+    num_modes : scalar_int
         Number of modes to generate.
-    first_mode_weight : ScalarFloat, optional
+    first_mode_weight : scalar_float, optional
         Weight of the first (dominant) mode. Default is 0.6.
         Must be below 1.0.
 
@@ -852,7 +845,7 @@ def decompose_beam_to_modes(
     original_intensity: Float[Array, " tp"] = jnp.square(jnp.abs(beam_flat))
     weights: Float[Array, " mm"] = jnp.zeros(num_modes, dtype=jnp.float64)
     weights = weights.at[0].set(first_mode_weight)
-    remaining_weight: ScalarFloat = (1.0 - first_mode_weight) / max(
+    remaining_weight: scalar_float = (1.0 - first_mode_weight) / max(
         1, num_modes - 1
     )
     weights = weights.at[1:].set(remaining_weight)
@@ -866,7 +859,7 @@ def decompose_beam_to_modes(
     multimodal_beam: Complex[Array, " hh ww mm"] = weighted_modes.reshape(
         hh, ww, num_modes
     )
-    probe_modes: ProbeModes = make_probe_modes(
+    probe_modes: ProbeModes = create_probe_modes(
         modes=multimodal_beam, weights=weights, calib=beam.calib_y
     )
     return probe_modes
@@ -970,7 +963,7 @@ def annular_detector(
         ny, nx
     )
 
-    stem_image: CalibratedArray = make_calibrated_array(
+    stem_image: CalibratedArray = create_calibrated_array(
         data_array=stem_image_2d,
         calib_y=stem4d_data.real_space_calib,
         calib_x=stem4d_data.real_space_calib,

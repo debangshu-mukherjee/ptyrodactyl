@@ -19,7 +19,7 @@ Routine Listings
     Compute reciprocal lattice vectors from real-space unit
     cell.
 :func:`tilt_crystal`
-    Tilt :class:`~ptyrodactyl.tools.CrystalData` by alpha and
+    Tilt :class:`~ptyrodactyl.types.CrystalData` by alpha and
     beta angles (TEM stage-like tilts).
 
 Notes
@@ -34,11 +34,11 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Bool, Float, Real, jaxtyped
 
-from ptyrodactyl.tools import (
+from ptyrodactyl.types import (
     CrystalData,
-    ScalarFloat,
-    ScalarNumeric,
-    make_crystal_data,
+    create_crystal_data,
+    scalar_float,
+    scalar_num,
 )
 
 
@@ -124,7 +124,7 @@ def rotmatrix_vectors(
             Rotation matrix for 180-degree rotation around an
             axis orthogonal to v1.
         """
-        magic_number: ScalarFloat = 0.9
+        magic_number: scalar_float = 0.9
         ortho: Float[Array, " 3"] = jnp.where(
             jnp.abs(v1[0]) < magic_number,
             jnp.array([1.0, 0.0, 0.0]),
@@ -166,9 +166,9 @@ def rotmatrix_vectors(
         )
         return rotation_matrix_general
 
-    close_to_zero: ScalarFloat = 1e-8
+    close_to_zero: scalar_float = 1e-8
     almost_parallel: Bool[Array, " "] = sin_theta < close_to_zero
-    close_to_one: ScalarFloat = 0.999999
+    close_to_one: scalar_float = 0.999999
     almost_opposite: Bool[Array, " "] = dot < -close_to_one
     rotation_matrix: Float[Array, "3 3"] = jax.lax.cond(
         almost_parallel,
@@ -183,7 +183,7 @@ def rotmatrix_vectors(
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def rotmatrix_axis(
-    axis: Real[Array, " 3"], theta: ScalarNumeric
+    axis: Real[Array, " 3"], theta: scalar_num
 ) -> Float[Array, "3 3"]:
     r"""Generate a rotation matrix around an arbitrary axis.
 
@@ -215,7 +215,7 @@ def rotmatrix_axis(
     axis : Real[Array, " 3"]
         3D vector defining the axis of rotation (will be
         normalized).
-    theta : ScalarNumeric
+    theta : scalar_num
         Rotation angle in radians. Positive for
         counter-clockwise rotation when looking along the
         axis.
@@ -266,7 +266,7 @@ def rotate_structure(
     coords: Real[Array, " N 4"],
     cell: Real[Array, "3 3"],
     rotation_matrix: Real[Array, "3 3"],
-    theta: ScalarNumeric = 0,
+    theta: scalar_num = 0,
 ) -> Tuple[Float[Array, " N 4"], Float[Array, "3 3"]]:
     """Apply rotation to a crystal structure.
 
@@ -300,7 +300,7 @@ def rotate_structure(
         a, b, c in Angstroms.
     rotation_matrix : Real[Array, "3 3"]
         Primary rotation matrix to apply.
-    theta : ScalarNumeric, optional
+    theta : scalar_num, optional
         Additional in-plane (z-axis) rotation angle in
         radians. Default is 0.
 
@@ -413,10 +413,10 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
 @jaxtyped(typechecker=beartype)
 def tilt_crystal(
     crystal_data: CrystalData,
-    alpha_rad: ScalarNumeric,
-    beta_rad: ScalarNumeric,
+    alpha_rad: scalar_num,
+    beta_rad: scalar_num,
 ) -> CrystalData:
-    r"""Tilt :class:`~ptyrodactyl.tools.CrystalData` by alpha and beta.
+    r"""Tilt :class:`~ptyrodactyl.types.CrystalData` by alpha and beta.
 
     Extended Summary
     ----------------
@@ -443,24 +443,24 @@ def tilt_crystal(
     4. **Rotate lattice** --
        ``lattice @ R_total.T`` if lattice is present.
     5. **Return new CrystalData** --
-       Via :func:`~ptyrodactyl.tools.make_crystal_data` with
+       Via :func:`~ptyrodactyl.types.create_crystal_data` with
        all other fields preserved.
 
     Parameters
     ----------
     crystal_data : CrystalData
         Input crystal structure data.
-    alpha_rad : ScalarNumeric
+    alpha_rad : scalar_num
         Tilt angle around the x-axis in radians. Positive
         alpha tilts +z toward +y.
-    beta_rad : ScalarNumeric
+    beta_rad : scalar_num
         Tilt angle around the y-axis in radians. Positive
         beta tilts +z toward -x.
 
     Returns
     -------
     tilted_crystal : CrystalData
-        New :class:`~ptyrodactyl.tools.CrystalData` with
+        New :class:`~ptyrodactyl.types.CrystalData` with
         rotated positions and lattice. All other fields
         (atomic_numbers, energy, etc.) are preserved.
 
@@ -485,7 +485,7 @@ def tilt_crystal(
     if crystal_data.lattice is not None:
         rotated_lattice = crystal_data.lattice @ r_total.T
 
-    tilted_crystal: CrystalData = make_crystal_data(
+    tilted_crystal: CrystalData = create_crystal_data(
         positions=rotated_positions,
         atomic_numbers=crystal_data.atomic_numbers,
         lattice=rotated_lattice,

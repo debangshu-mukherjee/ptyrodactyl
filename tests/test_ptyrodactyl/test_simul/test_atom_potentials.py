@@ -14,7 +14,7 @@ from ptyrodactyl.simul.atom_potentials import (
     bessel_kv,
     kirkland_potentials_crystal,
 )
-from ptyrodactyl.tools import make_crystal_data
+from ptyrodactyl.types import create_crystal_data
 
 
 class TestBesselKv(chex.TestCase):
@@ -529,7 +529,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
 
         positions = jnp.array([[0.0, 0.0, 0.0]])
         atomic_numbers = jnp.array([1])  # Hydrogen
-        xyz_data = make_crystal_data(
+        xyz_data = create_crystal_data(
             positions=positions,
             atomic_numbers=atomic_numbers,
             lattice=None,
@@ -578,7 +578,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
             ]
         )
         atomic_numbers = jnp.array([1, 6, 14])  # H, C, Si
-        xyz_data = make_crystal_data(
+        xyz_data = create_crystal_data(
             positions=positions,
             atomic_numbers=atomic_numbers,
             lattice=None,
@@ -617,7 +617,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
             ]
         )
         atomic_numbers = jnp.array([6, 6, 6])  # All carbon
-        xyz_data = make_crystal_data(
+        xyz_data = create_crystal_data(
             positions=positions,
             atomic_numbers=atomic_numbers,
             lattice=None,
@@ -669,7 +669,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         """Test that padding is correctly removed from final result."""
         positions = jnp.array([[2.0, 2.0, 0.0]])
         atomic_numbers = jnp.array([1])
-        xyz_data = make_crystal_data(
+        xyz_data = create_crystal_data(
             positions=positions,
             atomic_numbers=atomic_numbers,
             lattice=None,
@@ -709,7 +709,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         for z in [1, 6, 14, 79]:  # H, C, Si, Au
             positions = jnp.array([[0.0, 0.0, 0.0]])
             atomic_numbers = jnp.array([z])
-            xyz_data = make_crystal_data(
+            xyz_data = create_crystal_data(
                 positions=positions,
                 atomic_numbers=atomic_numbers,
                 lattice=None,
@@ -747,7 +747,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.2
 
         def process_single(pos, atoms):
-            xyz_data = make_crystal_data(
+            xyz_data = create_crystal_data(
                 positions=pos,
                 atomic_numbers=atoms,
                 lattice=None,
@@ -778,7 +778,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         atomic_numbers = jnp.array([6])  # Carbon
 
         # Not providing lattice - will get identity matrix
-        xyz_data = make_crystal_data(
+        xyz_data = create_crystal_data(
             positions=positions,
             atomic_numbers=atomic_numbers,
             lattice=None,  # Will default to identity

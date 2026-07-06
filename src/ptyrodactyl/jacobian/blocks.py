@@ -4,9 +4,8 @@ Extended Summary
 ----------------
 Ptychography involves multiple parameter groups with different
 physical meanings and observability characteristics.  This module
-provides NamedTuple structures for organising parameters into
-blocks and computing block-wise Jacobians for Schur complement
-marginalisation and targeted updates.
+computes block-wise Jacobians for Schur complement marginalisation
+and targeted updates.
 
 The five parameter blocks are:
 
@@ -20,307 +19,41 @@ The five parameter blocks are:
 
 Routine Listings
 ----------------
-:class:`ExitWaveParams`
-    Complex exit wave array.
-:class:`AberrationParams`
-    Zernike coefficients and soft aperture cutoff.
-:class:`GeometryParams`
-    Rotation angle, centre offset, ellipticity.
-:class:`PositionParams`
-    Per-scan-point position corrections.
-:class:`ProbeModeParams`
-    Probe mode weights and shapes.
-:class:`PtychoParams`
-    Combined parameter container for all blocks.
-:func:`make_ptycho_params`
-    Construct combined parameter container from components.
-:func:`split_params`
-    Extract individual blocks from combined params.
-:func:`block_jacobian_operator`
-    JVP operator for a single parameter block.
-:func:`block_vjp_operator`
-    VJP operator for a single parameter block.
-:func:`block_jtj_operator`
-    J^T J operator for a single parameter block.
-:func:`cross_block_jtj_operator`
-    Cross-block J^T J operator for Schur complements.
-:func:`compute_block_gradient`
-    Gradient J^T r for a single parameter block.
-:func:`block_gauss_newton_step`
-    Gauss-Newton step updating only specified blocks.
 :func:`alternating_block_solve`
     Solve via alternating block updates following a schedule.
+:func:`block_gauss_newton_step`
+    Gauss-Newton step updating only specified blocks.
+:func:`block_jacobian_operator`
+    JVP operator for a single parameter block.
+:func:`block_jtj_operator`
+    J^T J operator for a single parameter block.
+:func:`block_vjp_operator`
+    VJP operator for a single parameter block.
+:func:`compute_block_gradient`
+    Gradient J^T r for a single parameter block.
+:func:`cross_block_jtj_operator`
+    Cross-block J^T J operator for Schur complements.
+:func:`split_params`
+    Extract individual blocks from combined params.
 """
 
 from collections.abc import Callable
-from typing import NamedTuple
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from jax import lax
 from jaxtyping import Array, Complex, Float, PyTree
 
 from ptyrodactyl.jacobian.solvers import conjugate_gradient
-
-
-class ExitWaveParams(NamedTuple):
-    """Exit wave parameters.
-
-    Extended Summary
-    ----------------
-    Stores the complex-valued exit wave as a single-field
-    NamedTuple.  Because :class:`NamedTuple` is a valid JAX
-    PyTree, all leaves are traced by autodiff.
-
-    Attributes
-    ----------
-    wave : Complex[Array, "h w"]
-        Complex-valued exit wave in real space.
-
-    See Also
-    --------
-    :func:`make_ptycho_params` : Factory that validates and
-        wraps raw arrays into parameter blocks.
-    """
-
-    wave: Complex[Array, "h w"]
-
-
-class AberrationParams(NamedTuple):
-    """Probe aberration parameters.
-
-    Extended Summary
-    ----------------
-    Stores Zernike polynomial coefficients and a soft aperture
-    specification as a NamedTuple PyTree.
-
-    Attributes
-    ----------
-    zernike_coeffs : Float[Array, "num_zernike"]
-        Coefficients for Zernike polynomial expansion.
-        Ordering follows the Noll convention.
-    aperture_mrad : Float[Array, ""]
-        Soft aperture cutoff in milliradians.
-    aperture_softness : Float[Array, ""]
-        Softness parameter for aperture roll-off,
-        dimensionless.
-
-    See Also
-    --------
-    :func:`make_ptycho_params` : Factory function.
-    """
-
-    zernike_coeffs: Float[Array, "num_zernike"]
-    aperture_mrad: Float[Array, ""]
-    aperture_softness: Float[Array, ""]
-
-
-class GeometryParams(NamedTuple):
-    """Geometric calibration parameters.
-
-    Extended Summary
-    ----------------
-    Stores rotation, centre offset, and ellipticity as a
-    NamedTuple PyTree.
-
-    Attributes
-    ----------
-    rotation_rad : Float[Array, ""]
-        Rotation angle around the optic axis in radians.
-    center_offset : Float[Array, "2"]
-        Offset of pattern centre (cx, cy) in pixels.
-    ellipticity : Float[Array, "2"]
-        Elliptical distortion parameters (e1, e2),
-        dimensionless.
-
-    See Also
-    --------
-    :func:`make_ptycho_params` : Factory function.
-    """
-
-    rotation_rad: Float[Array, ""]
-    center_offset: Float[Array, "2"]
-    ellipticity: Float[Array, "2"]
-
-
-class PositionParams(NamedTuple):
-    """Scan position error parameters.
-
-    Extended Summary
-    ----------------
-    Stores per-scan-point position corrections as a NamedTuple
-    PyTree.
-
-    Attributes
-    ----------
-    position_offsets : Float[Array, "num_positions 2"]
-        Per-scan-point position corrections (dx, dy) in
-        Angstroms.
-
-    See Also
-    --------
-    :func:`make_ptycho_params` : Factory function.
-    """
-
-    position_offsets: Float[Array, "num_positions 2"]
-
-
-class ProbeModeParams(NamedTuple):
-    """Probe mode parameters for partial coherence.
-
-    Extended Summary
-    ----------------
-    Stores mode weights and per-mode phase perturbations as a
-    NamedTuple PyTree.
-
-    Attributes
-    ----------
-    mode_weights : Float[Array, "num_modes"]
-        Relative weights for each probe mode (sum to 1),
-        dimensionless.
-    mode_phases : Float[Array, "num_modes h w"]
-        Phase perturbations for each mode relative to the
-        base probe, in radians.
-
-    See Also
-    --------
-    :func:`make_ptycho_params` : Factory function.
-    """
-
-    mode_weights: Float[Array, "num_modes"]
-    mode_phases: Float[Array, "num_modes h w"]
-
-
-class PtychoParams(NamedTuple):
-    """Combined parameter container for all ptychography blocks.
-
-    Extended Summary
-    ----------------
-    Groups every parameter block into a single NamedTuple that
-    can be passed through the forward model.  Because all fields
-    are themselves NamedTuples (valid PyTrees), the entire
-    structure is a valid JAX PyTree and all leaves are traced
-    during autodiff.
-
-    Attributes
-    ----------
-    exit_wave : ExitWaveParams
-        Exit wave parameters.
-    aberrations : AberrationParams
-        Probe aberration parameters.
-    geometry : GeometryParams
-        Geometric calibration parameters.
-    positions : PositionParams
-        Scan position error parameters.
-    probe_modes : ProbeModeParams
-        Probe mode parameters.
-
-    See Also
-    --------
-    :func:`make_ptycho_params` : Factory function.
-    :func:`split_params` : Inverse extraction.
-    """
-
-    exit_wave: ExitWaveParams
-    aberrations: AberrationParams
-    geometry: GeometryParams
-    positions: PositionParams
-    probe_modes: ProbeModeParams
-
-
-def make_ptycho_params(
-    exit_wave: Complex[Array, "h w"],
-    zernike_coeffs: Float[Array, "num_zernike"],
-    aperture_mrad: float,
-    aperture_softness: float,
-    rotation_rad: float,
-    center_offset: Float[Array, "2"],
-    ellipticity: Float[Array, "2"],
-    position_offsets: Float[Array, "num_positions 2"],
-    mode_weights: Float[Array, "num_modes"],
-    mode_phases: Float[Array, "num_modes h w"],
-) -> PtychoParams:
-    """Construct a :class:`PtychoParams` from raw arrays.
-
-    Extended Summary
-    ----------------
-    Wraps scalar floats in :func:`jnp.array` and assembles the
-    five sub-blocks into a single :class:`PtychoParams` instance.
-
-    Implementation Logic
-    --------------------
-    1. **Wrap scalars** --
-       Convert *aperture_mrad*, *aperture_softness*, and
-       *rotation_rad* to rank-0 JAX arrays.
-    2. **Build sub-blocks** --
-       Instantiate each NamedTuple parameter block.
-    3. **Assemble container** --
-       Return the combined :class:`PtychoParams`.
-
-    Parameters
-    ----------
-    exit_wave : Complex[Array, "h w"]
-        Complex exit wave array.
-    zernike_coeffs : Float[Array, "num_zernike"]
-        Zernike polynomial coefficients.
-    aperture_mrad : float
-        Soft aperture cutoff in milliradians.
-    aperture_softness : float
-        Aperture roll-off softness, dimensionless.
-    rotation_rad : float
-        Rotation angle in radians.
-    center_offset : Float[Array, "2"]
-        Pattern centre offset in pixels.
-    ellipticity : Float[Array, "2"]
-        Elliptical distortion, dimensionless.
-    position_offsets : Float[Array, "num_positions 2"]
-        Per-position corrections in Angstroms.
-    mode_weights : Float[Array, "num_modes"]
-        Probe mode weights, dimensionless.
-    mode_phases : Float[Array, "num_modes h w"]
-        Probe mode phase perturbations in radians.
-
-    Returns
-    -------
-    params : PtychoParams
-        Combined parameter container.
-
-    See Also
-    --------
-    :func:`split_params` : Inverse operation.
-    """
-    exit_wave_params: ExitWaveParams = ExitWaveParams(wave=exit_wave)
-
-    aberration_params: AberrationParams = AberrationParams(
-        zernike_coeffs=zernike_coeffs,
-        aperture_mrad=jnp.array(aperture_mrad),
-        aperture_softness=jnp.array(aperture_softness),
-    )
-
-    geometry_params: GeometryParams = GeometryParams(
-        rotation_rad=jnp.array(rotation_rad),
-        center_offset=center_offset,
-        ellipticity=ellipticity,
-    )
-
-    position_params: PositionParams = PositionParams(
-        position_offsets=position_offsets,
-    )
-
-    probe_mode_params: ProbeModeParams = ProbeModeParams(
-        mode_weights=mode_weights,
-        mode_phases=mode_phases,
-    )
-
-    params: PtychoParams = PtychoParams(
-        exit_wave=exit_wave_params,
-        aberrations=aberration_params,
-        geometry=geometry_params,
-        positions=position_params,
-        probe_modes=probe_mode_params,
-    )
-
-    return params
+from ptyrodactyl.types import (
+    AberrationParams,
+    ExitWaveParams,
+    GeometryParams,
+    PositionParams,
+    ProbeModeParams,
+    PtychoParams,
+)
 
 
 def split_params(
@@ -354,7 +87,7 @@ def split_params(
 
     See Also
     --------
-    :func:`make_ptycho_params` : Inverse operation.
+    :func:`ptyrodactyl.types.create_ptycho_params` : Inverse operation.
     """
     return (
         params.exit_wave,
@@ -433,36 +166,38 @@ def block_jacobian_operator(
         block_tangent: PyTree,
     ) -> Float[Array, "num_pos det_h det_w"]:
         """Compute J_block @ block_tangent."""
-        zero_exit: ExitWaveParams = _tree_zeros_like(params.exit_wave)
-        zero_aberr: AberrationParams = _tree_zeros_like(params.aberrations)
-        zero_geom: GeometryParams = _tree_zeros_like(params.geometry)
-        zero_pos: PositionParams = _tree_zeros_like(params.positions)
-        zero_modes: ProbeModeParams = _tree_zeros_like(params.probe_modes)
-
-        tangent_exit: ExitWaveParams = zero_exit
-        tangent_aberr: AberrationParams = zero_aberr
-        tangent_geom: GeometryParams = zero_geom
-        tangent_pos: PositionParams = zero_pos
-        tangent_modes: ProbeModeParams = zero_modes
+        full_tangent: PtychoParams = _tree_zeros_like(params)
 
         if block_name == "exit_wave":
-            tangent_exit = block_tangent
+            full_tangent = eqx.tree_at(
+                lambda p: p.exit_wave,
+                full_tangent,
+                block_tangent,
+            )
         elif block_name == "aberrations":
-            tangent_aberr = block_tangent
+            full_tangent = eqx.tree_at(
+                lambda p: p.aberrations,
+                full_tangent,
+                block_tangent,
+            )
         elif block_name == "geometry":
-            tangent_geom = block_tangent
+            full_tangent = eqx.tree_at(
+                lambda p: p.geometry,
+                full_tangent,
+                block_tangent,
+            )
         elif block_name == "positions":
-            tangent_pos = block_tangent
+            full_tangent = eqx.tree_at(
+                lambda p: p.positions,
+                full_tangent,
+                block_tangent,
+            )
         elif block_name == "probe_modes":
-            tangent_modes = block_tangent
-
-        full_tangent: PtychoParams = PtychoParams(
-            exit_wave=tangent_exit,
-            aberrations=tangent_aberr,
-            geometry=tangent_geom,
-            positions=tangent_pos,
-            probe_modes=tangent_modes,
-        )
+            full_tangent = eqx.tree_at(
+                lambda p: p.probe_modes,
+                full_tangent,
+                block_tangent,
+            )
 
         _, output_tangent = jax.jvp(forward_fn, (params,), (full_tangent,))
         return output_tangent
@@ -733,11 +468,7 @@ def block_gauss_newton_step(
     prediction: Float[Array, "num_pos det_h det_w"] = forward_fn(params)
     residual: Float[Array, "num_pos det_h det_w"] = prediction - data
 
-    new_exit_wave: ExitWaveParams = params.exit_wave
-    new_aberrations: AberrationParams = params.aberrations
-    new_geometry: GeometryParams = params.geometry
-    new_positions: PositionParams = params.positions
-    new_probe_modes: ProbeModeParams = params.probe_modes
+    new_params: PtychoParams = params
 
     for block_name in block_names:
         gradient: PyTree = compute_block_gradient(
@@ -751,20 +482,34 @@ def block_gauss_newton_step(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
             new_wave: Complex[Array, "h w"] = params.exit_wave.wave - step.wave
-            new_exit_wave = ExitWaveParams(wave=new_wave)
+            new_params = eqx.tree_at(
+                lambda p: p.exit_wave.wave,
+                new_params,
+                new_wave,
+            )
 
         elif block_name == "aberrations":
             x0 = _tree_zeros_like(params.aberrations)
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
-            new_aberrations = AberrationParams(
-                zernike_coeffs=params.aberrations.zernike_coeffs
-                - step.zernike_coeffs,
-                aperture_mrad=params.aberrations.aperture_mrad
-                - step.aperture_mrad,
-                aperture_softness=params.aberrations.aperture_softness
-                - step.aperture_softness,
+            new_aberrations: tuple[
+                Float[Array, "num_zernike"],
+                Float[Array, ""],
+                Float[Array, ""],
+            ] = (
+                params.aberrations.zernike_coeffs - step.zernike_coeffs,
+                params.aberrations.aperture_mrad - step.aperture_mrad,
+                params.aberrations.aperture_softness - step.aperture_softness,
+            )
+            new_params = eqx.tree_at(
+                lambda p: (
+                    p.aberrations.zernike_coeffs,
+                    p.aberrations.aperture_mrad,
+                    p.aberrations.aperture_softness,
+                ),
+                new_params,
+                new_aberrations,
             )
 
         elif block_name == "geometry":
@@ -772,11 +517,23 @@ def block_gauss_newton_step(
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
-            new_geometry = GeometryParams(
-                rotation_rad=params.geometry.rotation_rad - step.rotation_rad,
-                center_offset=params.geometry.center_offset
-                - step.center_offset,
-                ellipticity=params.geometry.ellipticity - step.ellipticity,
+            new_geometry: tuple[
+                Float[Array, ""],
+                Float[Array, "2"],
+                Float[Array, "2"],
+            ] = (
+                params.geometry.rotation_rad - step.rotation_rad,
+                params.geometry.center_offset - step.center_offset,
+                params.geometry.ellipticity - step.ellipticity,
+            )
+            new_params = eqx.tree_at(
+                lambda p: (
+                    p.geometry.rotation_rad,
+                    p.geometry.center_offset,
+                    p.geometry.ellipticity,
+                ),
+                new_params,
+                new_geometry,
             )
 
         elif block_name == "positions":
@@ -784,9 +541,13 @@ def block_gauss_newton_step(
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
-            new_positions = PositionParams(
-                position_offsets=params.positions.position_offsets
-                - step.position_offsets,
+            new_position_offsets: Float[Array, "num_positions 2"] = (
+                params.positions.position_offsets - step.position_offsets
+            )
+            new_params = eqx.tree_at(
+                lambda p: p.positions.position_offsets,
+                new_params,
+                new_position_offsets,
             )
 
         elif block_name == "probe_modes":
@@ -794,19 +555,21 @@ def block_gauss_newton_step(
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
-            new_probe_modes = ProbeModeParams(
-                mode_weights=params.probe_modes.mode_weights
-                - step.mode_weights,
-                mode_phases=params.probe_modes.mode_phases - step.mode_phases,
+            new_probe_modes: tuple[
+                Float[Array, "num_modes"],
+                Float[Array, "num_modes h w"],
+            ] = (
+                params.probe_modes.mode_weights - step.mode_weights,
+                params.probe_modes.mode_phases - step.mode_phases,
             )
-
-    new_params: PtychoParams = PtychoParams(
-        exit_wave=new_exit_wave,
-        aberrations=new_aberrations,
-        geometry=new_geometry,
-        positions=new_positions,
-        probe_modes=new_probe_modes,
-    )
+            new_params = eqx.tree_at(
+                lambda p: (
+                    p.probe_modes.mode_weights,
+                    p.probe_modes.mode_phases,
+                ),
+                new_params,
+                new_probe_modes,
+            )
 
     return new_params
 
@@ -921,14 +684,6 @@ def alternating_block_solve(
 
 
 __all__: list[str] = [
-    # Classes
-    "AberrationParams",
-    "ExitWaveParams",
-    "GeometryParams",
-    "PositionParams",
-    "ProbeModeParams",
-    "PtychoParams",
-    # Functions
     "alternating_block_solve",
     "block_gauss_newton_step",
     "block_jacobian_operator",
@@ -936,6 +691,5 @@ __all__: list[str] = [
     "block_vjp_operator",
     "compute_block_gradient",
     "cross_block_jtj_operator",
-    "make_ptycho_params",
     "split_params",
 ]

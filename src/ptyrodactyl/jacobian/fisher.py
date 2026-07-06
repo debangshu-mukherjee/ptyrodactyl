@@ -11,38 +11,35 @@ across experimental conditions.
 
 Routine Listings
 ----------------
-:class:`FisherState`
-    State container for iterative Fisher computation.
-:func:`fisher_information`
-    Compute Fisher information matrix at a parameter point.
-:func:`fisher_information_operator`
-    Matrix-free Fisher information operator for large problems.
-:func:`fisher_diagonal`
-    Fast diagonal approximation of Fisher information.
-:func:`schur_complement`
-    Marginalise nuisance parameters via Schur complement.
-:func:`effective_fisher`
-    Fisher information after marginalising nuisances.
-:func:`fisher_eigenspectrum`
-    Eigenvalues of Fisher matrix via Lanczos.
 :func:`a_optimality`
     A-optimality criterion: trace(F^{-1}).
+:func:`condition_number`
+    Condition number of Fisher information matrix.
 :func:`d_optimality`
     D-optimality criterion: log det(F).
 :func:`e_optimality`
     E-optimality criterion: lambda_min(F).
-:func:`stack_fisher`
-    Combine Fisher matrices from multiple conditions.
-:func:`optimal_weights_e_criterion`
-    Optimal weights for stacking under E-optimality.
-:func:`condition_number`
-    Condition number of Fisher information matrix.
+:func:`effective_fisher`
+    Fisher information after marginalising nuisances.
+:func:`fisher_diagonal`
+    Fast diagonal approximation of Fisher information.
+:func:`fisher_eigenspectrum`
+    Eigenvalues of Fisher matrix via Lanczos.
+:func:`fisher_information`
+    Compute Fisher information matrix at a parameter point.
+:func:`fisher_information_operator`
+    Matrix-free Fisher information operator for large problems.
 :func:`information_gain`
     Information gain from adding measurements.
+:func:`optimal_weights_e_criterion`
+    Optimal weights for stacking under E-optimality.
+:func:`schur_complement`
+    Marginalise nuisance parameters via Schur complement.
+:func:`stack_fisher`
+    Combine Fisher matrices from multiple conditions.
 """
 
 from collections.abc import Callable
-from typing import NamedTuple
 
 import jax
 import jax.flatten_util
@@ -51,21 +48,6 @@ from jax import lax
 from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree
 
 from ptyrodactyl.jacobian.operators import jtj_operator
-
-
-class FisherState(NamedTuple):
-    """State container for iterative Fisher computation.
-
-    Attributes
-    ----------
-    fisher_matrix : Float[Array, "n n"]
-        Current Fisher information matrix estimate.
-    iteration : Int[Array, ""]
-        Current iteration index.
-    """
-
-    fisher_matrix: Float[Array, "n n"]
-    iteration: Int[Array, ""]
 
 
 def _tree_dot(
@@ -954,9 +936,6 @@ def information_gain(
 
 
 __all__: list[str] = [
-    # Classes
-    "FisherState",
-    # Functions
     "a_optimality",
     "condition_number",
     "d_optimality",

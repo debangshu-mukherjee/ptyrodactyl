@@ -2,40 +2,26 @@ r"""Physical constants and derived quantities for electron microscopy.
 
 Extended Summary
 ----------------
-Provides fundamental physical constants as JAX float64 scalars
-and derived functions for relativistic electron optics. All
-constants follow CODATA 2018 recommended values. Functions are
-JIT-compatible and support automatic differentiation.
+Provides derived functions for relativistic electron optics. The
+physical constants live in :mod:`ptyrodactyl.types` and are
+imported here for computation. Functions are JIT-compatible and
+support automatic differentiation.
 
 Routine Listings
 ----------------
-:data:`HBAR`
-    Reduced Planck constant in J·s.
-:data:`H_PLANCK`
-    Planck constant in J·s.
-:data:`M_E`
-    Electron rest mass in kg.
-:data:`E_CHARGE`
-    Elementary charge in C.
-:data:`C_LIGHT`
-    Speed of light in m/s.
-:data:`A_BOHR`
-    Bohr radius in Angstroms.
-:data:`M0C2_EV`
-    Electron rest energy in eV.
-:func:`relativistic_wavelength_ang`
-    Relativistic electron wavelength in Angstroms.
 :func:`interaction_parameter`
     Interaction parameter sigma in 1/(V·Angstrom).
 :func:`relativistic_mass`
     Relativistic electron mass in kg.
+:func:`relativistic_wavelength_ang`
+    Relativistic electron wavelength in Angstroms.
 
 Notes
 -----
-Constants are stored as Python floats and cast to
-``jnp.float64`` inside functions. This avoids triggering
-JAX tracing at module import time while preserving full
-float64 precision in computation.
+Constants are canonical 0-dimensional weakly typed JAX arrays in
+:mod:`ptyrodactyl.types`; the formulas cast them to ``jnp.float64``
+inside the jitted functions to preserve the previous numerical
+behavior.
 """
 
 import jax
@@ -44,28 +30,24 @@ from beartype import beartype
 from jax import Array
 from jaxtyping import Float, jaxtyped
 
-from ptyrodactyl.types import scalar_num
-
-HBAR: float = 1.054571817e-34
-"""Reduced Planck constant in J·s."""
-
-H_PLANCK: float = 6.62607015e-34
-"""Planck constant in J·s."""
-
-M_E: float = 9.1093837015e-31
-"""Electron rest mass in kg."""
-
-E_CHARGE: float = 1.602176634e-19
-"""Elementary charge in C."""
-
-C_LIGHT: float = 2.99792458e8
-"""Speed of light in m/s."""
-
-A_BOHR: float = 0.529177210903
-"""Bohr radius in Angstroms."""
-
-M0C2_EV: float = 510998.95
-"""Electron rest energy in eV."""
+from ptyrodactyl.types import (
+    C_LIGHT as _C_LIGHT,
+)
+from ptyrodactyl.types import (
+    E_CHARGE as _E_CHARGE,
+)
+from ptyrodactyl.types import (
+    H_PLANCK as _H_PLANCK,
+)
+from ptyrodactyl.types import (
+    HBAR as _HBAR,
+)
+from ptyrodactyl.types import (
+    M_E as _M_E,
+)
+from ptyrodactyl.types import (
+    scalar_num,
+)
 
 
 @jaxtyped(typechecker=beartype)
@@ -99,7 +81,7 @@ def relativistic_wavelength_ang(
 
     Parameters
     ----------
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kiloelectronvolts.
 
     Returns
@@ -118,10 +100,10 @@ def relativistic_wavelength_ang(
     -----
     Uses CODATA 2018 constants.
     """
-    h: Float[Array, " "] = jnp.float64(H_PLANCK)
-    m: Float[Array, " "] = jnp.float64(M_E)
-    e: Float[Array, " "] = jnp.float64(E_CHARGE)
-    c: Float[Array, " "] = jnp.float64(C_LIGHT)
+    h: Float[Array, " "] = jnp.float64(_H_PLANCK)
+    m: Float[Array, " "] = jnp.float64(_M_E)
+    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
+    c: Float[Array, " "] = jnp.float64(_C_LIGHT)
 
     ev: Float[Array, " "] = jnp.float64(voltage_kv) * jnp.float64(1000.0) * e
     numerator: Float[Array, " "] = jnp.square(h) * jnp.square(c)
@@ -163,7 +145,7 @@ def interaction_parameter(
 
     Parameters
     ----------
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kiloelectronvolts.
 
     Returns
@@ -182,8 +164,8 @@ def interaction_parameter(
     lam_m: Float[Array, " "] = relativistic_wavelength_ang(
         voltage_kv
     ) * jnp.float64(1e-10)
-    hbar: Float[Array, " "] = jnp.float64(HBAR)
-    e: Float[Array, " "] = jnp.float64(E_CHARGE)
+    hbar: Float[Array, " "] = jnp.float64(_HBAR)
+    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
 
     sigma_si: Float[Array, " "] = (
         2.0 * jnp.pi * m_rel * e * lam_m / jnp.square(hbar)
@@ -211,7 +193,7 @@ def relativistic_mass(
 
     Parameters
     ----------
-    voltage_kv : ScalarNumeric
+    voltage_kv : scalar_num
         Accelerating voltage in kiloelectronvolts.
 
     Returns
@@ -224,9 +206,9 @@ def relativistic_mass(
     :func:`relativistic_wavelength_ang` :
         Wavelength at the same voltage.
     """
-    m: Float[Array, " "] = jnp.float64(M_E)
-    e: Float[Array, " "] = jnp.float64(E_CHARGE)
-    c: Float[Array, " "] = jnp.float64(C_LIGHT)
+    m: Float[Array, " "] = jnp.float64(_M_E)
+    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
+    c: Float[Array, " "] = jnp.float64(_C_LIGHT)
 
     ev: Float[Array, " "] = jnp.float64(voltage_kv) * jnp.float64(1000.0) * e
     m_rel: Float[Array, " "] = m * (1.0 + ev / (m * jnp.square(c)))
@@ -234,13 +216,6 @@ def relativistic_mass(
 
 
 __all__: list[str] = [
-    "A_BOHR",
-    "C_LIGHT",
-    "E_CHARGE",
-    "H_PLANCK",
-    "HBAR",
-    "M0C2_EV",
-    "M_E",
     "interaction_parameter",
     "relativistic_mass",
     "relativistic_wavelength_ang",

@@ -9,7 +9,7 @@ constructs a differentiable forward model via
 :func:`ptyrodactyl.simul.simulations.stem_4d`, computes the loss
 and its gradients with ``jax.value_and_grad``, and iteratively
 updates the reconstruction variables using a first-order optimizer
-from :mod:`ptyrodactyl.tools`.
+from :mod:`ptyrodactyl.types`.
 
 Routine Listings
 ----------------
@@ -45,14 +45,14 @@ from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 import ptyrodactyl.tools as ptt
 from ptyrodactyl.simul.simulations import stem_4d
-from ptyrodactyl.tools import (
+from ptyrodactyl.types import (
     STEM4D,
     CalibratedArray,
     ProbeModes,
-    ScalarFloat,
-    ScalarInt,
-    ScalarNumeric,
-    make_calibrated_array,
+    create_calibrated_array,
+    scalar_float,
+    scalar_int,
+    scalar_num,
 )
 
 OPTIMIZERS: Dict[str, ptt.Optimizer] = {
@@ -91,10 +91,10 @@ def single_slice_ptychography(
     experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
-    slice_thickness: ScalarNumeric,
-    save_every: ScalarInt = 10,
-    num_iterations: ScalarInt = 1000,
-    learning_rate: ScalarFloat = 0.001,
+    slice_thickness: scalar_num,
+    save_every: scalar_int = 10,
+    num_iterations: scalar_int = 1000,
+    learning_rate: scalar_float = 0.001,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
 ) -> Tuple[
@@ -142,24 +142,24 @@ def single_slice_ptychography(
 
     Parameters
     ----------
-    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+    experimental_data : :class:`~ptyrodactyl.types.STEM4D`
         Experimental 4D-STEM data PyTree containing diffraction
         patterns, scan positions, and calibration information.
-    initial_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+    initial_potential : :class:`~ptyrodactyl.types.CalibratedArray`
         Initial guess for the electrostatic potential slice.
-    initial_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+    initial_beam : :class:`~ptyrodactyl.types.CalibratedArray`
         Initial guess for the electron beam.  If stored in
         reciprocal space (``real_space=False``), an inverse FFT
         is applied before optimisation.
-    slice_thickness : ScalarNumeric
+    slice_thickness : scalar_num
         Thickness of the potential slice, in Angstroms.
-    save_every : ScalarInt, optional
+    save_every : scalar_int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : ScalarInt, optional
+    num_iterations : scalar_int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
-    learning_rate : ScalarFloat, optional
+    learning_rate : scalar_float, optional
         Step size for the optimizer.  Default is ``0.001``.
     loss_type : str, optional
         Loss function identifier passed to
@@ -170,9 +170,9 @@ def single_slice_ptychography(
 
     Returns
     -------
-    final_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+    final_potential : :class:`~ptyrodactyl.types.CalibratedArray`
         Optimised electrostatic potential slice.
-    final_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+    final_beam : :class:`~ptyrodactyl.types.CalibratedArray`
         Optimised electron beam in real space.
     intermediate_potslice : Complex[Array, "H W S"]
         Potential snapshots at saved iterations.
@@ -342,13 +342,13 @@ def single_slice_ptychography(
             )
             intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
 
-    final_potential: CalibratedArray = make_calibrated_array(
+    final_potential: CalibratedArray = create_calibrated_array(
         data_array=pot_slice,
         calib_y=initial_potential.calib_y,
         calib_x=initial_potential.calib_x,
         real_space=True,
     )
-    final_beam: CalibratedArray = make_calibrated_array(
+    final_beam: CalibratedArray = create_calibrated_array(
         data_array=beam,
         calib_y=initial_beam.calib_y,
         calib_x=initial_beam.calib_x,
@@ -368,10 +368,10 @@ def single_slice_poscorrected(
     experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
-    slice_thickness: ScalarNumeric,
-    save_every: ScalarInt = 10,
-    num_iterations: ScalarInt = 1000,
-    learning_rate: Union[ScalarFloat, Float[Array, "2"]] = 0.01,
+    slice_thickness: scalar_num,
+    save_every: scalar_int = 10,
+    num_iterations: scalar_int = 1000,
+    learning_rate: Union[scalar_float, Float[Array, "2"]] = 0.01,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
 ) -> Tuple[
@@ -425,22 +425,22 @@ def single_slice_poscorrected(
 
     Parameters
     ----------
-    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+    experimental_data : :class:`~ptyrodactyl.types.STEM4D`
         Experimental 4D-STEM data PyTree containing diffraction
         patterns, scan positions, and calibration information.
-    initial_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+    initial_potential : :class:`~ptyrodactyl.types.CalibratedArray`
         Initial guess for the electrostatic potential slice.
-    initial_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+    initial_beam : :class:`~ptyrodactyl.types.CalibratedArray`
         Initial guess for the electron beam.
-    slice_thickness : ScalarNumeric
+    slice_thickness : scalar_num
         Thickness of the potential slice, in Angstroms.
-    save_every : ScalarInt, optional
+    save_every : scalar_int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : ScalarInt, optional
+    num_iterations : scalar_int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
-    learning_rate : ScalarFloat or Float[Array, "2"], optional
+    learning_rate : scalar_float or Float[Array, "2"], optional
         Step size(s) for the optimizer.  If scalar, the same
         rate is used for potential/beam and positions.  If a
         length-2 array, element 0 controls potential/beam and
@@ -454,9 +454,9 @@ def single_slice_poscorrected(
 
     Returns
     -------
-    final_potential : :class:`~ptyrodactyl.tools.CalibratedArray`
+    final_potential : :class:`~ptyrodactyl.types.CalibratedArray`
         Optimised electrostatic potential slice.
-    final_beam : :class:`~ptyrodactyl.tools.CalibratedArray`
+    final_beam : :class:`~ptyrodactyl.types.CalibratedArray`
         Optimised electron beam in real space.
     pos_guess : Float[Array, "P 2"]
         Refined scan positions, in Angstroms.
@@ -693,13 +693,13 @@ def single_slice_poscorrected(
                 :, :, saver
             ].set(pos_guess)
 
-    final_potential: CalibratedArray = make_calibrated_array(
+    final_potential: CalibratedArray = create_calibrated_array(
         data_array=pot_guess,
         calib_y=initial_potential.calib_y,
         calib_x=initial_potential.calib_x,
         real_space=True,
     )
-    final_beam: CalibratedArray = make_calibrated_array(
+    final_beam: CalibratedArray = create_calibrated_array(
         data_array=beam_guess,
         calib_y=initial_beam.calib_y,
         calib_x=initial_beam.calib_x,
@@ -720,10 +720,10 @@ def single_slice_multi_modal(
     experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: ProbeModes,
-    slice_thickness: ScalarNumeric,
-    save_every: ScalarInt = 10,
-    num_iterations: ScalarInt = 1000,
-    learning_rate: Union[ScalarFloat, Float[Array, "2"]] = 0.01,
+    slice_thickness: scalar_num,
+    save_every: scalar_int = 10,
+    num_iterations: scalar_int = 1000,
+    learning_rate: Union[scalar_float, Float[Array, "2"]] = 0.01,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
 ) -> Tuple[
@@ -739,7 +739,7 @@ def single_slice_multi_modal(
     ----------------
     Single-slice ptychographic reconstruction that models the
     probe as a superposition of coherent modes stored in a
-    :class:`~ptyrodactyl.tools.ProbeModes` PyTree.  The
+    :class:`~ptyrodactyl.types.ProbeModes` PyTree.  The
     optimiser simultaneously refines the potential, all probe
     modes, and the scan positions:
 
@@ -763,7 +763,7 @@ def single_slice_multi_modal(
     1. **Build forward model** --
        Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d`
        accepting ``(pot_slice, beam, pos_list)`` where *beam*
-       is a :class:`~ptyrodactyl.tools.ProbeModes` instance.
+       is a :class:`~ptyrodactyl.types.ProbeModes` instance.
     2. **Construct loss** --
        Creates the loss via
        :func:`~ptyrodactyl.tools.create_loss_function`.
@@ -773,7 +773,7 @@ def single_slice_multi_modal(
        (index 1).
     4. **Iterate** --
        Gradients are computed for the potential array, the
-       ``modes`` field of :class:`~ptyrodactyl.tools.ProbeModes`,
+       ``modes`` field of :class:`~ptyrodactyl.types.ProbeModes`,
        and positions, then applied with the chosen optimizer.
     5. **Snapshot** --
        Every *save_every* iterations, store the current
@@ -781,23 +781,23 @@ def single_slice_multi_modal(
 
     Parameters
     ----------
-    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+    experimental_data : :class:`~ptyrodactyl.types.STEM4D`
         Experimental 4D-STEM data PyTree containing diffraction
         patterns, scan positions, and calibration information.
     initial_pot_slice : Complex[Array, "H W"]
         Initial guess for the electrostatic potential slice.
-    initial_beam : :class:`~ptyrodactyl.tools.ProbeModes`
+    initial_beam : :class:`~ptyrodactyl.types.ProbeModes`
         Initial multi-modal probe containing mode arrays,
         weights, and calibration.
-    slice_thickness : ScalarNumeric
+    slice_thickness : scalar_num
         Thickness of the potential slice, in Angstroms.
-    save_every : ScalarInt, optional
+    save_every : scalar_int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : ScalarInt, optional
+    num_iterations : scalar_int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
-    learning_rate : ScalarFloat or Float[Array, "2"], optional
+    learning_rate : scalar_float or Float[Array, "2"], optional
         Step size(s) for the optimizer.  If scalar, the same
         rate is used for potential/beam and positions.  If a
         length-2 array, element 0 controls potential/beam and
@@ -813,7 +813,7 @@ def single_slice_multi_modal(
     -------
     pot_slice : Complex[Array, "H W"]
         Optimised electrostatic potential slice.
-    beam : :class:`~ptyrodactyl.tools.ProbeModes`
+    beam : :class:`~ptyrodactyl.types.ProbeModes`
         Optimised multi-modal probe.
     pos_list : Float[Array, "P 2"]
         Refined scan positions, in Angstroms.
@@ -845,7 +845,7 @@ def single_slice_multi_modal(
         ----------
         pot_slice : Complex[Array, "H W"]
             Electrostatic potential slice.
-        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+        beam : :class:`~ptyrodactyl.types.ProbeModes`
             Multi-modal probe.
         pos_list : Float[Array, "P 2"]
             Scan positions, in Angstroms.
@@ -881,7 +881,7 @@ def single_slice_multi_modal(
         ----------
         pot_slice : Complex[Array, "H W"]
             Current potential slice estimate.
-        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+        beam : :class:`~ptyrodactyl.types.ProbeModes`
             Current multi-modal probe estimate.
         pos_list : Float[Array, "P 2"]
             Current scan positions, in Angstroms.
@@ -935,7 +935,7 @@ def single_slice_multi_modal(
         ----------
         pot_slice : Complex[Array, "H W"]
             Current potential slice.
-        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+        beam : :class:`~ptyrodactyl.types.ProbeModes`
             Current multi-modal probe.
         pos_list : Float[Array, "P 2"]
             Current scan positions, in Angstroms.
@@ -950,7 +950,7 @@ def single_slice_multi_modal(
         -------
         pot_slice : Complex[Array, "H W"]
             Updated potential slice.
-        beam : :class:`~ptyrodactyl.tools.ProbeModes`
+        beam : :class:`~ptyrodactyl.types.ProbeModes`
             Updated multi-modal probe.
         pos_list : Float[Array, "P 2"]
             Updated scan positions.
@@ -1045,11 +1045,11 @@ def multi_slice_multi_modal(
     experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: Complex[Array, "H W"],
-    slice_thickness: ScalarNumeric,
-    save_every: ScalarInt = 10,
-    num_iterations: ScalarInt = 1000,
-    learning_rate: ScalarFloat = 0.001,
-    pos_learning_rate: ScalarFloat = 0.01,
+    slice_thickness: scalar_num,
+    save_every: scalar_int = 10,
+    num_iterations: scalar_int = 1000,
+    learning_rate: scalar_float = 0.001,
+    pos_learning_rate: scalar_float = 0.01,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
 ) -> Tuple[
@@ -1100,25 +1100,25 @@ def multi_slice_multi_modal(
 
     Parameters
     ----------
-    experimental_data : :class:`~ptyrodactyl.tools.STEM4D`
+    experimental_data : :class:`~ptyrodactyl.types.STEM4D`
         Experimental 4D-STEM data PyTree containing diffraction
         patterns, scan positions, and calibration information.
     initial_pot_slice : Complex[Array, "H W"]
         Initial guess for the electrostatic potential slice.
     initial_beam : Complex[Array, "H W"]
         Initial guess for the electron beam.
-    slice_thickness : ScalarNumeric
+    slice_thickness : scalar_num
         Thickness of each potential slice, in Angstroms.
-    save_every : ScalarInt, optional
+    save_every : scalar_int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : ScalarInt, optional
+    num_iterations : scalar_int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
-    learning_rate : ScalarFloat, optional
+    learning_rate : scalar_float, optional
         Step size for potential and beam updates.
         Default is ``0.001``.
-    pos_learning_rate : ScalarFloat, optional
+    pos_learning_rate : scalar_float, optional
         Step size for position updates.
         Default is ``0.01``.
     loss_type : str, optional

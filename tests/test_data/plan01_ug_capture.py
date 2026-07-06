@@ -27,36 +27,28 @@ def _build():
     import ptyrodactyl.simul as ps
     from ptyrodactyl.simul.simulations import stem_4d
 
-    try:  # post-Plan-01 layout
-        from ptyrodactyl.types import (
-            create_calibrated_array as make_calibrated_array,
-            create_potential_slices as make_potential_slices,
-            create_probe_modes as make_probe_modes,
-        )
-    except ImportError:  # pre-Plan-01 layout
-        from ptyrodactyl.tools import (
-            make_calibrated_array,
-            make_potential_slices,
-            make_probe_modes,
-        )
+    from ptyrodactyl.types import (
+        create_potential_slices,
+        create_probe_modes,
+    )
 
     key = jax.random.PRNGKey(42)
     pot = jax.random.uniform(key, (H, W, N_SLICES), dtype=jnp.float64) * 10.0
-    slices = make_potential_slices(pot, SLICE_THICKNESS_ANG, CALIB_ANG)
+    slices = create_potential_slices(pot, SLICE_THICKNESS_ANG, CALIB_ANG)
     probe = ps.make_probe(
         aperture=20.0,
         voltage=VOLTAGE_KV,
         image_size=jnp.array([H, W]),
         calibration_pm=CALIB_ANG * 100.0,
     )
-    pm = make_probe_modes(probe[..., None], jnp.array([1.0]), CALIB_ANG)
+    pm = create_probe_modes(probe[..., None], jnp.array([1.0]), CALIB_ANG)
 
     cbed_out = ps.cbed(slices, pm, VOLTAGE_KV).data_array
     positions = jnp.array([[12.0, 12.0], [12.0, 20.0], [20.0, 12.0], [20.0, 20.0]])
     s4d = stem_4d(slices, pm, positions, VOLTAGE_KV, CALIB_ANG)
 
     def loss(p):
-        sl = make_potential_slices(p, SLICE_THICKNESS_ANG, CALIB_ANG)
+        sl = create_potential_slices(p, SLICE_THICKNESS_ANG, CALIB_ANG)
         return jnp.sum(ps.cbed(sl, pm, VOLTAGE_KV).data_array)
 
     grad_pot = jax.grad(loss)(pot)

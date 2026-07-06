@@ -11,36 +11,27 @@ and :func:`jax.lax.fori_loop`.
 
 Routine Listings
 ----------------
-:class:`CGState`
-    State container for conjugate gradient iteration.
-:class:`GNState`
-    State container for Gauss-Newton iteration.
-:class:`LMState`
-    State container for Levenberg-Marquardt iteration.
-:class:`LanczosState`
-    State container for Lanczos tridiagonalisation.
 :func:`conjugate_gradient`
     Matrix-free CG solver for symmetric PSD systems.
-:func:`gauss_newton_step`
-    Single Gauss-Newton update step.
+:func:`effective_nullspace_dimension`
+    Count dimensions below noise threshold.
 :func:`gauss_newton_solve`
     Full Gauss-Newton iteration to convergence.
-:func:`levenberg_marquardt_step`
-    Single LM update step with adaptive damping.
-:func:`levenberg_marquardt_solve`
-    Full LM iteration to convergence.
+:func:`gauss_newton_step`
+    Single Gauss-Newton update step.
 :func:`lanczos_tridiagonal`
     Lanczos algorithm for tridiagonalising symmetric
     operators.
+:func:`levenberg_marquardt_solve`
+    Full LM iteration to convergence.
+:func:`levenberg_marquardt_step`
+    Single LM update step with adaptive damping.
 :func:`singular_spectrum`
     Estimate singular values of Jacobian via Lanczos on
     J^T J.
-:func:`effective_nullspace_dimension`
-    Count dimensions below noise threshold.
 """
 
 from collections.abc import Callable
-from typing import NamedTuple
 
 import jax
 import jax.flatten_util
@@ -49,93 +40,7 @@ from jax import lax
 from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray, PyTree
 
 from ptyrodactyl.jacobian.operators import jtj_operator, vjp_operator
-
-
-class CGState(NamedTuple):
-    """State container for conjugate gradient iteration.
-
-    Attributes
-    ----------
-    x : PyTree
-        Current solution estimate.
-    r : PyTree
-        Current residual b - A x.
-    p : PyTree
-        Current search direction.
-    r_dot_r : Float[Array, ""]
-        Squared residual norm <r, r>.
-    iteration : Int[Array, ""]
-        Current iteration index.
-    """
-
-    x: PyTree
-    r: PyTree
-    p: PyTree
-    r_dot_r: Float[Array, ""]
-    iteration: Int[Array, ""]
-
-
-class GNState(NamedTuple):
-    """State container for Gauss-Newton iteration.
-
-    Attributes
-    ----------
-    params : PyTree
-        Current parameter estimate.
-    residual_norm : Float[Array, ""]
-        L2 norm of the current residual.
-    iteration : Int[Array, ""]
-        Current iteration index.
-    """
-
-    params: PyTree
-    residual_norm: Float[Array, ""]
-    iteration: Int[Array, ""]
-
-
-class LMState(NamedTuple):
-    r"""State container for Levenberg-Marquardt iteration.
-
-    Attributes
-    ----------
-    params : PyTree
-        Current parameter estimate.
-    residual_norm : Float[Array, ""]
-        L2 norm of the current residual.
-    damping : Float[Array, ""]
-        Current damping parameter :math:`\lambda`.
-    iteration : Int[Array, ""]
-        Current iteration index.
-    """
-
-    params: PyTree
-    residual_norm: Float[Array, ""]
-    damping: Float[Array, ""]
-    iteration: Int[Array, ""]
-
-
-class LanczosState(NamedTuple):
-    """State container for Lanczos tridiagonalisation.
-
-    Attributes
-    ----------
-    v_prev : Float[Array, "n"]
-        Previous Lanczos vector.
-    v_curr : Float[Array, "n"]
-        Current Lanczos vector.
-    alpha : Float[Array, "k"]
-        Diagonal elements accumulated so far.
-    beta : Float[Array, "k"]
-        Off-diagonal elements accumulated so far.
-    iteration : Int[Array, ""]
-        Current iteration index.
-    """
-
-    v_prev: Float[Array, "n"]
-    v_curr: Float[Array, "n"]
-    alpha: Float[Array, "k"]
-    beta: Float[Array, "k"]
-    iteration: Int[Array, ""]
+from ptyrodactyl.types import CGState, GNState, LanczosState, LMState
 
 
 def _tree_dot(
@@ -1026,12 +931,6 @@ def effective_nullspace_dimension(
 
 
 __all__: list[str] = [
-    # Classes
-    "CGState",
-    "GNState",
-    "LMState",
-    "LanczosState",
-    # Functions
     "conjugate_gradient",
     "effective_nullspace_dimension",
     "gauss_newton_solve",

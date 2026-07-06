@@ -85,8 +85,8 @@ from .preprocessing import kirkland_potentials
 @jax.jit
 def contrast_stretch(
     series: Union[Float[Array, " H W"], Float[Array, " N H W"]],
-    p1: float,
-    p2: float,
+    p1: scalar_float,
+    p2: scalar_float,
 ) -> Union[Float[Array, " H W"], Float[Array, " N H W"]]:
     """Rescale image intensity between specified percentiles.
 
@@ -109,9 +109,9 @@ def contrast_stretch(
     ----------
     series : Float[Array, " H W"] | Float[Array, " N H W"]
         Input image or image stack.
-    p1 : float
+    p1 : scalar_float
         Lower percentile (0--100).
-    p2 : float
+    p2 : scalar_float
         Upper percentile (0--100).
 
     Returns
@@ -121,9 +121,10 @@ def contrast_stretch(
     """
     original_shape: Tuple[int, ...] = series.shape
     is_2d_image: int = 2
-    series_reshaped: Float[Array, " N H W"] = jnp.where(
-        len(original_shape) == is_2d_image, series[jnp.newaxis, :, :], series
-    )
+    if len(original_shape) == is_2d_image:
+        series_reshaped: Float[Array, " N H W"] = series[jnp.newaxis, :, :]
+    else:
+        series_reshaped = series
 
     def _rescale_single_image(
         image: Float[Array, " H W"],
@@ -157,12 +158,12 @@ def contrast_stretch(
     transformed: Float[Array, " N H W"] = jax.vmap(_rescale_single_image)(
         series_reshaped
     )
-    is_2d_image: int = 2
-    final_result: Union[Float[Array, " H W"], Float[Array, " N H W"]] = (
-        jnp.where(
-            len(original_shape) == is_2d_image, transformed[0], transformed
+    if len(original_shape) == is_2d_image:
+        final_result: Union[Float[Array, " H W"], Float[Array, " N H W"]] = (
+            transformed[0]
         )
-    )
+    else:
+        final_result = transformed
     return final_result
 
 
@@ -619,16 +620,16 @@ def _calculate_gaussian_contributions(
 
 
 def _downsample_potential(
-    supersampled_potential: Float[Array, " h w"],
+    supersampled_potential: Float[Array, " h_in w_in"],
     supersampling: int,
     target_height: int,
     target_width: int,
-) -> Float[Array, " h w"]:
+) -> Float[Array, " h_out w_out"]:
     """Downsample supersampled potential to target resolution.
 
     Parameters
     ----------
-    supersampled_potential : Float[Array, " h w"]
+    supersampled_potential : Float[Array, " h_in w_in"]
         Potential on the fine (supersampled) grid.
     supersampling : int
         Supersampling factor used during computation.
@@ -639,7 +640,7 @@ def _downsample_potential(
 
     Returns
     -------
-    potential_resized : Float[Array, " h w"]
+    potential_resized : Float[Array, " h_out w_out"]
         Potential averaged down to target resolution.
     """
     height: int = supersampled_potential.shape[0]
@@ -661,7 +662,7 @@ def _downsample_potential(
     )
 
     potential: Float[Array, " h_new w_new"] = jnp.mean(reshaped, axis=(1, 3))
-    potential_resized: Float[Array, " h w"] = jax.lax.dynamic_slice(
+    potential_resized: Float[Array, " h_out w_out"] = jax.lax.dynamic_slice(
         potential, (0, 0), (target_height, target_width)
     )
     return potential_resized
@@ -978,12 +979,12 @@ def _process_all_slices(
     ky: Float[Array, " h 1"] = jnp.fft.fftfreq(height, d=1.0).reshape(-1, 1)
     kx: Float[Array, " 1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
 
-    def _process_single_slice(slice_idx: int) -> Float[Array, " h w"]:
+    def _process_single_slice(slice_idx: scalar_int) -> Float[Array, " h w"]:
         """Accumulate potentials for atoms in one slice.
 
         Parameters
         ----------
-        slice_idx : int
+        slice_idx : scalar_int
             Index of the slice to process.
 
         Returns

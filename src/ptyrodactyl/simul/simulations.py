@@ -293,7 +293,7 @@ def fourier_calib(
 def make_probe(
     aperture: scalar_num,
     voltage: scalar_num,
-    image_size: Int[Array, " 2"],
+    image_size: Union[Tuple[int, int], Int[Array, " 2"]],
     calibration_pm: scalar_float,
     defocus: scalar_num = 0.0,
     c3: scalar_num = 0.0,
@@ -327,7 +327,7 @@ def make_probe(
         Aperture semi-angle in milliradians.
     voltage : scalar_num
         Accelerating voltage in kiloelectronvolts.
-    image_size : Int[Array, " 2"]
+    image_size : Tuple[int, int] | Int[Array, " 2"]
         Grid size in pixels ``(H, W)``.
     calibration_pm : scalar_float
         Real-space pixel size in picometers.
@@ -635,12 +635,14 @@ def shift_beam_fourier(
         our_beam, axes=(0, 1)
     )
 
-    def _apply_shift(position_idx: int) -> Complex128[Array, " hh ww #mm"]:
+    def _apply_shift(
+        position_idx: scalar_int,
+    ) -> Complex128[Array, " hh ww #mm"]:
         """Apply Fourier phase ramp shift for one position.
 
         Parameters
         ----------
-        position_idx : int
+        position_idx : scalar_int
             Index into the positions array.
 
         Returns
@@ -783,6 +785,7 @@ def stem_4d(
 def decompose_beam_to_modes(
     beam: CalibratedArray,
     num_modes: scalar_int,
+    key: PRNGKeyArray,
     first_mode_weight: scalar_float = 0.6,
 ) -> ProbeModes:
     """Decompose an electron beam into orthogonal modes.
@@ -813,6 +816,8 @@ def decompose_beam_to_modes(
         Electron beam to decompose.
     num_modes : scalar_int
         Number of modes to generate.
+    key : PRNGKeyArray
+        Random key used to generate the orthogonal modal basis.
     first_mode_weight : scalar_float, optional
         Weight of the first (dominant) mode. Default is 0.6.
         Must be below 1.0.
@@ -828,25 +833,25 @@ def decompose_beam_to_modes(
     ww: int
     hh, ww = beam.data_array.shape
     tp: int = hh * ww
+    mode_count: int = int(num_modes)
     beam_flat: Complex[Array, " tp"] = beam.data_array.reshape(-1)
-    key: PRNGKeyArray = jax.random.PRNGKey(0)
     key1: PRNGKeyArray
     key2: PRNGKeyArray
     key1, key2 = jax.random.split(key)
     random_real: Float[Array, " tp mm"] = jax.random.normal(
-        key1, (tp, int(num_modes)), dtype=jnp.float64
+        key1, (tp, mode_count), dtype=jnp.float64
     )
     random_imag: Float[Array, " tp mm"] = jax.random.normal(
-        key2, (tp, int(num_modes)), dtype=jnp.float64
+        key2, (tp, mode_count), dtype=jnp.float64
     )
     random_matrix: Complex[Array, " tp mm"] = random_real + (1j * random_imag)
     qq: Complex[Array, " tp mm"]
     qq, _ = jnp.linalg.qr(random_matrix, mode="reduced")
     original_intensity: Float[Array, " tp"] = jnp.square(jnp.abs(beam_flat))
-    weights: Float[Array, " mm"] = jnp.zeros(num_modes, dtype=jnp.float64)
+    weights: Float[Array, " mm"] = jnp.zeros(mode_count, dtype=jnp.float64)
     weights = weights.at[0].set(first_mode_weight)
     remaining_weight: scalar_float = (1.0 - first_mode_weight) / max(
-        1, num_modes - 1
+        1, mode_count - 1
     )
     weights = weights.at[1:].set(remaining_weight)
     sqrt_weights: Float[Array, " mm"] = jnp.sqrt(weights)
@@ -857,7 +862,7 @@ def decompose_beam_to_modes(
         qq * sqrt_intensity * sqrt_weights
     )
     multimodal_beam: Complex[Array, " hh ww mm"] = weighted_modes.reshape(
-        hh, ww, num_modes
+        hh, ww, mode_count
     )
     probe_modes: ProbeModes = create_probe_modes(
         modes=multimodal_beam, weights=weights, calib=beam.calib_y
@@ -869,6 +874,7 @@ def decompose_beam_to_modes(
 def annular_detector(
     stem4d_data: STEM4D,
     collection_angles: Float[Array, " 2"],
+    scan_shape: Tuple[int, int],
 ) -> CalibratedArray:
     """Integrate 4D-STEM data with an annular detector.
 
@@ -898,6 +904,9 @@ def annular_detector(
     collection_angles : Float[Array, " 2"]
         Inner and outer collection angles in milliradians,
         ``[inner, outer]``.
+    scan_shape : tuple[int, int]
+        Static raster shape ``(ny, nx)`` used to reshape the
+        integrated detector signal.
 
     Returns
     -------
@@ -905,8 +914,8 @@ def annular_detector(
         Real-space STEM image with ``real_space = True``
         and calibrations in Angstroms per pixel.
     """
-    wavelength: Float[Array, " "] = (
-        relativistic_wavelength_ang(stem4d_data.voltage_kv)
+    wavelength: Float[Array, " "] = relativistic_wavelength_ang(
+        stem4d_data.voltage_kv
     )
     inner_angle_rad: Float[Array, " "] = collection_angles[0] / 1000.0
     outer_angle_rad: Float[Array, " "] = collection_angles[1] / 1000.0
@@ -951,13 +960,9 @@ def annular_detector(
         stem4d_data.data
     )
 
-    y_positions: Float[Array, " pp"] = stem4d_data.scan_positions[:, 0]
-    x_positions: Float[Array, " pp"] = stem4d_data.scan_positions[:, 1]
-
-    y_unique: Float[Array, " ny"] = jnp.unique(y_positions)
-    x_unique: Float[Array, " nx"] = jnp.unique(x_positions)
-    ny: int = y_unique.shape[0]
-    nx: int = x_unique.shape[0]
+    ny: int
+    nx: int
+    ny, nx = scan_shape
 
     stem_image_2d: Float[Array, " ny nx"] = integrated_intensities.reshape(
         ny, nx

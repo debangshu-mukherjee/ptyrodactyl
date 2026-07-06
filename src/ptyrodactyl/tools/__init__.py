@@ -9,6 +9,8 @@ validated factories are exported only from :mod:`ptyrodactyl.types`.
 
 The submodules are organized as follows:
 
+- :mod:`caching`
+    Persistent XLA compilation cache configuration.
 - :mod:`constants`
     Derived electron-optics quantities.
 - :mod:`loss_functions`
@@ -44,6 +46,8 @@ Routine Listings
     Create step decay learning rate scheduler.
 :func:`create_warmup_cosine_scheduler`
     Create warmup cosine annealing learning rate scheduler.
+:func:`enable_compilation_cache`
+    Point JAX's persistent compilation cache at a directory.
 :func:`helmholtz_coupling`
     Helmholtz potential coupling sigma_H in 1/(V·Angstrom^2).
 :func:`init_adagrad`
@@ -73,6 +77,7 @@ All exported functions are JAX-compatible and designed for use with
 ``jit``, ``grad``, and ``vmap`` where applicable.
 """
 
+from .caching import enable_compilation_cache
 from .constants import (
     helmholtz_coupling,
     phase_interaction_parameter,
@@ -114,6 +119,7 @@ __all__: list[str] = [
     "create_loss_function",
     "create_step_scheduler",
     "create_warmup_cosine_scheduler",
+    "enable_compilation_cache",
     "helmholtz_coupling",
     "init_adagrad",
     "init_adam",

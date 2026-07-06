@@ -12,6 +12,8 @@ Submodules
 - :mod:`atom_potentials`
     Functions for generating atomic potentials and slices from
     coordinates.
+- :mod:`checked`
+    JIT-safe validating wrappers for simulation kernels.
 - :mod:`geometry`
     Geometric transformations and operations for crystal
     structures.
@@ -29,6 +31,8 @@ The submodules are organized as follows:
 
 - :mod:`atom_potentials`
     Atomic potential calculations for electron microscopy.
+- :mod:`checked`
+    JIT-safe validating wrappers for simulation kernels.
 - :mod:`geometry`
     Geometric transformations and operations for crystal structures.
 - :mod:`parallelized`
@@ -50,6 +54,16 @@ Routine Listings
     Modified Bessel function of the second kind.
 :func:`cbed`
     Generate convergent beam electron diffraction patterns.
+:func:`checked_cbed`
+    Validate CBED inputs and run the bare CBED kernel.
+:func:`checked_make_probe`
+    Validate probe-construction inputs and run the bare probe
+    kernel.
+:func:`checked_stem4d_sharded`
+    Validate sharded 4D-STEM inputs and run the bare sharded
+    4D-STEM kernel.
+:func:`checked_stem_4d`
+    Validate 4D-STEM inputs and run the bare 4D-STEM kernel.
 :func:`clip_cbed`
     Clip CBED patterns to mrad extent and resize to target
     shape.
@@ -117,6 +131,12 @@ from .atom_potentials import (
     kirkland_potentials_crystal,
     single_atom_potential,
 )
+from .checked import (
+    checked_cbed,
+    checked_make_probe,
+    checked_stem4d_sharded,
+    checked_stem_4d,
+)
 from .geometry import (
     reciprocal_lattice,
     rotate_structure,
@@ -152,6 +172,10 @@ __all__: list[str] = [
     "atomic_symbol",
     "bessel_kv",
     "cbed",
+    "checked_cbed",
+    "checked_make_probe",
+    "checked_stem4d_sharded",
+    "checked_stem_4d",
     "clip_cbed",
     "contrast_stretch",
     "decompose_beam_to_modes",

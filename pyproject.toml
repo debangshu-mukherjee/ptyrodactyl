@@ -97,6 +97,7 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
+addopts = ["--jaxtyping-packages=ptyrodactyl,beartype.beartype"]
 
 [tool.coverage.run]
 source = ["ptyrodactyl"]

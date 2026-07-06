@@ -13,6 +13,7 @@ import jax
 import pytest
 
 
+@pytest.hookimpl(trylast=True)
 def pytest_configure(config: pytest.Config) -> None:
     """Assert the x64 discipline the package enables at import time.
 

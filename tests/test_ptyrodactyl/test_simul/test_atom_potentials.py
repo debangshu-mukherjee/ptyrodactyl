@@ -1,10 +1,12 @@
-"""Tests for atom_potentials module, specifically the bessel_kv and _slice_atoms functions."""
+"""Tests for atom_potentials module."""
+# ruff: noqa: E402
 
 import unittest
 
 import chex
 import jax
 import jax.numpy as jnp
+import numpy as np
 from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
@@ -12,9 +14,46 @@ jax.config.update("jax_enable_x64", True)
 from ptyrodactyl.simul.atom_potentials import (
     _slice_atoms,
     bessel_kv,
+    contrast_stretch,
     kirkland_potentials_crystal,
 )
 from ptyrodactyl.types import create_crystal_data
+
+
+class TestContrastStretch(chex.TestCase):
+    """Test suite for percentile contrast stretching."""
+
+    def test_contrast_stretch_2d_static_rank(self) -> None:
+        """2D input returns a 2D image with fixed values."""
+        image = jnp.array(
+            [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]], dtype=jnp.float64
+        )
+        expected = np.array(
+            [[0.0, 0.125, 0.375], [0.625, 0.875, 1.0]],
+            dtype=np.float64,
+        )
+
+        result = contrast_stretch(image, 10.0, 90.0)
+
+        assert result.shape == image.shape
+        assert np.array_equal(np.asarray(result), expected)
+
+    def test_contrast_stretch_3d_static_rank(self) -> None:
+        """3D input returns a 3D stack with fixed values per image."""
+        image = jnp.array(
+            [[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]], dtype=jnp.float64
+        )
+        stack = jnp.stack([image, image + 10.0], axis=0)
+        expected_image = np.array(
+            [[0.0, 0.125, 0.375], [0.625, 0.875, 1.0]],
+            dtype=np.float64,
+        )
+        expected = np.stack([expected_image, expected_image], axis=0)
+
+        result = contrast_stretch(stack, 10.0, 90.0)
+
+        assert result.shape == stack.shape
+        assert np.array_equal(np.asarray(result), expected)
 
 
 class TestBesselKv(chex.TestCase):
@@ -110,15 +149,16 @@ class TestBesselKv(chex.TestCase):
         relative_errors = jnp.abs(
             (k0_values - expected_approx) / expected_approx
         )
-        assert jnp.all(
-            relative_errors < 0.01
-        ), f"Small x approximation failed: max error = {jnp.max(relative_errors):.6f}"
+        assert jnp.all(relative_errors < 0.01), (
+            "Small x approximation failed: "
+            f"max error = {jnp.max(relative_errors):.6f}"
+        )
 
     @chex.variants(
         with_jit=True, without_jit=True, with_device=True, with_pmap=True
     )
     def test_bessel_k0_large_x_behavior(self) -> None:
-        """Test K_0(x) asymptotic behavior for large x: K_0(x) ~ sqrt(pi/(2x)) * exp(-x)."""
+        """Test K_0(x) asymptotic behavior for large x."""
         x_large = jnp.array([10.0, 20.0, 50.0, 100.0], dtype=jnp.float64)
         v_scalar = jnp.asarray(0.0, dtype=jnp.float64)
 
@@ -130,9 +170,10 @@ class TestBesselKv(chex.TestCase):
         relative_errors = jnp.abs(
             (k0_values - expected_asymptotic) / expected_asymptotic
         )
-        assert jnp.all(
-            relative_errors < 0.1
-        ), f"Large x asymptotic failed: max error = {jnp.max(relative_errors):.6f}"
+        assert jnp.all(relative_errors < 0.1), (
+            "Large x asymptotic failed: "
+            f"max error = {jnp.max(relative_errors):.6f}"
+        )
 
     @chex.variants(
         with_jit=True, without_jit=True, with_device=True, with_pmap=True
@@ -162,7 +203,11 @@ class TestBesselKv(chex.TestCase):
     )
     @parameterized.parameters(
         (jnp.float32,),
-        (jnp.float64,) if getattr(jax.config, "jax_enable_x64", False) else (jnp.float32,),
+        (
+            (jnp.float64,)
+            if getattr(jax.config, "jax_enable_x64", False)
+            else (jnp.float32,)
+        ),
     )
     def test_bessel_k0_dtype_consistency(self, dtype) -> None:
         """Test that output dtype matches input dtype."""
@@ -381,7 +426,7 @@ class TestSliceAtoms(chex.TestCase):
         with_jit=True, without_jit=True, with_device=True, with_pmap=True
     )
     def test_atoms_at_slice_boundaries(self) -> None:
-        """Test that atoms exactly at slice boundaries are assigned correctly."""
+        """Test atoms exactly at slice boundaries."""
         coords = jnp.array(
             [
                 [1.0, 1.0, 0.0],  # Exactly at z=0
@@ -756,7 +801,9 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
                 properties=None,
                 comment=None,
             )
-            return self.variant(kirkland_potentials_crystal)(xyz_data, pixel_size)
+            return self.variant(kirkland_potentials_crystal)(
+                xyz_data, pixel_size
+            )
 
         # Process each structure
         results = []

@@ -1,5 +1,42 @@
 # Changelog
 
+## Plan 02 — JIT & Runtime-Validation Hardening (complete)
+
+All seven phases landed (gates RJ1-RJ7): runtime typecheck stack
+(`@jaxtyped(typechecker=beartype)`) on every public function in `jacobian/`,
+`born/`, and `tools/`; duplicated PyTree helpers collapsed into
+`jacobian/_treemath.py`; hard-coded `float32` purged; typed enums `LossType`
+and `OptimizableBlock` replace string dispatch (invalid keys raise
+`ValueError` at the boundary); `born/green.py` preconditions enforced
+(`safety_factor > 1`, finiteness); the four `phase_recon` reconstructors run
+`lax.scan` (no Python loops, no `print`; the `jnp.floor`-as-shape bug is
+fixed, so `single_slice_ptychography` runs); `annular_detector` takes a
+static `scan_shape`; `decompose_beam_to_modes` requires an explicit PRNG key;
+additive `checked_*` validating wrappers (`checked_make_probe`,
+`checked_cbed`, `checked_stem_4d`, `checked_stem4d_sharded`); the top-level
+bootstrap merges `XLA_FLAGS` per-flag, honors
+`PTYRODACTYL_DISABLE_RUNTIME_CHECKS=1 -> EQX_ON_ERROR=off`, enables an opt-in
+compilation cache (`tools/caching.py`), and exposes an idempotent,
+warn-degrading `init_distributed(..., force=False)`; and the test suite runs
+under LIVE jaxtyping enforcement (`--jaxtyping-packages` in pytest addopts).
+
+### Known-failing baseline (deliberate, owned by future plans)
+
+46 tests fail at this commit and on GitHub CI, unchanged from the
+pre-Plan-02 baseline — none were introduced or worsened here:
+
+- 27 Bessel-K derivative NaNs and 17 `kirkland_potentials_crystal`
+  shape/jit defects (`test_simul/test_atom_potentials.py`) — retired by the
+  Lobato potential-layer rebuild (plan 06 in the private plans repo).
+- 2 `parse_xyz` contract drifts (`test_simul/test_preprocessing.py`) —
+  resolved when the parsers move to `inout/` and its ingest contract is
+  pinned (plans 04/05).
+
+CI is expected to stay red until those plans land; the regression gate for
+this repo is "no NEW failures against the 46-line baseline", enforced during
+review, plus the bit-level unification-gate reference
+(`tests/test_data/plan01_ug_capture.py verify`).
+
 ## Interaction-Parameter Physics Fix
 
 `ptyrodactyl.tools.interaction_parameter` was removed. Its formula used

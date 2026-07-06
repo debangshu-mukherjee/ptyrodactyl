@@ -48,6 +48,7 @@ from ptyrodactyl.simul.simulations import stem_4d
 from ptyrodactyl.types import (
     STEM4D,
     CalibratedArray,
+    PotentialSlices,
     ProbeModes,
     create_calibrated_array,
     scalar_float,
@@ -208,11 +209,20 @@ def single_slice_ptychography(
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
+        potential_slices = PotentialSlices(
+            slices=jnp.real(pot_slice)[..., jnp.newaxis],
+            slice_thickness=slice_thickness,
+            calib=calib_ang,
+        )
+        probe_modes = ProbeModes(
+            modes=beam[..., jnp.newaxis],
+            weights=jnp.ones((1,), dtype=experimental_4dstem.dtype),
+            calib=calib_ang,
+        )
         stem4d_result = stem_4d(
-            pot_slice[None, ...],
-            beam[None, ...],
+            potential_slices,
+            probe_modes,
             pos_list,
-            slice_thickness,
             voltage_kv,
             calib_ang,
         )
@@ -253,11 +263,14 @@ def single_slice_ptychography(
     beam_state: Any = optimizer.init(initial_beam.data_array.shape)
 
     pot_slice: Complex[Array, "H W"] = initial_potential.data_array
-    beam: Complex[Array, "H W"]
-    if initial_beam.real_space:
-        beam = initial_beam.data_array
-    else:
-        beam = jnp.fft.ifft2(initial_beam.data_array)
+    beam: Complex[Array, "H W"] = jax.lax.cond(
+        initial_beam.real_space,
+        lambda beam_data: beam_data,
+        lambda beam_data: jnp.fft.ifft2(beam_data),
+        initial_beam.data_array,
+    )
+
+    snapshot_count: int = num_iterations // save_every
 
     @jax.jit
     def _update_step(
@@ -313,7 +326,7 @@ def single_slice_ptychography(
         shape=(
             pot_slice.shape[0],
             pot_slice.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=pot_slice.dtype,
     )
@@ -321,26 +334,81 @@ def single_slice_ptychography(
         shape=(
             beam.shape[0],
             beam.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=beam.dtype,
     )
 
-    for ii in range(num_iterations):
-        loss: Float[Array, " "]
+    def _scan_step(
+        carry: tuple[Any, ...], ii: Int[Array, ""]
+    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        (
+            pot_slice,
+            beam,
+            pot_slice_state,
+            beam_state,
+            intermediate_potslice,
+            intermediate_beam,
+        ) = carry
         pot_slice, beam, pot_slice_state, beam_state, loss = _update_step(
             pot_slice, beam, pot_slice_state, beam_state
         )
 
-        if ii % save_every == 0:
-            print(f"Iteration {ii}, Loss: {loss}")
-            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(
-                jnp.int32
-            )
-            intermediate_potslice = intermediate_potslice.at[:, :, saver].set(
+        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+            pots, beams = args
+            saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
+            pots = pots.at[:, :, saver].set(pot_slice)
+            beams = beams.at[:, :, saver].set(beam)
+            return pots, beams
+
+        intermediate_potslice, intermediate_beam = jax.lax.cond(
+            ii % save_every == 0,
+            _save_snapshot,
+            lambda args: args,
+            (intermediate_potslice, intermediate_beam),
+        )
+        return (
+            pot_slice,
+            beam,
+            pot_slice_state,
+            beam_state,
+            intermediate_potslice,
+            intermediate_beam,
+        ), loss
+
+    if num_iterations > 0:
+        pot_slice, beam, pot_slice_state, beam_state, _ = _update_step(
+            pot_slice, beam, pot_slice_state, beam_state
+        )
+        if snapshot_count > 0:
+            intermediate_potslice = intermediate_potslice.at[:, :, 0].set(
                 pot_slice
             )
-            intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
+            intermediate_beam = intermediate_beam.at[:, :, 0].set(beam)
+
+        (
+            (
+                pot_slice,
+                beam,
+                pot_slice_state,
+                beam_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            _,
+        ) = jax.lax.scan(
+            _scan_step,
+            (
+                pot_slice,
+                beam,
+                pot_slice_state,
+                beam_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            jnp.arange(1, num_iterations),
+            unroll=True,
+        )
 
     final_potential: CalibratedArray = create_calibrated_array(
         data_array=pot_slice,
@@ -364,7 +432,7 @@ def single_slice_ptychography(
 
 
 @jaxtyped(typechecker=beartype)
-def single_slice_poscorrected(
+def single_slice_poscorrected(  # noqa: PLR0915
     experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
@@ -500,11 +568,20 @@ def single_slice_poscorrected(
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
+        potential_slices = PotentialSlices(
+            slices=jnp.real(pot_slice)[..., jnp.newaxis],
+            slice_thickness=slice_thickness,
+            calib=calib_ang,
+        )
+        probe_modes = ProbeModes(
+            modes=beam[..., jnp.newaxis],
+            weights=jnp.ones((1,), dtype=experimental_4dstem.dtype),
+            calib=calib_ang,
+        )
         stem4d_result = stem_4d(
-            pot_slice[None, ...],
-            beam[None, ...],
+            potential_slices,
+            probe_modes,
             pos_list,
-            slice_thickness,
             voltage_kv,
             calib_ang,
         )
@@ -553,10 +630,13 @@ def single_slice_poscorrected(
     beam_state: Any = optimizer.init(initial_beam.data_array.shape)
     pos_state: Any = optimizer.init(initial_pos_list.shape)
 
-    learning_rate: Float[Array, ...] = jnp.array(learning_rate)
-
-    if len(learning_rate) == 1:
-        learning_rate = jnp.array([learning_rate, learning_rate])
+    learning_rates: Float[Array, ...] = jnp.array(learning_rate)
+    if len(learning_rates.shape) == 0:
+        parameter_learning_rate: float = float(learning_rates)
+        position_learning_rate: float = float(learning_rates)
+    else:
+        parameter_learning_rate = float(learning_rates[0])
+        position_learning_rate = float(learning_rates[1])
 
     @jax.jit
     def _update_step(
@@ -613,14 +693,21 @@ def single_slice_poscorrected(
         grads: Dict[str, Array]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
-            pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
+            pot_slice,
+            grads["pot_slice"],
+            pot_slice_state,
+            parameter_learning_rate,
         )
         beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, learning_rate
+            beam, grads["beam"], beam_state, parameter_learning_rate
         )
-        pos_list, pos_state = optimizer.update(
-            pos_list, grads["pos_list"], pos_state, learning_rate[1]
+        pos_list_complex, pos_state = optimizer.update(
+            pos_list.astype(jnp.complex128),
+            grads["pos_list"].astype(jnp.complex128),
+            pos_state,
+            position_learning_rate,
         )
+        pos_list = jnp.real(pos_list_complex)
         return (
             pot_slice,
             beam,
@@ -635,11 +722,13 @@ def single_slice_poscorrected(
     beam_guess: Complex[Array, "H W"] = initial_beam.data_array
     pos_guess: Float[Array, "P 2"] = initial_pos_list
 
+    snapshot_count: int = num_iterations // save_every
+
     intermediate_potslices: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             pot_guess.shape[0],
             pot_guess.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=pot_guess.dtype,
     )
@@ -647,7 +736,7 @@ def single_slice_poscorrected(
         shape=(
             beam_guess.shape[0],
             beam_guess.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=beam_guess.dtype,
     )
@@ -655,12 +744,25 @@ def single_slice_poscorrected(
         shape=(
             pos_guess.shape[0],
             pos_guess.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=pos_guess.dtype,
     )
 
-    for ii in range(num_iterations):
+    def _scan_step(
+        carry: tuple[Any, ...], ii: Int[Array, ""]
+    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        (
+            pot_guess,
+            beam_guess,
+            pos_guess,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            intermediate_potslices,
+            intermediate_beams,
+            intermediate_positions,
+        ) = carry
         (
             pot_guess,
             beam_guess,
@@ -678,20 +780,95 @@ def single_slice_poscorrected(
             pos_state,
         )
 
-        if ii % save_every == 0:
-            print(f"Iteration {ii}, Loss: {loss}")
-            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(
-                jnp.int32
+        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+            pots, beams, positions = args
+            saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
+            pots = pots.at[:, :, saver].set(pot_guess)
+            beams = beams.at[:, :, saver].set(beam_guess)
+            positions = positions.at[:, :, saver].set(pos_guess)
+            return pots, beams, positions
+
+        (
+            intermediate_potslices,
+            intermediate_beams,
+            intermediate_positions,
+        ) = jax.lax.cond(
+            ii % save_every == 0,
+            _save_snapshot,
+            lambda args: args,
+            (
+                intermediate_potslices,
+                intermediate_beams,
+                intermediate_positions,
+            ),
+        )
+        return (
+            pot_guess,
+            beam_guess,
+            pos_guess,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            intermediate_potslices,
+            intermediate_beams,
+            intermediate_positions,
+        ), loss
+
+    if num_iterations > 0:
+        (
+            pot_guess,
+            beam_guess,
+            pos_guess,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            _,
+        ) = _update_step(
+            pot_guess,
+            beam_guess,
+            pos_guess,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+        )
+        if snapshot_count > 0:
+            intermediate_potslices = intermediate_potslices.at[:, :, 0].set(
+                pot_guess
             )
-            intermediate_potslices = intermediate_potslices.at[
-                :, :, saver
-            ].set(pot_guess)
-            intermediate_beams = intermediate_beams.at[:, :, saver].set(
-                beam_guess
+            intermediate_beams = intermediate_beams.at[:, :, 0].set(beam_guess)
+            intermediate_positions = intermediate_positions.at[:, :, 0].set(
+                pos_guess
             )
-            intermediate_positions = intermediate_positions.at[
-                :, :, saver
-            ].set(pos_guess)
+
+        (
+            (
+                pot_guess,
+                beam_guess,
+                pos_guess,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslices,
+                intermediate_beams,
+                intermediate_positions,
+            ),
+            _,
+        ) = jax.lax.scan(
+            _scan_step,
+            (
+                pot_guess,
+                beam_guess,
+                pos_guess,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslices,
+                intermediate_beams,
+                intermediate_positions,
+            ),
+            jnp.arange(1, num_iterations),
+            unroll=True,
+        )
 
     final_potential: CalibratedArray = create_calibrated_array(
         data_array=pot_guess,
@@ -716,7 +893,7 @@ def single_slice_poscorrected(
 
 
 @jaxtyped(typechecker=beartype)
-def single_slice_multi_modal(
+def single_slice_multi_modal(  # noqa: PLR0915
     experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: ProbeModes,
@@ -731,7 +908,7 @@ def single_slice_multi_modal(
     ProbeModes,
     Float[Array, "P 2"],
     Complex[Array, "H W S"],
-    Complex[Array, "H W S"],
+    Complex[Array, "H W M S"],
 ]:
     r"""Reconstruct potential, multi-modal beam, and positions.
 
@@ -855,11 +1032,15 @@ def single_slice_multi_modal(
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
+        potential_slices = PotentialSlices(
+            slices=jnp.real(pot_slice)[..., jnp.newaxis],
+            slice_thickness=slice_thickness,
+            calib=calib_ang,
+        )
         stem4d_result = stem_4d(
-            pot_slice[None, ...],
+            potential_slices,
             beam,
             pos_list,
-            slice_thickness,
             voltage_kv,
             calib_ang,
         )
@@ -908,9 +1089,13 @@ def single_slice_multi_modal(
     beam_state: Any = optimizer.init(initial_beam.modes.shape)
     pos_state: Any = optimizer.init(initial_pos_list.shape)
 
-    learning_rate: Float[Array, ...] = jnp.array(learning_rate)
-    if len(learning_rate.shape) == 0:
-        learning_rate = jnp.array([learning_rate, learning_rate])
+    learning_rates: Float[Array, ...] = jnp.array(learning_rate)
+    if len(learning_rates.shape) == 0:
+        parameter_learning_rate: float = float(learning_rates)
+        position_learning_rate: float = float(learning_rates)
+    else:
+        parameter_learning_rate = float(learning_rates[0])
+        position_learning_rate = float(learning_rates[1])
 
     @jax.jit
     def _update_step(
@@ -967,18 +1152,28 @@ def single_slice_multi_modal(
         grads: Dict[str, Any]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
         pot_slice, pot_slice_state = optimizer.update(
-            pot_slice, grads["pot_slice"], pot_slice_state, learning_rate[0]
+            pot_slice,
+            grads["pot_slice"],
+            pot_slice_state,
+            parameter_learning_rate,
         )
         beam_modes: Complex[Array, "H W M"]
         beam_modes, beam_state = optimizer.update(
-            beam.modes, grads["beam"].modes, beam_state, learning_rate[0]
+            beam.modes,
+            grads["beam"].modes,
+            beam_state,
+            parameter_learning_rate,
         )
         beam = ProbeModes(
             modes=beam_modes, weights=beam.weights, calib=beam.calib
         )
-        pos_list, pos_state = optimizer.update(
-            pos_list, grads["pos_list"], pos_state, learning_rate[1]
+        pos_list_complex, pos_state = optimizer.update(
+            pos_list.astype(jnp.complex128),
+            grads["pos_list"].astype(jnp.complex128),
+            pos_state,
+            position_learning_rate,
         )
+        pos_list = jnp.real(pos_list_complex)
         return (
             pot_slice,
             beam,
@@ -993,11 +1188,13 @@ def single_slice_multi_modal(
     beam: ProbeModes = initial_beam
     pos_list: Float[Array, "P 2"] = initial_pos_list
 
+    snapshot_count: int = num_iterations // save_every
+
     intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             initial_pot_slice.shape[0],
             initial_pot_slice.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=initial_pot_slice.dtype,
     )
@@ -1006,13 +1203,24 @@ def single_slice_multi_modal(
             initial_beam.modes.shape[0],
             initial_beam.modes.shape[1],
             initial_beam.modes.shape[2],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=initial_beam.modes.dtype,
     )
 
-    for ii in range(num_iterations):
-        loss: Float[Array, " "]
+    def _scan_step(
+        carry: tuple[Any, ...], ii: Int[Array, ""]
+    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        (
+            pot_slice,
+            beam,
+            pos_list,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            intermediate_potslice,
+            intermediate_beam,
+        ) = carry
         (
             pot_slice,
             beam,
@@ -1025,17 +1233,77 @@ def single_slice_multi_modal(
             pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
         )
 
-        if ii % save_every == 0:
-            print(f"Iteration {ii}, Loss: {loss}")
-            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(
-                jnp.int32
-            )
-            intermediate_potslice = intermediate_potslice.at[:, :, saver].set(
+        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+            pots, beams = args
+            saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
+            pots = pots.at[:, :, saver].set(pot_slice)
+            beams = beams.at[:, :, :, saver].set(beam.modes)
+            return pots, beams
+
+        intermediate_potslice, intermediate_beam = jax.lax.cond(
+            ii % save_every == 0,
+            _save_snapshot,
+            lambda args: args,
+            (intermediate_potslice, intermediate_beam),
+        )
+        return (
+            pot_slice,
+            beam,
+            pos_list,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            intermediate_potslice,
+            intermediate_beam,
+        ), loss
+
+    if num_iterations > 0:
+        (
+            pot_slice,
+            beam,
+            pos_list,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            _,
+        ) = _update_step(
+            pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
+        )
+        if snapshot_count > 0:
+            intermediate_potslice = intermediate_potslice.at[:, :, 0].set(
                 pot_slice
             )
-            intermediate_beam = intermediate_beam.at[:, :, :, saver].set(
+            intermediate_beam = intermediate_beam.at[:, :, :, 0].set(
                 beam.modes
             )
+
+        (
+            (
+                pot_slice,
+                beam,
+                pos_list,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            _,
+        ) = jax.lax.scan(
+            _scan_step,
+            (
+                pot_slice,
+                beam,
+                pos_list,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            jnp.arange(1, num_iterations),
+            unroll=True,
+        )
 
     return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
 
@@ -1174,11 +1442,20 @@ def multi_slice_multi_modal(
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
+        potential_slices = PotentialSlices(
+            slices=jnp.real(pot_slice)[..., jnp.newaxis],
+            slice_thickness=slice_thickness,
+            calib=calib_ang,
+        )
+        probe_modes = ProbeModes(
+            modes=beam[..., jnp.newaxis],
+            weights=jnp.ones((1,), dtype=experimental_4dstem.dtype),
+            calib=calib_ang,
+        )
         stem4d_result = stem_4d(
-            pot_slice[None, ...],
-            beam[None, ...],
+            potential_slices,
+            probe_modes,
             pos_list,
-            slice_thickness,
             voltage_kv,
             calib_ang,
         )
@@ -1287,9 +1564,13 @@ def multi_slice_multi_modal(
         beam, beam_state = optimizer.update(
             beam, grads["beam"], beam_state, learning_rate
         )
-        pos_list, pos_state = optimizer.update(
-            pos_list, grads["pos_list"], pos_state, pos_learning_rate
+        pos_list_complex, pos_state = optimizer.update(
+            pos_list.astype(jnp.complex128),
+            grads["pos_list"].astype(jnp.complex128),
+            pos_state,
+            pos_learning_rate,
         )
+        pos_list = jnp.real(pos_list_complex)
         return (
             pot_slice,
             beam,
@@ -1304,11 +1585,13 @@ def multi_slice_multi_modal(
     beam: Complex[Array, "H W"] = initial_beam
     pos_list: Float[Array, "P 2"] = initial_pos_list
 
+    snapshot_count: int = num_iterations // save_every
+
     intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
             initial_pot_slice.shape[0],
             initial_pot_slice.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=initial_pot_slice.dtype,
     )
@@ -1316,13 +1599,24 @@ def multi_slice_multi_modal(
         shape=(
             initial_beam.shape[0],
             initial_beam.shape[1],
-            jnp.floor(num_iterations / save_every),
+            snapshot_count,
         ),
         dtype=initial_beam.dtype,
     )
 
-    for ii in range(num_iterations):
-        loss: Float[Array, " "]
+    def _scan_step(
+        carry: tuple[Any, ...], ii: Int[Array, ""]
+    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        (
+            pot_slice,
+            beam,
+            pos_list,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            intermediate_potslice,
+            intermediate_beam,
+        ) = carry
         (
             pot_slice,
             beam,
@@ -1335,15 +1629,75 @@ def multi_slice_multi_modal(
             pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
         )
 
-        if ii % save_every == 0:
-            print(f"Iteration {ii}, Loss: {loss}")
-            saver: Int[Array, ""] = jnp.floor(ii / save_every).astype(
-                jnp.int32
-            )
-            intermediate_potslice = intermediate_potslice.at[:, :, saver].set(
+        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+            pots, beams = args
+            saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
+            pots = pots.at[:, :, saver].set(pot_slice)
+            beams = beams.at[:, :, saver].set(beam)
+            return pots, beams
+
+        intermediate_potslice, intermediate_beam = jax.lax.cond(
+            ii % save_every == 0,
+            _save_snapshot,
+            lambda args: args,
+            (intermediate_potslice, intermediate_beam),
+        )
+        return (
+            pot_slice,
+            beam,
+            pos_list,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            intermediate_potslice,
+            intermediate_beam,
+        ), loss
+
+    if num_iterations > 0:
+        (
+            pot_slice,
+            beam,
+            pos_list,
+            pot_slice_state,
+            beam_state,
+            pos_state,
+            _,
+        ) = _update_step(
+            pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
+        )
+        if snapshot_count > 0:
+            intermediate_potslice = intermediate_potslice.at[:, :, 0].set(
                 pot_slice
             )
-            intermediate_beam = intermediate_beam.at[:, :, saver].set(beam)
+            intermediate_beam = intermediate_beam.at[:, :, 0].set(beam)
+
+        (
+            (
+                pot_slice,
+                beam,
+                pos_list,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            _,
+        ) = jax.lax.scan(
+            _scan_step,
+            (
+                pot_slice,
+                beam,
+                pos_list,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            jnp.arange(1, num_iterations),
+            unroll=True,
+        )
 
     return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
 

@@ -31,153 +31,26 @@ Routine Listings
     J^T J.
 """
 
-from collections.abc import Callable
-
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
+from beartype import beartype
+from beartype.typing import Callable
 from jax import lax
-from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray, PyTree
+from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray, PyTree, jaxtyped
 
+from ptyrodactyl.jacobian._treemath import (
+    _tree_add,
+    _tree_dot,
+    _tree_scalar_mul,
+    _tree_sub,
+    _tree_zeros_like,
+)
 from ptyrodactyl.jacobian.operators import jtj_operator, vjp_operator
 from ptyrodactyl.types import CGState, GNState, LanczosState, LMState
 
 
-def _tree_dot(
-    tree_a: PyTree,
-    tree_b: PyTree,
-) -> Float[Array, ""]:
-    """Compute inner product between two PyTrees.
-
-    Parameters
-    ----------
-    tree_a : PyTree
-        First PyTree operand.
-    tree_b : PyTree
-        Second PyTree operand with same structure as
-        *tree_a*.
-
-    Returns
-    -------
-    result : Float[Array, ""]
-        Sum of element-wise products across all leaves.
-    """
-    leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
-    leaves_b, _ = jax.tree_util.tree_flatten(tree_b)
-    products: list = [
-        jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b, strict=False)
-    ]
-    result: Float[Array, ""] = jnp.sum(jnp.array(products))
-    return result
-
-
-def _tree_add(
-    tree_a: PyTree,
-    tree_b: PyTree,
-) -> PyTree:
-    """Element-wise addition of two PyTrees.
-
-    Parameters
-    ----------
-    tree_a : PyTree
-        First PyTree operand.
-    tree_b : PyTree
-        Second PyTree operand with same structure as
-        *tree_a*.
-
-    Returns
-    -------
-    result : PyTree
-        PyTree with element-wise sum of leaves.
-    """
-    result: PyTree = jax.tree_util.tree_map(lambda a, b: a + b, tree_a, tree_b)
-    return result
-
-
-def _tree_scalar_mul(
-    scalar: Float[Array, ""],
-    tree: PyTree,
-) -> PyTree:
-    """Multiply all leaves of a PyTree by a scalar.
-
-    Parameters
-    ----------
-    scalar : Float[Array, ""]
-        Scalar multiplier.
-    tree : PyTree
-        PyTree to scale.
-
-    Returns
-    -------
-    result : PyTree
-        Scaled PyTree.
-    """
-    result: PyTree = jax.tree_util.tree_map(lambda x: scalar * x, tree)
-    return result
-
-
-def _tree_sub(
-    tree_a: PyTree,
-    tree_b: PyTree,
-) -> PyTree:
-    """Element-wise subtraction of two PyTrees.
-
-    Parameters
-    ----------
-    tree_a : PyTree
-        First PyTree operand.
-    tree_b : PyTree
-        Second PyTree operand to subtract from *tree_a*.
-
-    Returns
-    -------
-    result : PyTree
-        PyTree with element-wise difference of leaves.
-    """
-    result: PyTree = jax.tree_util.tree_map(lambda a, b: a - b, tree_a, tree_b)
-    return result
-
-
-def _tree_zeros_like(
-    tree: PyTree,
-) -> PyTree:
-    """Create a PyTree of zeros with same structure as input.
-
-    Parameters
-    ----------
-    tree : PyTree
-        Template PyTree.
-
-    Returns
-    -------
-    result : PyTree
-        PyTree of zeros with matching structure and dtypes.
-    """
-    result: PyTree = jax.tree_util.tree_map(jnp.zeros_like, tree)
-    return result
-
-
-def _tree_norm(
-    tree: PyTree,
-) -> Float[Array, ""]:
-    """Compute L2 norm of a PyTree.
-
-    Parameters
-    ----------
-    tree : PyTree
-        Input PyTree.
-
-    Returns
-    -------
-    result : Float[Array, ""]
-        Square root of sum of squared elements across all
-        leaves.
-    """
-    dot_product: Float[Array, ""] = _tree_dot(tree, tree)
-    result: Float[Array, ""] = jnp.sqrt(dot_product)
-    return result
-
-
+@jaxtyped(typechecker=beartype)
 def conjugate_gradient(
     linear_operator: Callable[[PyTree], PyTree],
     rhs: PyTree,
@@ -284,9 +157,12 @@ def conjugate_gradient(
     final_state, _ = lax.scan(
         cg_step, initial_state, None, length=max_iterations
     )
-    return final_state.x, final_state.iteration
+    solution: PyTree = final_state.x
+    iterations: Int[Array, ""] = final_state.iteration
+    return solution, iterations
 
 
+@jaxtyped(typechecker=beartype)
 def gauss_newton_step(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -357,11 +233,12 @@ def gauss_newton_step(
     new_params: PyTree = _tree_sub(params, step)
     new_prediction: Float[Array, "..."] = forward_fn(new_params)
     new_residual: Float[Array, "..."] = new_prediction - data
-    residual_norm_new: Float[Array, ""] = jnp.sqrt(jnp.sum(new_residual**2))
+    residual_norm: Float[Array, ""] = jnp.sqrt(jnp.sum(new_residual**2))
 
-    return new_params, residual_norm_new
+    return new_params, residual_norm
 
 
+@jaxtyped(typechecker=beartype)
 def gauss_newton_solve(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params_init: PyTree,
@@ -450,9 +327,11 @@ def gauss_newton_solve(
     final_state, _ = lax.scan(
         gn_iteration, initial_state, None, length=max_iterations
     )
-    return final_state.params, final_state
+    params_final: PyTree = final_state.params
+    return params_final, final_state
 
 
+@jaxtyped(typechecker=beartype)
 def levenberg_marquardt_step(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -525,20 +404,21 @@ def levenberg_marquardt_step(
         """Apply (J^T J + lambda I) to v."""
         jtj_v: PyTree = jtj_fn(v)
         damped_term: PyTree = _tree_scalar_mul(damping, v)
-        return _tree_add(jtj_v, damped_term)
+        result: PyTree = _tree_add(jtj_v, damped_term)
+        return result
 
     x0: PyTree = _tree_zeros_like(params)
     step, _ = conjugate_gradient(
         damped_operator, gradient, x0, cg_max_iterations, cg_tolerance
     )
 
-    new_params: PyTree = _tree_sub(params, step)
-    new_prediction: Float[Array, "..."] = forward_fn(new_params)
+    candidate_params: PyTree = _tree_sub(params, step)
+    new_prediction: Float[Array, "..."] = forward_fn(candidate_params)
     new_residual: Float[Array, "..."] = new_prediction - data
-    new_residual_norm: Float[Array, ""] = jnp.sum(new_residual**2)
+    new_residual_sum_squares: Float[Array, ""] = jnp.sum(new_residual**2)
 
     actual_reduction: Float[Array, ""] = (
-        residual_norm_current - new_residual_norm
+        residual_norm_current - new_residual_sum_squares
     )
     jtj_step: PyTree = jtj_fn(step)
     predicted_reduction: Float[Array, ""] = _tree_dot(
@@ -562,20 +442,21 @@ def levenberg_marquardt_step(
         ),
     )
 
-    params_out: PyTree = lax.cond(
+    new_params: PyTree = lax.cond(
         gain_ratio > 0.0,
-        lambda: new_params,
+        lambda: candidate_params,
         lambda: params,
     )
-    norm_out: Float[Array, ""] = lax.cond(
+    new_residual_norm: Float[Array, ""] = lax.cond(
         gain_ratio > 0.0,
-        lambda: jnp.sqrt(new_residual_norm),
+        lambda: jnp.sqrt(new_residual_sum_squares),
         lambda: jnp.sqrt(residual_norm_current),
     )
 
-    return params_out, norm_out, new_damping
+    return new_params, new_residual_norm, new_damping
 
 
+@jaxtyped(typechecker=beartype)
 def levenberg_marquardt_solve(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params_init: PyTree,
@@ -681,9 +562,11 @@ def levenberg_marquardt_solve(
     final_state, _ = lax.scan(
         lm_iteration, initial_state, None, length=max_iterations
     )
-    return final_state.params, final_state
+    params_final: PyTree = final_state.params
+    return params_final, final_state
 
 
+@jaxtyped(typechecker=beartype)
 def lanczos_tridiagonal(
     linear_operator: Callable[[Float[Array, "n"]], Float[Array, "n"]],
     initial_vector: Float[Array, "n"],
@@ -784,12 +667,13 @@ def lanczos_tridiagonal(
 
     final_state, _ = lax.scan(lanczos_step, initial_state, None, length=k)
 
-    alpha_out: Float[Array, "k"] = final_state.alpha
-    beta_out: Float[Array, "k-1"] = final_state.beta[:-1]
+    alpha: Float[Array, "k"] = final_state.alpha
+    beta: Float[Array, "k-1"] = final_state.beta[:-1]
 
-    return alpha_out, beta_out
+    return alpha, beta
 
 
+@jaxtyped(typechecker=beartype)
 def singular_spectrum(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -879,13 +763,14 @@ def singular_spectrum(
     singular_values_sorted: Float[Array, "k"] = jnp.sort(singular_values_all)[
         ::-1
     ]
-    singular_values_out: Float[Array, "k"] = singular_values_sorted[
+    singular_values: Float[Array, "k"] = singular_values_sorted[
         :num_singular_values
     ]
 
-    return singular_values_out
+    return singular_values
 
 
+@jaxtyped(typechecker=beartype)
 def effective_nullspace_dimension(
     singular_values: Float[Array, "k"],
     noise_floor: float,

@@ -10,28 +10,30 @@ Equinox leaf.
 
 Routine Listings
 ----------------
-:class:`ExitWaveParams`
-    Complex exit wave array.
 :class:`AberrationParams`
     Zernike coefficients and soft aperture cutoff.
+:class:`CGState`
+    State container for conjugate gradient iteration.
+:class:`ExitWaveParams`
+    Complex exit wave array.
+:class:`FisherState`
+    State container for iterative Fisher computation.
+:class:`GNState`
+    State container for Gauss-Newton iteration.
 :class:`GeometryParams`
     Rotation angle, centre offset, ellipticity.
+:class:`LMState`
+    State container for Levenberg-Marquardt iteration.
+:class:`LanczosState`
+    State container for Lanczos tridiagonalisation.
+:class:`OptimizableBlock`
+    Static ptychography parameter-block selection enum.
 :class:`PositionParams`
     Per-scan-point position corrections.
 :class:`ProbeModeParams`
     Probe mode weights and shapes.
 :class:`PtychoParams`
     Combined parameter container for all blocks.
-:class:`FisherState`
-    State container for iterative Fisher computation.
-:class:`CGState`
-    State container for conjugate gradient iteration.
-:class:`GNState`
-    State container for Gauss-Newton iteration.
-:class:`LMState`
-    State container for Levenberg-Marquardt iteration.
-:class:`LanczosState`
-    State container for Lanczos tridiagonalisation.
 :func:`create_ptycho_params`
     Construct combined PtychoParams from components.
 
@@ -41,6 +43,8 @@ All fields are dynamic Equinox leaves. Iteration counters remain traced
 rank-0 integer arrays so these states can be carried through
 ``jax.lax.scan``.
 """
+
+from enum import Enum
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -54,6 +58,30 @@ def _raise_if(condition: bool, message: str) -> None:
     """Raise ValueError when a structural condition is true."""
     if condition:
         raise ValueError(message)
+
+
+class OptimizableBlock(str, Enum):
+    """Store static optimizable ptychography block names.
+
+    Attributes
+    ----------
+    ABERRATIONS : str
+        Probe aberration parameter block.
+    EXIT_WAVE : str
+        Complex exit-wave parameter block.
+    GEOMETRY : str
+        Geometric calibration parameter block.
+    POSITIONS : str
+        Scan-position correction parameter block.
+    PROBE_MODES : str
+        Probe-mode weight and phase parameter block.
+    """
+
+    ABERRATIONS = "aberrations"
+    EXIT_WAVE = "exit_wave"
+    GEOMETRY = "geometry"
+    POSITIONS = "positions"
+    PROBE_MODES = "probe_modes"
 
 
 class ExitWaveParams(eqx.Module):
@@ -352,9 +380,7 @@ def create_ptycho_params(
         position_offsets
     )
     mode_weights_arr: Float[Array, "num_modes"] = jnp.asarray(mode_weights)
-    mode_phases_arr: Float[Array, "num_modes h w"] = jnp.asarray(
-        mode_phases
-    )
+    mode_phases_arr: Float[Array, "num_modes h w"] = jnp.asarray(mode_phases)
 
     image_rank: int = 2
     vector_rank: int = 1
@@ -517,6 +543,7 @@ __all__: list[str] = [
     "GeometryParams",
     "LMState",
     "LanczosState",
+    "OptimizableBlock",
     "PositionParams",
     "ProbeModeParams",
     "PtychoParams",

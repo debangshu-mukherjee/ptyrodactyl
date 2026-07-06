@@ -9,8 +9,10 @@ support automatic differentiation.
 
 Routine Listings
 ----------------
-:func:`interaction_parameter`
-    Interaction parameter sigma in 1/(V·Angstrom).
+:func:`helmholtz_coupling`
+    Helmholtz potential coupling sigma_H in 1/(V·Angstrom^2).
+:func:`phase_interaction_parameter`
+    Phase interaction parameter sigma in rad/(V·Angstrom).
 :func:`relativistic_mass`
     Relativistic electron mass in kg.
 :func:`relativistic_wavelength_ang`
@@ -38,9 +40,6 @@ from ptyrodactyl.types import (
 )
 from ptyrodactyl.types import (
     H_PLANCK as _H_PLANCK,
-)
-from ptyrodactyl.types import (
-    HBAR as _HBAR,
 )
 from ptyrodactyl.types import (
     M_E as _M_E,
@@ -93,8 +92,8 @@ def relativistic_wavelength_ang(
     --------
     :func:`relativistic_mass` :
         Relativistic electron mass at the same voltage.
-    :func:`interaction_parameter` :
-        Interaction parameter derived from the same voltage.
+    :func:`phase_interaction_parameter` :
+        Phase interaction parameter derived from the same voltage.
 
     Notes
     -----
@@ -115,23 +114,30 @@ def relativistic_wavelength_ang(
 
 @jaxtyped(typechecker=beartype)
 @jax.jit
-def interaction_parameter(
+def phase_interaction_parameter(
     voltage_kv: scalar_num,
 ) -> Float[Array, " "]:
-    r"""Interaction parameter sigma in 1/(V·Angstrom).
+    r"""Phase interaction parameter sigma in rad/(V·Angstrom).
 
     Extended Summary
     ----------------
-    The interaction parameter relates the electrostatic
-    potential to the phase shift of the electron wave:
+    The phase interaction parameter relates the projected
+    electrostatic potential (in V·Angstrom) to the phase shift of
+    the electron wave, :math:`\Delta\phi = \sigma \int V\,dz`:
 
     .. math::
 
-        \sigma = \frac{2\pi\,m\,e\,\lambda}{\hbar^2}
+        \sigma = \frac{2\pi\,m\,e\,\lambda}{h^2}
 
     where :math:`m` is the relativistic electron mass and
     :math:`\lambda` is the relativistic wavelength, both
-    evaluated at the given accelerating voltage.
+    evaluated at the given accelerating voltage. Note the Planck
+    constant :math:`h` (not :math:`\hbar`): with :math:`\hbar` the
+    result is inflated by :math:`(2\pi)^2 \approx 39.48`.
+
+    Reference values: :math:`\sigma(100\,\mathrm{kV}) =
+    0.92440\times 10^{-3}`, :math:`\sigma(300\,\mathrm{kV}) =
+    0.65262\times 10^{-3}` rad/(V·Angstrom).
 
     Implementation Logic
     --------------------
@@ -141,7 +147,7 @@ def interaction_parameter(
        Call :func:`relativistic_wavelength_ang` for
        :math:`\lambda` in Angstroms, convert to metres.
     3. **Evaluate sigma** --
-       Apply the formula and convert to 1/(V·Angstrom).
+       Apply the formula and convert to rad/(V·Angstrom).
 
     Parameters
     ----------
@@ -151,10 +157,13 @@ def interaction_parameter(
     Returns
     -------
     sigma : Float[Array, " "]
-        Interaction parameter in 1/(V·Angstrom).
+        Phase interaction parameter in rad/(V·Angstrom).
 
     See Also
     --------
+    :func:`helmholtz_coupling` :
+        Volumetric coupling; equals :math:`2 k_0 \sigma` with
+        :math:`k_0 = 2\pi/\lambda`.
     :func:`relativistic_wavelength_ang` :
         Wavelength used in computation.
     :func:`relativistic_mass` :
@@ -164,15 +173,88 @@ def interaction_parameter(
     lam_m: Float[Array, " "] = relativistic_wavelength_ang(
         voltage_kv
     ) * jnp.float64(1e-10)
-    hbar: Float[Array, " "] = jnp.float64(_HBAR)
+    h: Float[Array, " "] = jnp.float64(_H_PLANCK)
     e: Float[Array, " "] = jnp.float64(_E_CHARGE)
 
     sigma_si: Float[Array, " "] = (
-        2.0 * jnp.pi * m_rel * e * lam_m / jnp.square(hbar)
+        2.0 * jnp.pi * m_rel * e * lam_m / jnp.square(h)
     )
-    # Convert from 1/(V·m) to 1/(V·Å): multiply by 1e-10
+    # Convert from rad/(V·m) to rad/(V·Å): multiply by 1e-10
     sigma: Float[Array, " "] = sigma_si * jnp.float64(1e-10)
     return sigma
+
+
+@jaxtyped(typechecker=beartype)
+@jax.jit
+def helmholtz_coupling(
+    voltage_kv: scalar_num,
+) -> Float[Array, " "]:
+    r"""Helmholtz potential coupling sigma_H in 1/(V·Angstrom^2).
+
+    Extended Summary
+    ----------------
+    The coupling that converts an electrostatic potential
+    :math:`\phi` (in volts) into the scattering potential of the
+    fixed-energy Helmholtz equation,
+    :math:`\left(\nabla^2 + k_0^2 + \sigma_H\,\phi\right)\psi = 0`:
+
+    .. math::
+
+        \sigma_H = \frac{2\,m\,e}{\hbar^2}
+                 = \frac{8\pi^2\,m_0 e}{h^2}
+                   \left(1 + \frac{eU_0}{m_0 c^2}\right)
+
+    where :math:`m` is the relativistic electron mass. The
+    implementation uses the exact (2019 SI) Planck constant
+    :math:`h` rather than the rounded stored :math:`\hbar`, so the
+    identity :math:`\sigma_H = 2 k_0 \sigma` holds to machine
+    precision against :func:`phase_interaction_parameter`. The
+    wavelength cancels, so :math:`\sigma_H` is linear in the
+    accelerating voltage :math:`U_0`. It relates to the phase
+    interaction parameter by :math:`\sigma_H = 2 k_0 \sigma` with
+    :math:`k_0 = 2\pi/\lambda`. This is the coupling consumed by
+    the convergent Born series forward model.
+
+    Reference values: :math:`\sigma_H(100\,\mathrm{kV}) = 0.31383`,
+    :math:`\sigma_H(300\,\mathrm{kV}) = 0.41656`
+    1/(V·Angstrom^2).
+
+    Implementation Logic
+    --------------------
+    1. **Compute relativistic mass** --
+       Call :func:`relativistic_mass` for :math:`m`.
+    2. **Evaluate sigma_H** --
+       Apply :math:`8\pi^2 m e/h^2` in SI (1/(V·m^2)) and convert
+       to 1/(V·Angstrom^2) with the factor :math:`10^{-20}`.
+
+    Parameters
+    ----------
+    voltage_kv : scalar_num
+        Accelerating voltage in kiloelectronvolts.
+
+    Returns
+    -------
+    sigma_h : Float[Array, " "]
+        Helmholtz potential coupling in 1/(V·Angstrom^2).
+
+    See Also
+    --------
+    :func:`phase_interaction_parameter` :
+        Projected-potential phase coupling; equals
+        :math:`\sigma_H/(2 k_0)`.
+    :func:`relativistic_mass` :
+        Relativistic mass used in computation.
+    """
+    m_rel: Float[Array, " "] = relativistic_mass(voltage_kv)
+    h: Float[Array, " "] = jnp.float64(_H_PLANCK)
+    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
+
+    sigma_h_si: Float[Array, " "] = (
+        8.0 * jnp.square(jnp.pi) * m_rel * e / jnp.square(h)
+    )
+    # Convert from 1/(V·m^2) to 1/(V·Å^2): multiply by 1e-20
+    sigma_h: Float[Array, " "] = sigma_h_si * jnp.float64(1e-20)
+    return sigma_h
 
 
 @jaxtyped(typechecker=beartype)
@@ -216,7 +298,8 @@ def relativistic_mass(
 
 
 __all__: list[str] = [
-    "interaction_parameter",
+    "helmholtz_coupling",
+    "phase_interaction_parameter",
     "relativistic_mass",
     "relativistic_wavelength_ang",
 ]

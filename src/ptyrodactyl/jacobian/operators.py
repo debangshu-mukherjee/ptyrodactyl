@@ -9,22 +9,23 @@ PyTree parameter structures and are fully JIT-compatible.
 
 Routine Listings
 ----------------
+:func:`hvp_gauss_newton`
+    Gauss-Newton Hessian-vector product for least-squares.
+:func:`jtj_operator`
+    Normal equations operator J^T J @ v.
 :func:`jvp_operator`
     Jacobian-vector product J @ v.
 :func:`vjp_operator`
     Vector-Jacobian product J^T @ u.
-:func:`jtj_operator`
-    Normal equations operator J^T J @ v.
-:func:`hvp_gauss_newton`
-    Gauss-Newton Hessian-vector product for least-squares.
 """
 
-from collections.abc import Callable
-
 import jax
-from jaxtyping import Array, Float, PyTree
+from beartype import beartype
+from beartype.typing import Callable
+from jaxtyping import Array, Float, PyTree, jaxtyped
 
 
+@jaxtyped(typechecker=beartype)
 def jvp_operator(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -71,6 +72,7 @@ def jvp_operator(
     return jvp_fn
 
 
+@jaxtyped(typechecker=beartype)
 def vjp_operator(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -115,11 +117,13 @@ def vjp_operator(
     ) -> PyTree:
         """Compute J^T @ cotangent_vector via reverse-mode AD."""
         result_tuple: tuple[PyTree, ...] = vjp_fn_raw(cotangent_vector)
-        return result_tuple[0]
+        result: PyTree = result_tuple[0]
+        return result
 
     return vjp_fn
 
 
+@jaxtyped(typechecker=beartype)
 def jtj_operator(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -164,11 +168,13 @@ def jtj_operator(
         """Compute J^T J @ vector via JVP then VJP."""
         _, forward_tangent = jax.jvp(forward_fn, (params,), (vector,))
         backward_result: tuple[PyTree, ...] = vjp_fn_raw(forward_tangent)
-        return backward_result[0]
+        result: PyTree = backward_result[0]
+        return result
 
     return jtj_fn
 
 
+@jaxtyped(typechecker=beartype)
 def hvp_gauss_newton(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -214,7 +220,8 @@ def hvp_gauss_newton(
     --------
     :func:`jtj_operator` : The underlying operator.
     """
-    return jtj_operator(forward_fn, params)
+    hvp_fn: Callable[[PyTree], PyTree] = jtj_operator(forward_fn, params)
+    return hvp_fn
 
 
 __all__: list[str] = [

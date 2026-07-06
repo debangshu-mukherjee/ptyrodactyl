@@ -37,25 +37,28 @@ Routine Listings
     Extract individual blocks from combined params.
 """
 
-from collections.abc import Callable
-
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+from beartype import beartype
+from beartype.typing import Callable
 from jax import lax
-from jaxtyping import Array, Complex, Float, PyTree
+from jaxtyping import Array, Complex, Float, PyTree, jaxtyped
 
+from ptyrodactyl.jacobian._treemath import _tree_zeros_like
 from ptyrodactyl.jacobian.solvers import conjugate_gradient
 from ptyrodactyl.types import (
     AberrationParams,
     ExitWaveParams,
     GeometryParams,
+    OptimizableBlock,
     PositionParams,
     ProbeModeParams,
     PtychoParams,
 )
 
 
+@jaxtyped(typechecker=beartype)
 def split_params(
     params: PtychoParams,
 ) -> tuple[
@@ -89,38 +92,25 @@ def split_params(
     --------
     :func:`ptyrodactyl.types.create_ptycho_params` : Inverse operation.
     """
+    exit_wave: ExitWaveParams = params.exit_wave
+    aberrations: AberrationParams = params.aberrations
+    geometry: GeometryParams = params.geometry
+    positions: PositionParams = params.positions
+    probe_modes: ProbeModeParams = params.probe_modes
     return (
-        params.exit_wave,
-        params.aberrations,
-        params.geometry,
-        params.positions,
-        params.probe_modes,
+        exit_wave,
+        aberrations,
+        geometry,
+        positions,
+        probe_modes,
     )
 
 
-def _tree_zeros_like(
-    tree: PyTree,
-) -> PyTree:
-    """Create a PyTree of zeros matching the input structure.
-
-    Parameters
-    ----------
-    tree : PyTree
-        Template PyTree whose leaf shapes and dtypes are
-        copied.
-
-    Returns
-    -------
-    zeros : PyTree
-        PyTree of zeros with the same structure as *tree*.
-    """
-    return jax.tree_util.tree_map(jnp.zeros_like, tree)
-
-
+@jaxtyped(typechecker=beartype)
 def block_jacobian_operator(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params: PtychoParams,
-    block_name: str,
+    block_name: str | OptimizableBlock,
 ) -> Callable[[PyTree], Float[Array, "num_pos det_h det_w"]]:
     r"""Construct a JVP operator for a single parameter block.
 
@@ -146,7 +136,7 @@ def block_jacobian_operator(
         Forward model mapping params to 4D-STEM datacube.
     params : PtychoParams
         Current parameter values.
-    block_name : str
+    block_name : str | OptimizableBlock
         Name of the block: ``'exit_wave'``,
         ``'aberrations'``, ``'geometry'``, ``'positions'``,
         or ``'probe_modes'``.
@@ -161,6 +151,7 @@ def block_jacobian_operator(
     --------
     :func:`block_vjp_operator` : Adjoint operator.
     """
+    block_name = OptimizableBlock(block_name)
 
     def jvp_fn(
         block_tangent: PyTree,
@@ -168,31 +159,31 @@ def block_jacobian_operator(
         """Compute J_block @ block_tangent."""
         full_tangent: PtychoParams = _tree_zeros_like(params)
 
-        if block_name == "exit_wave":
+        if block_name is OptimizableBlock.EXIT_WAVE:
             full_tangent = eqx.tree_at(
                 lambda p: p.exit_wave,
                 full_tangent,
                 block_tangent,
             )
-        elif block_name == "aberrations":
+        elif block_name is OptimizableBlock.ABERRATIONS:
             full_tangent = eqx.tree_at(
                 lambda p: p.aberrations,
                 full_tangent,
                 block_tangent,
             )
-        elif block_name == "geometry":
+        elif block_name is OptimizableBlock.GEOMETRY:
             full_tangent = eqx.tree_at(
                 lambda p: p.geometry,
                 full_tangent,
                 block_tangent,
             )
-        elif block_name == "positions":
+        elif block_name is OptimizableBlock.POSITIONS:
             full_tangent = eqx.tree_at(
                 lambda p: p.positions,
                 full_tangent,
                 block_tangent,
             )
-        elif block_name == "probe_modes":
+        elif block_name is OptimizableBlock.PROBE_MODES:
             full_tangent = eqx.tree_at(
                 lambda p: p.probe_modes,
                 full_tangent,
@@ -205,10 +196,11 @@ def block_jacobian_operator(
     return jvp_fn
 
 
+@jaxtyped(typechecker=beartype)
 def block_vjp_operator(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params: PtychoParams,
-    block_name: str,
+    block_name: str | OptimizableBlock,
 ) -> Callable[[Float[Array, "num_pos det_h det_w"]], PyTree]:
     r"""Construct a VJP operator for a single parameter block.
 
@@ -230,7 +222,7 @@ def block_vjp_operator(
         Forward model mapping params to 4D-STEM datacube.
     params : PtychoParams
         Current parameter values.
-    block_name : str
+    block_name : str | OptimizableBlock
         Name of the block: ``'exit_wave'``,
         ``'aberrations'``, ``'geometry'``, ``'positions'``,
         or ``'probe_modes'``.
@@ -244,6 +236,7 @@ def block_vjp_operator(
     --------
     :func:`block_jacobian_operator` : Forward operator.
     """
+    block_name = OptimizableBlock(block_name)
     _, full_vjp_fn = jax.vjp(forward_fn, params)
 
     def vjp_fn(
@@ -253,27 +246,30 @@ def block_vjp_operator(
         full_grad: tuple[PtychoParams] = full_vjp_fn(cotangent)
         params_grad: PtychoParams = full_grad[0]
 
-        if block_name == "exit_wave":
-            return params_grad.exit_wave
-        if block_name == "aberrations":
-            return params_grad.aberrations
-        if block_name == "geometry":
-            return params_grad.geometry
-        if block_name == "positions":
-            return params_grad.positions
-        if block_name == "probe_modes":
-            return params_grad.probe_modes
+        if block_name is OptimizableBlock.EXIT_WAVE:
+            block_gradient: PyTree = params_grad.exit_wave
+        elif block_name is OptimizableBlock.ABERRATIONS:
+            block_gradient = params_grad.aberrations
+        elif block_name is OptimizableBlock.GEOMETRY:
+            block_gradient = params_grad.geometry
+        elif block_name is OptimizableBlock.POSITIONS:
+            block_gradient = params_grad.positions
+        elif block_name is OptimizableBlock.PROBE_MODES:
+            block_gradient = params_grad.probe_modes
+        else:
+            msg = f"Unknown block_name: {block_name}"
+            raise ValueError(msg)
 
-        msg = f"Unknown block_name: {block_name}"
-        raise ValueError(msg)
+        return block_gradient
 
     return vjp_fn
 
 
+@jaxtyped(typechecker=beartype)
 def block_jtj_operator(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params: PtychoParams,
-    block_name: str,
+    block_name: str | OptimizableBlock,
 ) -> Callable[[PyTree], PyTree]:
     r"""Construct a J^T J operator for a single parameter block.
 
@@ -295,7 +291,7 @@ def block_jtj_operator(
         Forward model mapping params to 4D-STEM datacube.
     params : PtychoParams
         Current parameter values.
-    block_name : str
+    block_name : str | OptimizableBlock
         Name of the block.
 
     Returns
@@ -308,6 +304,7 @@ def block_jtj_operator(
     :func:`block_jacobian_operator` : Block JVP.
     :func:`block_vjp_operator` : Block VJP.
     """
+    block_name = OptimizableBlock(block_name)
     jvp_fn: Callable = block_jacobian_operator(forward_fn, params, block_name)
     vjp_fn: Callable = block_vjp_operator(forward_fn, params, block_name)
 
@@ -322,11 +319,12 @@ def block_jtj_operator(
     return jtj_fn
 
 
+@jaxtyped(typechecker=beartype)
 def cross_block_jtj_operator(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params: PtychoParams,
-    block_name_row: str,
-    block_name_col: str,
+    block_name_row: str | OptimizableBlock,
+    block_name_col: str | OptimizableBlock,
 ) -> Callable[[PyTree], PyTree]:
     r"""Construct a cross-block J^T J operator.
 
@@ -349,9 +347,9 @@ def cross_block_jtj_operator(
         Forward model.
     params : PtychoParams
         Current parameter values.
-    block_name_row : str
+    block_name_row : str | OptimizableBlock
         Row block name (for VJP).
-    block_name_col : str
+    block_name_col : str | OptimizableBlock
         Column block name (for JVP).
 
     Returns
@@ -363,6 +361,8 @@ def cross_block_jtj_operator(
     --------
     :func:`block_jtj_operator` : Diagonal-block variant.
     """
+    block_name_row = OptimizableBlock(block_name_row)
+    block_name_col = OptimizableBlock(block_name_col)
     jvp_fn: Callable = block_jacobian_operator(
         forward_fn, params, block_name_col
     )
@@ -379,11 +379,12 @@ def cross_block_jtj_operator(
     return cross_jtj_fn
 
 
+@jaxtyped(typechecker=beartype)
 def compute_block_gradient(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params: PtychoParams,
     residual: Float[Array, "num_pos det_h det_w"],
-    block_name: str,
+    block_name: str | OptimizableBlock,
 ) -> PyTree:
     r"""Compute the gradient J^T r for a single parameter block.
 
@@ -395,7 +396,7 @@ def compute_block_gradient(
         Current parameter values.
     residual : Float[Array, "num_pos det_h det_w"]
         Current residual (forward - data).
-    block_name : str
+    block_name : str | OptimizableBlock
         Name of the block.
 
     Returns
@@ -407,16 +408,18 @@ def compute_block_gradient(
     --------
     :func:`block_vjp_operator` : Underlying VJP.
     """
+    block_name = OptimizableBlock(block_name)
     vjp_fn: Callable = block_vjp_operator(forward_fn, params, block_name)
     gradient: PyTree = vjp_fn(residual)
     return gradient
 
 
+@jaxtyped(typechecker=beartype)
 def block_gauss_newton_step(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params: PtychoParams,
     data: Float[Array, "num_pos det_h det_w"],
-    block_names: list[str],
+    block_names: list[str | OptimizableBlock],
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
 ) -> PtychoParams:
@@ -449,7 +452,7 @@ def block_gauss_newton_step(
         Current parameter values.
     data : Float[Array, "num_pos det_h det_w"]
         Observed 4D-STEM data.
-    block_names : List[str]
+    block_names : list[str | OptimizableBlock]
         List of blocks to update.
     cg_max_iterations : int
         Maximum CG iterations.  Default 50.
@@ -465,6 +468,7 @@ def block_gauss_newton_step(
     --------
     :func:`alternating_block_solve` : Full iterative solver.
     """
+    block_names = [OptimizableBlock(block_name) for block_name in block_names]
     prediction: Float[Array, "num_pos det_h det_w"] = forward_fn(params)
     residual: Float[Array, "num_pos det_h det_w"] = prediction - data
 
@@ -476,7 +480,7 @@ def block_gauss_newton_step(
         )
         jtj_fn: Callable = block_jtj_operator(forward_fn, params, block_name)
 
-        if block_name == "exit_wave":
+        if block_name is OptimizableBlock.EXIT_WAVE:
             x0: PyTree = _tree_zeros_like(params.exit_wave)
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
@@ -488,7 +492,7 @@ def block_gauss_newton_step(
                 new_wave,
             )
 
-        elif block_name == "aberrations":
+        elif block_name is OptimizableBlock.ABERRATIONS:
             x0 = _tree_zeros_like(params.aberrations)
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
@@ -512,7 +516,7 @@ def block_gauss_newton_step(
                 new_aberrations,
             )
 
-        elif block_name == "geometry":
+        elif block_name is OptimizableBlock.GEOMETRY:
             x0 = _tree_zeros_like(params.geometry)
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
@@ -536,7 +540,7 @@ def block_gauss_newton_step(
                 new_geometry,
             )
 
-        elif block_name == "positions":
+        elif block_name is OptimizableBlock.POSITIONS:
             x0 = _tree_zeros_like(params.positions)
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
@@ -550,7 +554,7 @@ def block_gauss_newton_step(
                 new_position_offsets,
             )
 
-        elif block_name == "probe_modes":
+        elif block_name is OptimizableBlock.PROBE_MODES:
             x0 = _tree_zeros_like(params.probe_modes)
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
@@ -574,11 +578,12 @@ def block_gauss_newton_step(
     return new_params
 
 
+@jaxtyped(typechecker=beartype)
 def alternating_block_solve(
     forward_fn: Callable[[PtychoParams], Float[Array, "num_pos det_h det_w"]],
     params_init: PtychoParams,
     data: Float[Array, "num_pos det_h det_w"],
-    block_schedule: list[list[str]],
+    block_schedule: list[list[str | OptimizableBlock]],
     num_outer_iterations: int = 10,
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
@@ -614,7 +619,7 @@ def alternating_block_solve(
         Initial parameters.
     data : Float[Array, "num_pos det_h det_w"]
         Observed 4D-STEM data.
-    block_schedule : List[List[str]]
+    block_schedule : list[list[str | OptimizableBlock]]
         Schedule of blocks to update each inner iteration.
         E.g. ``[['exit_wave'], ['positions', 'aberrations']]``
         alternates between the two groups.
@@ -637,6 +642,10 @@ def alternating_block_solve(
     --------
     :func:`block_gauss_newton_step` : Single-step primitive.
     """
+    block_schedule = [
+        [OptimizableBlock(block_name) for block_name in block_group]
+        for block_group in block_schedule
+    ]
 
     def compute_residual_norm(
         params: PtychoParams,
@@ -655,7 +664,7 @@ def alternating_block_solve(
 
         def inner_step(
             params_inner: PtychoParams,
-            block_group: list[str],
+            block_group: list[OptimizableBlock],
         ) -> PtychoParams:
             """Apply block GN step for one group."""
             return block_gauss_newton_step(
@@ -676,9 +685,13 @@ def alternating_block_solve(
         return (updated_params, iteration + 1), residual_norm
 
     initial_carry: tuple[PtychoParams, int] = (params_init, 0)
-    (final_params, _), residual_history = lax.scan(
+    scan_carry: tuple[PtychoParams, int]
+    residual_history: Float[Array, "num_outer"]
+    scan_carry, residual_history = lax.scan(
         outer_iteration, initial_carry, None, length=num_outer_iterations
     )
+    final_params: PtychoParams
+    final_params, _ = scan_carry
 
     return final_params, residual_history
 

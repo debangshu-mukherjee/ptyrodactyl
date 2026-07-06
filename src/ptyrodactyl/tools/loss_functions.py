@@ -23,14 +23,18 @@ function that can be used with various optimization algorithms.
 
 import jax
 import jax.numpy as jnp
+from beartype import beartype
 from beartype.typing import Any, Callable
-from jaxtyping import Array, Float, Num, PyTree
+from jaxtyping import Array, Float, Num, PyTree, jaxtyped
+
+from ptyrodactyl.types import LossType
 
 
+@jaxtyped(typechecker=beartype)
 def create_loss_function(
     forward_function: Callable[..., Num[Array, " ..."]],
     experimental_data: Num[Array, " ..."],
-    loss_type: str = "mae",
+    loss_type: str | LossType = LossType.MAE,
 ) -> Callable[..., Float[Array, ""]]:
     """Create a JIT-compiled loss function for ptychography.
 
@@ -58,10 +62,10 @@ def create_loss_function(
         The forward model function (e.g., a STEM simulation).
     experimental_data : Array
         The experimental data to compare against.
-    loss_type : str, optional
+    loss_type : str | LossType, optional
         Loss variant to use. One of ``"mae"`` (Mean Absolute
         Error), ``"mse"`` (Mean Squared Error), or ``"rmse"``
-        (Root Mean Squared Error). Default is ``"mae"``.
+        (Root Mean Squared Error). Default is ``LossType.MAE``.
 
     Returns
     -------
@@ -69,6 +73,11 @@ def create_loss_function(
         A JIT-compiled function that computes the scalar loss
         given model parameters and any additional arguments
         required by the forward function.
+
+    Raises
+    ------
+    ValueError
+        If ``loss_type`` is not a supported loss selection.
 
     See Also
     --------
@@ -89,7 +98,8 @@ def create_loss_function(
         loss : Float[Array, ""]
             Scalar MAE value.
         """
-        return jnp.mean(jnp.abs(diff))
+        loss = jnp.mean(jnp.abs(diff))
+        return loss  # noqa: RET504
 
     def mse_loss(diff: Num[Array, " ..."]) -> Float[Array, " "]:
         """Compute mean squared error from residuals.
@@ -104,7 +114,8 @@ def create_loss_function(
         loss : Float[Array, ""]
             Scalar MSE value.
         """
-        return jnp.mean(jnp.square(diff))
+        loss = jnp.mean(jnp.square(diff))
+        return loss  # noqa: RET504
 
     def rmse_loss(diff: Num[Array, " ..."]) -> Float[Array, " "]:
         """Compute root mean squared error from residuals.
@@ -119,11 +130,17 @@ def create_loss_function(
         loss : Float[Array, ""]
             Scalar RMSE value.
         """
-        return jnp.sqrt(jnp.mean(jnp.square(diff)))
+        loss = jnp.sqrt(jnp.mean(jnp.square(diff)))
+        return loss  # noqa: RET504
 
-    loss_functions = {"mae": mae_loss, "mse": mse_loss, "rmse": rmse_loss}
+    loss_mode: LossType = LossType(loss_type)
+    loss_functions = {
+        LossType.MAE: mae_loss,
+        LossType.MSE: mse_loss,
+        LossType.RMSE: rmse_loss,
+    }
 
-    selected_loss_fn = loss_functions[loss_type]
+    selected_loss_fn = loss_functions[loss_mode]
 
     @jax.jit
     def loss_fn(params: PyTree, *args: Any) -> Float[Array, ""]:
@@ -144,7 +161,8 @@ def create_loss_function(
         """
         model_output = forward_function(params, *args)
         diff = model_output - experimental_data
-        return selected_loss_fn(diff)
+        loss = selected_loss_fn(diff)
+        return loss  # noqa: RET504
 
     return loss_fn
 

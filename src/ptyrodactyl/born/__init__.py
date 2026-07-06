@@ -19,7 +19,6 @@ Routine Listings
     Background wavenumber for the Helmholtz equation.
 """
 
-
 from .green import (
     convergence_parameter,
     green_function_fourier,

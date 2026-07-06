@@ -22,13 +22,14 @@ system and can be used with various JAX transformations
 including ``jit``, ``grad``, and ``vmap``.
 """
 
-from collections.abc import Sequence
-
 import jax
+from beartype import beartype
+from beartype.typing import Sequence
 from jax.sharding import NamedSharding, PartitionSpec
-from jaxtyping import Array, Num
+from jaxtyping import Array, Num, jaxtyped
 
 
+@jaxtyped(typechecker=beartype)
 def shard_array(
     input_array: Num[Array, " ..."],
     shard_axes: int | Sequence[int],
@@ -80,7 +81,8 @@ def shard_array(
         shard_axes = [shard_axes]
     num_devices: int = len(devices)
     mesh = jax.make_mesh(
-        (num_devices,), ("devices",),
+        (num_devices,),
+        ("devices",),
     )
     pspec = [None] * input_array.ndim
     for ax in shard_axes:
@@ -89,7 +91,8 @@ def shard_array(
     pspec = PartitionSpec(*pspec)
     sharding = NamedSharding(mesh, pspec)
     with mesh:
-        return jax.device_put(input_array, sharding)
+        sharded_array = jax.device_put(input_array, sharding)
+    return sharded_array  # noqa: RET504
 
 
 __all__: list[str] = [

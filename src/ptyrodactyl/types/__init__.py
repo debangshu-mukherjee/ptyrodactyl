@@ -50,6 +50,10 @@ Routine Listings
     State container for Lanczos tridiagonalisation.
 :class:`LaplaceUncertainty`
     Laplace-approximation uncertainty carrier.
+:class:`LossType`
+    Loss-function selection enum.
+:class:`OptimizableBlock`
+    Optimizable ptychography parameter-block enum.
 :class:`PositionParams`
     Per-scan-point position corrections.
 :class:`PosteriorSamples`
@@ -157,6 +161,7 @@ from .crystal_types import (
     create_crystal_structure,
 )
 from .custom_types import (
+    LossType,
     float_jax_image,
     float_np_image,
     int_jax_image,
@@ -194,6 +199,7 @@ from .jacobian_types import (
     GNState,
     LanczosState,
     LMState,
+    OptimizableBlock,
     PositionParams,
     ProbeModeParams,
     PtychoParams,
@@ -229,9 +235,11 @@ __all__: list[str] = [
     "LMState",
     "LanczosState",
     "LaplaceUncertainty",
+    "LossType",
     "M0C2_EV",
     "MOTT_BETHE_VOLT_ANGSTROM_SQ",
     "M_E",
+    "OptimizableBlock",
     "PositionParams",
     "PosteriorSamples",
     "PotentialSlices",

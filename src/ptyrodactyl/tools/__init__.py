@@ -44,6 +44,8 @@ Routine Listings
     Create step decay learning rate scheduler.
 :func:`create_warmup_cosine_scheduler`
     Create warmup cosine annealing learning rate scheduler.
+:func:`helmholtz_coupling`
+    Helmholtz potential coupling sigma_H in 1/(V·Angstrom^2).
 :func:`init_adagrad`
     Initialize Adagrad optimizer state.
 :func:`init_adam`
@@ -52,8 +54,8 @@ Routine Listings
     Initialize RMSprop optimizer state.
 :func:`init_scheduler_state`
     Initialize learning rate scheduler state.
-:func:`interaction_parameter`
-    Interaction parameter sigma in 1/(V·Angstrom).
+:func:`phase_interaction_parameter`
+    Phase interaction parameter sigma in rad/(V·Angstrom).
 :func:`relativistic_mass`
     Relativistic electron mass in kg.
 :func:`relativistic_wavelength_ang`
@@ -72,7 +74,8 @@ All exported functions are JAX-compatible and designed for use with
 """
 
 from .constants import (
-    interaction_parameter,
+    helmholtz_coupling,
+    phase_interaction_parameter,
     relativistic_mass,
     relativistic_wavelength_ang,
 )
@@ -111,11 +114,12 @@ __all__: list[str] = [
     "create_loss_function",
     "create_step_scheduler",
     "create_warmup_cosine_scheduler",
+    "helmholtz_coupling",
     "init_adagrad",
     "init_adam",
     "init_rmsprop",
     "init_scheduler_state",
-    "interaction_parameter",
+    "phase_interaction_parameter",
     "relativistic_mass",
     "relativistic_wavelength_ang",
     "rmsprop_update",

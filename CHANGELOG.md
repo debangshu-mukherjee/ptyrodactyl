@@ -1,5 +1,30 @@
 # Changelog
 
+## Interaction-Parameter Physics Fix
+
+`ptyrodactyl.tools.interaction_parameter` was removed. Its formula used
+`hbar**2` where `h**2` is required, so it returned values inflated by
+`(2*pi)**2 ~ 39.48` (0.0365 instead of 0.92440e-3 rad/(V·Angstrom) at
+100 kV). The function had no consumers inside the package — the
+multislice transmission function computes its own algebraically
+equivalent sigma inline — so no simulation output changes (the
+unification-gate reference remains bit-identical).
+
+Two corrected functions replace it, both exported from
+`ptyrodactyl.tools`:
+
+- `phase_interaction_parameter(voltage_kv)` — the projected-potential
+  phase coupling `sigma = 2*pi*m*e*lambda/h**2` in rad/(V·Angstrom);
+  0.92440e-3 at 100 kV.
+- `helmholtz_coupling(voltage_kv)` — the volumetric Helmholtz coupling
+  `sigma_H = 2*m*e/hbar**2 = 8*pi**2*m0*e/h**2 * (1 + e*U0/(m0*c**2))`
+  in 1/(V·Angstrom^2); 0.31383 at 100 kV. Satisfies
+  `sigma_H = 2*k0*sigma` to machine precision. This is the coupling the
+  convergent Born series forward model consumes.
+
+Both are regression-pinned against Kirkland Table 2.1 reference values
+in `tests/test_ptyrodactyl/test_tools/test_constants.py`.
+
 ## Plan-01 Phase P6
 
 ### Carrier, Alias, And Constant Imports

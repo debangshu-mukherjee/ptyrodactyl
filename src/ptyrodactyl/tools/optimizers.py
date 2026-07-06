@@ -22,38 +22,38 @@ Routine Listings
 ----------------
 :class:`LRSchedulerState`
     State maintained by learning rate schedulers.
-:class:`OptimizerState`
-    State maintained by optimizers (moments, step count).
 :class:`Optimizer`
     Optimizer configuration with init and update functions.
+:class:`OptimizerState`
+    State maintained by optimizers (moments, step count).
+:func:`adagrad_update`
+    Adagrad parameter update step.
+:func:`adam_update`
+    Adam parameter update step.
+:func:`complex_adagrad`
+    One step of complex-valued Adagrad.
+:func:`complex_adam`
+    One step of complex-valued Adam.
+:func:`complex_rmsprop`
+    One step of complex-valued RMSprop.
 :func:`create_cosine_scheduler`
     Cosine annealing learning rate scheduler.
 :func:`create_step_scheduler`
     Step decay learning rate scheduler.
 :func:`create_warmup_cosine_scheduler`
     Linear warmup followed by cosine decay scheduler.
-:func:`init_scheduler_state`
-    Initialise scheduler state with a given learning rate.
-:func:`wirtinger_grad`
-    Compute Wirtinger gradient of a complex-valued function.
-:func:`complex_adam`
-    One step of complex-valued Adam.
-:func:`complex_adagrad`
-    One step of complex-valued Adagrad.
-:func:`complex_rmsprop`
-    One step of complex-valued RMSprop.
-:func:`init_adam`
-    Initialise Adam optimizer state.
 :func:`init_adagrad`
     Initialise Adagrad optimizer state.
+:func:`init_adam`
+    Initialise Adam optimizer state.
 :func:`init_rmsprop`
     Initialise RMSprop optimizer state.
-:func:`adam_update`
-    Adam parameter update step.
-:func:`adagrad_update`
-    Adagrad parameter update step.
+:func:`init_scheduler_state`
+    Initialise scheduler state with a given learning rate.
 :func:`rmsprop_update`
     RMSprop parameter update step.
+:func:`wirtinger_grad`
+    Compute Wirtinger gradient of a complex-valued function.
 
 Notes
 -----
@@ -65,6 +65,7 @@ with JAX transformations including ``jit``, ``grad``, and
 
 import jax
 import jax.numpy as jnp
+from beartype import beartype
 from beartype.typing import (
     Any,
     Callable,
@@ -74,7 +75,7 @@ from beartype.typing import (
     Tuple,
     Union,
 )
-from jaxtyping import Array, Complex, Float, Int, Num
+from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 
 class LRSchedulerState(NamedTuple):
@@ -101,6 +102,7 @@ SchedulerFn = Callable[
 ]
 
 
+@jaxtyped(typechecker=beartype)
 def create_cosine_scheduler(
     total_steps: int,
     final_lr_factor: float = 0.01,
@@ -180,6 +182,7 @@ def create_cosine_scheduler(
     return scheduler_fn
 
 
+@jaxtyped(typechecker=beartype)
 def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     r"""Create a step decay learning rate scheduler.
 
@@ -245,6 +248,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     return scheduler_fn
 
 
+@jaxtyped(typechecker=beartype)
 def create_warmup_cosine_scheduler(
     total_steps: int,
     warmup_steps: int,
@@ -344,7 +348,10 @@ def create_warmup_cosine_scheduler(
     return scheduler_fn
 
 
-def init_scheduler_state(initial_lr: float) -> LRSchedulerState:
+@jaxtyped(typechecker=beartype)
+def init_scheduler_state(
+    initial_lr: float | Float[Array, " "],
+) -> LRSchedulerState:
     """Initialise scheduler state with a given learning rate.
 
     Parameters
@@ -358,9 +365,10 @@ def init_scheduler_state(initial_lr: float) -> LRSchedulerState:
         Scheduler state with ``step=0`` and
         ``learning_rate=initial_lr``.
     """
-    return LRSchedulerState(
+    state = LRSchedulerState(
         step=0, learning_rate=initial_lr, initial_lr=initial_lr
     )
+    return state  # noqa: RET504
 
 
 class OptimizerState(NamedTuple):
@@ -397,6 +405,7 @@ class Optimizer(NamedTuple):
     update: Callable
 
 
+@jaxtyped(typechecker=beartype)
 def wirtinger_grad(
     func2diff: Callable[..., Float[Array, " ..."]],
     argnums: Optional[Union[int, Sequence[int]]] = 0,
@@ -472,7 +481,7 @@ Tuple[Complex[Array, " ..."], ...]]
             Wirtinger gradient(s) for the selected arguments.
         """
 
-        def split_complex(args: tuple) -> tuple:
+        def split_complex(args: tuple[Any, ...]) -> tuple[Any, ...]:
             """Split complex args into real and imaginary parts.
 
             Parameters
@@ -485,14 +494,17 @@ Tuple[Complex[Array, " ..."], ...]]
             split : tuple
                 Real parts followed by imaginary parts.
             """
-            return tuple(
+            split = tuple(
                 jnp.real(arg) if jnp.iscomplexobj(arg) else arg for arg in args
             ) + tuple(
                 jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg)
                 for arg in args
             )
+            return split  # noqa: RET504
 
-        def combine_complex(r: tuple, i: tuple) -> tuple:
+        def combine_complex(
+            r: tuple[Any, ...], i: tuple[Any, ...]
+        ) -> tuple[Any, ...]:
             """Recombine real and imaginary tuples.
 
             Parameters
@@ -507,10 +519,11 @@ Tuple[Complex[Array, " ..."], ...]]
             combined : tuple
                 Complex (or real) arguments.
             """
-            return tuple(
+            combined = tuple(
                 rr + 1j * ii if jnp.iscomplexobj(arg) else rr
                 for rr, ii, arg in zip(r, i, args, strict=False)
             )
+            return combined  # noqa: RET504
 
         split_args = split_complex(args)
         n = len(args)
@@ -528,9 +541,10 @@ Tuple[Complex[Array, " ..."], ...]]
             real_val : Float[Array, " ..."]
                 Real part of ``func2diff`` output.
             """
-            return jnp.real(
+            real_val = jnp.real(
                 func2diff(*combine_complex(split_args[:n], split_args[n:]))
             )
+            return real_val  # noqa: RET504
 
         def f_imag(*split_args: Num[Array, " ..."]) -> Float[Array, " ..."]:
             """Return the imaginary part of the function output.
@@ -545,33 +559,39 @@ Tuple[Complex[Array, " ..."], ...]]
             imag_val : Float[Array, " ..."]
                 Imaginary part of ``func2diff`` output.
             """
-            return jnp.imag(
+            imag_val = jnp.imag(
                 func2diff(*combine_complex(split_args[:n], split_args[n:]))
             )
+            return imag_val  # noqa: RET504
 
         gr = jax.grad(f_real, argnums=argnums)(*split_args)
         gi = jax.grad(f_imag, argnums=argnums)(*split_args)
 
         if isinstance(argnums, int):
-            return 0.5 * (gr - 1j * gi)
-        return tuple(
+            wirt_grad = 0.5 * (gr - 1j * gi)
+            return wirt_grad  # noqa: RET504
+        wirt_grad = tuple(
             0.5 * (grr - 1j * gii) for grr, gii in zip(gr, gi, strict=False)
         )
+        return wirt_grad  # noqa: RET504
 
     return grad_f
 
 
+@jaxtyped(typechecker=beartype)
 def complex_adam(
     params: Complex[Array, " ..."],
     grads: Complex[Array, " ..."],
-    state: Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int | Array],
+    state: Tuple[
+        Num[Array, " ..."], Num[Array, " ..."], int | Int[Array, " "]
+    ],
     learning_rate: float = 0.001,
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
 ) -> Tuple[
     Complex[Array, " ..."],
-    Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int | Array],
+    Tuple[Num[Array, " ..."], Num[Array, " ..."], int | Int[Array, " "]],
 ]:
     r"""Perform one step of complex-valued Adam.
 
@@ -604,7 +624,7 @@ def complex_adam(
         Current complex-valued parameters.
     grads : Complex[Array, " ..."]
         Wirtinger gradients.
-    state : Tuple[Complex[Array, " ..."], Complex[Array, " ..."], int]
+    state : Tuple[Num[Array, " ..."], Num[Array, " ..."], int]
         Optimizer state ``(m, v, t)``.
     learning_rate : float, optional
         Step size. Default is ``0.001``.
@@ -622,8 +642,7 @@ def complex_adam(
     -------
     new_params : Complex[Array, " ..."]
         Updated complex-valued parameters.
-    new_state : Tuple[Complex[Array, " ..."], \
-Complex[Array, " ..."], int]
+    new_state : Tuple[Num[Array, " ..."], Num[Array, " ..."], int]
         Updated optimizer state ``(m, v, t)``.
 
     See Also
@@ -641,16 +660,18 @@ Complex[Array, " ..."], int]
     v_hat = v / (1 - beta2**t)
     update = learning_rate * m_hat / (jnp.sqrt(v_hat) + eps)
     new_params = params - update
-    return new_params, (m, v, t)
+    new_state = (m, v, t)
+    return new_params, new_state
 
 
+@jaxtyped(typechecker=beartype)
 def complex_adagrad(
     params: Complex[Array, " ..."],
     grads: Complex[Array, " ..."],
-    state: Complex[Array, " ..."],
+    state: Num[Array, " ..."],
     learning_rate: float = 0.01,
     eps: float = 1e-8,
-) -> Tuple[Complex[Array, " ..."], Complex[Array, " ..."]]:
+) -> Tuple[Complex[Array, " ..."], Num[Array, " ..."]]:
     r"""Perform one step of complex-valued Adagrad.
 
     Extended Summary
@@ -680,7 +701,7 @@ def complex_adagrad(
         Current complex-valued parameters.
     grads : Complex[Array, " ..."]
         Wirtinger gradients.
-    state : Complex[Array, " ..."]
+    state : Num[Array, " ..."]
         Accumulated squared gradients.
     learning_rate : float, optional
         Step size. Default is ``0.01``.
@@ -692,7 +713,7 @@ def complex_adagrad(
     -------
     new_params : Complex[Array, " ..."]
         Updated complex-valued parameters.
-    new_state : Complex[Array, " ..."]
+    new_state : Num[Array, " ..."]
         Updated accumulated squared gradients.
 
     See Also
@@ -713,17 +734,19 @@ def complex_adagrad(
     # Update parameters
     new_params = params - adaptive_lr * grads
 
-    return new_params, new_accumulated_grads
+    new_state = new_accumulated_grads
+    return new_params, new_state
 
 
+@jaxtyped(typechecker=beartype)
 def complex_rmsprop(
     params: Complex[Array, " ..."],
     grads: Complex[Array, " ..."],
-    state: Complex[Array, " ..."],
+    state: Num[Array, " ..."],
     learning_rate: float = 0.001,
     decay_rate: float = 0.9,
     eps: float = 1e-8,
-) -> Tuple[Complex[Array, " ..."], Complex[Array, " ..."]]:
+) -> Tuple[Complex[Array, " ..."], Num[Array, " ..."]]:
     r"""Perform one step of complex-valued RMSprop.
 
     Extended Summary
@@ -753,7 +776,7 @@ def complex_rmsprop(
         Current complex-valued parameters.
     grads : Complex[Array, " ..."]
         Wirtinger gradients.
-    state : Complex[Array, " ..."]
+    state : Num[Array, " ..."]
         Moving average of squared gradients.
     learning_rate : float, optional
         Step size. Default is ``0.001``.
@@ -768,7 +791,7 @@ def complex_rmsprop(
     -------
     new_params : Complex[Array, " ..."]
         Updated complex-valued parameters.
-    new_state : Complex[Array, " ..."]
+    new_state : Num[Array, " ..."]
         Updated moving average of squared gradients.
 
     See Also
@@ -791,9 +814,19 @@ def complex_rmsprop(
     # Update parameters
     new_params = params - adaptive_lr * grads
 
-    return new_params, new_moving_avg
+    new_state = new_moving_avg
+    return new_params, new_state
 
 
+def _init_optimizer_state(shape: tuple[int, ...]) -> OptimizerState:
+    """Initialise optimizer state with zero moments and step count."""
+    state = OptimizerState(
+        m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
+    )
+    return state  # noqa: RET504
+
+
+@jaxtyped(typechecker=beartype)
 def init_adam(shape: tuple) -> OptimizerState:
     """Initialise Adam optimizer state.
 
@@ -808,11 +841,11 @@ def init_adam(shape: tuple) -> OptimizerState:
         State with zero first and second moments and
         ``step=0``.
     """
-    return OptimizerState(
-        m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
-    )
+    state = _init_optimizer_state(shape)
+    return state  # noqa: RET504
 
 
+@jaxtyped(typechecker=beartype)
 def init_adagrad(shape: tuple) -> OptimizerState:
     """Initialise Adagrad optimizer state.
 
@@ -826,11 +859,11 @@ def init_adagrad(shape: tuple) -> OptimizerState:
     state : OptimizerState
         State with zero accumulated gradients and ``step=0``.
     """
-    return OptimizerState(
-        m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
-    )
+    state = _init_optimizer_state(shape)
+    return state  # noqa: RET504
 
 
+@jaxtyped(typechecker=beartype)
 def init_rmsprop(shape: tuple) -> OptimizerState:
     """Initialise RMSprop optimizer state.
 
@@ -844,11 +877,11 @@ def init_rmsprop(shape: tuple) -> OptimizerState:
     state : OptimizerState
         State with zero moving average and ``step=0``.
     """
-    return OptimizerState(
-        m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
-    )
+    state = _init_optimizer_state(shape)
+    return state  # noqa: RET504
 
 
+@jaxtyped(typechecker=beartype)
 def adam_update(
     params: Complex[Array, " ..."],
     grads: Complex[Array, " ..."],
@@ -900,9 +933,11 @@ def adam_update(
     new_params, (new_m, new_v, new_step) = complex_adam(
         params, grads, (m, v, step), learning_rate, beta1, beta2, eps
     )
-    return new_params, OptimizerState(m=new_m, v=new_v, step=new_step)
+    new_state = OptimizerState(m=new_m, v=new_v, step=new_step)
+    return new_params, new_state
 
 
+@jaxtyped(typechecker=beartype)
 def adagrad_update(
     params: Complex[Array, " ..."],
     grads: Complex[Array, " ..."],
@@ -947,9 +982,11 @@ def adagrad_update(
     """
     m, v, step = state
     new_params, new_v = complex_adagrad(params, grads, v, learning_rate, eps)
-    return new_params, OptimizerState(m=m, v=new_v, step=step + 1)
+    new_state = OptimizerState(m=m, v=new_v, step=step + 1)
+    return new_params, new_state
 
 
+@jaxtyped(typechecker=beartype)
 def rmsprop_update(
     params: Complex[Array, " ..."],
     grads: Complex[Array, " ..."],
@@ -1000,7 +1037,8 @@ def rmsprop_update(
     new_params, new_v = complex_rmsprop(
         params, grads, v, learning_rate, decay_rate, eps
     )
-    return new_params, OptimizerState(m=m, v=new_v, step=step + 1)
+    new_state = OptimizerState(m=m, v=new_v, step=step + 1)
+    return new_params, new_state
 
 
 __all__: list[str] = [

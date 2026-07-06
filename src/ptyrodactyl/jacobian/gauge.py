@@ -9,6 +9,14 @@ onto, and quotient out gauge freedom.
 
 Routine Listings
 ----------------
+:func:`decompose_gauge_observable`
+    Split vector into gauge and observable components.
+:func:`effective_rank`
+    Count observable dimensions above noise threshold.
+:func:`gauge_invariant_norm`
+    Compute norm in quotient space (modulo gauge).
+:func:`gauge_orbit_distance`
+    Distance between two points modulo gauge.
 :func:`nullspace_vectors_lanczos`
     Estimate nullspace basis vectors via shifted inverse
     Lanczos.
@@ -16,124 +24,23 @@ Routine Listings
     Project parameter perturbation onto gauge subspace.
 :func:`project_to_observable`
     Project parameter perturbation onto observable subspace.
-:func:`decompose_gauge_observable`
-    Split vector into gauge and observable components.
-:func:`effective_rank`
-    Count observable dimensions above noise threshold.
-:func:`gauge_invariant_norm`
-    Compute norm in quotient space (modulo gauge).
 :func:`random_gauge_direction`
     Sample a random direction from the gauge subspace.
-:func:`gauge_orbit_distance`
-    Distance between two points modulo gauge.
 """
-
-from collections.abc import Callable
 
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
+from beartype import beartype
+from beartype.typing import Callable
 from jax import lax
-from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree
+from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree, jaxtyped
 
+from ptyrodactyl.jacobian._treemath import _tree_dot, _tree_sub
 from ptyrodactyl.jacobian.operators import jtj_operator
 
 
-def _tree_dot(
-    tree_a: PyTree,
-    tree_b: PyTree,
-) -> Float[Array, ""]:
-    """Compute inner product between two PyTrees.
-
-    Parameters
-    ----------
-    tree_a : PyTree
-        First PyTree operand.
-    tree_b : PyTree
-        Second PyTree operand with same structure as
-        *tree_a*.
-
-    Returns
-    -------
-    result : Float[Array, ""]
-        Sum of element-wise products across all leaves.
-    """
-    leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
-    leaves_b, _ = jax.tree_util.tree_flatten(tree_b)
-    products: list = [
-        jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b, strict=False)
-    ]
-    result: Float[Array, ""] = jnp.sum(jnp.array(products))
-    return result
-
-
-def _tree_add(
-    tree_a: PyTree,
-    tree_b: PyTree,
-) -> PyTree:
-    """Element-wise addition of two PyTrees.
-
-    Parameters
-    ----------
-    tree_a : PyTree
-        First PyTree operand.
-    tree_b : PyTree
-        Second PyTree operand with same structure as
-        *tree_a*.
-
-    Returns
-    -------
-    result : PyTree
-        PyTree with element-wise sum of leaves.
-    """
-    result: PyTree = jax.tree_util.tree_map(lambda a, b: a + b, tree_a, tree_b)
-    return result
-
-
-def _tree_scalar_mul(
-    scalar: Float[Array, ""],
-    tree: PyTree,
-) -> PyTree:
-    """Multiply all leaves of a PyTree by a scalar.
-
-    Parameters
-    ----------
-    scalar : Float[Array, ""]
-        Scalar multiplier.
-    tree : PyTree
-        PyTree to scale.
-
-    Returns
-    -------
-    result : PyTree
-        Scaled PyTree.
-    """
-    result: PyTree = jax.tree_util.tree_map(lambda x: scalar * x, tree)
-    return result
-
-
-def _tree_sub(
-    tree_a: PyTree,
-    tree_b: PyTree,
-) -> PyTree:
-    """Element-wise subtraction of two PyTrees.
-
-    Parameters
-    ----------
-    tree_a : PyTree
-        First PyTree operand.
-    tree_b : PyTree
-        Second PyTree operand to subtract from *tree_a*.
-
-    Returns
-    -------
-    result : PyTree
-        PyTree with element-wise difference of leaves.
-    """
-    result: PyTree = jax.tree_util.tree_map(lambda a, b: a - b, tree_a, tree_b)
-    return result
-
-
+@jaxtyped(typechecker=beartype)
 def nullspace_vectors_lanczos(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -273,9 +180,7 @@ def nullspace_vectors_lanczos(
     eigenvalues_sorted: Float[Array, "k"] = eigenvalues_tri[sorted_indices]
     ritz_vectors_sorted: Float[Array, "k n"] = ritz_vectors[sorted_indices]
 
-    eigenvalues_out: Float[Array, "num_vectors"] = eigenvalues_sorted[
-        :num_vectors
-    ]
+    eigenvalues: Float[Array, "num_vectors"] = eigenvalues_sorted[:num_vectors]
     nullspace_basis: Float[Array, "num_vectors n"] = ritz_vectors_sorted[
         :num_vectors
     ]
@@ -283,13 +188,12 @@ def nullspace_vectors_lanczos(
     norms: Float[Array, "num_vectors"] = jnp.linalg.norm(
         nullspace_basis, axis=1, keepdims=True
     )
-    nullspace_basis_normalized: Float[Array, "num_vectors n"] = (
-        nullspace_basis / (norms + 1e-12)
-    )
+    nullspace_basis = nullspace_basis / (norms + 1e-12)
 
-    return nullspace_basis_normalized, eigenvalues_out
+    return nullspace_basis, eigenvalues
 
 
+@jaxtyped(typechecker=beartype)
 def project_to_nullspace(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -359,7 +263,7 @@ def project_to_nullspace(
 
     is_nullspace: Float[Array, "num_vectors"] = (
         eigenvalues < threshold
-    ).astype(jnp.float32)
+    ).astype(flat_perturbation.dtype)
 
     coefficients: Float[Array, "num_vectors"] = jnp.dot(
         nullspace_basis, flat_perturbation
@@ -376,6 +280,7 @@ def project_to_nullspace(
     return gauge_component
 
 
+@jaxtyped(typechecker=beartype)
 def project_to_observable(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -435,6 +340,7 @@ def project_to_observable(
     return observable_component
 
 
+@jaxtyped(typechecker=beartype)
 def decompose_gauge_observable(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -504,6 +410,7 @@ def decompose_gauge_observable(
     return gauge_component, observable_component
 
 
+@jaxtyped(typechecker=beartype)
 def effective_rank(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -631,6 +538,7 @@ def effective_rank(
     return rank
 
 
+@jaxtyped(typechecker=beartype)
 def gauge_invariant_norm(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -693,6 +601,7 @@ def gauge_invariant_norm(
     return norm
 
 
+@jaxtyped(typechecker=beartype)
 def random_gauge_direction(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params: PyTree,
@@ -762,7 +671,7 @@ def random_gauge_direction(
 
     is_nullspace: Float[Array, "num_vectors"] = (
         eigenvalues < threshold
-    ).astype(jnp.float32)
+    ).astype(nullspace_basis.dtype)
 
     key: Array = jax.random.PRNGKey(direction_seed)
     random_coeffs: Float[Array, "num_vectors"] = jax.random.normal(
@@ -780,6 +689,7 @@ def random_gauge_direction(
     return gauge_direction
 
 
+@jaxtyped(typechecker=beartype)
 def gauge_orbit_distance(
     forward_fn: Callable[[PyTree], Float[Array, "..."]],
     params_a: PyTree,

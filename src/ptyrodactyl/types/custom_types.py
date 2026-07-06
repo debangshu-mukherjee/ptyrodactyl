@@ -1,37 +1,39 @@
-"""Custom type aliases for scalar and image data.
+"""Custom type aliases and vocabularies for scalar and image data.
 
 Extended Summary
 ----------------
-This module defines shared scalar and image type aliases for
-JAX-compatible electron microscopy code. Scalar aliases accept
-standard Python scalars and 0-dimensional JAX arrays so public
-APIs can be called naturally from Python while remaining traceable
-under JAX transformations.
+This module defines shared scalar and image type aliases plus small
+static vocabularies for JAX-compatible electron microscopy code.
+Scalar aliases accept standard Python scalars and 0-dimensional JAX
+arrays so public APIs can be called naturally from Python while
+remaining traceable under JAX transformations.
 
 Routine Listings
 ----------------
+:class:`LossType`
+    Static loss-function selection enum.
+:obj:`float_jax_image`
+    Type alias for 2D JAX float array (H, W).
+:obj:`float_np_image`
+    Type alias for 2D numpy float array (H, W).
+:obj:`int_jax_image`
+    Type alias for 2D JAX integer array (H, W).
+:obj:`int_np_image`
+    Type alias for 2D numpy integer array (H, W).
+:obj:`non_jax_number`
+    Union type for non-JAX numeric values (int or float).
+:obj:`scalar_bool`
+    Union type for scalar boolean values (bool or JAX scalar
+    array).
 :obj:`scalar_float`
     Union type for scalar float values (float or JAX scalar
     array).
 :obj:`scalar_int`
     Union type for scalar integer values (int or JAX scalar
     array).
-:obj:`scalar_bool`
-    Union type for scalar boolean values (bool or JAX scalar
-    array).
 :obj:`scalar_num`
     Union type for scalar numeric values (int, float, or JAX
     scalar array).
-:obj:`non_jax_number`
-    Union type for non-JAX numeric values (int or float).
-:obj:`float_jax_image`
-    Type alias for 2D JAX float array (H, W).
-:obj:`int_jax_image`
-    Type alias for 2D JAX integer array (H, W).
-:obj:`float_np_image`
-    Type alias for 2D numpy float array (H, W).
-:obj:`int_np_image`
-    Type alias for 2D numpy integer array (H, W).
 
 Notes
 -----
@@ -39,9 +41,30 @@ These aliases are re-exported from :mod:`ptyrodactyl.types` as the
 canonical type import path for the package.
 """
 
+from enum import Enum
+
 from beartype.typing import TypeAlias, Union
 from jaxtyping import Array, Bool, Float, Int, Num
 from numpy.typing import NDArray
+
+
+class LossType(str, Enum):
+    """Store static loss-function selection.
+
+    Attributes
+    ----------
+    MAE : str
+        Mean absolute error.
+    MSE : str
+        Mean squared error.
+    RMSE : str
+        Root mean squared error.
+    """
+
+    MAE = "mae"
+    MSE = "mse"
+    RMSE = "rmse"
+
 
 scalar_float: TypeAlias = Union[float, Float[Array, " "]]
 """Scalar float accepted as a Python float or 0-dimensional JAX array."""
@@ -71,6 +94,7 @@ int_np_image: TypeAlias = Int[NDArray, " H W"]
 """2-dimensional numpy integer image array."""
 
 __all__: list[str] = [
+    "LossType",
     "float_jax_image",
     "float_np_image",
     "int_jax_image",

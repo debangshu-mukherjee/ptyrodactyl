@@ -18,17 +18,17 @@ length :math:`\lambda = k_0 / \varepsilon`.
 
 Routine Listings
 ----------------
-:func:`wavenumber_background`
-    Background wavenumber :math:`k_0^2` centred between min and
-    max of the specimen :math:`k^2`.
 :func:`convergence_parameter`
     Convergence parameter :math:`\varepsilon \geq \max|U(\mathbf{r})|`
     guaranteeing :math:`\rho(M) < 1`.
-:func:`reciprocal_coords`
-    Reciprocal-space coordinate arrays for an isotropic 3-D grid.
 :func:`green_function_fourier`
     Green's function
     :math:`\tilde{g}_0(\mathbf{p})` on the 3-D Fourier grid.
+:func:`reciprocal_coords`
+    Reciprocal-space coordinate arrays for an isotropic 3-D grid.
+:func:`wavenumber_background`
+    Background wavenumber :math:`k_0^2` centred between min and
+    max of the specimen :math:`k^2`.
 
 Notes
 -----
@@ -36,12 +36,28 @@ All functions are JIT-compatible and operate on JAX arrays.
 Units are Angstroms and inverse Angstroms throughout.
 """
 
+import equinox as eqx
 import jax.numpy as jnp
-from jaxtyping import Array, Complex, Float
+from beartype import beartype
+from jaxtyping import Array, Complex, Float, jaxtyped
 
 
+def _validate_grid_inputs(
+    grid_shape: tuple[int, int, int],
+    grid_spacing_ang: float,
+) -> None:
+    """Validate static grid structure for Fourier-space helpers."""
+    min_grid_spacing: float = 0.0
+    min_grid_size: int = 0
+    if grid_spacing_ang <= min_grid_spacing:
+        raise ValueError("grid_spacing_ang must be positive")
+    if any(axis_size <= min_grid_size for axis_size in grid_shape):
+        raise ValueError("grid_shape entries must be positive")
+
+
+@jaxtyped(typechecker=beartype)
 def wavenumber_background(
-        k_squared: Float[Array, "Nx Ny Nz"],
+    k_squared: Float[Array, "Nx Ny Nz"],
 ) -> Float[Array, ""]:
     r"""Compute the optimal background wavenumber squared.
 
@@ -105,9 +121,10 @@ def wavenumber_background(
     return k0_squared
 
 
+@jaxtyped(typechecker=beartype)
 def convergence_parameter(
-        scattering_potential: Complex[Array, "Nx Ny Nz"],
-        safety_factor: float = 1.01,
+    scattering_potential: Complex[Array, "Nx Ny Nz"],
+    safety_factor: float = 1.01,
 ) -> Float[Array, ""]:
     r"""Compute the convergence parameter from the scattering potential.
 
@@ -163,7 +180,16 @@ def convergence_parameter(
     :func:`green_function_fourier` :
         Consumes :math:`\varepsilon` to build the Green's
         function.
+
+    Raises
+    ------
+    ValueError
+        If ``safety_factor`` is not greater than 1.0.
     """
+    min_safety: float = 1.0
+    if safety_factor <= min_safety:
+        raise ValueError("safety_factor must be greater than 1.0")
+
     modulus: Float[Array, "Nx Ny Nz"] = jnp.abs(scattering_potential)
 
     max_modulus: Float[Array, ""] = jnp.max(modulus)
@@ -173,9 +199,10 @@ def convergence_parameter(
     return epsilon
 
 
+@jaxtyped(typechecker=beartype)
 def reciprocal_coords(
-        grid_shape: tuple[int, int, int],
-        grid_spacing_ang: float,
+    grid_shape: tuple[int, int, int],
+    grid_spacing_ang: float,
 ) -> tuple[
     Float[Array, "Nx Ny Nz"],
     Float[Array, "Nx Ny Nz"],
@@ -230,7 +257,14 @@ def reciprocal_coords(
     --------
     :func:`green_function_fourier` :
         Consumes these coordinates to evaluate :math:`|p|^2`.
+
+    Raises
+    ------
+    ValueError
+        If ``grid_spacing_ang`` or any ``grid_shape`` entry is not positive.
     """
+    _validate_grid_inputs(grid_shape, grid_spacing_ang)
+
     px_1d: Float[Array, "Nx"] = (
         jnp.fft.fftfreq(grid_shape[0], d=grid_spacing_ang) * 2.0 * jnp.pi
     )
@@ -249,11 +283,12 @@ def reciprocal_coords(
     return px, py, pz
 
 
+@jaxtyped(typechecker=beartype)
 def green_function_fourier(
-        grid_shape: tuple[int, int, int],
-        grid_spacing_ang: float,
-        k0_squared: Float[Array, ""],
-        epsilon: Float[Array, ""],
+    grid_shape: tuple[int, int, int],
+    grid_spacing_ang: float,
+    k0_squared: Float[Array, ""],
+    epsilon: Float[Array, ""],
 ) -> Complex[Array, "Nx Ny Nz"]:
     r"""Construct the Fourier-space Green's function.
 
@@ -332,7 +367,26 @@ def green_function_fourier(
         Computes :math:`\varepsilon`.
     :func:`reciprocal_coords` :
         Builds the reciprocal-space grids consumed here.
+
+    Raises
+    ------
+    ValueError
+        If ``grid_spacing_ang`` or any ``grid_shape`` entry is not positive.
+    EquinoxRuntimeError
+        If ``k0_squared`` or ``epsilon`` is non-finite.
     """
+    _validate_grid_inputs(grid_shape, grid_spacing_ang)
+    checked_k0_squared: Float[Array, ""] = eqx.error_if(
+        k0_squared,
+        ~jnp.isfinite(k0_squared),
+        "k0_squared must be finite",
+    )
+    checked_epsilon: Float[Array, ""] = eqx.error_if(
+        epsilon,
+        ~jnp.isfinite(epsilon),
+        "epsilon must be finite",
+    )
+
     px: Float[Array, "Nx Ny Nz"]
     py: Float[Array, "Nx Ny Nz"]
     pz: Float[Array, "Nx Ny Nz"]
@@ -341,12 +395,13 @@ def green_function_fourier(
     p_squared: Float[Array, "Nx Ny Nz"] = px**2 + py**2 + pz**2
 
     denominator: Complex[Array, "Nx Ny Nz"] = (
-        p_squared - k0_squared - 1j * epsilon
+        p_squared - checked_k0_squared - 1j * checked_epsilon
     )
 
     g0_tilde: Complex[Array, "Nx Ny Nz"] = 1.0 / denominator
 
     return g0_tilde
+
 
 __all__: list[str] = [
     "convergence_parameter",

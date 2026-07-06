@@ -39,45 +39,32 @@ Routine Listings
     Combine Fisher matrices from multiple conditions.
 """
 
-from collections.abc import Callable
-
+import equinox as eqx
 import jax
 import jax.flatten_util
 import jax.numpy as jnp
+from beartype import beartype
+from beartype.typing import Callable
 from jax import lax
-from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree
+from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree, jaxtyped
 
+from ptyrodactyl.jacobian._treemath import _tree_dot  # noqa: F401
 from ptyrodactyl.jacobian.operators import jtj_operator
 
 
-def _tree_dot(
-    tree_a: PyTree,
-    tree_b: PyTree,
+def _validate_noise_variance(
+    noise_variance: Float[Array, ""],
 ) -> Float[Array, ""]:
-    """Compute inner product between two PyTrees.
-
-    Parameters
-    ----------
-    tree_a : PyTree
-        First PyTree operand.
-    tree_b : PyTree
-        Second PyTree operand with same structure as
-        *tree_a*.
-
-    Returns
-    -------
-    result : Float[Array, ""]
-        Sum of element-wise products across all leaves.
-    """
-    leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
-    leaves_b, _ = jax.tree_util.tree_flatten(tree_b)
-    products: list = [
-        jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b, strict=False)
-    ]
-    result: Float[Array, ""] = jnp.sum(jnp.array(products))
-    return result
+    """Validate traced Gaussian noise variance."""
+    checked_noise_variance: Float[Array, ""] = eqx.error_if(
+        noise_variance,
+        (~jnp.isfinite(noise_variance)) | (noise_variance <= 0),
+        "noise_variance must be positive",
+    )
+    return checked_noise_variance
 
 
+@jaxtyped(typechecker=beartype)
 def fisher_information(
     forward_fn: Callable[[PyTree], Float[Array, "m"]],
     params: PyTree,
@@ -126,6 +113,9 @@ def fisher_information(
         Fisher information matrix of shape
         ``(n_params, n_params)``.
     """
+    checked_noise_variance: Float[Array, ""] = _validate_noise_variance(
+        noise_variance
+    )
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
 
@@ -142,11 +132,12 @@ def fisher_information(
         jnp.arange(n)
     ).T
     jtj: Float[Array, "n n"] = jnp.dot(jacobian_matrix.T, jacobian_matrix)
-    fisher_matrix: Float[Array, "n n"] = jtj / noise_variance
+    fisher_matrix: Float[Array, "n n"] = jtj / checked_noise_variance
 
     return fisher_matrix
 
 
+@jaxtyped(typechecker=beartype)
 def fisher_information_operator(
     forward_fn: Callable[[PyTree], Float[Array, "m"]],
     params: PyTree,
@@ -188,8 +179,11 @@ def fisher_information_operator(
     fisher_op : Callable[[PyTree], PyTree]
         Operator that computes F @ v for any vector v.
     """
+    checked_noise_variance: Float[Array, ""] = _validate_noise_variance(
+        noise_variance
+    )
     jtj_fn: Callable = jtj_operator(forward_fn, params)
-    inv_variance: Float[Array, ""] = 1.0 / noise_variance
+    inv_variance: Float[Array, ""] = 1.0 / checked_noise_variance
 
     def fisher_op(
         vector: PyTree,
@@ -204,6 +198,7 @@ def fisher_information_operator(
     return fisher_op
 
 
+@jaxtyped(typechecker=beartype)
 def fisher_diagonal(
     forward_fn: Callable[[PyTree], Float[Array, "m"]],
     params: PyTree,
@@ -256,6 +251,9 @@ def fisher_diagonal(
         Diagonal of Fisher matrix as a PyTree matching
         *params* structure.
     """
+    checked_noise_variance: Float[Array, ""] = _validate_noise_variance(
+        noise_variance
+    )
     flat_params, unflatten_fn = jax.flatten_util.ravel_pytree(params)
     n: int = flat_params.shape[0]
 
@@ -280,7 +278,7 @@ def fisher_diagonal(
     ) -> tuple[Float[Array, "n"], None]:
         """Accumulate one Hutchinson diagonal sample."""
         z: Float[Array, "n"] = jax.random.rademacher(key_i, (n,)).astype(
-            jnp.float32
+            flat_params.dtype
         )
         jtj_z: Float[Array, "n"] = jtj_flat_fn(z)
         sample: Float[Array, "n"] = z * jtj_z
@@ -290,12 +288,15 @@ def fisher_diagonal(
     keys: PRNGKeyArray = jax.random.split(key, num_hutchinson_samples)
     diagonal_sum, _ = lax.scan(hutchinson_sample, jnp.zeros(n), keys)
     diagonal_mean: Float[Array, "n"] = diagonal_sum / num_hutchinson_samples
-    fisher_diag_flat: Float[Array, "n"] = diagonal_mean / noise_variance
+    fisher_diag_flat: Float[Array, "n"] = (
+        diagonal_mean / checked_noise_variance
+    )
     fisher_diag: PyTree = unflatten_fn(fisher_diag_flat)
 
     return fisher_diag
 
 
+@jaxtyped(typechecker=beartype)
 def schur_complement(
     full_matrix: Float[Array, "n n"],
     num_params_of_interest: int,
@@ -355,6 +356,7 @@ def schur_complement(
     return schur
 
 
+@jaxtyped(typechecker=beartype)
 def effective_fisher(
     forward_fn: Callable[[PyTree], Float[Array, "m"]],
     params_interest: PyTree,
@@ -410,6 +412,9 @@ def effective_fisher(
     :func:`schur_complement` : The marginalisation step.
     :func:`fisher_information` : Full Fisher matrix.
     """
+    checked_noise_variance: Float[Array, ""] = _validate_noise_variance(
+        noise_variance
+    )
     flat_interest, unflatten_interest = jax.flatten_util.ravel_pytree(
         params_interest
     )
@@ -448,13 +453,14 @@ def effective_fisher(
         jnp.arange(n)
     ).T
     jtj: Float[Array, "n n"] = jnp.dot(jacobian_matrix.T, jacobian_matrix)
-    full_fisher: Float[Array, "n n"] = jtj / noise_variance
+    full_fisher: Float[Array, "n n"] = jtj / checked_noise_variance
 
     fisher_eff: Float[Array, "p p"] = schur_complement(full_fisher, p)
 
     return fisher_eff
 
 
+@jaxtyped(typechecker=beartype)
 def fisher_eigenspectrum(
     forward_fn: Callable[[PyTree], Float[Array, "m"]],
     params: PyTree,
@@ -586,6 +592,7 @@ def fisher_eigenspectrum(
     return eigenvalues_out
 
 
+@jaxtyped(typechecker=beartype)
 def a_optimality(
     fisher_matrix: Float[Array, "n n"],
     regularization: float = 1e-8,
@@ -628,6 +635,7 @@ def a_optimality(
     return criterion
 
 
+@jaxtyped(typechecker=beartype)
 def d_optimality(
     fisher_matrix: Float[Array, "n n"],
     regularization: float = 1e-8,
@@ -671,9 +679,11 @@ def d_optimality(
     log_det: Float[Array, ""] = jnp.sum(
         jnp.log(jnp.maximum(eigenvalues, 1e-12))
     )
-    return log_det
+    criterion: Float[Array, ""] = log_det
+    return criterion
 
 
+@jaxtyped(typechecker=beartype)
 def e_optimality(
     fisher_matrix: Float[Array, "n n"],
 ) -> Float[Array, ""]:
@@ -708,6 +718,7 @@ def e_optimality(
     return criterion
 
 
+@jaxtyped(typechecker=beartype)
 def stack_fisher(
     fisher_matrices: Float[Array, "k n n"],
     weights: Float[Array, "k"],
@@ -747,6 +758,7 @@ def stack_fisher(
     return combined_fisher
 
 
+@jaxtyped(typechecker=beartype)
 def optimal_weights_e_criterion(
     fisher_matrices: Float[Array, "k n n"],
     num_iterations: int = 100,
@@ -846,6 +858,7 @@ def optimal_weights_e_criterion(
     return optimal_weights
 
 
+@jaxtyped(typechecker=beartype)
 def condition_number(
     fisher_matrix: Float[Array, "n n"],
     regularization: float = 1e-12,
@@ -889,6 +902,7 @@ def condition_number(
     return kappa
 
 
+@jaxtyped(typechecker=beartype)
 def information_gain(
     fisher_before: Float[Array, "n n"],
     fisher_after: Float[Array, "n n"],

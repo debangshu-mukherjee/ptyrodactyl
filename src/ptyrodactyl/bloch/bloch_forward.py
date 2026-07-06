@@ -10,22 +10,22 @@ symmetries.
 
 Routine Listings
 ----------------
-``structure_matrix``
+:func:`structure_matrix`
     Assemble the dynamical matrix from Fourier potentials and excitation
     errors.
-``excitation_errors``
+:func:`excitation_errors`
     Compute Ewald-sphere excitation errors for reflected beams.
-``scattering_matrix``
+:func:`scattering_matrix`
     Propagate beam amplitudes through a slab by matrix exponential.
-``bloch_beam_amplitudes``
+:func:`bloch_beam_amplitudes`
     Compute amplitudes at one thickness from an incident-beam condition.
-``bloch_thickness_series``
+:func:`bloch_thickness_series`
     Compute amplitudes over uniform thickness steps with ``lax.scan``.
-``two_beam_pendellosung``
+:func:`two_beam_pendellosung`
     Evaluate the analytic two-beam Pendellosung solution.
-``extinction_distance``
+:func:`extinction_distance`
     Compute the two-beam extinction distance.
-``fourier_potential_from_grid``
+:func:`fourier_potential_from_grid`
     Sample Fourier potential coefficients from a real-space grid.
 """
 

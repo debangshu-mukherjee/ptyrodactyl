@@ -45,15 +45,16 @@ from jaxtyping import Array, Complex, Float, Int, jaxtyped
 from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
-    Distribution,
-    ReductionMode,
+    AtomicSliceData,
+    DetectorConfig,
+    MicroscopeConfig,
+    ProbeModes,
     create_stem4d,
     scalar_float,
     scalar_int,
     scalar_num,
 )
 
-from .reduce import apply_distribution
 from .simulations import (
     _cbed_amplitude_from_slice_provider,
 )
@@ -254,25 +255,19 @@ def cbed_image_from_atoms(
         atom_mask=atom_mask,
     )
     mode_count: int = amplitudes.shape[-1]
-    samples: Float[Array, "M 1"] = jnp.arange(
-        mode_count,
+    unit_weights: Float[Array, " M"] = jnp.ones(
+        (mode_count,),
         dtype=jnp.float64,
-    )[:, jnp.newaxis]
-    distribution: Distribution = Distribution(
-        samples=samples,
-        weights=jnp.ones((mode_count,), dtype=jnp.float64),
-        reduction=ReductionMode.INCOHERENT,
-        axis_id="probe_modes",
     )
-
-    def _mode_amplitude(sample: Float[Array, " D"]) -> Complex[Array, "H W"]:
-        mode_idx: Int[Array, ""] = sample[0].astype(jnp.int32)
-        amplitude: Complex[Array, "H W"] = amplitudes[..., mode_idx]
-        return amplitude
-
-    cbed_pattern: Float[Array, "H W"] = apply_distribution(
-        distribution,
-        _mode_amplitude,
+    mode_intensities: Float[Array, "M H W"] = jnp.moveaxis(
+        jnp.abs(amplitudes) ** 2,
+        -1,
+        0,
+    )
+    cbed_pattern: Float[Array, "H W"] = jnp.einsum(
+        "m,mhw->hw",
+        unit_weights,
+        mode_intensities,
     )
     return cbed_pattern
 
@@ -362,14 +357,10 @@ def clip_cbed(
 
 @jaxtyped(typechecker=beartype)
 def stem4d_sharded(
-    probe_modes: Complex[Array, "H W M"],
-    scan_positions_ang: Float[Array, "P 2"],
-    atom_coords: Float[Array, "N 3"],
-    atom_types: Int[Array, " N"],
-    slice_z_bounds: Float[Array, "S 2"],
-    atom_potentials: Float[Array, "T H W"],
-    voltage_kv: scalar_num,
-    calib_ang: scalar_float,
+    probe_modes: ProbeModes,
+    sample: AtomicSliceData,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
     mesh: Optional[Mesh] = None,
 ) -> STEM4D:
     """Generate 4D-STEM data with on-the-fly beam shifting and slices.
@@ -400,28 +391,14 @@ def stem4d_sharded(
 
     Parameters
     ----------
-    probe_modes : Complex[Array, "H W M"]
-        Base electron probe modes (unshifted). H and W are
-        image dimensions, M is number of modes.
-    scan_positions_ang : Float[Array, "P 2"]
-        Scan positions in Angstroms, columns ``(y, x)``.
-        P is the number of positions. Can be sharded along
-        the first axis.
-    atom_coords : Float[Array, "N 3"]
-        Atom coordinates in Angstroms, columns ``(x, y, z)``.
-    atom_types : Int[Array, " N"]
-        Atom type indices (0-indexed), maps to
-        *atom_potentials*.
-    slice_z_bounds : Float[Array, "S 2"]
-        Z boundaries per slice, columns ``(z_min, z_max)``
-        in Angstroms.
-    atom_potentials : Float[Array, "T H W"]
-        Precomputed 2D atomic potentials for each unique
-        atom type.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
-    calib_ang : scalar_float
-        Real-space pixel size in Angstroms.
+    probe_modes : ProbeModes
+        Base electron probe modes (unshifted).
+    sample : AtomicSliceData
+        Atom coordinates, type indices, z bounds, and potential kernels.
+    microscope : MicroscopeConfig
+        Microscope voltage and ensemble configuration.
+    detector : DetectorConfig
+        Scan positions in Angstroms and real-space calibration.
     mesh : Optional[Mesh]
         JAX device mesh for multi-GPU parallelism. If
         provided, uses ``shard_map``. If ``None``, uses
@@ -439,10 +416,19 @@ def stem4d_sharded(
     :func:`clip_cbed` : Clip and resize CBED patterns to
         target mrad extent and shape.
     """
-    h: int = probe_modes.shape[0]
-    w: int = probe_modes.shape[1]
+    if detector.scan_positions_ang is None:
+        raise ValueError("detector.scan_positions_ang is required")
 
-    probe_k: Complex[Array, "H W M"] = jnp.fft.fft2(probe_modes, axes=(0, 1))
+    scan_positions_ang: Float[Array, "P 2"] = detector.scan_positions_ang
+    voltage_kv: Float[Array, ""] = microscope.voltage_kv
+    calib_ang: Float[Array, ""] = detector.real_space_calib_ang
+    h: int = probe_modes.modes.shape[0]
+    w: int = probe_modes.modes.shape[1]
+
+    probe_k: Complex[Array, "H W M"] = jnp.fft.fft2(
+        probe_modes.modes,
+        axes=(0, 1),
+    )
     qy: Float[Array, " H"] = jnp.fft.fftfreq(h, d=calib_ang)
     qx: Float[Array, " W"] = jnp.fft.fftfreq(w, d=calib_ang)
     qya: Float[Array, "H W"]
@@ -495,12 +481,13 @@ def stem4d_sharded(
 
         cbed_pattern: Float[Array, "H W"] = cbed_image_from_atoms(
             beam=current_beam,
-            atom_coords=atom_coords,
-            atom_types=atom_types,
-            slice_z_bounds=slice_z_bounds,
-            atom_potentials=atom_potentials,
+            atom_coords=sample.atom_coords,
+            atom_types=sample.atom_types,
+            slice_z_bounds=sample.slice_z_bounds,
+            atom_potentials=sample.atom_potentials,
             voltage_kv=voltage_kv,
             calib_ang=calib_ang,
+            atom_mask=sample.atom_mask,
         )
         return cbed_pattern
 
@@ -542,7 +529,7 @@ def stem4d_sharded(
         real_space_calib=calib_ang,
         fourier_space_calib=fourier_calib,
         scan_positions=scan_positions_ang,
-        voltage_kv=voltage_kv,
+        voltage_kv=microscope.voltage_kv,
     )
 
     return stem4d_data_sharded

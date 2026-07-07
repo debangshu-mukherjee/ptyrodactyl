@@ -400,9 +400,7 @@ def _bessel_kv_small_integer(
     log_i1_term: Float[Array, " ..."] = -jnp.log(x / 2.0) * i1
     k1: Float[Array, " ..."] = log_i1_term + k1_poly / x
 
-    kn_result: Float[Array, " ..."] = _bessel_kn_recurrence(
-        n, x, k0, k1
-    )
+    kn_result: Float[Array, " ..."] = _bessel_kn_recurrence(n, x, k0, k1)
     pos_v_result: Float[Array, " ..."] = jnp.where(
         v >= 0, kn_result, kn_result
     )
@@ -780,12 +778,6 @@ def single_atom_potential(
         supersampled_potential, supersampling, target_height, target_width
     )
     return potential_resized
-
-
-# JIT compile single_atom_potential with static arguments
-single_atom_potential = jax.jit(
-    single_atom_potential, static_argnames=["grid_shape", "supersampling"]
-)
 
 
 @jaxtyped(typechecker=beartype)
@@ -1450,8 +1442,8 @@ def kirkland_potentials_crystal(
     -----
     For JIT compilation, provide *grid_shape*. Compute it as::
 
-        height = ceil((y_range + 2*padding) / pixel_size)
-        width  = ceil((x_range + 2*padding) / pixel_size)
+        height = ceil((y_range + 2 * padding) / pixel_size)
+        width = ceil((x_range + 2 * padding) / pixel_size)
         n_slices = ceil(z_extent / slice_thickness)
 
     See Also

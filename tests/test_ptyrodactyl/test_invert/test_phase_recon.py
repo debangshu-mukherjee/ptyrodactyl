@@ -15,8 +15,8 @@ from ptyrodactyl.invert.phase_recon import (
     single_slice_ptychography,
 )
 from ptyrodactyl.types import (
-    ProbeModes,
     create_calibrated_array,
+    create_probe_modes,
     create_stem4d,
 )
 
@@ -43,7 +43,7 @@ def _tiny_recon_inputs():
     ).astype(jnp.complex128)
     beam = create_calibrated_array(beam_array, 1.0, 1.0, True)
     mode_array = jnp.stack([beam_array, beam_array * (0.5 + 0.1j)], axis=-1)
-    modes = ProbeModes(
+    modes = create_probe_modes(
         modes=mode_array,
         weights=jnp.array([0.7, 0.3], dtype=jnp.float64),
         calib=jnp.array(1.0, dtype=jnp.float64),

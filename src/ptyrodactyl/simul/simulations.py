@@ -43,6 +43,7 @@ from :mod:`ptyrodactyl.types`.
 """
 
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -67,11 +68,15 @@ from ptyrodactyl.types import (
     M_E,
     STEM4D,
     CalibratedArray,
+    DetectorConfig,
     Distribution,
+    EnsembleAxes,
+    MicroscopeConfig,
     PotentialSlices,
     ProbeModes,
     ReductionMode,
     create_calibrated_array,
+    create_detector_config,
     create_distribution,
     create_probe_modes,
     create_stem4d,
@@ -80,7 +85,7 @@ from ptyrodactyl.types import (
     scalar_num,
 )
 
-from .reduce import apply_distribution
+from .reduce import apply_distribution, apply_distributions
 
 
 @jaxtyped(typechecker=beartype)
@@ -298,13 +303,8 @@ def fourier_calib(
 
 @jaxtyped(typechecker=beartype)
 def make_probe(
-    aperture: scalar_num,
-    voltage: scalar_num,
-    image_size: Union[Tuple[int, int], Int[Array, " 2"]],
-    calibration_pm: scalar_float,
-    defocus: scalar_num = 0.0,
-    c3: scalar_num = 0.0,
-    c5: scalar_num = 0.0,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
 ) -> Complex[Array, " h w"]:
     """Create an electron probe with spherical aberrations.
 
@@ -330,22 +330,11 @@ def make_probe(
 
     Parameters
     ----------
-    aperture : scalar_num
-        Aperture semi-angle in milliradians.
-    voltage : scalar_num
-        Accelerating voltage in kiloelectronvolts.
-    image_size : Tuple[int, int] | Int[Array, " 2"]
-        Grid size in pixels ``(H, W)``.
-    calibration_pm : scalar_float
-        Real-space pixel size in picometers.
-    defocus : scalar_num, optional
-        Defocus in Angstroms. Default is 0.
-    c3 : scalar_num, optional
-        Third-order spherical aberration in Angstroms.
-        Default is 0.
-    c5 : scalar_num, optional
-        Fifth-order spherical aberration in Angstroms.
-        Default is 0.
+    microscope : MicroscopeConfig
+        Microscope voltage, aperture, aberration coefficients, and static
+        probe shape.
+    detector : DetectorConfig
+        Detector calibration carrying the probe pixel size in picometers.
 
     Returns
     -------
@@ -356,14 +345,21 @@ def make_probe(
     --------
     :func:`aberration` : Compute the aberration phase.
     """
-    aperture: Float[Array, " "] = jnp.asarray(aperture / 1000.0)
-    wavelength: Float[Array, " "] = relativistic_wavelength_ang(voltage)
+    if microscope.probe_shape is None:
+        raise ValueError("microscope.probe_shape is required")
+
+    aperture: Float[Array, " "] = jnp.asarray(
+        microscope.aperture_mrad / 1000.0
+    )
+    wavelength: Float[Array, " "] = relativistic_wavelength_ang(
+        microscope.voltage_kv
+    )
     l_max: Float[Array, " "] = aperture / wavelength
     image_y: scalar_int
     image_x: scalar_int
-    image_y, image_x = image_size
-    x_fov: Float[Array, " "] = image_x * 0.01 * calibration_pm
-    y_fov: Float[Array, " "] = image_y * 0.01 * calibration_pm
+    image_y, image_x = microscope.probe_shape
+    x_fov: Float[Array, " "] = image_x * 0.01 * detector.probe_calibration_pm
+    y_fov: Float[Array, " "] = image_y * 0.01 * detector.probe_calibration_pm
     qx: Float[Array, " w"] = (
         jnp.arange((-image_x / 2), (image_x / 2), 1)
     ) / x_fov
@@ -383,7 +379,11 @@ def make_probe(
         inverse_real_matrix <= l_max, dtype=jnp.complex128
     )
     chi_probe: Float[Array, " h w"] = aberration(
-        inverse_real_matrix, wavelength, defocus, c3, c5
+        inverse_real_matrix,
+        wavelength,
+        microscope.defocus_ang,
+        microscope.c3_ang,
+        microscope.c5_ang,
     )
     a_dist *= jnp.exp(-1j * chi_probe)
     probe_real_space: Complex[Array, " h w"] = jnp.fft.ifftshift(
@@ -510,7 +510,7 @@ def _cbed_amplitude_from_slice_provider(
 def cbed_amplitude(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
-    voltage_kv: scalar_num,
+    microscope: MicroscopeConfig,
 ) -> Complex[Array, " H W M"]:
     """Return complex CBED detector fields for each probe mode.
 
@@ -528,8 +528,8 @@ def cbed_amplitude(
     beam : ProbeModes
         Electron beam. ``modes`` has shape ``(H, W, M)``;
         ``weights`` shape ``(M,)``; ``calib`` in Angstroms.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
+    microscope : MicroscopeConfig
+        Microscope voltage and ensemble configuration.
 
     Returns
     -------
@@ -557,7 +557,7 @@ def cbed_amplitude(
             beam_modes,
             num_slices,
             pot_slices.slice_thickness,
-            voltage_kv,
+            microscope.voltage_kv,
             calib_ang,
             _slice_at,
         )
@@ -582,12 +582,41 @@ def probe_modes_to_distribution(probe: ProbeModes) -> Distribution:
     return distribution
 
 
+def _has_extra_ensemble_axes(ensemble: EnsembleAxes) -> bool:
+    """Return whether cbed_image should use the generalized axis binder."""
+    return (
+        ensemble.probe_modes is not None
+        or ensemble.position_jitter is not None
+        or ensemble.coherence is not None
+    )
+
+
+def _ensemble_axes_for_cbed(
+    ensemble: EnsembleAxes,
+    beam: ProbeModes,
+) -> tuple[Distribution, ...]:
+    """Return ordered CBED axes with probe modes first when needed."""
+    axes: list[Distribution] = []
+    mode_count: int = jnp.atleast_3d(beam.modes).shape[-1]
+    if ensemble.probe_modes is not None:
+        axes.append(ensemble.probe_modes)
+    elif mode_count > 1:
+        axes.append(probe_modes_to_distribution(beam))
+    if ensemble.position_jitter is not None:
+        axes.append(ensemble.position_jitter)
+    if ensemble.coherence is not None:
+        axes.append(ensemble.coherence)
+    if len(axes) == 0:
+        axes.append(probe_modes_to_distribution(beam))
+    return tuple(axes)
+
+
 @jaxtyped(typechecker=beartype)
 @jax.jit
 def cbed_image(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
-    voltage_kv: scalar_num,
+    microscope: MicroscopeConfig,
 ) -> CalibratedArray:
     """Simulate a CBED intensity image via explicit mode reduction.
 
@@ -603,18 +632,52 @@ def cbed_image(
         Potential slices for multislice propagation.
     beam : ProbeModes
         Probe modes and explicit incoherent mode weights.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
+    microscope : MicroscopeConfig
+        Microscope voltage and optional ensemble axes.
 
     Returns
     -------
     cbed_pytree : CalibratedArray
         CBED intensity pattern with Fourier-space calibrations.
     """
+    if _has_extra_ensemble_axes(microscope.ensemble):
+        calib_ang: Float[Array, ""] = jnp.amin(
+            jnp.array([pot_slices.calib, beam.calib])
+        )
+        detector: DetectorConfig = create_detector_config(
+            real_space_calib_ang=calib_ang,
+            probe_calibration_pm=calib_ang * 100.0,
+        )
+        axes: tuple[Distribution, ...] = _ensemble_axes_for_cbed(
+            microscope.ensemble,
+            beam,
+        )
+        from .producers import bind_cbed_axes  # noqa: PLC0415
+
+        bound_amplitude = bind_cbed_axes(
+            pot_slices=pot_slices,
+            probe_modes=beam,
+            microscope=microscope,
+            detector=detector,
+            axes=axes,
+        )
+        cbed_pattern: Float[Array, " H W"] = apply_distributions(
+            axes,
+            bound_amplitude,
+        )
+        real_space_fov: Float[Array, " "] = jnp.multiply(
+            beam.modes.shape[0], calib_ang
+        )
+        inverse_space_calib: Float[Array, " "] = 1 / real_space_fov
+        cbed_pytree: CalibratedArray = create_calibrated_array(
+            cbed_pattern, inverse_space_calib, inverse_space_calib, False
+        )
+        return cbed_pytree
+
     amplitudes: Complex[Array, " H W M"] = cbed_amplitude(
         pot_slices=pot_slices,
         beam=beam,
-        voltage_kv=voltage_kv,
+        microscope=microscope,
     )
     distribution: Distribution = probe_modes_to_distribution(beam)
 
@@ -735,9 +798,8 @@ def shift_beam_fourier(
 def stem_4d(
     pot_slice: PotentialSlices,
     beam: ProbeModes,
-    positions: Num[Array, "#P 2"],
-    voltage_kv: scalar_num,
-    calib_ang: scalar_float,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
 ) -> STEM4D:
     """Generate 4D-STEM data at multiple probe positions.
 
@@ -763,13 +825,10 @@ def stem_4d(
         Potential slices for the sample.
     beam : ProbeModes
         Electron beam modes.
-    positions : Num[Array, "#P 2"]
-        Scan positions ``(y, x)`` in pixels. P is the number
-        of positions.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
-    calib_ang : scalar_float
-        Pixel size in Angstroms.
+    microscope : MicroscopeConfig
+        Microscope voltage and optional ensemble axes.
+    detector : DetectorConfig
+        Scan positions and real-space calibration.
 
     Returns
     -------
@@ -782,6 +841,11 @@ def stem_4d(
     :func:`cbed_image` : Single-position CBED intensity simulation.
     :func:`shift_beam_fourier` : Fourier-space beam shifting.
     """
+    if detector.scan_positions_px is None:
+        raise ValueError("detector.scan_positions_px is required")
+
+    positions: Float[Array, "#P 2"] = detector.scan_positions_px
+    calib_ang: Float[Array, ""] = detector.real_space_calib_ang
     shifted_beams: Complex[Array, " P H W #M"] = shift_beam_fourier(
         beam.modes, positions, calib_ang
     )
@@ -802,15 +866,15 @@ def stem_4d(
         current_beam: Complex[Array, " H W #M"] = jnp.take(
             shifted_beams, pos_idx, axis=0
         )
-        current_probe_modes: ProbeModes = ProbeModes(
-            modes=current_beam,
-            weights=beam.weights,
-            calib=beam.calib,
+        current_probe_modes: ProbeModes = eqx.tree_at(
+            lambda probe: probe.modes,
+            beam,
+            current_beam,
         )
         cbed_result: CalibratedArray = cbed_image(
             pot_slices=pot_slice,
             beam=current_probe_modes,
-            voltage_kv=voltage_kv,
+            microscope=microscope,
         )
         return cbed_result.data_array
 
@@ -830,7 +894,7 @@ def stem_4d(
         real_space_calib=calib_ang,
         fourier_space_calib=fourier_calib,
         scan_positions=scan_positions_ang,
-        voltage_kv=voltage_kv,
+        voltage_kv=microscope.voltage_kv,
     )
     return stem4d_data
 
@@ -925,8 +989,7 @@ def decompose_beam_to_modes(
 @jaxtyped(typechecker=beartype)
 def annular_detector(
     stem4d_data: STEM4D,
-    collection_angles: Float[Array, " 2"],
-    scan_shape: Tuple[int, int],
+    detector: DetectorConfig,
 ) -> CalibratedArray:
     """Integrate 4D-STEM data with an annular detector.
 
@@ -953,12 +1016,8 @@ def annular_detector(
         4D-STEM dataset. ``data`` shape ``(P, H, W)``,
         ``fourier_space_calib`` in inverse Angstroms per
         pixel, ``voltage_kv`` in kilovolts.
-    collection_angles : Float[Array, " 2"]
-        Inner and outer collection angles in milliradians,
-        ``[inner, outer]``.
-    scan_shape : tuple[int, int]
-        Static raster shape ``(ny, nx)`` used to reshape the
-        integrated detector signal.
+    detector : DetectorConfig
+        Annular collection angles and static raster shape.
 
     Returns
     -------
@@ -966,11 +1025,18 @@ def annular_detector(
         Real-space STEM image with ``real_space = True``
         and calibrations in Angstroms per pixel.
     """
+    if detector.scan_shape is None:
+        raise ValueError("detector.scan_shape is required")
+
     wavelength: Float[Array, " "] = relativistic_wavelength_ang(
         stem4d_data.voltage_kv
     )
-    inner_angle_rad: Float[Array, " "] = collection_angles[0] / 1000.0
-    outer_angle_rad: Float[Array, " "] = collection_angles[1] / 1000.0
+    inner_angle_rad: Float[Array, " "] = (
+        detector.collection_inner_mrad / 1000.0
+    )
+    outer_angle_rad: Float[Array, " "] = (
+        detector.collection_outer_mrad / 1000.0
+    )
     inner_k: Float[Array, " "] = inner_angle_rad / wavelength
     outer_k: Float[Array, " "] = outer_angle_rad / wavelength
 
@@ -1014,7 +1080,7 @@ def annular_detector(
 
     ny: int
     nx: int
-    ny, nx = scan_shape
+    ny, nx = detector.scan_shape
 
     stem_image_2d: Float[Array, " ny nx"] = integrated_intensities.reshape(
         ny, nx

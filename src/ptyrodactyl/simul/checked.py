@@ -29,19 +29,21 @@ transformation context, and the runtime checks remain compatible with
 """
 
 import equinox as eqx
-import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional, Tuple, Union
+from beartype.typing import Optional
 from jax.sharding import Mesh
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 from ptyrodactyl.types import (
     STEM4D,
+    AtomicSliceData,
     CalibratedArray,
+    DetectorConfig,
+    MicroscopeConfig,
     PotentialSlices,
     ProbeModes,
-    scalar_float,
+    create_atomic_slice_data,
     scalar_num,
 )
 
@@ -82,6 +84,114 @@ def _checked_positive_scalar(
         checked_value <= 0,
         f"{name} must be positive",
     )
+
+
+def _checked_finite_scalar(
+    value: scalar_num,
+    name: str,
+) -> Num[Array, ""]:
+    value_arr: Num[Array, ""] = jnp.asarray(value)
+    _raise_if(value_arr.shape != (), f"{name} must be a scalar")
+    return eqx.error_if(
+        value_arr,
+        ~jnp.isfinite(value_arr),
+        f"{name} must be finite",
+    )
+
+
+def _checked_nonnegative_scalar(
+    value: scalar_num,
+    name: str,
+) -> Num[Array, ""]:
+    checked_value: Num[Array, ""] = _checked_finite_scalar(value, name)
+    return eqx.error_if(
+        checked_value,
+        checked_value < 0,
+        f"{name} must be non-negative",
+    )
+
+
+def _checked_microscope(microscope: MicroscopeConfig) -> MicroscopeConfig:
+    """Return a microscope carrier with traced scalar checks attached."""
+    checked_values = (
+        _checked_positive_scalar(microscope.voltage_kv, "voltage_kv"),
+        _checked_positive_scalar(microscope.aperture_mrad, "aperture_mrad"),
+        _checked_finite_scalar(microscope.defocus_ang, "defocus_ang"),
+        _checked_finite_scalar(microscope.c3_ang, "c3_ang"),
+        _checked_finite_scalar(microscope.c5_ang, "c5_ang"),
+    )
+    return eqx.tree_at(
+        lambda config: (
+            config.voltage_kv,
+            config.aperture_mrad,
+            config.defocus_ang,
+            config.c3_ang,
+            config.c5_ang,
+        ),
+        microscope,
+        checked_values,
+    )
+
+
+def _checked_detector(detector: DetectorConfig) -> DetectorConfig:
+    """Return a detector carrier with traced scalar checks attached."""
+    checked_inner: Num[Array, ""] = _checked_nonnegative_scalar(
+        detector.collection_inner_mrad,
+        "collection_inner_mrad",
+    )
+    checked_outer: Num[Array, ""] = _checked_nonnegative_scalar(
+        detector.collection_outer_mrad,
+        "collection_outer_mrad",
+    )
+    checked_outer = eqx.error_if(
+        checked_outer,
+        checked_outer < checked_inner,
+        "collection_outer_mrad must be >= collection_inner_mrad",
+    )
+    checked_detector = eqx.tree_at(
+        lambda config: (
+            config.real_space_calib_ang,
+            config.probe_calibration_pm,
+            config.collection_inner_mrad,
+            config.collection_outer_mrad,
+        ),
+        detector,
+        (
+            _checked_positive_scalar(
+                detector.real_space_calib_ang,
+                "real_space_calib_ang",
+            ),
+            _checked_positive_scalar(
+                detector.probe_calibration_pm,
+                "probe_calibration_pm",
+            ),
+            checked_inner,
+            checked_outer,
+        ),
+    )
+    if checked_detector.scan_positions_px is not None:
+        checked_positions_px: Float[Array, "P 2"] = eqx.error_if(
+            checked_detector.scan_positions_px,
+            jnp.any(~jnp.isfinite(checked_detector.scan_positions_px)),
+            "scan_positions_px contain non-finite values",
+        )
+        checked_detector = eqx.tree_at(
+            lambda config: config.scan_positions_px,
+            checked_detector,
+            checked_positions_px,
+        )
+    if checked_detector.scan_positions_ang is not None:
+        checked_positions_ang: Float[Array, "P 2"] = eqx.error_if(
+            checked_detector.scan_positions_ang,
+            jnp.any(~jnp.isfinite(checked_detector.scan_positions_ang)),
+            "scan_positions_ang contain non-finite values",
+        )
+        checked_detector = eqx.tree_at(
+            lambda config: config.scan_positions_ang,
+            checked_detector,
+            checked_positions_ang,
+        )
+    return checked_detector
 
 
 def _potential_grid_shape(
@@ -346,34 +456,17 @@ def _checked_sharded_arrays(
 
 @jaxtyped(typechecker=beartype)
 def checked_make_probe(
-    aperture: scalar_num,
-    voltage: scalar_num,
-    image_size: Union[Tuple[int, int], Int[Array, " 2"]],
-    calibration_pm: scalar_float,
-    defocus: scalar_num = 0.0,
-    c3: scalar_num = 0.0,
-    c5: scalar_num = 0.0,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
 ) -> Complex[Array, " h w"]:
     """Validate probe-construction inputs and run the bare probe kernel.
 
     Parameters
     ----------
-    aperture : scalar_num
-        Aperture semi-angle in milliradians.
-    voltage : scalar_num
-        Accelerating voltage in kiloelectronvolts.
-    image_size : Tuple[int, int] | Int[Array, " 2"]
-        Grid size in pixels ``(H, W)``.
-    calibration_pm : scalar_float
-        Real-space pixel size in picometers.
-    defocus : scalar_num, optional
-        Defocus in Angstroms. Default is 0.
-    c3 : scalar_num, optional
-        Third-order spherical aberration in Angstroms.
-        Default is 0.
-    c5 : scalar_num, optional
-        Fifth-order spherical aberration in Angstroms.
-        Default is 0.
+    microscope : MicroscopeConfig
+        Microscope voltage, aperture, aberrations, and static probe shape.
+    detector : DetectorConfig
+        Detector calibration carrying the probe pixel size.
 
     Returns
     -------
@@ -388,53 +481,16 @@ def checked_make_probe(
     ValueError
         If ``image_size`` does not have shape ``(2,)``.
     """
-    image_size_arr: Int[Array, " 2"] = jnp.asarray(image_size)
     _raise_if(
-        image_size_arr.shape != (_XY_COORDS,),
-        "image_size must have shape (2,)",
+        microscope.probe_shape is None,
+        "microscope.probe_shape is required",
     )
+    checked_microscope: MicroscopeConfig = _checked_microscope(microscope)
+    checked_detector: DetectorConfig = _checked_detector(detector)
 
-    with jax.ensure_compile_time_eval():
-        static_image_size: tuple[int, int] = (
-            int(image_size_arr[0]),
-            int(image_size_arr[1]),
-        )
-
-    checked_aperture: Num[Array, ""] = _checked_positive_scalar(
-        aperture,
-        "aperture",
-    )
-    checked_voltage: Num[Array, ""] = _checked_positive_scalar(
-        voltage,
-        "voltage",
-    )
-    checked_image_size: Int[Array, " 2"] = eqx.error_if(
-        image_size_arr,
-        jnp.any(~jnp.isfinite(image_size_arr)),
-        "image_size entries must be finite",
-    )
-    checked_image_size = eqx.error_if(
-        checked_image_size,
-        jnp.any(checked_image_size <= 0),
-        "image_size entries must be positive",
-    )
-    checked_aperture = checked_aperture + (
-        jnp.zeros_like(checked_aperture) * jnp.sum(checked_image_size)
-    )
-    checked_calibration_pm: Num[Array, ""] = _checked_positive_scalar(
-        calibration_pm,
-        "calibration_pm",
-    )
-
-    # The public type wrapper rejects the static tuple needed by arange in JIT.
     probe_real_space: Complex[Array, " h w"] = make_probe.__wrapped__(
-        aperture=checked_aperture,
-        voltage=checked_voltage,
-        image_size=static_image_size,
-        calibration_pm=checked_calibration_pm,
-        defocus=defocus,
-        c3=c3,
-        c5=c5,
+        microscope=checked_microscope,
+        detector=checked_detector,
     )
     return probe_real_space
 
@@ -443,7 +499,7 @@ def checked_make_probe(
 def checked_cbed_image(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
-    voltage_kv: scalar_num,
+    microscope: MicroscopeConfig,
 ) -> CalibratedArray:
     """Validate CBED inputs and run the bare CBED intensity kernel.
 
@@ -453,8 +509,8 @@ def checked_cbed_image(
         Potential slices for multislice propagation.
     beam : ProbeModes
         Electron beam modes.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
+    microscope : MicroscopeConfig
+        Microscope voltage and optional ensemble axes.
 
     Returns
     -------
@@ -475,15 +531,12 @@ def checked_cbed_image(
         "pot_slices",
     )
     checked_beam: ProbeModes = _checked_beam(beam)
-    checked_voltage: Num[Array, ""] = _checked_positive_scalar(
-        voltage_kv,
-        "voltage_kv",
-    )
+    checked_microscope: MicroscopeConfig = _checked_microscope(microscope)
 
     cbed_pytree: CalibratedArray = cbed_image(
         pot_slices=checked_pot_slices,
         beam=checked_beam,
-        voltage_kv=checked_voltage,
+        microscope=checked_microscope,
     )
     return cbed_pytree
 
@@ -492,9 +545,8 @@ def checked_cbed_image(
 def checked_stem_4d(
     pot_slice: PotentialSlices,
     beam: ProbeModes,
-    positions: Num[Array, "#P 2"],
-    voltage_kv: scalar_num,
-    calib_ang: scalar_float,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
 ) -> STEM4D:
     """Validate 4D-STEM inputs and run the bare 4D-STEM kernel.
 
@@ -504,12 +556,10 @@ def checked_stem_4d(
         Potential slices for the sample.
     beam : ProbeModes
         Electron beam modes.
-    positions : Num[Array, "#P 2"]
-        Scan positions ``(y, x)`` in pixels.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
-    calib_ang : scalar_float
-        Pixel size in Angstroms.
+    microscope : MicroscopeConfig
+        Microscope voltage and optional ensemble axes.
+    detector : DetectorConfig
+        Scan positions in pixels and real-space calibration.
 
     Returns
     -------
@@ -525,7 +575,11 @@ def checked_stem_4d(
         If static ranks or spatial grid shapes are incompatible.
     """
     _validate_cbed_structure(pot_slice, beam, "pot_slice")
-    _validate_positions_structure(positions, "positions")
+    _raise_if(
+        detector.scan_positions_px is None,
+        "detector.scan_positions_px is required",
+    )
+    _validate_positions_structure(detector.scan_positions_px, "positions")
 
     checked_pot_slice: PotentialSlices = _checked_potential_slices(
         pot_slice,
@@ -533,60 +587,46 @@ def checked_stem_4d(
     )
     checked_beam: ProbeModes = _checked_beam(beam)
     checked_positions: Num[Array, "#P 2"] = _checked_positions_in_pixels(
-        positions,
+        detector.scan_positions_px,
         _potential_grid_shape(pot_slice, "pot_slice"),
     )
-    checked_voltage: Num[Array, ""] = _checked_positive_scalar(
-        voltage_kv,
-        "voltage_kv",
-    )
-    checked_calib_ang: Num[Array, ""] = _checked_positive_scalar(
-        calib_ang,
-        "calib_ang",
+    checked_microscope: MicroscopeConfig = _checked_microscope(microscope)
+    checked_detector: DetectorConfig = _checked_detector(detector)
+    checked_detector = eqx.tree_at(
+        lambda config: config.scan_positions_px,
+        checked_detector,
+        checked_positions,
     )
 
     stem4d_data: STEM4D = stem_4d(
         pot_slice=checked_pot_slice,
         beam=checked_beam,
-        positions=checked_positions,
-        voltage_kv=checked_voltage,
-        calib_ang=checked_calib_ang,
+        microscope=checked_microscope,
+        detector=checked_detector,
     )
     return stem4d_data
 
 
 @jaxtyped(typechecker=beartype)
 def checked_stem4d_sharded(
-    probe_modes: Complex[Array, "H W M"],
-    scan_positions_ang: Float[Array, "P 2"],
-    atom_coords: Float[Array, "N 3"],
-    atom_types: Int[Array, " N"],
-    slice_z_bounds: Float[Array, "S 2"],
-    atom_potentials: Float[Array, "T H W"],
-    voltage_kv: scalar_num,
-    calib_ang: scalar_float,
+    probe_modes: ProbeModes,
+    sample: AtomicSliceData,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
     mesh: Optional[Mesh] = None,
 ) -> STEM4D:
     """Validate sharded 4D-STEM inputs and run the bare sharded kernel.
 
     Parameters
     ----------
-    probe_modes : Complex[Array, "H W M"]
+    probe_modes : ProbeModes
         Base electron probe modes.
-    scan_positions_ang : Float[Array, "P 2"]
-        Scan positions in Angstroms, columns ``(y, x)``.
-    atom_coords : Float[Array, "N 3"]
-        Atom coordinates in Angstroms, columns ``(x, y, z)``.
-    atom_types : Int[Array, " N"]
-        Atom type indices.
-    slice_z_bounds : Float[Array, "S 2"]
-        Z boundaries per slice, columns ``(z_min, z_max)``.
-    atom_potentials : Float[Array, "T H W"]
-        Precomputed 2D atomic potentials for each atom type.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
-    calib_ang : scalar_float
-        Real-space pixel size in Angstroms.
+    sample : AtomicSliceData
+        Atom coordinates, type indices, z bounds, and potential kernels.
+    microscope : MicroscopeConfig
+        Microscope voltage and ensemble configuration.
+    detector : DetectorConfig
+        Scan positions in Angstroms and real-space calibration.
     mesh : Optional[Mesh]
         JAX device mesh for distributed execution. Default is ``None``.
 
@@ -603,51 +643,63 @@ def checked_stem4d_sharded(
     ValueError
         If static ranks or spatial grid shapes are incompatible.
     """
+    _raise_if(
+        detector.scan_positions_ang is None,
+        "detector.scan_positions_ang is required",
+    )
     _validate_sharded_structure(
-        probe_modes,
-        scan_positions_ang,
-        atom_coords,
-        atom_types,
-        slice_z_bounds,
-        atom_potentials,
+        probe_modes.modes,
+        detector.scan_positions_ang,
+        sample.atom_coords,
+        sample.atom_types,
+        sample.slice_z_bounds,
+        sample.atom_potentials,
     )
-    checked_voltage: Num[Array, ""] = _checked_positive_scalar(
-        voltage_kv,
-        "voltage_kv",
-    )
-    checked_calib_ang: Num[Array, ""] = _checked_positive_scalar(
-        calib_ang,
-        "calib_ang",
-    )
-    checked_probe_modes: Complex[Array, "H W M"]
+    checked_microscope: MicroscopeConfig = _checked_microscope(microscope)
+    checked_detector: DetectorConfig = _checked_detector(detector)
+    checked_probe_modes: ProbeModes = _checked_beam(probe_modes)
+    checked_probe_mode_array: Complex[Array, "H W M"]
     checked_scan_positions_ang: Float[Array, "P 2"]
     checked_atom_coords: Float[Array, "N 3"]
     checked_slice_z_bounds: Float[Array, "S 2"]
     checked_atom_potentials: Float[Array, "T H W"]
     (
-        checked_probe_modes,
+        checked_probe_mode_array,
         checked_scan_positions_ang,
         checked_atom_coords,
         checked_slice_z_bounds,
         checked_atom_potentials,
     ) = _checked_sharded_arrays(
-        probe_modes,
-        scan_positions_ang,
-        atom_coords,
-        slice_z_bounds,
-        atom_potentials,
-        checked_calib_ang,
+        probe_modes.modes,
+        detector.scan_positions_ang,
+        sample.atom_coords,
+        sample.slice_z_bounds,
+        sample.atom_potentials,
+        checked_detector.real_space_calib_ang,
+    )
+    checked_probe_modes = eqx.tree_at(
+        lambda probe: probe.modes,
+        checked_probe_modes,
+        checked_probe_mode_array,
+    )
+    checked_sample: AtomicSliceData = create_atomic_slice_data(
+        atom_coords=checked_atom_coords,
+        atom_types=sample.atom_types,
+        slice_z_bounds=checked_slice_z_bounds,
+        atom_potentials=checked_atom_potentials,
+        atom_mask=sample.atom_mask,
+    )
+    checked_detector = eqx.tree_at(
+        lambda config: config.scan_positions_ang,
+        checked_detector,
+        checked_scan_positions_ang,
     )
 
     stem4d_data_sharded: STEM4D = stem4d_sharded(
         probe_modes=checked_probe_modes,
-        scan_positions_ang=checked_scan_positions_ang,
-        atom_coords=checked_atom_coords,
-        atom_types=atom_types,
-        slice_z_bounds=checked_slice_z_bounds,
-        atom_potentials=checked_atom_potentials,
-        voltage_kv=checked_voltage,
-        calib_ang=checked_calib_ang,
+        sample=checked_sample,
+        microscope=checked_microscope,
+        detector=checked_detector,
         mesh=mesh,
     )
     return stem4d_data_sharded

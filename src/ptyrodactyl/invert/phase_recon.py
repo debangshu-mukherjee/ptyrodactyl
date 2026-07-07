@@ -37,6 +37,7 @@ preprocessed and validated using the factory functions from
 :mod:`ptyrodactyl.tools`.
 """
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -48,9 +49,12 @@ from ptyrodactyl.simul.simulations import stem_4d
 from ptyrodactyl.types import (
     STEM4D,
     CalibratedArray,
-    PotentialSlices,
     ProbeModes,
     create_calibrated_array,
+    create_detector_config,
+    create_microscope_config,
+    create_potential_slices,
+    create_probe_modes,
     scalar_float,
     scalar_int,
     scalar_num,
@@ -191,6 +195,10 @@ def single_slice_ptychography(
     pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
     voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
+    microscope = create_microscope_config(
+        voltage_kv=voltage_kv,
+        aperture_mrad=1.0,
+    )
 
     def _forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
@@ -209,22 +217,25 @@ def single_slice_ptychography(
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
-        potential_slices = PotentialSlices(
+        potential_slices = create_potential_slices(
             slices=jnp.real(pot_slice)[..., jnp.newaxis],
             slice_thickness=slice_thickness,
             calib=calib_ang,
         )
-        probe_modes = ProbeModes(
+        probe_modes = create_probe_modes(
             modes=beam[..., jnp.newaxis],
             weights=jnp.ones((1,), dtype=experimental_4dstem.dtype),
             calib=calib_ang,
         )
+        detector = create_detector_config(
+            real_space_calib_ang=calib_ang,
+            scan_positions_px=pos_list,
+        )
         stem4d_result = stem_4d(
             potential_slices,
             probe_modes,
-            pos_list,
-            voltage_kv,
-            calib_ang,
+            microscope,
+            detector,
         )
         return stem4d_result.data
 
@@ -546,6 +557,10 @@ def single_slice_poscorrected(  # noqa: PLR0915
     voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
+    microscope = create_microscope_config(
+        voltage_kv=voltage_kv,
+        aperture_mrad=1.0,
+    )
 
     def _forward_fn(
         pot_slice: Complex[Array, "H W"],
@@ -568,22 +583,25 @@ def single_slice_poscorrected(  # noqa: PLR0915
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
-        potential_slices = PotentialSlices(
+        potential_slices = create_potential_slices(
             slices=jnp.real(pot_slice)[..., jnp.newaxis],
             slice_thickness=slice_thickness,
             calib=calib_ang,
         )
-        probe_modes = ProbeModes(
+        probe_modes = create_probe_modes(
             modes=beam[..., jnp.newaxis],
             weights=jnp.ones((1,), dtype=experimental_4dstem.dtype),
             calib=calib_ang,
         )
+        detector = create_detector_config(
+            real_space_calib_ang=calib_ang,
+            scan_positions_px=pos_list,
+        )
         stem4d_result = stem_4d(
             potential_slices,
             probe_modes,
-            pos_list,
-            voltage_kv,
-            calib_ang,
+            microscope,
+            detector,
         )
         return stem4d_result.data
 
@@ -1010,6 +1028,10 @@ def single_slice_multi_modal(  # noqa: PLR0915
     voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
+    microscope = create_microscope_config(
+        voltage_kv=voltage_kv,
+        aperture_mrad=1.0,
+    )
 
     def _forward_fn(
         pot_slice: Complex[Array, "H W"],
@@ -1032,17 +1054,20 @@ def single_slice_multi_modal(  # noqa: PLR0915
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
-        potential_slices = PotentialSlices(
+        potential_slices = create_potential_slices(
             slices=jnp.real(pot_slice)[..., jnp.newaxis],
             slice_thickness=slice_thickness,
             calib=calib_ang,
         )
+        detector = create_detector_config(
+            real_space_calib_ang=calib_ang,
+            scan_positions_px=pos_list,
+        )
         stem4d_result = stem_4d(
             potential_slices,
             beam,
-            pos_list,
-            voltage_kv,
-            calib_ang,
+            microscope,
+            detector,
         )
         return stem4d_result.data
 
@@ -1164,8 +1189,10 @@ def single_slice_multi_modal(  # noqa: PLR0915
             beam_state,
             parameter_learning_rate,
         )
-        beam = ProbeModes(
-            modes=beam_modes, weights=beam.weights, calib=beam.calib
+        beam = eqx.tree_at(
+            lambda probe: probe.modes,
+            beam,
+            beam_modes,
         )
         pos_list_complex, pos_state = optimizer.update(
             pos_list.astype(jnp.complex128),
@@ -1420,6 +1447,10 @@ def multi_slice_multi_modal(
     voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
     calib_ang: Float[Array, " "] = experimental_data.real_space_calib
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
+    microscope = create_microscope_config(
+        voltage_kv=voltage_kv,
+        aperture_mrad=1.0,
+    )
 
     def _forward_fn(
         pot_slice: Complex[Array, "H W"],
@@ -1442,22 +1473,25 @@ def multi_slice_multi_modal(
         patterns : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
-        potential_slices = PotentialSlices(
+        potential_slices = create_potential_slices(
             slices=jnp.real(pot_slice)[..., jnp.newaxis],
             slice_thickness=slice_thickness,
             calib=calib_ang,
         )
-        probe_modes = ProbeModes(
+        probe_modes = create_probe_modes(
             modes=beam[..., jnp.newaxis],
             weights=jnp.ones((1,), dtype=experimental_4dstem.dtype),
             calib=calib_ang,
         )
+        detector = create_detector_config(
+            real_space_calib_ang=calib_ang,
+            scan_positions_px=pos_list,
+        )
         stem4d_result = stem_4d(
             potential_slices,
             probe_modes,
-            pos_list,
-            voltage_kv,
-            calib_ang,
+            microscope,
+            detector,
         )
         return stem4d_result.data
 

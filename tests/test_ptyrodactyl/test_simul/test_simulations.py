@@ -1,6 +1,7 @@
 """Tests for :mod:`ptyrodactyl.simul.simulations`."""
 # ruff: noqa: E402, I001
 
+import inspect
 import numpy as np
 import pytest
 
@@ -9,22 +10,60 @@ import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.simul import apply_distribution
+from ptyrodactyl.simul import (
+    apply_distribution,
+    apply_distributions,
+    bind_cbed_axes,
+    checked_cbed_image,
+    checked_make_probe,
+    checked_stem4d_sharded,
+    checked_stem_4d,
+    coherence_to_distribution,
+    position_jitter_to_distribution,
+)
+from ptyrodactyl.simul.parallelized import stem4d_sharded
 from ptyrodactyl.simul.simulations import (
+    aberration,
     annular_detector,
     cbed_amplitude,
     cbed_image,
     decompose_beam_to_modes,
+    make_probe,
     probe_modes_to_distribution,
+    stem_4d,
 )
 from ptyrodactyl.types import (
     ReductionMode,
     create_calibrated_array,
+    create_detector_config,
+    create_ensemble_axes,
     create_distribution,
+    create_microscope_config,
     create_potential_slices,
     create_probe_modes,
     create_stem4d,
 )
+
+
+def test_public_integrator_signatures_have_at_most_six_parameters() -> None:
+    """Carrierized public integrators stay below the IM7 signature cap."""
+    public_integrators = (
+        aberration,
+        annular_detector,
+        cbed_amplitude,
+        cbed_image,
+        checked_cbed_image,
+        checked_make_probe,
+        checked_stem4d_sharded,
+        checked_stem_4d,
+        make_probe,
+        stem4d_sharded,
+        stem_4d,
+    )
+
+    for integrator in public_integrators:
+        parameters = inspect.signature(integrator).parameters
+        assert len(parameters) <= 6, integrator
 
 
 def test_annular_detector_static_scan_shape_and_jit() -> None:
@@ -48,10 +87,15 @@ def test_annular_detector_static_scan_shape_and_jit() -> None:
         dtype=np.float64,
     )
 
-    result = annular_detector(stem4d, collection_angles, (2, 3))
-    jitted = jax.jit(annular_detector, static_argnames=("scan_shape",))(
-        stem4d, collection_angles, (2, 3)
+    detector = create_detector_config(
+        real_space_calib_ang=0.5,
+        collection_inner_mrad=collection_angles[0],
+        collection_outer_mrad=collection_angles[1],
+        scan_shape=(2, 3),
     )
+
+    result = annular_detector(stem4d, detector)
+    jitted = jax.jit(annular_detector)(stem4d, detector)
 
     assert np.array_equal(np.asarray(result.data_array), expected)
     assert np.array_equal(np.asarray(jitted.data_array), expected)
@@ -149,6 +193,48 @@ def test_probe_modes_to_distribution_uses_explicit_weights() -> None:
     assert distribution.axis_id == "probe_modes"
 
 
+def test_cbed_image_ensemble_axes_match_explicit_composition() -> None:
+    """A jitter axis inside MicroscopeConfig matches explicit composition."""
+    pot_slices = create_potential_slices(
+        jnp.zeros((8, 8, 1), dtype=jnp.float64),
+        1.0,
+        0.5,
+    )
+    detector = create_detector_config(
+        real_space_calib_ang=0.5,
+        probe_calibration_pm=50.0,
+    )
+    probe = make_probe(
+        create_microscope_config(80.0, 25.0, probe_shape=(8, 8)),
+        detector,
+    )
+    beam = create_probe_modes(
+        probe[..., jnp.newaxis],
+        jnp.ones((1,), dtype=jnp.float64),
+        0.5,
+    )
+    jitter = position_jitter_to_distribution(0.15, 2)
+    ensemble = create_ensemble_axes(position_jitter=jitter)
+    microscope = create_microscope_config(
+        80.0,
+        25.0,
+        ensemble=ensemble,
+        probe_shape=(8, 8),
+    )
+    axes = (jitter,)
+    bound = bind_cbed_axes(
+        pot_slices=pot_slices,
+        probe_modes=beam,
+        microscope=microscope,
+        detector=detector,
+        axes=axes,
+    )
+    explicit = apply_distributions(axes, bound)
+    carried = cbed_image(pot_slices, beam, microscope).data_array
+
+    assert np.array_equal(np.asarray(carried), np.asarray(explicit))
+
+
 def test_coherent_probe_distribution_has_finite_weight_grad() -> None:
     """A coherent toy mode distribution remains differentiable in weights."""
     samples = jnp.arange(2, dtype=jnp.float64)[:, jnp.newaxis]
@@ -179,6 +265,63 @@ def test_coherent_probe_distribution_has_finite_weight_grad() -> None:
     assert np.all(np.isfinite(np.asarray(grad_value)))
 
 
+def test_forward_carrier_dynamic_scalars_have_finite_gradients() -> None:
+    """Physical carrier leaves remain dynamic under an end-to-end gradient."""
+    pot_slices = create_potential_slices(
+        jnp.zeros((8, 8, 1), dtype=jnp.float64),
+        1.0,
+        0.5,
+    )
+    detector = create_detector_config(
+        real_space_calib_ang=0.5,
+        probe_calibration_pm=50.0,
+    )
+
+    def objective(params):
+        voltage = params[0]
+        aperture = params[1]
+        defocus = params[2]
+        jitter_sigma = params[3]
+        energy_width = params[4]
+        angular_width = params[5]
+        first_weight = params[6]
+        probe_microscope = create_microscope_config(
+            voltage_kv=voltage,
+            aperture_mrad=aperture,
+            defocus_ang=defocus,
+            probe_shape=(8, 8),
+        )
+        probe = make_probe(probe_microscope, detector)
+        modes = jnp.stack((probe, jnp.roll(probe, shift=1, axis=0)), axis=2)
+        weights = jnp.stack((first_weight, 1.0 - first_weight))
+        beam = create_probe_modes(modes, weights, 0.5)
+        ensemble = create_ensemble_axes(
+            position_jitter=position_jitter_to_distribution(jitter_sigma, 2),
+            coherence=coherence_to_distribution(
+                energy_width,
+                angular_width,
+                2,
+            ),
+        )
+        microscope = create_microscope_config(
+            voltage_kv=voltage,
+            aperture_mrad=aperture,
+            defocus_ang=defocus,
+            ensemble=ensemble,
+            probe_shape=(8, 8),
+        )
+        return jnp.sum(cbed_image(pot_slices, beam, microscope).data_array)
+
+    params = jnp.array(
+        [80.0, 25.0, 1.5, 0.05, 0.1, 0.02, 0.6],
+        dtype=jnp.float64,
+    )
+    grad_value = jax.grad(objective)(params)
+
+    assert grad_value.shape == params.shape
+    assert np.all(np.isfinite(np.asarray(grad_value)))
+
+
 def test_cbed_amplitude_phase_gradient_survives_intensity_seam() -> None:
     """Amplitude keeps phase information that the intensity path removes."""
     pot_slices = create_potential_slices(
@@ -193,14 +336,26 @@ def test_cbed_amplitude_phase_gradient_survives_intensity_seam() -> None:
 
     def probe_with_phase(phase):
         modes = (base * jnp.exp(1j * phase))[..., jnp.newaxis]
-        return create_probe_modes(modes, jnp.ones((1,), dtype=jnp.float64), 0.5)
+        return create_probe_modes(
+            modes,
+            jnp.ones((1,), dtype=jnp.float64),
+            0.5,
+        )
 
     def amplitude_loss(phase):
-        amplitudes = cbed_amplitude(pot_slices, probe_with_phase(phase), 80.0)
+        amplitudes = cbed_amplitude(
+            pot_slices,
+            probe_with_phase(phase),
+            create_microscope_config(80.0, 1.0),
+        )
         return jnp.real(jnp.sum(amplitudes))
 
     def intensity_loss(phase):
-        image = cbed_image(pot_slices, probe_with_phase(phase), 80.0)
+        image = cbed_image(
+            pot_slices,
+            probe_with_phase(phase),
+            create_microscope_config(80.0, 1.0),
+        )
         return jnp.sum(image.data_array)
 
     phase = jnp.asarray(0.37, dtype=jnp.float64)

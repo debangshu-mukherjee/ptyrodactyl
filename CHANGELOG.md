@@ -1,5 +1,30 @@
 # Changelog
 
+## Plan 03 — IM7 Forward-Simulation Carrier Bundling
+
+Forward simulator entry points now take types-owned Equinox carrier
+configuration instead of loose voltage, calibration, scan, and detector
+scalars. The ensemble injection point is `MicroscopeConfig.ensemble`, so
+adding jitter/coherence/probe-mode axes no longer widens public signatures.
+
+| Symbol | Old contract | New contract |
+| --- | --- | --- |
+| `make_probe` | `(aperture, voltage, image_size, calibration_pm, defocus=0, c3=0, c5=0)` | `(microscope: MicroscopeConfig, detector: DetectorConfig)` |
+| `cbed_amplitude` | `(pot_slices, beam, voltage_kv)` | `(pot_slices, beam, microscope: MicroscopeConfig)` |
+| `cbed_image` | `(pot_slices, beam, voltage_kv)` | `(pot_slices, beam, microscope: MicroscopeConfig)` |
+| `stem_4d` | `(pot_slice, beam, positions, voltage_kv, calib_ang)` | `(pot_slice, beam, microscope: MicroscopeConfig, detector: DetectorConfig)` |
+| `stem4d_sharded` | `(probe_modes, scan_positions_ang, atom_coords, atom_types, slice_z_bounds, atom_potentials, voltage_kv, calib_ang, mesh=None)` | `(probe_modes: ProbeModes, sample: AtomicSliceData, microscope: MicroscopeConfig, detector: DetectorConfig, mesh=None)` |
+| `annular_detector` | `(stem4d_data, collection_angles, scan_shape)` | `(stem4d_data, detector: DetectorConfig)` |
+| `checked_make_probe` | `(aperture, voltage, image_size, calibration_pm, defocus=0, c3=0, c5=0)` | `(microscope: MicroscopeConfig, detector: DetectorConfig)` |
+| `checked_cbed_image` | `(pot_slices, beam, voltage_kv)` | `(pot_slices, beam, microscope: MicroscopeConfig)` |
+| `checked_stem_4d` | `(pot_slice, beam, positions, voltage_kv, calib_ang)` | `(pot_slice, beam, microscope: MicroscopeConfig, detector: DetectorConfig)` |
+| `checked_stem4d_sharded` | `(probe_modes, scan_positions_ang, atom_coords, atom_types, slice_z_bounds, atom_potentials, voltage_kv, calib_ang, mesh=None)` | `(probe_modes: ProbeModes, sample: AtomicSliceData, microscope: MicroscopeConfig, detector: DetectorConfig, mesh=None)` |
+
+New factories: `create_microscope_config`, `create_detector_config`,
+`create_ensemble_axes`, and `create_atomic_slice_data`. Existing sample-side
+carriers remain in use; `AtomicSliceData` covers the sharded on-the-fly atom
+slice inputs that had no existing carrier.
+
 ## Plan 03 — IM2+IM3 CBED Amplitude Split And Explicit Mode Weights
 
 | Change | Symbols |

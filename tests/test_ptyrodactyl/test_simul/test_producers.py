@@ -17,13 +17,30 @@ from ptyrodactyl.simul import (
 from ptyrodactyl.simul.producers import _axis_update_from_sample
 from ptyrodactyl.types import (
     ReductionMode,
+    create_detector_config,
     create_distribution,
+    create_microscope_config,
     create_potential_slices,
     create_probe_modes,
 )
 
 _CALIB_ANG = 0.5
 _VOLTAGE_KV = 80.0
+
+
+def _microscope():
+    return create_microscope_config(
+        voltage_kv=_VOLTAGE_KV,
+        aperture_mrad=25.0,
+        probe_shape=(8, 8),
+    )
+
+
+def _detector():
+    return create_detector_config(
+        real_space_calib_ang=_CALIB_ANG,
+        probe_calibration_pm=_CALIB_ANG * 100.0,
+    )
 
 
 def _tiny_potential():
@@ -38,7 +55,7 @@ def _tiny_potential():
 
 
 def _probe_modes(mode_count=1, scale=1.0):
-    base = make_probe(25.0, _VOLTAGE_KV, (8, 8), _CALIB_ANG * 100.0)
+    base = make_probe(_microscope(), _detector())
     first_mode = scale * base
     if mode_count == 1:
         modes = first_mode[..., jnp.newaxis]
@@ -56,8 +73,8 @@ def _cbed_loss_for_axes(axes, beam):
     bound = bind_cbed_axes(
         pot_slices,
         beam,
-        _VOLTAGE_KV,
-        _CALIB_ANG,
+        _microscope(),
+        _detector(),
         axes,
         (),
     )
@@ -76,12 +93,12 @@ def test_zero_width_axes_are_noop_against_plain_cbed_image():
     bound = bind_cbed_axes(
         pot_slices,
         beam,
-        _VOLTAGE_KV,
-        _CALIB_ANG,
+        _microscope(),
+        _detector(),
         axes,
         (),
     )
-    expected = cbed_image(pot_slices, beam, _VOLTAGE_KV).data_array
+    expected = cbed_image(pot_slices, beam, _microscope()).data_array
 
     actual = apply_distributions(axes, bound)
 
@@ -233,8 +250,8 @@ def _cbed_loss_image(axes, beam):
     bound = bind_cbed_axes(
         pot_slices,
         beam,
-        _VOLTAGE_KV,
-        _CALIB_ANG,
+        _microscope(),
+        _detector(),
         axes,
         (),
     )

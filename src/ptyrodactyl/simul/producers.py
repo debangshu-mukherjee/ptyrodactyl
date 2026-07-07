@@ -22,9 +22,9 @@ Routine Listings
     Build the incoherent two-dimensional position-jitter distribution.
 """
 
-import numpy as np
 import equinox as eqx
 import jax.numpy as jnp
+import numpy as np
 from beartype import beartype
 from beartype.typing import Callable
 from jaxtyping import Array, Complex, Float, jaxtyped
@@ -32,13 +32,16 @@ from jaxtyping import Array, Complex, Float, jaxtyped
 from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     AxisUpdate,
+    DetectorConfig,
     Distribution,
+    MicroscopeConfig,
     PotentialSlices,
     ProbeModes,
     ReductionMode,
     combine_axis_updates,
     create_axis_update,
     create_distribution,
+    create_probe_modes,
     scalar_float,
     scalar_int,
     scalar_num,
@@ -58,8 +61,8 @@ _PROBE_MODE_DIM: int = 1
 def bind_cbed_axes(
     pot_slices: PotentialSlices,
     probe_modes: ProbeModes,
-    voltage_kv: scalar_num,
-    calib_ang: scalar_float,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
     axes: tuple[Distribution, ...],
     column_maps: tuple[str, ...] = (),
 ) -> Callable[[Float[Array, " D"]], Complex[Array, " H W"]]:
@@ -73,9 +76,9 @@ def bind_cbed_axes(
         Probe modes. If a ``"probe_modes"`` axis is present, it must be the
         first axis and its single sample column is the mode index. Otherwise
         ``probe_modes`` must contain exactly one mode.
-    voltage_kv : scalar_num
-        Nominal accelerating voltage in kilovolts.
-    calib_ang : scalar_float
+    microscope : MicroscopeConfig
+        Nominal microscope voltage and aberration configuration.
+    detector : DetectorConfig
         Real-space pixel size used for position shifts and tilt ramps.
     axes : tuple[Distribution, ...]
         Distribution axes whose sample rows are concatenated by
@@ -111,9 +114,10 @@ def bind_cbed_axes(
     _validate_axis_maps(axes, axis_maps, probe_modes)
     expected_dim: int = sum(axis.samples.shape[1] for axis in axes)
     nominal_voltage_kv: Float[Array, " "] = jnp.asarray(
-        voltage_kv,
+        microscope.voltage_kv,
         dtype=jnp.float64,
     )
+    calib_ang: Float[Array, " "] = detector.real_space_calib_ang
 
     def bound_amplitude_fn(
         sample: Float[Array, " D"],
@@ -128,6 +132,11 @@ def bind_cbed_axes(
         updated_voltage_kv: Float[Array, " "] = (
             nominal_voltage_kv + update.energy_delta_ev / 1000.0
         )
+        updated_microscope: MicroscopeConfig = eqx.tree_at(
+            lambda config: config.voltage_kv,
+            microscope,
+            updated_voltage_kv,
+        )
         selected_modes: Complex[Array, " H W 1"] = jnp.take(
             probe_modes.modes,
             mode_idx.astype(jnp.int32),
@@ -135,7 +144,7 @@ def bind_cbed_axes(
         )[..., jnp.newaxis]
         shifted_modes_all: Complex[Array, " 1 H W 1"] = shift_beam_fourier(
             selected_modes,
-            update.position_delta_ang,
+            update.position_delta_ang[jnp.newaxis, :],
             calib_ang,
         )
         shifted_modes: Complex[Array, " H W 1"] = shifted_modes_all[0]
@@ -145,15 +154,15 @@ def bind_cbed_axes(
             updated_voltage_kv,
             calib_ang,
         )
-        bound_probe: ProbeModes = ProbeModes(
+        bound_probe: ProbeModes = create_probe_modes(
             modes=tilted_modes,
             weights=jnp.ones((1,), dtype=jnp.float64),
             calib=probe_modes.calib,
         )
         amplitudes: Complex[Array, " H W 1"] = cbed_amplitude(
-            pot_slices,
-            bound_probe,
-            updated_voltage_kv,
+            pot_slices=pot_slices,
+            beam=bound_probe,
+            microscope=updated_microscope,
         )
         amplitude: Complex[Array, " H W"] = amplitudes[..., 0]
         return amplitude

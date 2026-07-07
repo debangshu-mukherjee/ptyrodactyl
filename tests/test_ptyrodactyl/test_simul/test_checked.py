@@ -4,6 +4,7 @@
 import numpy as np
 import pytest
 
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 from equinox import EquinoxRuntimeError
@@ -18,7 +19,13 @@ from ptyrodactyl.simul import (
 )
 from ptyrodactyl.simul.parallelized import stem4d_sharded
 from ptyrodactyl.simul.simulations import cbed_image, make_probe, stem_4d
-from ptyrodactyl.types import PotentialSlices, ProbeModes
+from ptyrodactyl.types import (
+    create_atomic_slice_data,
+    create_detector_config,
+    create_microscope_config,
+    create_potential_slices,
+    create_probe_modes,
+)
 
 
 _GRID_SIZE = 16
@@ -80,25 +87,40 @@ def _potential_data(scale=1.0):
 
 
 def _valid_potential_slices(scale=1.0):
-    return PotentialSlices(
-        slices=_potential_data(scale),
-        slice_thickness=_SLICE_THICKNESS,
-        calib=_CALIB_ANG,
+    return create_potential_slices(
+        _potential_data(scale),
+        _SLICE_THICKNESS,
+        _CALIB_ANG,
+    )
+
+
+def _microscope(defocus=0.0):
+    return create_microscope_config(
+        voltage_kv=_VOLTAGE,
+        aperture_mrad=_APERTURE,
+        defocus_ang=defocus,
+        probe_shape=(_GRID_SIZE, _GRID_SIZE),
+    )
+
+
+def _detector(scan_positions_px=None, scan_positions_ang=None):
+    return create_detector_config(
+        real_space_calib_ang=_CALIB_ANG,
+        probe_calibration_pm=_CALIB_PM,
+        scan_positions_px=scan_positions_px,
+        scan_positions_ang=scan_positions_ang,
     )
 
 
 def _valid_probe_modes(defocus=0.0):
     probe = make_probe(
-        _APERTURE,
-        _VOLTAGE,
-        _IMAGE_SIZE,
-        _CALIB_PM,
-        defocus=defocus,
+        _microscope(defocus=defocus),
+        _detector(),
     )
-    return ProbeModes(
-        modes=probe[..., jnp.newaxis],
-        weights=jnp.ones((1,), dtype=jnp.float64),
-        calib=_CALIB_ANG,
+    return create_probe_modes(
+        probe[..., jnp.newaxis],
+        jnp.ones((1,), dtype=jnp.float64),
+        _CALIB_ANG,
     )
 
 
@@ -129,25 +151,21 @@ def _sharded_inputs(scale=1.0):
 
 
 def test_checked_make_probe_transparent_jit_grad_and_raises():
-    expected = make_probe(_APERTURE, _VOLTAGE, _IMAGE_SIZE, _CALIB_PM)
-    actual = checked_make_probe(_APERTURE, _VOLTAGE, _IMAGE_SIZE, _CALIB_PM)
+    microscope = _microscope()
+    detector = _detector()
+    expected = make_probe(microscope, detector)
+    actual = checked_make_probe(microscope, detector)
     _assert_tree_array_equal(actual, expected)
 
     jitted = jax.jit(
         lambda defocus: checked_make_probe(
-            _APERTURE,
-            _VOLTAGE,
-            _IMAGE_SIZE,
-            _CALIB_PM,
-            defocus=defocus,
+            _microscope(defocus=defocus),
+            detector,
         )
     )(jnp.asarray(3.0, dtype=jnp.float64))
     expected_jitted = make_probe(
-        _APERTURE,
-        _VOLTAGE,
-        _IMAGE_SIZE,
-        _CALIB_PM,
-        defocus=jnp.asarray(3.0, dtype=jnp.float64),
+        _microscope(defocus=jnp.asarray(3.0, dtype=jnp.float64)),
+        detector,
     )
     _assert_tree_allclose(jitted, expected_jitted)
 
@@ -155,11 +173,8 @@ def test_checked_make_probe_transparent_jit_grad_and_raises():
         lambda defocus: jnp.sum(
             jnp.abs(
                 checked_make_probe(
-                    _APERTURE,
-                    _VOLTAGE,
-                    _IMAGE_SIZE,
-                    _CALIB_PM,
-                    defocus=defocus,
+                    _microscope(defocus=defocus),
+                    detector,
                 )
             )
             ** 2
@@ -167,24 +182,30 @@ def test_checked_make_probe_transparent_jit_grad_and_raises():
     )(jnp.asarray(0.0, dtype=jnp.float64))
     _assert_finite(grad_value)
 
-    with pytest.raises(EquinoxRuntimeError, match="voltage must be positive"):
+    with pytest.raises(
+        EquinoxRuntimeError,
+        match="voltage_kv must be positive",
+    ):
         checked_make_probe(
-            _APERTURE,
-            jnp.asarray(-80.0, dtype=jnp.float64),
-            _IMAGE_SIZE,
-            _CALIB_PM,
+            create_microscope_config(
+                voltage_kv=jnp.asarray(-80.0, dtype=jnp.float64),
+                aperture_mrad=_APERTURE,
+                probe_shape=(_GRID_SIZE, _GRID_SIZE),
+            ),
+            detector,
         )
 
 
 def test_checked_cbed_image_transparent_jit_grad_vmap_and_raises():
     pot_slices = _valid_potential_slices()
     beam = _valid_probe_modes()
+    microscope = _microscope()
 
-    expected = cbed_image(pot_slices, beam, _VOLTAGE)
-    actual = checked_cbed_image(pot_slices, beam, _VOLTAGE)
+    expected = cbed_image(pot_slices, beam, microscope)
+    actual = checked_cbed_image(pot_slices, beam, microscope)
     _assert_tree_array_equal(actual, expected)
 
-    jitted = jax.jit(checked_cbed_image)(pot_slices, beam, _VOLTAGE)
+    jitted = jax.jit(checked_cbed_image)(pot_slices, beam, microscope)
     _assert_tree_array_equal(jitted, expected)
 
     grad_value = jax.grad(
@@ -192,7 +213,7 @@ def test_checked_cbed_image_transparent_jit_grad_vmap_and_raises():
             checked_cbed_image(
                 _valid_potential_slices(scale),
                 beam,
-                _VOLTAGE,
+                microscope,
             ).data_array
         )
     )(jnp.asarray(1.0, dtype=jnp.float64))
@@ -204,50 +225,50 @@ def test_checked_cbed_image_transparent_jit_grad_vmap_and_raises():
     )
     vmapped = jax.vmap(
         lambda slices: checked_cbed_image(
-            PotentialSlices(
-                slices=slices,
-                slice_thickness=pot_slices.slice_thickness,
-                calib=pot_slices.calib,
+            create_potential_slices(
+                slices,
+                pot_slices.slice_thickness,
+                pot_slices.calib,
             ),
             beam,
-            _VOLTAGE,
+            microscope,
         ).data_array
     )(batched_slices)
     assert vmapped.shape == (2, _GRID_SIZE, _GRID_SIZE)
     _assert_finite(vmapped)
 
-    bad_pot_slices = PotentialSlices(
-        slices=pot_slices.slices.at[0, 0, 0].set(jnp.nan),
-        slice_thickness=pot_slices.slice_thickness,
-        calib=pot_slices.calib,
+    bad_pot_slices = eqx.tree_at(
+        lambda value: value.slices,
+        pot_slices,
+        pot_slices.slices.at[0, 0, 0].set(jnp.nan),
     )
     with pytest.raises(
         EquinoxRuntimeError,
         match="pot_slices.slices contain non-finite values",
     ):
-        checked_cbed_image(bad_pot_slices, beam, _VOLTAGE)
+        checked_cbed_image(bad_pot_slices, beam, microscope)
 
 
 def test_checked_stem_4d_transparent_jit_grad_and_raises():
     pot_slice = _valid_potential_slices()
     beam = _valid_probe_modes()
+    microscope = _microscope()
+    detector = _detector(scan_positions_px=_POSITIONS)
 
-    expected = stem_4d(pot_slice, beam, _POSITIONS, _VOLTAGE, _CALIB_ANG)
+    expected = stem_4d(pot_slice, beam, microscope, detector)
     actual = checked_stem_4d(
         pot_slice,
         beam,
-        _POSITIONS,
-        _VOLTAGE,
-        _CALIB_ANG,
+        microscope,
+        detector,
     )
     _assert_tree_array_equal(actual, expected)
 
     jitted = jax.jit(checked_stem_4d)(
         pot_slice,
         beam,
-        _POSITIONS,
-        _VOLTAGE,
-        _CALIB_ANG,
+        microscope,
+        detector,
     )
     _assert_tree_array_equal(jitted, expected)
 
@@ -256,15 +277,15 @@ def test_checked_stem_4d_transparent_jit_grad_and_raises():
             checked_stem_4d(
                 _valid_potential_slices(scale),
                 beam,
-                _POSITIONS,
-                _VOLTAGE,
-                _CALIB_ANG,
+                microscope,
+                detector,
             ).data
         )
     )(jnp.asarray(1.0, dtype=jnp.float64))
     _assert_finite(grad_value)
 
     bad_positions = _POSITIONS.at[1, 0].set(_GRID_SIZE)
+    bad_detector = _detector(scan_positions_px=bad_positions)
     with pytest.raises(
         EquinoxRuntimeError,
         match="positions must be within pot_slice grid bounds",
@@ -272,53 +293,53 @@ def test_checked_stem_4d_transparent_jit_grad_and_raises():
         checked_stem_4d(
             pot_slice,
             beam,
-            bad_positions,
-            _VOLTAGE,
-            _CALIB_ANG,
+            microscope,
+            bad_detector,
         )
 
 
 def test_checked_stem4d_sharded_transparent_jit_grad_and_raises():
     (
-        probe_modes,
+        probe_mode_array,
         scan_positions_ang,
         atom_coords,
         atom_types,
         slice_z_bounds,
         atom_potentials,
     ) = _sharded_inputs()
+    probe_modes = create_probe_modes(
+        probe_mode_array,
+        jnp.ones((probe_mode_array.shape[-1],), dtype=jnp.float64),
+        _CALIB_ANG,
+    )
+    sample = create_atomic_slice_data(
+        atom_coords,
+        atom_types,
+        slice_z_bounds,
+        atom_potentials,
+    )
+    microscope = _microscope()
+    detector = _detector(scan_positions_ang=scan_positions_ang)
 
     expected = stem4d_sharded(
         probe_modes,
-        scan_positions_ang,
-        atom_coords,
-        atom_types,
-        slice_z_bounds,
-        atom_potentials,
-        _VOLTAGE,
-        _CALIB_ANG,
+        sample,
+        microscope,
+        detector,
     )
     actual = checked_stem4d_sharded(
         probe_modes,
-        scan_positions_ang,
-        atom_coords,
-        atom_types,
-        slice_z_bounds,
-        atom_potentials,
-        _VOLTAGE,
-        _CALIB_ANG,
+        sample,
+        microscope,
+        detector,
     )
     _assert_tree_array_equal(actual, expected)
 
     jitted = jax.jit(checked_stem4d_sharded)(
         probe_modes,
-        scan_positions_ang,
-        atom_coords,
-        atom_types,
-        slice_z_bounds,
-        atom_potentials,
-        _VOLTAGE,
-        _CALIB_ANG,
+        sample,
+        microscope,
+        detector,
     )
     _assert_tree_array_equal(jitted, expected)
 
@@ -326,30 +347,28 @@ def test_checked_stem4d_sharded_transparent_jit_grad_and_raises():
         lambda scale: jnp.sum(
             checked_stem4d_sharded(
                 probe_modes,
-                scan_positions_ang,
-                atom_coords,
-                atom_types,
-                slice_z_bounds,
-                atom_potentials * scale,
-                _VOLTAGE,
-                _CALIB_ANG,
+                create_atomic_slice_data(
+                    atom_coords,
+                    atom_types,
+                    slice_z_bounds,
+                    atom_potentials * scale,
+                ),
+                microscope,
+                detector,
             ).data
         )
     )(jnp.asarray(1.0, dtype=jnp.float64))
     _assert_finite(grad_value)
 
     bad_scan_positions = scan_positions_ang.at[1, 0].set(8.1)
+    bad_detector = _detector(scan_positions_ang=bad_scan_positions)
     with pytest.raises(
         EquinoxRuntimeError,
         match="scan_positions_ang must be within atom_potentials grid bounds",
     ):
         checked_stem4d_sharded(
             probe_modes,
-            bad_scan_positions,
-            atom_coords,
-            atom_types,
-            slice_z_bounds,
-            atom_potentials,
-            _VOLTAGE,
-            _CALIB_ANG,
+            sample,
+            microscope,
+            bad_detector,
         )

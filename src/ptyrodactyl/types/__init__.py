@@ -32,6 +32,12 @@ Routine Listings
     State container for conjugate gradient iteration.
 :class:`CalibratedArray`
     Calibrated array data with spatial calibration.
+:class:`DetectorConfig`
+    Detector, scan-position, and calibration configuration.
+:class:`EnsembleAxes`
+    Optional ensemble distributions for forward simulators.
+:class:`MicroscopeConfig`
+    Microscope voltage and probe-aberration configuration.
 :class:`CrystalData`
     Crystal data with atomic positions, lattice vectors, and metadata.
 :class:`CrystalStructure`
@@ -80,8 +86,16 @@ Routine Listings
     Sum multiple AxisUpdate carriers.
 :func:`create_axis_update`
     Create an AxisUpdate with runtime validation.
+:func:`create_atomic_slice_data`
+    Create AtomicSliceData with runtime validation.
 :func:`create_calibrated_array`
     Create a CalibratedArray with runtime validation.
+:func:`create_detector_config`
+    Create DetectorConfig with runtime validation.
+:func:`create_ensemble_axes`
+    Create EnsembleAxes with runtime validation.
+:func:`create_microscope_config`
+    Create MicroscopeConfig with runtime validation.
 :func:`create_crystal_data`
     Create a CrystalData with runtime validation.
 :func:`create_crystal_structure`
@@ -187,14 +201,22 @@ from .distributions import (
     create_trivial_distribution,
 )
 from .electron_types import (
+    STEM4D,
+    AtomicSliceData,
     AxisUpdate,
     CalibratedArray,
+    DetectorConfig,
+    EnsembleAxes,
+    MicroscopeConfig,
     PotentialSlices,
     ProbeModes,
-    STEM4D,
     combine_axis_updates,
+    create_atomic_slice_data,
     create_axis_update,
     create_calibrated_array,
+    create_detector_config,
+    create_ensemble_axes,
+    create_microscope_config,
     create_potential_slices,
     create_probe_modes,
     create_stem4d,
@@ -229,13 +251,16 @@ __all__: list[str] = [
     "A_BOHR",
     "AberrationParams",
     "AxisUpdate",
+    "AtomicSliceData",
     "CGState",
     "C_LIGHT",
     "CalibratedArray",
     "CrystalData",
     "CrystalStructure",
     "Distribution",
+    "DetectorConfig",
     "E_CHARGE",
+    "EnsembleAxes",
     "ExitWaveParams",
     "FisherState",
     "GNState",
@@ -249,6 +274,7 @@ __all__: list[str] = [
     "M0C2_EV",
     "MOTT_BETHE_VOLT_ANGSTROM_SQ",
     "M_E",
+    "MicroscopeConfig",
     "OptimizableBlock",
     "PositionParams",
     "PosteriorSamples",
@@ -264,11 +290,15 @@ __all__: list[str] = [
     "TRIVIAL_DISTRIBUTION",
     "combine_axis_updates",
     "create_axis_update",
+    "create_atomic_slice_data",
     "create_calibrated_array",
     "create_crystal_data",
     "create_crystal_structure",
     "create_distribution",
+    "create_detector_config",
+    "create_ensemble_axes",
     "create_laplace_uncertainty",
+    "create_microscope_config",
     "create_posterior_samples",
     "create_potential_slices",
     "create_probe_modes",

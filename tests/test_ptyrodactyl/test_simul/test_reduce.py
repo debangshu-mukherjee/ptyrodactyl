@@ -17,7 +17,6 @@ import pytest
 from ptyrodactyl.simul import apply_distribution, apply_distributions
 from ptyrodactyl.types import (
     TRIVIAL,
-    Distribution,
     ReductionMode,
     create_distribution,
 )
@@ -113,7 +112,7 @@ def test_apply_distribution_trivial_axis_is_identity_modulus_square():
 def test_apply_distribution_gradients_are_finite_for_weights_and_bound_param(
     mode,
 ):
-    """Gradients are finite through weights and through bound-closure params."""
+    """Gradients are finite through weights and bound-closure parameters."""
     samples = jnp.asarray(
         [[0.1, -0.2], [0.3, 0.4], [-0.5, 0.7]],
         dtype=jnp.float64,
@@ -121,7 +120,7 @@ def test_apply_distribution_gradients_are_finite_for_weights_and_bound_param(
     weights = jnp.asarray([0.2, 0.3, 0.5], dtype=jnp.float64)
 
     def objective_weights(weight_values):
-        distribution = Distribution(
+        distribution = create_distribution(
             samples=samples,
             weights=weight_values,
             reduction=mode,
@@ -135,7 +134,7 @@ def test_apply_distribution_gradients_are_finite_for_weights_and_bound_param(
         return value
 
     def objective_parameter(parameter):
-        distribution = Distribution(
+        distribution = create_distribution(
             samples=samples,
             weights=weights,
             reduction=mode,
@@ -170,7 +169,7 @@ def test_apply_distribution_static_branch_jit_reuses_sample_value_trace(mode):
     @jax.jit
     def reduce_samples(samples):
         trace_count["count"] += 1
-        distribution = Distribution(
+        distribution = create_distribution(
             samples=samples,
             weights=weights,
             reduction=mode,

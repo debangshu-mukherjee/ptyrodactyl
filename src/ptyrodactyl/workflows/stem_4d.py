@@ -48,6 +48,10 @@ from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
     CrystalData,
+    create_atomic_slice_data,
+    create_detector_config,
+    create_microscope_config,
+    create_probe_modes,
     create_stem4d,
     scalar_float,
     scalar_num,
@@ -353,14 +357,22 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
         )
 
     image_size: Int[Array, " 2"] = jnp.array([height, width])
+    microscope = create_microscope_config(
+        voltage_kv=voltage_kv,
+        aperture_mrad=cbed_aperture_mrad,
+        defocus_ang=probe_defocus,
+        c3_ang=probe_c3,
+        c5_ang=probe_c5,
+        probe_shape=image_size,
+    )
+    detector = create_detector_config(
+        real_space_calib_ang=real_space_pixel_size_ang,
+        probe_calibration_pm=real_space_pixel_size_ang * 100.0,
+        scan_positions_ang=scan_positions,
+    )
     probe: Complex[Array, "H W"] = make_probe(
-        aperture=cbed_aperture_mrad,
-        voltage=voltage_kv,
-        image_size=image_size,
-        calibration_pm=real_space_pixel_size_ang * 100.0,
-        defocus=probe_defocus,
-        c3=probe_c3,
-        c5=probe_c5,
+        microscope=microscope,
+        detector=detector,
     )
 
     if num_modes > 1:
@@ -369,6 +381,15 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
         )
     else:
         modes = probe[..., jnp.newaxis]
+    probe_mode_weights: Float[Array, " M"] = jnp.ones(
+        (modes.shape[-1],),
+        dtype=jnp.float64,
+    )
+    probe_mode_carrier = create_probe_modes(
+        modes=modes,
+        weights=probe_mode_weights,
+        calib=real_space_pixel_size_ang,
+    )
 
     z_min: float = float(jnp.min(z_coords))
     slice_boundaries: list[list[float]] = []
@@ -430,32 +451,30 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
         dtype=jnp.int32,
     )
     atom_coords: Float[Array, "N 3"] = crystal_data.positions
+    sample = create_atomic_slice_data(
+        atom_coords=atom_coords,
+        atom_types=atom_types,
+        slice_z_bounds=slice_z_bounds,
+        atom_potentials=atom_potentials,
+    )
 
     if use_parallel:
         mesh = jax.make_mesh(
             (len(devices),), ("p",),
         )
         raw_stem4d: STEM4D = stem4d_sharded(
-            modes,
-            scan_positions,
-            atom_coords,
-            atom_types,
-            slice_z_bounds,
-            atom_potentials,
-            voltage_kv,
-            real_space_pixel_size_ang,
+            probe_mode_carrier,
+            sample,
+            microscope,
+            detector,
             mesh=mesh,
         )
     else:
         raw_stem4d = stem4d_sharded(
-            modes,
-            scan_positions,
-            atom_coords,
-            atom_types,
-            slice_z_bounds,
-            atom_potentials,
-            voltage_kv,
-            real_space_pixel_size_ang,
+            probe_mode_carrier,
+            sample,
+            microscope,
+            detector,
         )
     fourier_calib_inv_ang: float = float(raw_stem4d.fourier_space_calib)
     wavelength_ang_clip: float = float(
@@ -771,14 +790,21 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     atom_coords_full: Float[Array, "N 3"] = crystal_data.positions
 
     fft_image_size: Int[Array, " 2"] = jnp.array([fft_pixels, fft_pixels])
+    microscope = create_microscope_config(
+        voltage_kv=voltage_kv,
+        aperture_mrad=cbed_aperture_mrad,
+        defocus_ang=probe_defocus,
+        c3_ang=probe_c3,
+        c5_ang=probe_c5,
+        probe_shape=fft_image_size,
+    )
+    detector = create_detector_config(
+        real_space_calib_ang=pixel_size_ang,
+        probe_calibration_pm=pixel_size_ang * 100.0,
+    )
     probe: Complex[Array, "H W"] = make_probe(
-        aperture=cbed_aperture_mrad,
-        voltage=voltage_kv,
-        image_size=fft_image_size,
-        calibration_pm=pixel_size_ang * 100.0,
-        defocus=probe_defocus,
-        c3=probe_c3,
-        c5=probe_c5,
+        microscope=microscope,
+        detector=detector,
     )
 
     if num_modes > 1:

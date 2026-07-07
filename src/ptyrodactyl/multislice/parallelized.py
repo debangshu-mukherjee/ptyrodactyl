@@ -37,6 +37,9 @@ from beartype.typing import Optional, Tuple
 from jax.sharding import Mesh, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
+from ptyrodactyl.multislice.simulations import (
+    _cbed_amplitude_from_slice_provider,
+)
 from ptyrodactyl.types import (
     STEM4D,
     AtomicSliceData,
@@ -47,10 +50,6 @@ from ptyrodactyl.types import (
     scalar_float,
     scalar_int,
     scalar_num,
-)
-
-from ptyrodactyl.multislice.simulations import (
-    _cbed_amplitude_from_slice_provider,
 )
 
 
@@ -183,7 +182,10 @@ def cbed_amplitude_from_atoms(
     calib_ang: scalar_float,
     atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Complex[Array, "H W M"]:
-    """Compute CBED detector amplitudes with on-the-fly slice generation."""
+    """Compute CBED detector amplitudes with on-the-fly slice generation.
+    
+    :see: cbed_image_from_atoms, stem4d_sharded.
+    """
     h: int = beam.shape[0]
     w: int = beam.shape[1]
     grid_shape: Tuple[int, int] = (h, w)
@@ -237,6 +239,8 @@ def cbed_image_from_atoms(
     The array-only sharded signature has no explicit mode-weight argument, so
     the retained mode axis is reduced with unit weights. That preserves the
     legacy interpretation that callers pass already scaled modes.
+    
+    :see: cbed_amplitude_from_atoms, stem4d_sharded.
     """
     amplitudes: Complex[Array, "H W M"] = cbed_amplitude_from_atoms(
         beam=beam,
@@ -322,6 +326,7 @@ def stem4d_sharded(
         patterns, real- and Fourier-space calibrations,
         scan positions, and accelerating voltage.
 
+    :see: cbed_image_from_atoms, checked_stem4d_sharded.
     """
     if detector.scan_positions_ang is None:
         raise ValueError("detector.scan_positions_ang is required")

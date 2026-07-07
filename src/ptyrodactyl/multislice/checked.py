@@ -35,6 +35,7 @@ from beartype.typing import Optional
 from jax.sharding import Mesh
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
+from ptyrodactyl.multislice.simulations import cbed_image, make_probe, stem_4d
 from ptyrodactyl.types import (
     STEM4D,
     AtomicSliceData,
@@ -48,7 +49,6 @@ from ptyrodactyl.types import (
 )
 
 from .parallelized import stem4d_sharded
-from ptyrodactyl.multislice.simulations import cbed_image, make_probe, stem_4d
 
 _VECTOR_RANK = 1
 _MATRIX_RANK = 2
@@ -480,6 +480,8 @@ def checked_make_probe(
         positivity is required.
     ValueError
         If ``image_size`` does not have shape ``(2,)``.
+    
+    :see: make_probe, checked_cbed_image.
     """
     _raise_if(
         microscope.probe_shape is None,
@@ -524,6 +526,8 @@ def checked_cbed_image(
         positivity is required.
     ValueError
         If static ranks or spatial grid shapes are incompatible.
+    
+    :see: cbed_image, checked_make_probe.
     """
     _validate_cbed_structure(pot_slices, beam, "pot_slices")
     checked_pot_slices: PotentialSlices = _checked_potential_slices(
@@ -573,6 +577,8 @@ def checked_stem_4d(
         positivity is required, or scan positions leave the grid.
     ValueError
         If static ranks or spatial grid shapes are incompatible.
+    
+    :see: stem_4d, checked_cbed_image.
     """
     _validate_cbed_structure(pot_slice, beam, "pot_slice")
     _raise_if(
@@ -642,6 +648,8 @@ def checked_stem4d_sharded(
         positivity is required, or scan positions leave the grid.
     ValueError
         If static ranks or spatial grid shapes are incompatible.
+    
+    :see: stem4d_sharded, checked_stem_4d.
     """
     _raise_if(
         detector.scan_positions_ang is None,

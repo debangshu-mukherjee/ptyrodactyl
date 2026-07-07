@@ -54,6 +54,8 @@ def apply_distribution(
     Incoherent axes take ``|.|^2`` per sample before the weighted sum.
     The reducer is intentionally not JIT-decorated; callers choose the
     transformation boundary.
+    
+    :see: apply_distributions, cbed_image.
     """
     amplitudes: Complex[Array, "N H W"] = jax.vmap(bound_amplitude_fn)(
         distribution.samples,
@@ -120,6 +122,8 @@ def apply_distributions(
     ------
     ValueError
         If no distribution axes are supplied.
+    
+    :see: apply_distribution, bind_cbed_axes.
     """
     if len(distributions) == 0:
         raise ValueError("distributions must contain at least one axis")
@@ -199,3 +203,9 @@ def _weighted_sum_axis(
     weighted_values: Array = values * weights.reshape(weight_shape)
     summed_values: Array = jnp.sum(weighted_values, axis=axis)
     return summed_values
+
+
+__all__: list[str] = [
+    "apply_distribution",
+    "apply_distributions",
+]

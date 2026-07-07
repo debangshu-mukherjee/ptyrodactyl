@@ -23,8 +23,12 @@ Routine Listings
     Calculate aberration phase for the electron probe.
 :func:`cbed_amplitude`
     Simulate complex CBED detector amplitudes.
+:func:`probe_modes_to_distribution`
+    Return the explicit incoherent distribution for probe modes.
 :func:`cbed_image`
     Simulate convergent beam electron diffraction intensity patterns.
+:func:`bind_cbed_axes`
+    Bind distribution cursor rows to the single-mode CBED amplitude kernel.
 :func:`shift_beam_fourier`
     Shift electron beam in Fourier space for scanning.
 :func:`stem_4d`
@@ -61,12 +65,21 @@ from jaxtyping import (
     jaxtyped,
 )
 
+from ptyrodactyl.multislice._ensemble_axes import (
+    _AXIS_COHERENCE,
+    _AXIS_POSITION_JITTER,
+    _AXIS_PROBE_MODES,
+    _COHERENCE_DIM,
+    _POSITION_DIM,
+    _PROBE_MODE_DIM,
+)
 from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
     M_E,
     STEM4D,
+    AxisUpdate,
     CalibratedArray,
     DetectorConfig,
     Distribution,
@@ -75,6 +88,8 @@ from ptyrodactyl.types import (
     PotentialSlices,
     ProbeModes,
     ReductionMode,
+    combine_axis_updates,
+    create_axis_update,
     create_calibrated_array,
     create_detector_config,
     create_distribution,
@@ -123,6 +138,8 @@ def transmission_func(
     -------
     trans : Complex[Array, " a b"]
         Complex transmission function for the slice.
+    
+    :see: propagation_func, cbed_amplitude.
     """
     voltage: Float[Array, " "] = jnp.multiply(voltage_kv, jnp.asarray(1000.0))
     e_e: Float[Array, " "] = jnp.float64(E_CHARGE)
@@ -187,6 +204,8 @@ def propagation_func(
     -------
     prop : Complex[Array, " h w"]
         Fresnel propagation function in Fourier space.
+    
+    :see: transmission_func, cbed_amplitude.
     """
     qy: Num[Array, " h"] = jnp.fft.fftfreq(int(imsize_y), d=calib_ang)
     qx: Num[Array, " w"] = jnp.fft.fftfreq(int(imsize_x), d=calib_ang)
@@ -239,6 +258,8 @@ def fourier_coords(
     calibrated_inverse_array : CalibratedArray
         Radial Fourier-space frequencies with calibrations
         in inverse Angstroms. ``real_space`` is ``False``.
+    
+    :see: fourier_calib, make_probe.
     """
     real_fov: Float[Array, " 2"] = jnp.multiply(image_size, calibration)
     inverse_arr_y: Float[Array, " h"] = (
@@ -293,6 +314,8 @@ def fourier_calib(
     -------
     inverse_space_calib : Float[Array, " 2"]
         Fourier calibration in inverse Angstroms per pixel.
+    
+    :see: fourier_coords, make_probe.
     """
     field_of_view: Float[Array, " "] = jnp.multiply(
         jnp.float64(sizebeam), real_space_calib
@@ -344,6 +367,8 @@ def make_probe(
     See Also
     --------
     :func:`aberration` : Compute the aberration phase.
+    
+    :see: aberration, cbed_image, stem_4d.
     """
     if microscope.probe_shape is None:
         raise ValueError("microscope.probe_shape is required")
@@ -444,6 +469,8 @@ def aberration(
     -------
     chi_probe : Float[Array, " H W"]
         Aberration phase in radians.
+    
+    :see: make_probe.
     """
     p_matrix: Float[Array, " H W"] = lambda_angstrom * fourier_coord
     chi: Float[Array, " H W"] = (
@@ -535,6 +562,8 @@ def cbed_amplitude(
     -------
     detector_amplitude : Complex[Array, " H W M"]
         Complex detector-plane amplitudes with the probe-mode axis retained.
+    
+    :see: transmission_func, propagation_func, cbed_image.
     """
     calib_ang: Float[Array, ""] = jnp.amin(
         jnp.array([pot_slices.calib, beam.calib])
@@ -567,7 +596,10 @@ def cbed_amplitude(
 
 @jaxtyped(typechecker=beartype)
 def probe_modes_to_distribution(probe: ProbeModes) -> Distribution:
-    """Return the explicit incoherent distribution for probe modes."""
+    """Return the explicit incoherent distribution for probe modes.
+    
+    :see: decompose_beam_to_modes, cbed_image.
+    """
     mode_count: int = jnp.atleast_3d(probe.modes).shape[-1]
     samples: Float[Array, " M 1"] = jnp.arange(
         mode_count,
@@ -612,6 +644,250 @@ def _ensemble_axes_for_cbed(
 
 
 @jaxtyped(typechecker=beartype)
+def bind_cbed_axes(
+    pot_slices: PotentialSlices,
+    probe_modes: ProbeModes,
+    microscope: MicroscopeConfig,
+    detector: DetectorConfig,
+    axes: tuple[Distribution, ...],
+    column_maps: tuple[str, ...] = (),
+) -> Callable[[Float[Array, " D"]], Complex[Array, " H W"]]:
+    """Return a CBED amplitude closure bound to distribution-axis columns.
+
+    Parameters
+    ----------
+    pot_slices : PotentialSlices
+        Potential slices passed unchanged to :func:`cbed_amplitude`.
+    probe_modes : ProbeModes
+        Probe modes. If a ``"probe_modes"`` axis is present, it must be the
+        first axis and its single sample column is the mode index. Otherwise
+        ``probe_modes`` must contain exactly one mode.
+    microscope : MicroscopeConfig
+        Nominal microscope voltage and aberration configuration.
+    detector : DetectorConfig
+        Real-space pixel size used for position shifts and tilt ramps.
+    axes : tuple[Distribution, ...]
+        Distribution axes whose sample rows are concatenated by
+        :func:`~ptyrodactyl.multislice.reduce.apply_distributions`.
+    column_maps : tuple[str, ...], optional
+        Static column-map names. An empty tuple derives them from each
+        distribution ``axis_id``. Supported names are ``"probe_modes"``,
+        ``"position_jitter"``, and ``"coherence"``.
+
+    Returns
+    -------
+    bound_amplitude_fn : Callable[[Float[Array, " D"]], Complex[Array, " H W"]]
+        Closure that maps one concatenated cursor row to one complex CBED
+        detector field.
+
+    Raises
+    ------
+    ValueError
+        If any axis id/map is unknown, dimensions do not match the static
+        binder contract, or a multimode probe lacks a probe-mode axis.
+
+    Notes
+    -----
+    The column contracts are:
+
+    - ``"probe_modes"``: ``[mode_index]``; selects one retained probe mode.
+    - ``"position_jitter"``: ``[dy_ang, dx_ang]``; folds to
+      ``AxisUpdate.position_delta_ang``.
+    - ``"coherence"``: ``[dE_ev, dtheta_x_mrad, dtheta_y_mrad]``; folds to
+      ``AxisUpdate.energy_delta_ev`` and ``AxisUpdate.tilt_delta_mrad``.
+    
+    :see: cbed_amplitude, apply_distributions, coherence_to_distribution.
+    """
+    axis_maps: tuple[str, ...] = _resolve_column_maps(axes, column_maps)
+    _validate_axis_maps(axes, axis_maps, probe_modes)
+    expected_dim: int = sum(axis.samples.shape[1] for axis in axes)
+    nominal_voltage_kv: Float[Array, " "] = jnp.asarray(
+        microscope.voltage_kv,
+        dtype=jnp.float64,
+    )
+    calib_ang: Float[Array, " "] = detector.real_space_calib_ang
+
+    def bound_amplitude_fn(
+        sample: Float[Array, " D"],
+    ) -> Complex[Array, " H W"]:
+        """Map one concatenated sample row to a single-mode CBED field."""
+        if sample.shape[0] != expected_dim:
+            raise ValueError("sample width does not match bound axes")
+
+        update: AxisUpdate
+        mode_idx: Array
+        update, mode_idx = _axis_update_from_sample(sample, axes, axis_maps)
+        updated_voltage_kv: Float[Array, " "] = (
+            nominal_voltage_kv + update.energy_delta_ev / 1000.0
+        )
+        updated_microscope: MicroscopeConfig = eqx.tree_at(
+            lambda config: config.voltage_kv,
+            microscope,
+            updated_voltage_kv,
+        )
+        selected_modes: Complex[Array, " H W 1"] = jnp.take(
+            probe_modes.modes,
+            mode_idx.astype(jnp.int32),
+            axis=2,
+        )[..., jnp.newaxis]
+        shifted_modes_all: Complex[Array, " 1 H W 1"] = shift_beam_fourier(
+            selected_modes,
+            update.position_delta_ang[jnp.newaxis, :],
+            calib_ang,
+        )
+        shifted_modes: Complex[Array, " H W 1"] = shifted_modes_all[0]
+        tilted_modes: Complex[Array, " H W 1"] = _apply_tilt_phase_ramp(
+            shifted_modes,
+            update.tilt_delta_mrad,
+            updated_voltage_kv,
+            calib_ang,
+        )
+        bound_probe: ProbeModes = create_probe_modes(
+            modes=tilted_modes,
+            weights=jnp.ones((1,), dtype=jnp.float64),
+            calib=probe_modes.calib,
+        )
+        amplitudes: Complex[Array, " H W 1"] = cbed_amplitude(
+            pot_slices=pot_slices,
+            beam=bound_probe,
+            microscope=updated_microscope,
+        )
+        amplitude: Complex[Array, " H W"] = amplitudes[..., 0]
+        return amplitude
+
+    return bound_amplitude_fn
+
+
+@jaxtyped(typechecker=beartype)
+def _apply_tilt_phase_ramp(
+    modes: Complex[Array, " H W M"],
+    tilt_delta_mrad: Float[Array, " 2"],
+    voltage_kv: scalar_num,
+    calib_ang: scalar_float,
+) -> Complex[Array, " H W M"]:
+    r"""Apply a small-angle incident-tilt phase ramp to real-space modes.
+
+    The convention is ``exp(i k dot r)`` with
+    ``k = 2 pi theta / lambda``. Tilt columns are stored as
+    ``[dtheta_x_mrad, dtheta_y_mrad]`` and converted to radians.
+    """
+    height: int = modes.shape[0]
+    width: int = modes.shape[1]
+    y_coords: Float[Array, " H"] = (
+        jnp.arange(height, dtype=jnp.float64) - (height - 1) / 2.0
+    ) * calib_ang
+    x_coords: Float[Array, " W"] = (
+        jnp.arange(width, dtype=jnp.float64) - (width - 1) / 2.0
+    ) * calib_ang
+    yy: Float[Array, " H W"]
+    xx: Float[Array, " H W"]
+    yy, xx = jnp.meshgrid(y_coords, x_coords, indexing="ij")
+    theta_x_rad: Float[Array, " "] = tilt_delta_mrad[0] / 1000.0
+    theta_y_rad: Float[Array, " "] = tilt_delta_mrad[1] / 1000.0
+    wavelength_ang: Float[Array, " "] = relativistic_wavelength_ang(
+        voltage_kv,
+    )
+    phase: Float[Array, " H W"] = (2.0 * jnp.pi / wavelength_ang) * (
+        theta_x_rad * xx + theta_y_rad * yy
+    )
+    ramp: Complex[Array, " H W"] = jnp.exp(1j * phase).astype(modes.dtype)
+    tilted_modes: Complex[Array, " H W M"] = modes * ramp[..., jnp.newaxis]
+    return tilted_modes
+
+
+@jaxtyped(typechecker=beartype)
+def _axis_update_from_sample(
+    sample: Float[Array, " D"],
+    axes: tuple[Distribution, ...],
+    axis_maps: tuple[str, ...],
+) -> tuple[AxisUpdate, Array]:
+    """Fold one concatenated cursor row into an AxisUpdate and mode index."""
+    cursor: int = 0
+    updates: list[AxisUpdate] = []
+    mode_idx: Array = jnp.asarray(0, dtype=jnp.int32)
+    for axis, axis_map in zip(axes, axis_maps, strict=True):
+        axis_dim: int = axis.samples.shape[1]
+        columns: Float[Array, " K"] = sample[cursor : cursor + axis_dim]
+        if axis_map == _AXIS_PROBE_MODES:
+            mode_idx = columns[0].astype(jnp.int32)
+            axis_update: AxisUpdate = create_axis_update()
+        elif axis_map == _AXIS_POSITION_JITTER:
+            axis_update = create_axis_update(position_delta_ang=columns)
+        elif axis_map == _AXIS_COHERENCE:
+            axis_update = create_axis_update(
+                energy_delta_ev=columns[0],
+                tilt_delta_mrad=columns[1:3],
+            )
+        else:
+            raise ValueError(f"unknown axis_id {axis_map!r}")
+        updates.append(axis_update)
+        cursor += axis_dim
+
+    update: AxisUpdate = combine_axis_updates(tuple(updates))
+    return update, mode_idx
+
+
+def _expected_axis_dim(axis_map: str) -> int:
+    """Return the static sample-column count for one supported axis map."""
+    if axis_map == _AXIS_PROBE_MODES:
+        axis_dim: int = _PROBE_MODE_DIM
+    elif axis_map == _AXIS_POSITION_JITTER:
+        axis_dim = _POSITION_DIM
+    elif axis_map == _AXIS_COHERENCE:
+        axis_dim = _COHERENCE_DIM
+    else:
+        raise ValueError(f"unknown axis_id {axis_map!r}")
+    return axis_dim
+
+
+def _resolve_column_maps(
+    axes: tuple[Distribution, ...],
+    column_maps: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return explicit static column-map names for all axes."""
+    if len(column_maps) == 0:
+        resolved_maps: tuple[str, ...] = tuple(
+            _require_axis_id(axis) for axis in axes
+        )
+    elif len(column_maps) == len(axes):
+        resolved_maps = column_maps
+    else:
+        raise ValueError("column_maps must be empty or match axes length")
+    return resolved_maps
+
+
+def _require_axis_id(axis: Distribution) -> str:
+    """Return a distribution axis_id or raise for missing metadata."""
+    if axis.axis_id is None:
+        raise ValueError("distribution axis_id is required")
+    axis_id: str = axis.axis_id
+    return axis_id
+
+
+def _validate_axis_maps(
+    axes: tuple[Distribution, ...],
+    axis_maps: tuple[str, ...],
+    probe_modes: ProbeModes,
+) -> None:
+    """Validate static axis-map dimensions and probe-mode composition."""
+    for axis_index, (axis, axis_map) in enumerate(
+        zip(axes, axis_maps, strict=True),
+    ):
+        expected_dim: int = _expected_axis_dim(axis_map)
+        actual_dim: int = axis.samples.shape[1]
+        if actual_dim != expected_dim:
+            raise ValueError(
+                f"{axis_map!r} axis must have sample width {expected_dim}",
+            )
+        if axis_map == _AXIS_PROBE_MODES and axis_index != 0:
+            raise ValueError("probe_modes axis must be first")
+
+    mode_count: int = probe_modes.modes.shape[2]
+    if _AXIS_PROBE_MODES not in axis_maps and mode_count != 1:
+        raise ValueError("multimode probes require a first probe_modes axis")
+
+
+@jaxtyped(typechecker=beartype)
 @jax.jit
 def cbed_image(
     pot_slices: PotentialSlices,
@@ -639,6 +915,8 @@ def cbed_image(
     -------
     cbed_pytree : CalibratedArray
         CBED intensity pattern with Fourier-space calibrations.
+    
+    :see: cbed_amplitude, apply_distribution, bind_cbed_axes.
     """
     if _has_extra_ensemble_axes(microscope.ensemble):
         calib_ang: Float[Array, ""] = jnp.amin(
@@ -652,8 +930,6 @@ def cbed_image(
             microscope.ensemble,
             beam,
         )
-        from .producers import bind_cbed_axes  # noqa: PLC0415
-
         bound_amplitude = bind_cbed_axes(
             pot_slices=pot_slices,
             probe_modes=beam,
@@ -736,6 +1012,8 @@ def shift_beam_fourier(
     -------
     all_shifted_beams : Complex128[Array, "#P H W #M"]
         Shifted beam(s) for all positions and modes.
+    
+    :see: stem_4d, bind_cbed_axes.
     """
     our_beam: Complex128[Array, "H W #M"] = jnp.atleast_3d(
         beam.astype(jnp.complex128)
@@ -840,6 +1118,8 @@ def stem_4d(
     --------
     :func:`cbed_image` : Single-position CBED intensity simulation.
     :func:`shift_beam_fourier` : Fourier-space beam shifting.
+    
+    :see: cbed_image, shift_beam_fourier, annular_detector.
     """
     if detector.scan_positions_px is None:
         raise ValueError("detector.scan_positions_px is required")
@@ -947,6 +1227,8 @@ def decompose_beam_to_modes(
         Decomposed probe with ``modes`` shape ``(H, W, M)``,
         ``weights`` shape ``(M,)``, and ``calib`` in
         Angstroms.
+    
+    :see: probe_modes_to_distribution, make_probe.
     """
     hh: int
     ww: int
@@ -1024,6 +1306,8 @@ def annular_detector(
     stem_image : CalibratedArray
         Real-space STEM image with ``real_space = True``
         and calibrations in Angstroms per pixel.
+    
+    :see: stem_4d, cbed_image.
     """
     if detector.scan_shape is None:
         raise ValueError("detector.scan_shape is required")
@@ -1099,6 +1383,7 @@ def annular_detector(
 __all__: list[str] = [
     "aberration",
     "annular_detector",
+    "bind_cbed_axes",
     "cbed_amplitude",
     "cbed_image",
     "decompose_beam_to_modes",

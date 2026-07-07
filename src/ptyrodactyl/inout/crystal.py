@@ -67,6 +67,8 @@ def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
     :func:`parse_xyz` : Parser for XYZ format files.
     :func:`parse_poscar` : Parser for VASP POSCAR/CONTCAR
         files.
+    
+    :see: parse_xyz, parse_poscar.
     """
     path: Path = Path(file_path)
     filename: str = path.name.lower()

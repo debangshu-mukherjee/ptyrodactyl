@@ -45,23 +45,23 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :func:`aberration`
-    Calculate aberration phase from aberration coefficients.
+    Calculate aberration phase for the electron probe.
 :func:`annular_detector`
-    Create annular detector mask for STEM imaging.
+    Simulate annular detector for STEM imaging.
 :func:`apply_distribution`
     Reduce one weighted distribution axis to detector intensity.
 :func:`apply_distributions`
     Reduce multiple weighted distribution axes to detector
     intensity.
 :func:`bessel_kv`
-    Modified Bessel function of the second kind.
+    Modified Bessel function of the second kind K_v(x).
 :func:`bind_cbed_axes`
     Bind distribution cursor rows to the single-mode CBED
     amplitude kernel.
 :func:`cbed_amplitude`
-    Generate complex convergent beam electron diffraction amplitudes.
+    Simulate complex CBED detector amplitudes.
 :func:`cbed_image`
-    Generate convergent beam electron diffraction intensity patterns.
+    Simulate convergent beam electron diffraction intensity patterns.
 :func:`checked_cbed_image`
     Validate CBED inputs and run the bare CBED intensity kernel.
 :func:`checked_make_probe`
@@ -81,27 +81,29 @@ Routine Listings
 :func:`fourier_coords`
     Generate Fourier space coordinate arrays.
 :func:`kirkland_potentials_crystal`
-    Generate atomic potentials from crystal data using
-    Kirkland parameters.
+    Convert :class:`~ptyrodactyl.types.CrystalData` to
+    :class:`~ptyrodactyl.types.PotentialSlices`.
 :func:`make_probe`
     Create electron probe with specified aberrations.
 :func:`position_jitter_to_distribution`
     Build the incoherent two-dimensional position-jitter
     distribution.
+:func:`probe_modes_to_distribution`
+    Return the explicit incoherent distribution for probe modes.
 :func:`propagation_func`
     Compute Fresnel propagation function.
 :func:`shift_beam_fourier`
-    Shift beam in Fourier space.
+    Shift electron beam in Fourier space for scanning.
 :func:`single_atom_potential`
-    Calculate single atom potential using Kirkland
+    Projected potential of a single atom via Kirkland
     parameterization.
 :func:`stem4d_sharded`
-    Generate 4D-STEM data from sharded beams with on-the-fly
-    slice generation.
+    Generate 4D-STEM data from sharded beams and atom
+    coordinates.
 :func:`stem_4d`
-    Generate 4D-STEM data from potential slices and probe.
+    Generate 4D-STEM data with multiple probe positions.
 :func:`transmission_func`
-    Compute transmission function for a potential slice.
+    Calculate transmission function for a potential slice.
 
 Notes
 -----
@@ -110,6 +112,23 @@ differentiation. The module is designed to be extensible for new
 simulation methods and can be used for both forward modeling and
 gradient-based reconstruction algorithms.
 """
+
+from ptyrodactyl.multislice.simulations import (
+    aberration,
+    annular_detector,
+    bind_cbed_axes,
+    cbed_amplitude,
+    cbed_image,
+    decompose_beam_to_modes,
+    fourier_calib,
+    fourier_coords,
+    make_probe,
+    probe_modes_to_distribution,
+    propagation_func,
+    shift_beam_fourier,
+    stem_4d,
+    transmission_func,
+)
 
 from .atom_potentials import (
     bessel_kv,
@@ -124,26 +143,10 @@ from .checked import (
 )
 from .parallelized import stem4d_sharded
 from .producers import (
-    bind_cbed_axes,
     coherence_to_distribution,
     position_jitter_to_distribution,
 )
 from .reduce import apply_distribution, apply_distributions
-from ptyrodactyl.multislice.simulations import (
-    aberration,
-    annular_detector,
-    cbed_amplitude,
-    cbed_image,
-    decompose_beam_to_modes,
-    fourier_calib,
-    fourier_coords,
-    make_probe,
-    probe_modes_to_distribution,
-    propagation_func,
-    shift_beam_fourier,
-    stem_4d,
-    transmission_func,
-)
 
 __all__: list[str] = [
     "aberration",

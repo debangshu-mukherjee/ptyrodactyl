@@ -119,6 +119,8 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
         If atomic symbol is not found in the mapping.
     ValueError
         If atomic symbol is empty.
+    
+    :see: parse_xyz, parse_poscar.
     """
     cleaned_symbol: str = symbol_string.strip()
 
@@ -196,6 +198,8 @@ def kirkland_potentials() -> Float[Array, "103 12"]:
     -----
     Data is loaded once at module import time from
     :data:`_KIRKLAND_POTENTIALS`. No file I/O on each call.
+    
+    :see: single_atom_potential, kirkland_potentials_crystal.
     """
     return _KIRKLAND_POTENTIALS
 
@@ -294,6 +298,8 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
     Supports both atomic symbols (e.g., ``"H"``, ``"Fe"``)
     and atomic numbers (e.g., ``"1"``, ``"26"``) in the first
     column of atom data.
+    
+    :see: parse_crystal, parse_poscar, atomic_symbol.
     """
     with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()

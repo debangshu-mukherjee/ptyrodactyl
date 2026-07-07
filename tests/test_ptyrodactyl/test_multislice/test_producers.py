@@ -14,7 +14,7 @@ from ptyrodactyl.multislice import (
     position_jitter_to_distribution,
     probe_modes_to_distribution,
 )
-from ptyrodactyl.multislice.producers import _axis_update_from_sample
+from ptyrodactyl.multislice.simulations import _axis_update_from_sample
 from ptyrodactyl.types import (
     ReductionMode,
     create_detector_config,

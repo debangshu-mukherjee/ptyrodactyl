@@ -75,6 +75,8 @@ def clip_cbed(
     -------
     resized : Float[Array, "Ho Wo"]
         Clipped and resized CBED pattern.
+    
+    :see: contrast_stretch, create_phosphor_colormap.
     """
     h: int = cbed.shape[0]
     w: int = cbed.shape[1]
@@ -149,6 +151,8 @@ def contrast_stretch(
     -------
     final_result : Float[Array, " H W"] | Float[Array, " N H W"]
         Rescaled image(s) with same shape as input.
+    
+    :see: clip_cbed, create_phosphor_colormap.
     """
     original_shape: Tuple[int, ...] = series.shape
     is_2d_image: int = 2
@@ -232,6 +236,8 @@ def create_phosphor_colormap(
     4. **Construct Colormap** --
        Create and return LinearSegmentedColormap with
        the custom color segment dictionary.
+    
+    :see: contrast_stretch, clip_cbed.
     """
     colors: List[
         Tuple[scalar_float, Tuple[scalar_float, scalar_float, scalar_float]]

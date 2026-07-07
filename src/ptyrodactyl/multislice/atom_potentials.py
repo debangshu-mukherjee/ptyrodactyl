@@ -428,6 +428,8 @@ def bessel_kv(
     The transition between small- and large-x approximations
     is at ``x = 2.0``. For integer orders ``n > 1``, forward
     recurrence with masked updates is used.
+    
+    :see: single_atom_potential, kirkland_potentials_crystal.
     """
     v: Float[Array, ""] = jnp.asarray(v)
     x: Float[Array, " ..."] = jnp.asarray(x)
@@ -641,6 +643,8 @@ def single_atom_potential(
     potential_resized : Float[Array, " h w"]
         Projected potential at the target resolution in
         Kirkland units.
+    
+    :see: bessel_kv, kirkland_potentials_crystal.
     """
     a0: Float[Array, ""] = jnp.asarray(0.5292)
     ek: Float[Array, ""] = jnp.asarray(14.4)
@@ -1363,6 +1367,8 @@ def kirkland_potentials_crystal(
         atom.
     :func:`~ptyrodactyl.types.create_potential_slices` : Factory
         for :class:`~ptyrodactyl.types.PotentialSlices`.
+    
+    :see: single_atom_potential, cbed_image, stem_4d.
     """
     positions: Float[Array, " N 3"] = crystal_data.positions
     atomic_numbers: Int[Array, " N"] = crystal_data.atomic_numbers

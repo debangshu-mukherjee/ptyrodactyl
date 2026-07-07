@@ -86,6 +86,8 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
     8. **Build output** -- Construct atomic numbers array
        and return
        :class:`~ptyrodactyl.types.CrystalData` PyTree.
+    
+    :see: parse_crystal, parse_xyz, atomic_symbol.
     """
     with open(file_path, encoding="utf-8") as f:
         lines: List[str] = f.readlines()

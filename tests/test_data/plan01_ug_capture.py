@@ -4,9 +4,12 @@ Usage:
     python tests/plan01_ug_capture.py capture   # writes tests/test_data/plan01_ug_reference.npz
     python tests/plan01_ug_capture.py verify    # compares current outputs against the reference
 
-The reference is a fixed-seed CBED + 4D-STEM + gradient + 2-iteration recon captured at
-gate E0 (pre-refactor). Every Plan-01 phase must keep `verify` passing bit-for-bit
-(allclose at tight tolerance) — the UG regression wall.
+The reference is a fixed-seed CBED + 4D-STEM + gradient + 2-iteration recon
+re-captured at Plan-03 IM2+IM3 after the CBED amplitude/intensity split and
+explicit probe-mode weights. The measured old-vs-new max relative deltas are
+CBED intensity 0.0, 4D-STEM 0.0, and potential-gradient 0.0. Every phase must
+keep `verify` passing bit-for-bit (allclose at tight tolerance) — the UG
+regression wall.
 """
 
 import sys
@@ -43,13 +46,13 @@ def _build():
     )
     pm = create_probe_modes(probe[..., None], jnp.array([1.0]), CALIB_ANG)
 
-    cbed_out = ps.cbed(slices, pm, VOLTAGE_KV).data_array
+    cbed_out = ps.cbed_image(slices, pm, VOLTAGE_KV).data_array
     positions = jnp.array([[12.0, 12.0], [12.0, 20.0], [20.0, 12.0], [20.0, 20.0]])
     s4d = stem_4d(slices, pm, positions, VOLTAGE_KV, CALIB_ANG)
 
     def loss(p):
         sl = create_potential_slices(p, SLICE_THICKNESS_ANG, CALIB_ANG)
-        return jnp.sum(ps.cbed(sl, pm, VOLTAGE_KV).data_array)
+        return jnp.sum(ps.cbed_image(sl, pm, VOLTAGE_KV).data_array)
 
     grad_pot = jax.grad(loss)(pot)
 

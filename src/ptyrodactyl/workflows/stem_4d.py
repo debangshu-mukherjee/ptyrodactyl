@@ -43,7 +43,7 @@ from ptyrodactyl.simul import (
     single_atom_potential,
     stem4d_sharded,
 )
-from ptyrodactyl.simul.parallelized import _cbed_from_potential_slices
+from ptyrodactyl.simul.parallelized import cbed_image_from_atoms
 from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
@@ -580,7 +580,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
        For each position, extract atoms within the tile
        region, shift the beam to tile-local coordinates,
        and run multislice via
-       :func:`_cbed_from_potential_slices`.
+       :func:`cbed_image_from_atoms`.
     6. **Clip and resize all CBEDs** --
        Clip to ``cbed_extent_mrad`` and resize to
        ``cbed_shape`` via bilinear interpolation.
@@ -860,7 +860,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             shifted_k, axes=(0, 1)
         )
 
-        cbed: Float[Array, "H W"] = _cbed_from_potential_slices(
+        cbed: Float[Array, "H W"] = cbed_image_from_atoms(
             beam=shifted_beam,
             atom_coords=local_coords,
             atom_types=atom_types_full,

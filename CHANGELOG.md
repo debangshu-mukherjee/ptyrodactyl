@@ -1,5 +1,18 @@
 # Changelog
 
+## Plan 03 — IM2+IM3 CBED Amplitude Split And Explicit Mode Weights
+
+| Change | Symbols |
+| --- | --- |
+| Added | `cbed_amplitude`, `cbed_image`, `probe_modes_to_distribution`, `cbed_amplitude_from_atoms`, `cbed_image_from_atoms`, `checked_cbed_image` |
+| Deleted | `cbed`, `_cbed_from_potential_slices` |
+| Renamed | `checked_cbed` -> `checked_cbed_image` |
+
+CBED now exposes Layer-0 complex detector amplitudes and forms public
+intensities only through the distribution reducer. Probe modes returned by
+`decompose_beam_to_modes` are no longer pre-scaled by `sqrt(weight)`;
+`ProbeModes.weights` is the explicit incoherent mixture carrier.
+
 ## Plan 02 — JIT & Runtime-Validation Hardening (complete)
 
 All seven phases landed (gates RJ1-RJ7): runtime typecheck stack

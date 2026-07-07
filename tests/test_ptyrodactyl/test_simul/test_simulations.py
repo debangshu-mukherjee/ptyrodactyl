@@ -9,11 +9,22 @@ import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
+from ptyrodactyl.simul import apply_distribution
 from ptyrodactyl.simul.simulations import (
     annular_detector,
+    cbed_amplitude,
+    cbed_image,
     decompose_beam_to_modes,
+    probe_modes_to_distribution,
 )
-from ptyrodactyl.types import create_calibrated_array, create_stem4d
+from ptyrodactyl.types import (
+    ReductionMode,
+    create_calibrated_array,
+    create_distribution,
+    create_potential_slices,
+    create_probe_modes,
+    create_stem4d,
+)
 
 
 def test_annular_detector_static_scan_shape_and_jit() -> None:
@@ -65,7 +76,7 @@ def test_decompose_beam_to_modes_requires_key() -> None:
 
 
 def test_decompose_beam_to_modes_fixed_key_reproducible() -> None:
-    """A fixed key gives reproducible modes and old key-zero values."""
+    """A fixed key gives reproducible unscaled modes and weights."""
     beam = create_calibrated_array(
         (jnp.arange(16, dtype=jnp.float64).reshape(4, 4) + 1j).astype(
             jnp.complex128
@@ -89,9 +100,118 @@ def test_decompose_beam_to_modes_fixed_key_reproducible() -> None:
     assert np.array_equal(np.asarray(first.calib), np.asarray(second.calib))
     assert np.array_equal(
         np.asarray(first.modes[0, 0, 0]),
-        np.asarray(-0.26771966341457853 + 0.199488434683742j),
+        np.asarray(-0.34562459928563927 + 0.25753846176370626j),
     )
     assert np.array_equal(
         np.asarray(first.weights),
         np.asarray([0.6, 0.2, 0.2], dtype=np.float64),
+    )
+
+    weighted_intensity = jnp.einsum(
+        "m,hwm->hw",
+        first.weights,
+        jnp.abs(first.modes) ** 2,
+    )
+    old_prescaled_modes = first.modes * jnp.sqrt(first.weights).reshape(
+        1, 1, -1
+    )
+    old_prescaled_intensity = jnp.sum(
+        jnp.abs(old_prescaled_modes) ** 2,
+        axis=-1,
+    )
+    np.testing.assert_allclose(
+        np.asarray(weighted_intensity),
+        np.asarray(old_prescaled_intensity),
+        rtol=1.0e-15,
+        atol=1.0e-15,
+    )
+
+
+def test_probe_modes_to_distribution_uses_explicit_weights() -> None:
+    """Probe mode distributions carry samples and weights explicitly."""
+    modes = jnp.ones((2, 2, 3), dtype=jnp.complex128)
+    weights = jnp.array([0.5, 0.3, 0.2], dtype=jnp.float64)
+    probe = create_probe_modes(modes, weights, 0.5)
+
+    distribution = probe_modes_to_distribution(probe)
+
+    np.testing.assert_array_equal(
+        np.asarray(distribution.samples),
+        np.asarray([[0.0], [1.0], [2.0]], dtype=np.float64),
+    )
+    np.testing.assert_allclose(
+        np.asarray(distribution.weights),
+        np.asarray(weights),
+        rtol=0.0,
+        atol=0.0,
+    )
+    assert distribution.reduction is ReductionMode.INCOHERENT
+    assert distribution.axis_id == "probe_modes"
+
+
+def test_coherent_probe_distribution_has_finite_weight_grad() -> None:
+    """A coherent toy mode distribution remains differentiable in weights."""
+    samples = jnp.arange(2, dtype=jnp.float64)[:, jnp.newaxis]
+    amplitudes = jnp.stack(
+        [
+            jnp.array([[1.0 + 0.5j, 0.25 - 0.75j]], dtype=jnp.complex128),
+            jnp.array([[0.5 - 0.25j, -1.0 + 0.125j]], dtype=jnp.complex128),
+        ],
+        axis=-1,
+    )
+
+    def loss(weights):
+        distribution = create_distribution(
+            samples=samples,
+            weights=weights,
+            reduction=ReductionMode.COHERENT,
+            axis_id="probe_modes",
+        )
+
+        def bound(sample):
+            mode_idx = sample[0].astype(jnp.int32)
+            return amplitudes[..., mode_idx]
+
+        return jnp.sum(apply_distribution(distribution, bound))
+
+    grad_value = jax.grad(loss)(jnp.array([0.25, 0.75], dtype=jnp.float64))
+
+    assert np.all(np.isfinite(np.asarray(grad_value)))
+
+
+def test_cbed_amplitude_phase_gradient_survives_intensity_seam() -> None:
+    """Amplitude keeps phase information that the intensity path removes."""
+    pot_slices = create_potential_slices(
+        jnp.zeros((4, 4, 1), dtype=jnp.float64),
+        1.0,
+        0.5,
+    )
+    base = (
+        jnp.arange(1, 17, dtype=jnp.float64).reshape(4, 4)
+        + 0.125j
+    ).astype(jnp.complex128)
+
+    def probe_with_phase(phase):
+        modes = (base * jnp.exp(1j * phase))[..., jnp.newaxis]
+        return create_probe_modes(modes, jnp.ones((1,), dtype=jnp.float64), 0.5)
+
+    def amplitude_loss(phase):
+        amplitudes = cbed_amplitude(pot_slices, probe_with_phase(phase), 80.0)
+        return jnp.real(jnp.sum(amplitudes))
+
+    def intensity_loss(phase):
+        image = cbed_image(pot_slices, probe_with_phase(phase), 80.0)
+        return jnp.sum(image.data_array)
+
+    phase = jnp.asarray(0.37, dtype=jnp.float64)
+    amplitude_grad = jax.grad(amplitude_loss)(phase)
+    intensity_grad = jax.grad(intensity_loss)(phase)
+
+    assert np.isfinite(np.asarray(amplitude_grad))
+    assert np.isfinite(np.asarray(intensity_grad))
+    assert not np.allclose(
+        np.asarray(amplitude_grad),
+        np.asarray(intensity_grad),
+        rtol=0.0,
+        atol=1.0e-8,
     )

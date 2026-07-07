@@ -22,6 +22,10 @@ Submodules
 - :mod:`preprocessing`
     Data preprocessing utilities and type definitions for
     microscopy data.
+- :mod:`producers`
+    Distribution producers and CBED axis binders.
+- :mod:`reduce`
+    Distribution-axis reducers for detector intensity formation.
 - :mod:`simulations`
     Forward simulation functions for electron beam propagation,
     CBED patterns, and 4D-STEM data generation with aberration
@@ -39,6 +43,10 @@ The submodules are organized as follows:
     Parallelized simulation functions for distributed microscopy.
 - :mod:`preprocessing`
     Data preprocessing utilities for electron microscopy.
+- :mod:`producers`
+    Distribution producers and CBED axis binders.
+- :mod:`reduce`
+    Distribution-axis reducers for detector intensity formation.
 - :mod:`simulations`
     Forward simulation functions for electron microscopy.
 
@@ -48,14 +56,24 @@ Routine Listings
     Calculate aberration phase from aberration coefficients.
 :func:`annular_detector`
     Create annular detector mask for STEM imaging.
+:func:`apply_distribution`
+    Reduce one weighted distribution axis to detector intensity.
+:func:`apply_distributions`
+    Reduce multiple weighted distribution axes to detector
+    intensity.
 :func:`atomic_symbol`
     Convert atomic number to chemical symbol.
 :func:`bessel_kv`
     Modified Bessel function of the second kind.
-:func:`cbed`
-    Generate convergent beam electron diffraction patterns.
-:func:`checked_cbed`
-    Validate CBED inputs and run the bare CBED kernel.
+:func:`bind_cbed_axes`
+    Bind distribution cursor rows to the single-mode CBED
+    amplitude kernel.
+:func:`cbed_amplitude`
+    Generate complex convergent beam electron diffraction amplitudes.
+:func:`cbed_image`
+    Generate convergent beam electron diffraction intensity patterns.
+:func:`checked_cbed_image`
+    Validate CBED inputs and run the bare CBED intensity kernel.
 :func:`checked_make_probe`
     Validate probe-construction inputs and run the bare probe
     kernel.
@@ -69,6 +87,8 @@ Routine Listings
     shape.
 :func:`contrast_stretch`
     Contrast stretch for visualization.
+:func:`coherence_to_distribution`
+    Build the incoherent chromatic/angular coherence distribution.
 :func:`decompose_beam_to_modes`
     Decompose electron beam into orthogonal modes.
 :func:`fourier_calib`
@@ -90,6 +110,9 @@ Routine Listings
     data.
 :func:`parse_xyz`
     Parse XYZ file and return validated structure data.
+:func:`position_jitter_to_distribution`
+    Build the incoherent two-dimensional position-jitter
+    distribution.
 :func:`propagation_func`
     Compute Fresnel propagation function.
 :func:`reciprocal_lattice`
@@ -132,7 +155,7 @@ from .atom_potentials import (
     single_atom_potential,
 )
 from .checked import (
-    checked_cbed,
+    checked_cbed_image,
     checked_make_probe,
     checked_stem4d_sharded,
     checked_stem_4d,
@@ -152,14 +175,22 @@ from .preprocessing import (
     parse_poscar,
     parse_xyz,
 )
+from .producers import (
+    bind_cbed_axes,
+    coherence_to_distribution,
+    position_jitter_to_distribution,
+)
+from .reduce import apply_distribution, apply_distributions
 from .simulations import (
     aberration,
     annular_detector,
-    cbed,
+    cbed_amplitude,
+    cbed_image,
     decompose_beam_to_modes,
     fourier_calib,
     fourier_coords,
     make_probe,
+    probe_modes_to_distribution,
     propagation_func,
     shift_beam_fourier,
     stem_4d,
@@ -169,15 +200,20 @@ from .simulations import (
 __all__: list[str] = [
     "aberration",
     "annular_detector",
+    "apply_distribution",
+    "apply_distributions",
     "atomic_symbol",
     "bessel_kv",
-    "cbed",
-    "checked_cbed",
+    "bind_cbed_axes",
+    "cbed_amplitude",
+    "cbed_image",
+    "checked_cbed_image",
     "checked_make_probe",
     "checked_stem4d_sharded",
     "checked_stem_4d",
     "clip_cbed",
     "contrast_stretch",
+    "coherence_to_distribution",
     "decompose_beam_to_modes",
     "fourier_calib",
     "fourier_coords",
@@ -187,6 +223,8 @@ __all__: list[str] = [
     "parse_crystal",
     "parse_poscar",
     "parse_xyz",
+    "position_jitter_to_distribution",
+    "probe_modes_to_distribution",
     "propagation_func",
     "reciprocal_lattice",
     "rotate_structure",

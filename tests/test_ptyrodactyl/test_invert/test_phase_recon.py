@@ -119,12 +119,16 @@ def test_single_slice_multi_modal_regresses() -> None:
 
     assert output[3].shape == (4, 4, 2)
     assert output[4].shape == (4, 4, 2, 2)
-    _assert_scalar_equal(output[0][0, 0], 0.028663118115104917 + 0j)
+    # Re-pinned at Plan-03 IM2+IM3: stem_4d now honors the explicit
+    # ProbeModes.weights ([0.7, 0.3] here) that the deleted `cbed` kernel
+    # silently ignored — the forward physics for manually built non-uniform
+    # weights changed by design (CHANGELOG: cbed -> cbed_amplitude/cbed_image).
+    _assert_scalar_equal(output[0][0, 0], 0.02866311714678175 + 0j)
     _assert_scalar_equal(
         output[1].modes[0, 0, 0],
-        -1.4996978807671886 - 1.4834412513458781j,
+        -1.4996968895875689 - 1.4834395099418607j,
     )
-    _assert_scalar_equal(output[2][0, 0], 0.002001215397622949)
+    _assert_scalar_equal(output[2][0, 0], 0.0020012155403489927)
 
 
 def test_multi_slice_multi_modal_regresses() -> None:

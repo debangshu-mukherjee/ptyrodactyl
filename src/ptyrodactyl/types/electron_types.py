@@ -10,6 +10,8 @@ properties.
 
 Routine Listings
 ----------------
+:class:`AxisUpdate`
+    Additive distribution-axis deltas for one kernel evaluation.
 :class:`CalibratedArray`
     Calibrated array data with spatial calibration.
 :class:`ProbeModes`
@@ -18,6 +20,10 @@ Routine Listings
     Potential slices for multi-slice simulations.
 :class:`STEM4D`
     4D-STEM data with diffraction patterns, calibrations, and parameters.
+:func:`combine_axis_updates`
+    Sum multiple AxisUpdate carriers.
+:func:`create_axis_update`
+    Create an AxisUpdate with runtime validation.
 :func:`create_calibrated_array`
     Create a CalibratedArray with runtime validation.
 :func:`create_probe_modes`
@@ -36,10 +42,40 @@ the module classes rely on Equinox's automatic PyTree registration.
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Union
+from beartype.typing import Optional, Union
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from .custom_types import scalar_bool, scalar_float, scalar_num
+
+
+class AxisUpdate(eqx.Module):
+    """Store additive distribution-axis deltas for one kernel evaluation.
+
+    This is the single shared axis-update carrier for the Plan 03 W3 binder
+    idiom. Distribution producers fold sample columns into this record, the
+    binder combines records additively, and kernel-specific code applies the
+    resulting perturbation without widening existing kernel signatures.
+    Override-style fields should be added only when a consumer demands them.
+
+    Attributes
+    ----------
+    energy_delta_ev : Float[Array, " "]
+        Beam-energy offset in electronvolts.
+    position_delta_ang : Float[Array, " 2"]
+        Scan-position shift in Angstroms as ``(y, x)``.
+    tilt_delta_mrad : Float[Array, " 2"]
+        Beam-tilt offset in milliradians as ``(x, y)``.
+    """
+
+    energy_delta_ev: Float[Array, " "] = eqx.field(
+        default_factory=lambda: jnp.asarray(0.0, dtype=jnp.float64)
+    )
+    position_delta_ang: Float[Array, " 2"] = eqx.field(
+        default_factory=lambda: jnp.zeros((2,), dtype=jnp.float64)
+    )
+    tilt_delta_mrad: Float[Array, " 2"] = eqx.field(
+        default_factory=lambda: jnp.zeros((2,), dtype=jnp.float64)
+    )
 
 
 class CalibratedArray(eqx.Module):
@@ -135,6 +171,113 @@ class STEM4D(eqx.Module):
 
 
 @jaxtyped(typechecker=beartype)
+def combine_axis_updates(updates: tuple[AxisUpdate, ...]) -> AxisUpdate:
+    """Sum a tuple of additive axis-update carriers.
+
+    Parameters
+    ----------
+    updates : tuple[AxisUpdate, ...]
+        Axis updates to combine. An empty tuple returns the zero-effect
+        update.
+
+    Returns
+    -------
+    combined_update : AxisUpdate
+        Additive sum of all supplied deltas.
+    """
+    if len(updates) == 0:
+        combined_update: AxisUpdate = create_axis_update()
+        return combined_update
+
+    position_delta_ang: Float[Array, " 2"] = jnp.sum(
+        jnp.stack(tuple(update.position_delta_ang for update in updates)),
+        axis=0,
+    )
+    energy_delta_ev: Float[Array, " "] = jnp.sum(
+        jnp.stack(tuple(update.energy_delta_ev for update in updates)),
+    )
+    tilt_delta_mrad: Float[Array, " 2"] = jnp.sum(
+        jnp.stack(tuple(update.tilt_delta_mrad for update in updates)),
+        axis=0,
+    )
+    combined_update = create_axis_update(
+        position_delta_ang=position_delta_ang,
+        energy_delta_ev=energy_delta_ev,
+        tilt_delta_mrad=tilt_delta_mrad,
+    )
+    return combined_update
+
+
+@jaxtyped(typechecker=beartype)
+def create_axis_update(
+    position_delta_ang: Optional[Float[Array, " 2"]] = None,
+    energy_delta_ev: Optional[Float[Array, " "]] = None,
+    tilt_delta_mrad: Optional[Float[Array, " 2"]] = None,
+) -> AxisUpdate:
+    """Create an AxisUpdate with structural and runtime validation.
+
+    Parameters
+    ----------
+    position_delta_ang : Optional[Float[Array, " 2"]], optional
+        Scan-position shift in Angstroms. Default: ``[0, 0]``.
+    energy_delta_ev : Optional[Float[Array, " "]], optional
+        Beam-energy offset in electronvolts. Default: ``0``.
+    tilt_delta_mrad : Optional[Float[Array, " 2"]], optional
+        Beam-tilt offset in milliradians. Default: ``[0, 0]``.
+
+    Returns
+    -------
+    axis_update : AxisUpdate
+        Validated additive update carrier.
+
+    Raises
+    ------
+    ValueError
+        If any supplied value has the wrong static shape.
+
+    Notes
+    -----
+    1. Replace missing fields with zero-effect values.
+    2. Validate static shapes before tracing.
+    3. Validate finiteness with ``eqx.error_if``.
+    """
+    position_arr: Float[Array, " 2"] = _axis_update_vector(
+        position_delta_ang,
+        "position_delta_ang",
+    )
+    energy_arr: Float[Array, " "] = _axis_update_scalar(
+        energy_delta_ev,
+        "energy_delta_ev",
+    )
+    tilt_arr: Float[Array, " 2"] = _axis_update_vector(
+        tilt_delta_mrad,
+        "tilt_delta_mrad",
+    )
+
+    checked_position: Float[Array, " 2"] = eqx.error_if(
+        position_arr,
+        jnp.any(~jnp.isfinite(position_arr)),
+        "position_delta_ang must be finite",
+    )
+    checked_energy: Float[Array, " "] = eqx.error_if(
+        energy_arr,
+        ~jnp.isfinite(energy_arr),
+        "energy_delta_ev must be finite",
+    )
+    checked_tilt: Float[Array, " 2"] = eqx.error_if(
+        tilt_arr,
+        jnp.any(~jnp.isfinite(tilt_arr)),
+        "tilt_delta_mrad must be finite",
+    )
+    axis_update: AxisUpdate = AxisUpdate(
+        position_delta_ang=checked_position,
+        energy_delta_ev=checked_energy,
+        tilt_delta_mrad=checked_tilt,
+    )
+    return axis_update
+
+
+@jaxtyped(typechecker=beartype)
 def create_calibrated_array(
     data_array: Union[
         Int[Array, "..."], Float[Array, "..."], Complex[Array, "..."]
@@ -213,6 +356,36 @@ Complex[Array, "..."]]
         real_space=real_space_arr,
     )
     return calibrated_array
+
+
+def _axis_update_scalar(
+    value: Optional[Float[Array, " "]],
+    name: str,
+) -> Float[Array, " "]:
+    """Return a scalar axis-update field with static shape validation."""
+    scalar: Float[Array, " "] = (
+        jnp.asarray(0.0, dtype=jnp.float64)
+        if value is None
+        else jnp.asarray(value, dtype=jnp.float64)
+    )
+    if scalar.shape != ():
+        raise ValueError(f"{name} must be a scalar")
+    return scalar
+
+
+def _axis_update_vector(
+    value: Optional[Float[Array, " 2"]],
+    name: str,
+) -> Float[Array, " 2"]:
+    """Return a two-vector axis-update field with static shape validation."""
+    vector: Float[Array, " 2"] = (
+        jnp.zeros((2,), dtype=jnp.float64)
+        if value is None
+        else jnp.asarray(value, dtype=jnp.float64)
+    )
+    if vector.shape != (2,):
+        raise ValueError(f"{name} must have shape (2,)")
+    return vector
 
 
 @jaxtyped(typechecker=beartype)
@@ -498,10 +671,13 @@ def create_stem4d(
 
 
 __all__: list[str] = [
+    "AxisUpdate",
     "CalibratedArray",
     "PotentialSlices",
     "ProbeModes",
     "STEM4D",
+    "combine_axis_updates",
+    "create_axis_update",
     "create_calibrated_array",
     "create_potential_slices",
     "create_probe_modes",

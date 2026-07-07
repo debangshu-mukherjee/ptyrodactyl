@@ -11,13 +11,13 @@ from equinox import EquinoxRuntimeError
 jax.config.update("jax_enable_x64", True)
 
 from ptyrodactyl.simul import (
-    checked_cbed,
+    checked_cbed_image,
     checked_make_probe,
     checked_stem4d_sharded,
     checked_stem_4d,
 )
 from ptyrodactyl.simul.parallelized import stem4d_sharded
-from ptyrodactyl.simul.simulations import cbed, make_probe, stem_4d
+from ptyrodactyl.simul.simulations import cbed_image, make_probe, stem_4d
 from ptyrodactyl.types import PotentialSlices, ProbeModes
 
 
@@ -176,20 +176,20 @@ def test_checked_make_probe_transparent_jit_grad_and_raises():
         )
 
 
-def test_checked_cbed_transparent_jit_grad_vmap_and_raises():
+def test_checked_cbed_image_transparent_jit_grad_vmap_and_raises():
     pot_slices = _valid_potential_slices()
     beam = _valid_probe_modes()
 
-    expected = cbed(pot_slices, beam, _VOLTAGE)
-    actual = checked_cbed(pot_slices, beam, _VOLTAGE)
+    expected = cbed_image(pot_slices, beam, _VOLTAGE)
+    actual = checked_cbed_image(pot_slices, beam, _VOLTAGE)
     _assert_tree_array_equal(actual, expected)
 
-    jitted = jax.jit(checked_cbed)(pot_slices, beam, _VOLTAGE)
+    jitted = jax.jit(checked_cbed_image)(pot_slices, beam, _VOLTAGE)
     _assert_tree_array_equal(jitted, expected)
 
     grad_value = jax.grad(
         lambda scale: jnp.sum(
-            checked_cbed(
+            checked_cbed_image(
                 _valid_potential_slices(scale),
                 beam,
                 _VOLTAGE,
@@ -203,7 +203,7 @@ def test_checked_cbed_transparent_jit_grad_vmap_and_raises():
         axis=0,
     )
     vmapped = jax.vmap(
-        lambda slices: checked_cbed(
+        lambda slices: checked_cbed_image(
             PotentialSlices(
                 slices=slices,
                 slice_thickness=pot_slices.slice_thickness,
@@ -225,7 +225,7 @@ def test_checked_cbed_transparent_jit_grad_vmap_and_raises():
         EquinoxRuntimeError,
         match="pot_slices.slices contain non-finite values",
     ):
-        checked_cbed(bad_pot_slices, beam, _VOLTAGE)
+        checked_cbed_image(bad_pot_slices, beam, _VOLTAGE)
 
 
 def test_checked_stem_4d_transparent_jit_grad_and_raises():

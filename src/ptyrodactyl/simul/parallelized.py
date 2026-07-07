@@ -13,9 +13,10 @@ Routine Listings
 :func:`_compute_slice_potential`
     Compute potential slice on-the-fly by summing atom type
     contributions.
-:func:`_cbed_from_potential_slices`
-    Compute CBED pattern with on-the-fly potential slice
-    generation.
+:func:`cbed_amplitude_from_atoms`
+    Compute CBED amplitudes with on-the-fly potential slice generation.
+:func:`cbed_image_from_atoms`
+    Compute CBED intensity with on-the-fly potential slice generation.
 :func:`clip_cbed`
     Clip CBED patterns to mrad extent and resize to target
     shape.
@@ -44,15 +45,17 @@ from jaxtyping import Array, Complex, Float, Int, jaxtyped
 from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
+    Distribution,
+    ReductionMode,
     create_stem4d,
     scalar_float,
     scalar_int,
     scalar_num,
 )
 
+from .reduce import apply_distribution
 from .simulations import (
-    propagation_func,
-    transmission_func,
+    _cbed_amplitude_from_slice_provider,
 )
 
 
@@ -175,7 +178,7 @@ def _compute_slice_potential(
 
 @jaxtyped(typechecker=beartype)
 @jax.jit
-def _cbed_from_potential_slices(
+def cbed_amplitude_from_atoms(
     beam: Complex[Array, "H W M"],
     atom_coords: Float[Array, "N 3"],
     atom_types: Int[Array, " N"],
@@ -184,96 +187,19 @@ def _cbed_from_potential_slices(
     voltage_kv: scalar_num,
     calib_ang: scalar_float,
     atom_mask: Optional[Float[Array, " N"]] = None,
-) -> Float[Array, "H W"]:
-    """Compute CBED pattern with on-the-fly slice generation.
-
-    Extended Summary
-    ----------------
-    Propagates electron beam modes through the sample using
-    the multislice algorithm. Potential slices are generated
-    on-the-fly via :func:`_compute_slice_potential` rather
-    than pre-computed, enabling memory-efficient simulation.
-
-    Implementation Logic
-    --------------------
-    1. **Build propagator** --
-       Compute Fresnel propagator from slice thickness via
-       :func:`~ptyrodactyl.simul.simulations.propagation_func`.
-    2. **Scan over slices** --
-       For each slice, generate the potential on-the-fly,
-       compute the transmission function, multiply the wave,
-       and propagate (skip propagation on the last slice).
-    3. **Compute intensity** --
-       FFT to Fourier space, square modulus, sum over modes.
-
-    Parameters
-    ----------
-    beam : Complex[Array, "H W M"]
-        Electron beam modes in real space.
-    atom_coords : Float[Array, "N 3"]
-        Atom coordinates in Angstroms, columns ``(x, y, z)``.
-    atom_types : Int[Array, " N"]
-        Atom type indices (0-indexed) for each atom.
-    slice_z_bounds : Float[Array, "S 2"]
-        Z boundaries for each slice, columns
-        ``(z_min, z_max)`` in Angstroms. S is the number of
-        slices.
-    atom_potentials : Float[Array, "T H W"]
-        Precomputed 2D atomic potentials per atom type.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
-    calib_ang : scalar_float
-        Pixel size in Angstroms.
-    atom_mask : Optional[Float[Array, " N"]]
-        Mask for atoms (1.0 = include, 0.0 = exclude). Used
-        by tiled workflows to exclude atoms outside the
-        current tile. If ``None``, all atoms are included.
-
-    Returns
-    -------
-    cbed_pattern : Float[Array, "H W"]
-        Computed CBED intensity pattern (sum over modes).
-    """
-    h: int
-    w: int
-    h, w = beam.shape[0], beam.shape[1]
-    num_slices: int = slice_z_bounds.shape[0]
+) -> Complex[Array, "H W M"]:
+    """Compute CBED detector amplitudes with on-the-fly slice generation."""
+    h: int = beam.shape[0]
+    w: int = beam.shape[1]
     grid_shape: Tuple[int, int] = (h, w)
-
+    num_slices: int = slice_z_bounds.shape[0]
     slice_thickness: Float[Array, " "] = (
         slice_z_bounds[0, 1] - slice_z_bounds[0, 0]
     )
 
-    propagator: Complex[Array, "H W"] = propagation_func(
-        h, w, slice_thickness, voltage_kv, calib_ang
-    )
-
-    init_wave: Complex[Array, "H W M"] = beam
-
-    def _scan_fn(
-        carry: Complex[Array, "H W M"], slice_idx: scalar_int
-    ) -> Tuple[Complex[Array, "H W M"], None]:
-        """Propagate wave through one potential slice.
-
-        Parameters
-        ----------
-        carry : Complex[Array, "H W M"]
-            Current wave state.
-        slice_idx : scalar_int
-            Index of the current slice.
-
-        Returns
-        -------
-        wave : Complex[Array, "H W M"]
-            Updated wave after transmission and propagation.
-        None
-            No stacked output.
-        """
-        wave: Complex[Array, "H W M"] = carry
-
+    def _slice_at(slice_idx: scalar_int) -> Float[Array, "H W"]:
         z_min: Float[Array, " "] = slice_z_bounds[slice_idx, 0]
         z_max: Float[Array, " "] = slice_z_bounds[slice_idx, 1]
-
         pot_slice: Float[Array, "H W"] = _compute_slice_potential(
             atom_coords,
             atom_types,
@@ -284,45 +210,70 @@ def _cbed_from_potential_slices(
             calib_ang,
             atom_mask,
         )
+        return pot_slice
 
-        trans_slice: Complex[Array, "H W"] = transmission_func(
-            pot_slice, voltage_kv
+    detector_amplitude: Complex[Array, "H W M"] = (
+        _cbed_amplitude_from_slice_provider(
+            beam,
+            num_slices,
+            slice_thickness,
+            voltage_kv,
+            calib_ang,
+            _slice_at,
         )
-        wave = wave * trans_slice[..., jnp.newaxis]
-
-        def _propagate(w: Complex[Array, "H W M"]) -> Complex[Array, "H W M"]:
-            """Apply Fresnel propagation in Fourier space.
-
-            Parameters
-            ----------
-            w : Complex[Array, "H W M"]
-                Wave in real space.
-
-            Returns
-            -------
-            Complex[Array, "H W M"]
-                Wave after Fresnel propagation.
-            """
-            w_k: Complex[Array, "H W M"] = jnp.fft.fft2(w, axes=(0, 1))
-            w_k = w_k * propagator[..., jnp.newaxis]
-            return jnp.fft.ifft2(w_k, axes=(0, 1))
-
-        is_last_slice: jnp.bool_ = slice_idx == num_slices - 1
-        wave = lax.cond(is_last_slice, lambda w: w, _propagate, wave)
-
-        return wave, None
-
-    final_wave: Complex[Array, "H W M"]
-    final_wave, _ = lax.scan(_scan_fn, init_wave, jnp.arange(num_slices))
-
-    fourier_pattern: Complex[Array, "H W M"] = jnp.fft.fftshift(
-        jnp.fft.fft2(final_wave, axes=(0, 1)), axes=(0, 1)
     )
-    intensity_per_mode: Float[Array, "H W M"] = jnp.square(
-        jnp.abs(fourier_pattern)
-    )
-    cbed_pattern: Float[Array, "H W"] = jnp.sum(intensity_per_mode, axis=-1)
+    return detector_amplitude
 
+
+@jaxtyped(typechecker=beartype)
+@jax.jit
+def cbed_image_from_atoms(
+    beam: Complex[Array, "H W M"],
+    atom_coords: Float[Array, "N 3"],
+    atom_types: Int[Array, " N"],
+    slice_z_bounds: Float[Array, "S 2"],
+    atom_potentials: Float[Array, "T H W"],
+    voltage_kv: scalar_num,
+    calib_ang: scalar_float,
+    atom_mask: Optional[Float[Array, " N"]] = None,
+) -> Float[Array, "H W"]:
+    """Compute CBED intensity from atom slices through the reducer.
+
+    The array-only sharded signature has no explicit mode-weight argument, so
+    the retained mode axis is reduced with unit weights. That preserves the
+    legacy interpretation that callers pass already scaled modes.
+    """
+    amplitudes: Complex[Array, "H W M"] = cbed_amplitude_from_atoms(
+        beam=beam,
+        atom_coords=atom_coords,
+        atom_types=atom_types,
+        slice_z_bounds=slice_z_bounds,
+        atom_potentials=atom_potentials,
+        voltage_kv=voltage_kv,
+        calib_ang=calib_ang,
+        atom_mask=atom_mask,
+    )
+    mode_count: int = amplitudes.shape[-1]
+    samples: Float[Array, "M 1"] = jnp.arange(
+        mode_count,
+        dtype=jnp.float64,
+    )[:, jnp.newaxis]
+    distribution: Distribution = Distribution(
+        samples=samples,
+        weights=jnp.ones((mode_count,), dtype=jnp.float64),
+        reduction=ReductionMode.INCOHERENT,
+        axis_id="probe_modes",
+    )
+
+    def _mode_amplitude(sample: Float[Array, " D"]) -> Complex[Array, "H W"]:
+        mode_idx: Int[Array, ""] = sample[0].astype(jnp.int32)
+        amplitude: Complex[Array, "H W"] = amplitudes[..., mode_idx]
+        return amplitude
+
+    cbed_pattern: Float[Array, "H W"] = apply_distribution(
+        distribution,
+        _mode_amplitude,
+    )
     return cbed_pattern
 
 
@@ -438,7 +389,7 @@ def stem4d_sharded(
     2. **Per-position processing** --
        For each scan position, apply a Fourier phase ramp to
        shift the probe, then compute the CBED pattern via
-       :func:`_cbed_from_potential_slices`.
+       :func:`cbed_image_from_atoms`.
     3. **Distributed execution** --
        If *mesh* is provided, use ``jax.shard_map`` to
        distribute positions across devices; otherwise use
@@ -542,7 +493,7 @@ def stem4d_sharded(
         """
         current_beam: Complex[Array, "H W M"] = _shift_probe(position_ang)
 
-        cbed_pattern: Float[Array, "H W"] = _cbed_from_potential_slices(
+        cbed_pattern: Float[Array, "H W"] = cbed_image_from_atoms(
             beam=current_beam,
             atom_coords=atom_coords,
             atom_types=atom_types,
@@ -598,6 +549,8 @@ def stem4d_sharded(
 
 
 __all__: list[str] = [
+    "cbed_amplitude_from_atoms",
+    "cbed_image_from_atoms",
     "clip_cbed",
     "stem4d_sharded",
 ]

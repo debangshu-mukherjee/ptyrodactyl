@@ -26,6 +26,8 @@ Routine Listings
 ----------------
 :class:`AberrationParams`
     Zernike coefficients and soft aperture cutoff.
+:class:`AxisUpdate`
+    Additive distribution-axis deltas for one kernel evaluation.
 :class:`CGState`
     State container for conjugate gradient iteration.
 :class:`CalibratedArray`
@@ -74,6 +76,10 @@ Routine Listings
     Reduction-mode enum for distribution collapse.
 :class:`STEM4D`
     4D-STEM data with diffraction patterns, calibrations, and parameters.
+:func:`combine_axis_updates`
+    Sum multiple AxisUpdate carriers.
+:func:`create_axis_update`
+    Create an AxisUpdate with runtime validation.
 :func:`create_calibrated_array`
     Create a CalibratedArray with runtime validation.
 :func:`create_crystal_data`
@@ -181,10 +187,13 @@ from .distributions import (
     create_trivial_distribution,
 )
 from .electron_types import (
-    STEM4D,
+    AxisUpdate,
     CalibratedArray,
     PotentialSlices,
     ProbeModes,
+    STEM4D,
+    combine_axis_updates,
+    create_axis_update,
     create_calibrated_array,
     create_potential_slices,
     create_probe_modes,
@@ -219,6 +228,7 @@ from .recon_types import (
 __all__: list[str] = [
     "A_BOHR",
     "AberrationParams",
+    "AxisUpdate",
     "CGState",
     "C_LIGHT",
     "CalibratedArray",
@@ -252,6 +262,8 @@ __all__: list[str] = [
     "STEM4D",
     "TRIVIAL",
     "TRIVIAL_DISTRIBUTION",
+    "combine_axis_updates",
+    "create_axis_update",
     "create_calibrated_array",
     "create_crystal_data",
     "create_crystal_structure",

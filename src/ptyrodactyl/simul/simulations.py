@@ -21,8 +21,10 @@ Routine Listings
     Create electron probe with specified aberrations.
 :func:`aberration`
     Calculate aberration phase for the electron probe.
-:func:`cbed`
-    Simulate convergent beam electron diffraction patterns.
+:func:`cbed_amplitude`
+    Simulate complex CBED detector amplitudes.
+:func:`cbed_image`
+    Simulate convergent beam electron diffraction intensity patterns.
 :func:`shift_beam_fourier`
     Shift electron beam in Fourier space for scanning.
 :func:`stem_4d`
@@ -44,7 +46,7 @@ from :mod:`ptyrodactyl.types`.
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Tuple, Union
+from beartype.typing import Callable, Tuple, Union
 from jax import lax
 from jaxtyping import (
     Array,
@@ -65,15 +67,20 @@ from ptyrodactyl.types import (
     M_E,
     STEM4D,
     CalibratedArray,
+    Distribution,
     PotentialSlices,
     ProbeModes,
+    ReductionMode,
     create_calibrated_array,
+    create_distribution,
     create_probe_modes,
     create_stem4d,
     scalar_float,
     scalar_int,
     scalar_num,
 )
+
+from .reduce import apply_distribution
 
 
 @jaxtyped(typechecker=beartype)
@@ -448,32 +455,69 @@ def aberration(
     return chi_probe
 
 
+def _cbed_amplitude_from_slice_provider(
+    beam_modes: Complex[Array, " H W M"],
+    num_slices: int,
+    slice_thickness: scalar_num,
+    voltage_kv: scalar_num,
+    calib_ang: scalar_float,
+    slice_provider: Callable[[scalar_int], Float[Array, " H W"]],
+) -> Complex[Array, " H W M"]:
+    """Return detector amplitudes from one provider-backed multislice scan."""
+    dtype: jnp.dtype = beam_modes.dtype
+    propagator: Complex[Array, " H W"] = propagation_func(
+        beam_modes.shape[0],
+        beam_modes.shape[1],
+        slice_thickness,
+        voltage_kv,
+        calib_ang,
+    ).astype(dtype)
+    init_wave: Complex[Array, " H W M"] = jnp.copy(beam_modes)
+
+    def _scan_fn(
+        carry: Complex[Array, " H W M"], slice_idx: scalar_int
+    ) -> Tuple[Complex[Array, " H W M"], None]:
+        """Propagate wave through one potential slice."""
+        wave: Complex[Array, " H W M"] = carry
+        pot_single_slice: Float[Array, " H W"] = slice_provider(slice_idx)
+        trans_slice: Complex[Array, " H W"] = transmission_func(
+            pot_single_slice, voltage_kv
+        )
+        wave = wave * trans_slice[..., jnp.newaxis]
+
+        def _propagate(
+            w: Complex[Array, " H W M"],
+        ) -> Complex[Array, " H W M"]:
+            """Apply Fresnel propagation in Fourier space."""
+            w_k: Complex[Array, " H W M"] = jnp.fft.fft2(w, axes=(0, 1))
+            w_k = w_k * propagator[..., jnp.newaxis]
+            return jnp.fft.ifft2(w_k, axes=(0, 1)).astype(dtype)
+
+        is_last_slice: Bool[Array, ""] = jnp.array(slice_idx == num_slices - 1)
+        wave = lax.cond(is_last_slice, lambda w: w, _propagate, wave)
+        return wave, None
+
+    final_wave: Complex[Array, " H W M"]
+    final_wave, _ = lax.scan(_scan_fn, init_wave, jnp.arange(num_slices))
+    detector_amplitude: Complex[Array, " H W M"] = jnp.fft.fftshift(
+        jnp.fft.fft2(final_wave, axes=(0, 1)), axes=(0, 1)
+    )
+    return detector_amplitude
+
+
 @jaxtyped(typechecker=beartype)
 @jax.jit
-def cbed(
+def cbed_amplitude(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
     voltage_kv: scalar_num,
-) -> CalibratedArray:
-    """Simulate a CBED pattern via the multislice algorithm.
+) -> Complex[Array, " H W M"]:
+    """Return complex CBED detector fields for each probe mode.
 
-    Extended Summary
-    ----------------
-    Propagates one or more beam modes through one or more
-    potential slices to produce a Convergent Beam Electron
-    Diffraction (CBED) intensity pattern.
-
-    Implementation Logic
-    --------------------
-    1. **Ensure 3D arrays** --
-       Promote single-slice / single-mode inputs.
-    2. **Build propagator** --
-       :func:`propagation_func` from slice thickness.
-    3. **Scan over slices** --
-       ``lax.scan``: transmit, then propagate (skip
-       propagation on the last slice).
-    4. **Compute intensity** --
-       FFT to Fourier space, square modulus, sum over modes.
+    Return the complex field so Layer 1 can choose coherent or incoherent
+    reduction explicitly. The multislice scan transmits and propagates all
+    modes together, Fourier-transforms the exit waves, and leaves the final
+    mode axis intact.
 
     Parameters
     ----------
@@ -489,93 +533,105 @@ def cbed(
 
     Returns
     -------
-    cbed_pytree : CalibratedArray
-        CBED intensity pattern as a
-        :class:`~ptyrodactyl.types.CalibratedArray` with
-        Fourier-space calibrations. ``real_space`` is
-        ``False``.
+    detector_amplitude : Complex[Array, " H W M"]
+        Complex detector-plane amplitudes with the probe-mode axis retained.
     """
     calib_ang: Float[Array, ""] = jnp.amin(
         jnp.array([pot_slices.calib, beam.calib])
     )
-    dtype: jnp.dtype = beam.modes.dtype
     pot_slice: Float[Array, " H W S"] = jnp.atleast_3d(pot_slices.slices)
     beam_modes: Complex[Array, " H W M"] = jnp.atleast_3d(beam.modes)
     num_slices: int = pot_slice.shape[-1]
-    slice_transmission: Complex[Array, " H W"] = propagation_func(
-        beam_modes.shape[0],
-        beam_modes.shape[1],
-        pot_slices.slice_thickness,
-        voltage_kv,
-        calib_ang,
-    ).astype(dtype)
-    init_wave: Complex[Array, " H W M"] = jnp.copy(beam_modes)
 
-    def _scan_fn(
-        carry: Complex[Array, " H W M"], slice_idx: scalar_int
-    ) -> Tuple[Complex[Array, " H W M"], None]:
-        """Propagate wave through one potential slice.
-
-        Parameters
-        ----------
-        carry : Complex[Array, " H W M"]
-            Current wave state.
-        slice_idx : scalar_int
-            Index of the current slice.
-
-        Returns
-        -------
-        wave : Complex[Array, " H W M"]
-            Updated wave.
-        None
-            No stacked output.
-        """
-        wave: Complex[Array, " H W M"] = carry
+    def _slice_at(slice_idx: scalar_int) -> Float[Array, " H W"]:
         pot_single_slice: Float[Array, " H W 1"] = lax.dynamic_slice_in_dim(
             pot_slice, slice_idx, 1, axis=2
         )
-        pot_single_slice: Float[Array, " H W"] = jnp.squeeze(
+        squeezed_slice: Float[Array, " H W"] = jnp.squeeze(
             pot_single_slice, axis=2
         )
-        trans_slice: Complex[Array, " H W"] = transmission_func(
-            pot_single_slice, voltage_kv
+        return squeezed_slice
+
+    detector_amplitude: Complex[Array, " H W M"] = (
+        _cbed_amplitude_from_slice_provider(
+            beam_modes,
+            num_slices,
+            pot_slices.slice_thickness,
+            voltage_kv,
+            calib_ang,
+            _slice_at,
         )
-        wave = wave * trans_slice[..., jnp.newaxis]
-
-        def _propagate(
-            w: Complex[Array, " H W M"],
-        ) -> Complex[Array, " H W M"]:
-            """Apply Fresnel propagation in Fourier space.
-
-            Parameters
-            ----------
-            w : Complex[Array, " H W M"]
-                Wave in real space.
-
-            Returns
-            -------
-            Complex[Array, " H W M"]
-                Wave after propagation.
-            """
-            w_k: Complex[Array, " H W M"] = jnp.fft.fft2(w, axes=(0, 1))
-            w_k = w_k * slice_transmission[..., jnp.newaxis]
-            return jnp.fft.ifft2(w_k, axes=(0, 1)).astype(dtype)
-
-        is_last_slice: Bool[Array, ""] = jnp.array(slice_idx == num_slices - 1)
-        wave = lax.cond(is_last_slice, lambda w: w, _propagate, wave)
-        return wave, None
-
-    final_wave: Complex[Array, " H W M"]
-    final_wave, _ = lax.scan(_scan_fn, init_wave, jnp.arange(num_slices))
-    fourier_space_pattern: Complex[Array, " H W M"] = jnp.fft.fftshift(
-        jnp.fft.fft2(final_wave, axes=(0, 1)), axes=(0, 1)
     )
-    intensity_per_mode: Float[Array, " H W M"] = jnp.square(
-        jnp.abs(fourier_space_pattern)
+    return detector_amplitude
+
+
+@jaxtyped(typechecker=beartype)
+def probe_modes_to_distribution(probe: ProbeModes) -> Distribution:
+    """Return the explicit incoherent distribution for probe modes."""
+    mode_count: int = jnp.atleast_3d(probe.modes).shape[-1]
+    samples: Float[Array, " M 1"] = jnp.arange(
+        mode_count,
+        dtype=jnp.float64,
+    )[:, jnp.newaxis]
+    distribution: Distribution = create_distribution(
+        samples=samples,
+        weights=probe.weights,
+        reduction=ReductionMode.INCOHERENT,
+        axis_id="probe_modes",
     )
-    cbed_pattern: Float[Array, " H W"] = jnp.sum(intensity_per_mode, axis=-1)
+    return distribution
+
+
+@jaxtyped(typechecker=beartype)
+@jax.jit
+def cbed_image(
+    pot_slices: PotentialSlices,
+    beam: ProbeModes,
+    voltage_kv: scalar_num,
+) -> CalibratedArray:
+    """Simulate a CBED intensity image via explicit mode reduction.
+
+    Computes :func:`cbed_amplitude` exactly once, then binds the retained mode
+    axis into :func:`apply_distribution`: ``samples = arange(M)[:, None]`` and
+    ``weights = probe.weights``. The bound closure indexes
+    ``amps[..., sample[0].astype(int)]`` so the Phase-1 reducer performs the
+    only public detector ``|.|^2`` and incoherent mode sum.
+
+    Parameters
+    ----------
+    pot_slices : PotentialSlices
+        Potential slices for multislice propagation.
+    beam : ProbeModes
+        Probe modes and explicit incoherent mode weights.
+    voltage_kv : scalar_num
+        Accelerating voltage in kilovolts.
+
+    Returns
+    -------
+    cbed_pytree : CalibratedArray
+        CBED intensity pattern with Fourier-space calibrations.
+    """
+    amplitudes: Complex[Array, " H W M"] = cbed_amplitude(
+        pot_slices=pot_slices,
+        beam=beam,
+        voltage_kv=voltage_kv,
+    )
+    distribution: Distribution = probe_modes_to_distribution(beam)
+
+    def _mode_amplitude(sample: Float[Array, " D"]) -> Complex[Array, " H W"]:
+        mode_idx: Int[Array, ""] = sample[0].astype(jnp.int32)
+        amplitude: Complex[Array, " H W"] = amplitudes[..., mode_idx]
+        return amplitude
+
+    cbed_pattern: Float[Array, " H W"] = apply_distribution(
+        distribution,
+        _mode_amplitude,
+    )
+    calib_ang: Float[Array, ""] = jnp.amin(
+        jnp.array([pot_slices.calib, beam.calib])
+    )
     real_space_fov: Float[Array, " "] = jnp.multiply(
-        beam_modes.shape[0], calib_ang
+        amplitudes.shape[0], calib_ang
     )
     inverse_space_calib: Float[Array, " "] = 1 / real_space_fov
     cbed_pytree: CalibratedArray = create_calibrated_array(
@@ -688,7 +744,7 @@ def stem_4d(
     Extended Summary
     ----------------
     Shifts the beam to each scan position and runs
-    :func:`cbed` for each, collecting diffraction patterns
+    :func:`cbed_image` for each, collecting diffraction patterns
     into a :class:`~ptyrodactyl.types.STEM4D` dataset.
 
     Implementation Logic
@@ -723,7 +779,7 @@ def stem_4d(
 
     See Also
     --------
-    :func:`cbed` : Single-position CBED simulation.
+    :func:`cbed_image` : Single-position CBED intensity simulation.
     :func:`shift_beam_fourier` : Fourier-space beam shifting.
     """
     shifted_beams: Complex[Array, " P H W #M"] = shift_beam_fourier(
@@ -751,7 +807,7 @@ def stem_4d(
             weights=beam.weights,
             calib=beam.calib,
         )
-        cbed_result: CalibratedArray = cbed(
+        cbed_result: CalibratedArray = cbed_image(
             pot_slices=pot_slice,
             beam=current_probe_modes,
             voltage_kv=voltage_kv,
@@ -761,15 +817,13 @@ def stem_4d(
     cbed_patterns: Float[Array, " P H W"] = jax.vmap(_process_single_position)(
         jnp.arange(positions.shape[0])
     )
-    first_beam_modes: ProbeModes = ProbeModes(
-        modes=shifted_beams[0],
-        weights=beam.weights,
-        calib=beam.calib,
+    detector_calib_ang: Float[Array, ""] = jnp.amin(
+        jnp.array([pot_slice.calib, beam.calib])
     )
-    first_cbed: CalibratedArray = cbed(
-        pot_slices=pot_slice, beam=first_beam_modes, voltage_kv=voltage_kv
+    real_space_fov: Float[Array, " "] = jnp.multiply(
+        shifted_beams.shape[1], detector_calib_ang
     )
-    fourier_calib: Float[Array, " "] = first_cbed.calib_y
+    fourier_calib: Float[Array, " "] = 1 / real_space_fov
     scan_positions_ang: Float[Array, " P 2"] = positions * calib_ang
     stem4d_data: STEM4D = create_stem4d(
         data=cbed_patterns,
@@ -803,10 +857,11 @@ def decompose_beam_to_modes(
     2. **Random orthogonal basis** --
        QR decomposition of a random complex matrix gives
        orthonormal columns.
-    3. **Weight and scale** --
+    3. **Scale modes** --
        First mode gets ``first_mode_weight``; remaining
-       weight is split equally. Each mode is scaled by
-       ``sqrt(weight) * sqrt(original_intensity)``.
+       weight is split equally. Each orthonormal mode is scaled by
+       ``sqrt(original_intensity)``; ``ProbeModes.weights`` is the only
+       carrier of the incoherent mixture weights.
     4. **Reshape** --
        Back to ``(H, W, M)`` spatial dimensions.
 
@@ -854,13 +909,10 @@ def decompose_beam_to_modes(
         1, mode_count - 1
     )
     weights = weights.at[1:].set(remaining_weight)
-    sqrt_weights: Float[Array, " mm"] = jnp.sqrt(weights)
     sqrt_intensity: Float[Array, " tp 1"] = jnp.sqrt(
         original_intensity
     ).reshape(-1, 1)
-    weighted_modes: Complex[Array, " tp mm"] = (
-        qq * sqrt_intensity * sqrt_weights
-    )
+    weighted_modes: Complex[Array, " tp mm"] = qq * sqrt_intensity
     multimodal_beam: Complex[Array, " hh ww mm"] = weighted_modes.reshape(
         hh, ww, mode_count
     )
@@ -981,11 +1033,13 @@ def annular_detector(
 __all__: list[str] = [
     "aberration",
     "annular_detector",
-    "cbed",
+    "cbed_amplitude",
+    "cbed_image",
     "decompose_beam_to_modes",
     "fourier_calib",
     "fourier_coords",
     "make_probe",
+    "probe_modes_to_distribution",
     "propagation_func",
     "shift_beam_fourier",
     "stem_4d",

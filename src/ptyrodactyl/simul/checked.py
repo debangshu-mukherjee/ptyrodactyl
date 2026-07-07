@@ -10,8 +10,8 @@ inputs.
 
 Routine Listings
 ----------------
-:func:`checked_cbed`
-    Validate CBED inputs and run the bare CBED kernel.
+:func:`checked_cbed_image`
+    Validate CBED inputs and run the bare CBED intensity kernel.
 :func:`checked_make_probe`
     Validate probe-construction inputs and run the bare probe
     kernel.
@@ -46,7 +46,7 @@ from ptyrodactyl.types import (
 )
 
 from .parallelized import stem4d_sharded
-from .simulations import cbed, make_probe, stem_4d
+from .simulations import cbed_image, make_probe, stem_4d
 
 _VECTOR_RANK = 1
 _MATRIX_RANK = 2
@@ -440,12 +440,12 @@ def checked_make_probe(
 
 
 @jaxtyped(typechecker=beartype)
-def checked_cbed(
+def checked_cbed_image(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
     voltage_kv: scalar_num,
 ) -> CalibratedArray:
-    """Validate CBED inputs and run the bare CBED kernel.
+    """Validate CBED inputs and run the bare CBED intensity kernel.
 
     Parameters
     ----------
@@ -480,7 +480,7 @@ def checked_cbed(
         "voltage_kv",
     )
 
-    cbed_pytree: CalibratedArray = cbed(
+    cbed_pytree: CalibratedArray = cbed_image(
         pot_slices=checked_pot_slices,
         beam=checked_beam,
         voltage_kv=checked_voltage,
@@ -654,7 +654,7 @@ def checked_stem4d_sharded(
 
 
 __all__: list[str] = [
-    "checked_cbed",
+    "checked_cbed_image",
     "checked_make_probe",
     "checked_stem4d_sharded",
     "checked_stem_4d",

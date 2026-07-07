@@ -1,5 +1,36 @@
 # Changelog
 
+## Plan 04 — simul renamed to multislice
+
+Moved: `src/ptyrodactyl/simul` -> `src/ptyrodactyl/multislice`
+Moved: `tests/test_ptyrodactyl/test_simul` -> `tests/test_ptyrodactyl/test_multislice`
+Retargeted: `ptyrodactyl.simul.*` imports -> `ptyrodactyl.multislice.*`
+
+`ptyrodactyl.born` remains a sibling subpackage; the multislice family does
+not absorb convergent Born series simulations.
+
+The `checked_*` wrappers, reducer module, and producer module moved with the
+package unchanged.
+
+## Plan 04 — Ucell And Plots Relocation
+
+Moved: `ptyrodactyl.multislice.geometry.reciprocal_lattice` → `ptyrodactyl.ucell.reciprocal_lattice`
+Moved: `ptyrodactyl.multislice.geometry.rotate_structure` → `ptyrodactyl.ucell.rotate_structure`
+Moved: `ptyrodactyl.multislice.geometry.rotmatrix_axis` → `ptyrodactyl.ucell.rotmatrix_axis`
+Moved: `ptyrodactyl.multislice.geometry.rotmatrix_vectors` → `ptyrodactyl.ucell.rotmatrix_vectors`
+Moved: `ptyrodactyl.multislice.geometry.tilt_crystal` → `ptyrodactyl.ucell.tilt_crystal`
+Moved: `ptyrodactyl.multislice.atom_potentials.contrast_stretch` → `ptyrodactyl.plots.contrast_stretch`
+Moved: `ptyrodactyl.multislice.parallelized.clip_cbed` → `ptyrodactyl.plots.clip_cbed`
+Added: `ptyrodactyl.plots.create_phosphor_colormap`
+
+## Plan 04 — Inout Parser Relocation
+
+Moved: `ptyrodactyl.multislice.atomic_symbol` → `ptyrodactyl.inout.atomic_symbol`
+Moved: `ptyrodactyl.multislice.kirkland_potentials` → `ptyrodactyl.inout.kirkland_potentials`
+Moved: `ptyrodactyl.multislice.parse_crystal` → `ptyrodactyl.inout.parse_crystal`
+Moved: `ptyrodactyl.multislice.parse_poscar` → `ptyrodactyl.inout.parse_poscar`
+Moved: `ptyrodactyl.multislice.parse_xyz` → `ptyrodactyl.inout.parse_xyz`
+
 ## Plan 03 — IM7 Forward-Simulation Carrier Bundling
 
 Forward simulator entry points now take types-owned Equinox carrier
@@ -64,9 +95,9 @@ under LIVE jaxtyping enforcement (`--jaxtyping-packages` in pytest addopts).
 pre-Plan-02 baseline — none were introduced or worsened here:
 
 - 27 Bessel-K derivative NaNs and 17 `kirkland_potentials_crystal`
-  shape/jit defects (`test_simul/test_atom_potentials.py`) — retired by the
+  shape/jit defects (`test_multislice/test_atom_potentials.py`) — retired by the
   Lobato potential-layer rebuild (plan 06 in the private plans repo).
-- 2 `parse_xyz` contract drifts (`test_simul/test_preprocessing.py`) —
+- 2 `parse_xyz` contract drifts (`test_multislice/test_preprocessing.py`) —
   resolved when the parsers move to `inout/` and its ingest contract is
   pinned (plans 04/05).
 

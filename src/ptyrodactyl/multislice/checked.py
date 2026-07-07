@@ -48,7 +48,7 @@ from ptyrodactyl.types import (
 )
 
 from .parallelized import stem4d_sharded
-from .simulations import cbed_image, make_probe, stem_4d
+from ptyrodactyl.multislice.simulations import cbed_image, make_probe, stem_4d
 
 _VECTOR_RANK = 1
 _MATRIX_RANK = 2

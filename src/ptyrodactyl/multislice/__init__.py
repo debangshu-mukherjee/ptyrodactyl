@@ -1,11 +1,13 @@
-"""JAX-based electron microscopy simulation toolkit.
+"""Multislice-family forward simulation toolkit.
 
 Extended Summary
 ----------------
-This package implements various electron microscopy components
-and propagation models with JAX for automatic differentiation
-and acceleration. All functions are fully differentiable and
-JIT-compilable.
+This subpackage owns multislice forward simulation for electron microscopy,
+including CBED amplitudes and intensities, 4D-STEM data generation, sharded
+atom-slice entry points, checked wrappers, distribution producers, and
+late detector reducers. It is named for the algorithm family rather than a
+generic simulation bucket; :mod:`ptyrodactyl.born` remains a sibling
+subpackage for convergent Born series simulations.
 
 Submodules
 ----------
@@ -14,14 +16,8 @@ Submodules
     coordinates.
 - :mod:`checked`
     JIT-safe validating wrappers for simulation kernels.
-- :mod:`geometry`
-    Geometric transformations and operations for crystal
-    structures.
 - :mod:`parallelized`
     Sharded simulation functions for distributed computing.
-- :mod:`preprocessing`
-    Data preprocessing utilities and type definitions for
-    microscopy data.
 - :mod:`producers`
     Distribution producers and CBED axis binders.
 - :mod:`reduce`
@@ -37,12 +33,8 @@ The submodules are organized as follows:
     Atomic potential calculations for electron microscopy.
 - :mod:`checked`
     JIT-safe validating wrappers for simulation kernels.
-- :mod:`geometry`
-    Geometric transformations and operations for crystal structures.
 - :mod:`parallelized`
     Parallelized simulation functions for distributed microscopy.
-- :mod:`preprocessing`
-    Data preprocessing utilities for electron microscopy.
 - :mod:`producers`
     Distribution producers and CBED axis binders.
 - :mod:`reduce`
@@ -61,8 +53,6 @@ Routine Listings
 :func:`apply_distributions`
     Reduce multiple weighted distribution axes to detector
     intensity.
-:func:`atomic_symbol`
-    Convert atomic number to chemical symbol.
 :func:`bessel_kv`
     Modified Bessel function of the second kind.
 :func:`bind_cbed_axes`
@@ -82,11 +72,6 @@ Routine Listings
     4D-STEM kernel.
 :func:`checked_stem_4d`
     Validate 4D-STEM inputs and run the bare 4D-STEM kernel.
-:func:`clip_cbed`
-    Clip CBED patterns to mrad extent and resize to target
-    shape.
-:func:`contrast_stretch`
-    Contrast stretch for visualization.
 :func:`coherence_to_distribution`
     Build the incoherent chromatic/angular coherence distribution.
 :func:`decompose_beam_to_modes`
@@ -95,35 +80,16 @@ Routine Listings
     Calculate Fourier space calibration from real space.
 :func:`fourier_coords`
     Generate Fourier space coordinate arrays.
-:func:`kirkland_potentials`
-    Kirkland atomic potential parameters lookup.
 :func:`kirkland_potentials_crystal`
     Generate atomic potentials from crystal data using
     Kirkland parameters.
 :func:`make_probe`
     Create electron probe with specified aberrations.
-:func:`parse_crystal`
-    Parse XYZ or POSCAR file, auto-detecting format,
-    returns :class:`~ptyrodactyl.types.CrystalData`.
-:func:`parse_poscar`
-    Parse VASP POSCAR file and return validated structure
-    data.
-:func:`parse_xyz`
-    Parse XYZ file and return validated structure data.
 :func:`position_jitter_to_distribution`
     Build the incoherent two-dimensional position-jitter
     distribution.
 :func:`propagation_func`
     Compute Fresnel propagation function.
-:func:`reciprocal_lattice`
-    Calculate reciprocal lattice vectors from real space
-    lattice.
-:func:`rotate_structure`
-    Rotate crystal structure by specified angles.
-:func:`rotmatrix_axis`
-    Create rotation matrix from axis and angle.
-:func:`rotmatrix_vectors`
-    Create rotation matrix from two vectors.
 :func:`shift_beam_fourier`
     Shift beam in Fourier space.
 :func:`single_atom_potential`
@@ -134,9 +100,6 @@ Routine Listings
     slice generation.
 :func:`stem_4d`
     Generate 4D-STEM data from potential slices and probe.
-:func:`tilt_crystal`
-    Tilt :class:`~ptyrodactyl.types.CrystalData` by alpha
-    and beta angles (TEM stage-like tilts).
 :func:`transmission_func`
     Compute transmission function for a potential slice.
 
@@ -150,7 +113,6 @@ gradient-based reconstruction algorithms.
 
 from .atom_potentials import (
     bessel_kv,
-    contrast_stretch,
     kirkland_potentials_crystal,
     single_atom_potential,
 )
@@ -160,28 +122,14 @@ from .checked import (
     checked_stem4d_sharded,
     checked_stem_4d,
 )
-from .geometry import (
-    reciprocal_lattice,
-    rotate_structure,
-    rotmatrix_axis,
-    rotmatrix_vectors,
-    tilt_crystal,
-)
-from .parallelized import clip_cbed, stem4d_sharded
-from .preprocessing import (
-    atomic_symbol,
-    kirkland_potentials,
-    parse_crystal,
-    parse_poscar,
-    parse_xyz,
-)
+from .parallelized import stem4d_sharded
 from .producers import (
     bind_cbed_axes,
     coherence_to_distribution,
     position_jitter_to_distribution,
 )
 from .reduce import apply_distribution, apply_distributions
-from .simulations import (
+from ptyrodactyl.multislice.simulations import (
     aberration,
     annular_detector,
     cbed_amplitude,
@@ -202,7 +150,6 @@ __all__: list[str] = [
     "annular_detector",
     "apply_distribution",
     "apply_distributions",
-    "atomic_symbol",
     "bessel_kv",
     "bind_cbed_axes",
     "cbed_amplitude",
@@ -211,29 +158,18 @@ __all__: list[str] = [
     "checked_make_probe",
     "checked_stem4d_sharded",
     "checked_stem_4d",
-    "clip_cbed",
-    "contrast_stretch",
     "coherence_to_distribution",
     "decompose_beam_to_modes",
     "fourier_calib",
     "fourier_coords",
-    "kirkland_potentials",
     "kirkland_potentials_crystal",
     "make_probe",
-    "parse_crystal",
-    "parse_poscar",
-    "parse_xyz",
     "position_jitter_to_distribution",
     "probe_modes_to_distribution",
     "propagation_func",
-    "reciprocal_lattice",
-    "rotate_structure",
-    "rotmatrix_axis",
-    "rotmatrix_vectors",
     "shift_beam_fourier",
     "single_atom_potential",
     "stem_4d",
     "stem4d_sharded",
-    "tilt_crystal",
     "transmission_func",
 ]

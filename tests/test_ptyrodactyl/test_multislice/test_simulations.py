@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.simul.simulations`."""
+"""Tests for :mod:`ptyrodactyl.multislice.simulations`."""
 # ruff: noqa: E402, I001
 
 import inspect
@@ -10,7 +10,7 @@ import jax.numpy as jnp
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.simul import (
+from ptyrodactyl.multislice import (
     apply_distribution,
     apply_distributions,
     bind_cbed_axes,
@@ -21,8 +21,8 @@ from ptyrodactyl.simul import (
     coherence_to_distribution,
     position_jitter_to_distribution,
 )
-from ptyrodactyl.simul.parallelized import stem4d_sharded
-from ptyrodactyl.simul.simulations import (
+from ptyrodactyl.multislice.parallelized import stem4d_sharded
+from ptyrodactyl.multislice.simulations import (
     aberration,
     annular_detector,
     cbed_amplitude,

@@ -17,9 +17,6 @@ Routine Listings
     Compute CBED amplitudes with on-the-fly potential slice generation.
 :func:`cbed_image_from_atoms`
     Compute CBED intensity with on-the-fly potential slice generation.
-:func:`clip_cbed`
-    Clip CBED patterns to mrad extent and resize to target
-    shape.
 :func:`stem4d_sharded`
     Generate 4D-STEM data from sharded beams and atom
     coordinates.
@@ -37,12 +34,9 @@ import jax
 import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Optional, Tuple
-from jax import lax
-from jax.image import resize
 from jax.sharding import Mesh, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
     AtomicSliceData,
@@ -55,7 +49,7 @@ from ptyrodactyl.types import (
     scalar_num,
 )
 
-from .simulations import (
+from ptyrodactyl.multislice.simulations import (
     _cbed_amplitude_from_slice_provider,
 )
 
@@ -273,89 +267,6 @@ def cbed_image_from_atoms(
 
 
 @jaxtyped(typechecker=beartype)
-@jax.jit
-def clip_cbed(
-    cbed: Float[Array, "H W"],
-    fourier_calib_inv_ang: scalar_float,
-    voltage_kv: scalar_num,
-    extent_mrad: scalar_float,
-    output_shape: Tuple[int, int],
-) -> Float[Array, "Ho Wo"]:
-    """Clip CBED pattern to mrad extent and resize.
-
-    Extended Summary
-    ----------------
-    Extracts the central region of a CBED pattern corresponding
-    to a given angular extent in milliradians, then resizes to
-    the target output shape using bilinear interpolation.
-
-    Implementation Logic
-    --------------------
-    1. **Convert mrad to pixels** --
-       Use wavelength and Fourier calibration to convert
-       ``extent_mrad`` to a pixel radius.
-    2. **Extract central crop** --
-       ``lax.dynamic_slice`` around the pattern center.
-    3. **Resize** --
-       Bilinear resize to ``output_shape``.
-
-    Parameters
-    ----------
-    cbed : Float[Array, "H W"]
-        Input CBED pattern (fftshifted, centered).
-    fourier_calib_inv_ang : scalar_float
-        Fourier space calibration in inverse Angstroms per
-        pixel.
-    voltage_kv : scalar_num
-        Accelerating voltage in kilovolts.
-    extent_mrad : scalar_float
-        Half-angle extent in milliradians (radius from
-        center).
-    output_shape : Tuple[int, int]
-        Target output shape ``(height, width)``.
-
-    Returns
-    -------
-    resized : Float[Array, "Ho Wo"]
-        Clipped and resized CBED pattern.
-    """
-    h: int = cbed.shape[0]
-    w: int = cbed.shape[1]
-
-    wavelength_ang: Float[Array, " "] = (
-        relativistic_wavelength_ang(voltage_kv)
-    )
-    mrad_per_inv_ang: Float[Array, " "] = wavelength_ang * 1000.0
-
-    extent_inv_ang: Float[Array, " "] = extent_mrad / mrad_per_inv_ang
-    extent_pixels: Int[Array, " "] = jnp.ceil(
-        extent_inv_ang / fourier_calib_inv_ang
-    ).astype(jnp.int32)
-
-    center_y: int = h // 2
-    center_x: int = w // 2
-
-    y_start: Int[Array, " "] = jnp.maximum(0, center_y - extent_pixels)
-    y_end: Int[Array, " "] = jnp.minimum(h, center_y + extent_pixels)
-    x_start: Int[Array, " "] = jnp.maximum(0, center_x - extent_pixels)
-    x_end: Int[Array, " "] = jnp.minimum(w, center_x + extent_pixels)
-
-    clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
-        cbed,
-        (y_start, x_start),
-        (y_end - y_start, x_end - x_start),
-    )
-
-    resized: Float[Array, "Ho Wo"] = resize(
-        clipped,
-        output_shape,
-        method="linear",
-    )
-
-    return resized
-
-
-@jaxtyped(typechecker=beartype)
 def stem4d_sharded(
     probe_modes: ProbeModes,
     sample: AtomicSliceData,
@@ -411,10 +322,6 @@ def stem4d_sharded(
         patterns, real- and Fourier-space calibrations,
         scan positions, and accelerating voltage.
 
-    See Also
-    --------
-    :func:`clip_cbed` : Clip and resize CBED patterns to
-        target mrad extent and shape.
     """
     if detector.scan_positions_ang is None:
         raise ValueError("detector.scan_positions_ang is required")
@@ -538,6 +445,5 @@ def stem4d_sharded(
 __all__: list[str] = [
     "cbed_amplitude_from_atoms",
     "cbed_image_from_atoms",
-    "clip_cbed",
     "stem4d_sharded",
 ]

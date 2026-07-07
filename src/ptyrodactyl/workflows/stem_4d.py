@@ -38,12 +38,12 @@ from jax import lax
 from jax.sharding import NamedSharding, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-from ptyrodactyl.simul import (
+from ptyrodactyl.multislice import (
     make_probe,
     single_atom_potential,
     stem4d_sharded,
 )
-from ptyrodactyl.simul.parallelized import cbed_image_from_atoms
+from ptyrodactyl.multislice.parallelized import cbed_image_from_atoms
 from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,

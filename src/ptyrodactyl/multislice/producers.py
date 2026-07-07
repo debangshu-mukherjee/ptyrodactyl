@@ -47,7 +47,10 @@ from ptyrodactyl.types import (
     scalar_num,
 )
 
-from .simulations import cbed_amplitude, shift_beam_fourier
+from ptyrodactyl.multislice.simulations import (
+    cbed_amplitude,
+    shift_beam_fourier,
+)
 
 _AXIS_COHERENCE: str = "coherence"
 _AXIS_POSITION_JITTER: str = "position_jitter"
@@ -82,7 +85,7 @@ def bind_cbed_axes(
         Real-space pixel size used for position shifts and tilt ramps.
     axes : tuple[Distribution, ...]
         Distribution axes whose sample rows are concatenated by
-        :func:`~ptyrodactyl.simul.reduce.apply_distributions`.
+        :func:`~ptyrodactyl.multislice.reduce.apply_distributions`.
     column_maps : tuple[str, ...], optional
         Static column-map names. An empty tuple derives them from each
         distribution ``axis_id``. Supported names are ``"probe_modes"``,

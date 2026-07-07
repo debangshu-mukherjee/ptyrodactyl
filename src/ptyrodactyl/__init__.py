@@ -37,14 +37,18 @@ The submodules are organized as follows:
     Bloch wave simulations.
 - :mod:`born`
     Convergent Born series simulations.
+- :mod:`inout`
+    Crystal-structure ingestion and lookup exports.
 - :mod:`invert`
     Electron microscopy reconstructions, ptychography and
     focal series.
 - :mod:`jacobian`
     Jacobian computation submodule.
-- :mod:`simul`
-    Electron microscopy simulations including 4D-STEM, CBED,
-    and multislice.
+- :mod:`multislice`
+    Multislice-family forward simulations including CBED and
+    4D-STEM.
+- :mod:`plots`
+    Plotting and visualization helper exports.
 - :mod:`tools`
     Utility tools for optimization, loss functions, and
     parallel processing including complex-valued optimizers
@@ -52,6 +56,8 @@ The submodules are organized as follows:
 - :mod:`types`
     Single home for carriers, type aliases, physical constants,
     and validated create_* factories.
+- :mod:`ucell`
+    Unit-cell geometry and crystallographic helpers.
 - :mod:`workflows`
     High-level workflows combining simulation steps for common
     use cases such as simulating 4D-STEM data from XYZ
@@ -171,11 +177,14 @@ init_distributed()
 from . import (  # noqa: E402, I001
     bloch,
     born,
+    inout,
     invert,
     jacobian,
-    simul,
+    multislice,
+    plots,
     tools,
     types,
+    ucell,
     workflows,
 )
 
@@ -185,10 +194,13 @@ __all__: list[str] = [
     "bloch",
     "born",
     "init_distributed",
+    "inout",
     "invert",
     "jacobian",
-    "simul",
+    "multislice",
+    "plots",
     "tools",
     "types",
+    "ucell",
     "workflows",
 ]

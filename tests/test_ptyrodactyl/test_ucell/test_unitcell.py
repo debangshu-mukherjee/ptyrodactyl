@@ -9,7 +9,7 @@ from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.simul.geometry import (
+from ptyrodactyl.ucell import (
     reciprocal_lattice,
     rotate_structure,
     rotmatrix_axis,

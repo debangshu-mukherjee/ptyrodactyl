@@ -9,8 +9,6 @@ handling and FFT-based sub-pixel atom positioning.
 
 Routine Listings
 ----------------
-:func:`contrast_stretch`
-    Rescale intensity values between specified percentiles.
 :func:`_bessel_iv_series`
     Series expansion for modified Bessel function I_v(x).
 :func:`_bessel_k0_series`
@@ -66,9 +64,10 @@ from functools import partial
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional, Tuple, Union
+from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
+from ptyrodactyl.inout import kirkland_potentials
 from ptyrodactyl.types import (
     CrystalData,
     PotentialSlices,
@@ -77,94 +76,6 @@ from ptyrodactyl.types import (
     scalar_int,
     scalar_num,
 )
-
-from .preprocessing import kirkland_potentials
-
-
-@jaxtyped(typechecker=beartype)
-@jax.jit
-def contrast_stretch(
-    series: Union[Float[Array, " H W"], Float[Array, " N H W"]],
-    p1: scalar_float,
-    p2: scalar_float,
-) -> Union[Float[Array, " H W"], Float[Array, " N H W"]]:
-    """Rescale image intensity between specified percentiles.
-
-    Extended Summary
-    ----------------
-    Clips pixel values to the ``[p1, p2]`` percentile range
-    and linearly rescales to ``[0, 1]``. Handles both single
-    images and stacks via ``jax.vmap``.
-
-    Implementation Logic
-    --------------------
-    1. **Expand dims** -- Promote 2D to 3D if needed.
-    2. **Per-image percentiles** -- Compute lower/upper
-       bounds from ``jnp.percentile``.
-    3. **Clip and rescale** -- Linear map to ``[0, 1]``.
-    4. **Restore shape** -- Squeeze back to 2D if input
-       was 2D.
-
-    Parameters
-    ----------
-    series : Float[Array, " H W"] | Float[Array, " N H W"]
-        Input image or image stack.
-    p1 : scalar_float
-        Lower percentile (0--100).
-    p2 : scalar_float
-        Upper percentile (0--100).
-
-    Returns
-    -------
-    final_result : Float[Array, " H W"] | Float[Array, " N H W"]
-        Rescaled image(s) with same shape as input.
-    """
-    original_shape: Tuple[int, ...] = series.shape
-    is_2d_image: int = 2
-    if len(original_shape) == is_2d_image:
-        series_reshaped: Float[Array, " N H W"] = series[jnp.newaxis, :, :]
-    else:
-        series_reshaped = series
-
-    def _rescale_single_image(
-        image: Float[Array, " H W"],
-    ) -> Float[Array, " H W"]:
-        """Rescale one image via percentile-based stretching.
-
-        Parameters
-        ----------
-        image : Float[Array, " H W"]
-            Single image to rescale.
-
-        Returns
-        -------
-        rescaled_image : Float[Array, " H W"]
-            Image rescaled to ``[0, 1]``.
-        """
-        flattened: Float[Array, " HW"] = image.flatten()
-        lower_bound: Float[Array, ""] = jnp.percentile(flattened, p1)
-        upper_bound: Float[Array, ""] = jnp.percentile(flattened, p2)
-        clipped_image: Float[Array, " H W"] = jnp.clip(
-            image, lower_bound, upper_bound
-        )
-        range_val: Float[Array, ""] = upper_bound - lower_bound
-        rescaled_image: Float[Array, " H W"] = jnp.where(
-            range_val > 0,
-            (clipped_image - lower_bound) / range_val,
-            clipped_image,
-        )
-        return rescaled_image
-
-    transformed: Float[Array, " N H W"] = jax.vmap(_rescale_single_image)(
-        series_reshaped
-    )
-    if len(original_shape) == is_2d_image:
-        final_result: Union[Float[Array, " H W"], Float[Array, " N H W"]] = (
-            transformed[0]
-        )
-    else:
-        final_result = transformed
-    return final_result
 
 
 def _bessel_iv_series(
@@ -1522,7 +1433,6 @@ def kirkland_potentials_crystal(
 
 __all__: list[str] = [
     "bessel_kv",
-    "contrast_stretch",
     "kirkland_potentials_crystal",
     "single_atom_potential",
 ]

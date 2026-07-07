@@ -1,11 +1,11 @@
-"""Tests for :mod:`ptyrodactyl.simul.producers`."""
+"""Tests for :mod:`ptyrodactyl.multislice.producers`."""
 
 import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
 
-from ptyrodactyl.simul import (
+from ptyrodactyl.multislice import (
     apply_distributions,
     bind_cbed_axes,
     cbed_image,
@@ -14,7 +14,7 @@ from ptyrodactyl.simul import (
     position_jitter_to_distribution,
     probe_modes_to_distribution,
 )
-from ptyrodactyl.simul.producers import _axis_update_from_sample
+from ptyrodactyl.multislice.producers import _axis_update_from_sample
 from ptyrodactyl.types import (
     ReductionMode,
     create_detector_config,

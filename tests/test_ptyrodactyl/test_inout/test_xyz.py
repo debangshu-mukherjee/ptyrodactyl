@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import pytest
 from equinox import EquinoxRuntimeError
 
-from ptyrodactyl.simul.preprocessing import (
+from ptyrodactyl.inout.xyz import (
     _ATOMIC_NUMBERS,
     _KIRKLAND_POTENTIALS,
     _parse_xyz_metadata,

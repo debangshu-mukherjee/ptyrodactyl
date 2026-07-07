@@ -6,7 +6,7 @@ Provides gradient-based optimization routines for reconstructing
 sample electrostatic potentials and electron probe functions from
 experimental 4D-STEM ptychographic datasets. Each public function
 constructs a differentiable forward model via
-:func:`ptyrodactyl.simul.simulations.stem_4d`, computes the loss
+:func:`ptyrodactyl.multislice.simulations.stem_4d`, computes the loss
 and its gradients with ``jax.value_and_grad``, and iteratively
 updates the reconstruction variables using a first-order optimizer
 from :mod:`ptyrodactyl.types`.
@@ -45,7 +45,7 @@ from beartype.typing import Any, Dict, Tuple, Union
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 import ptyrodactyl.tools as ptt
-from ptyrodactyl.simul.simulations import stem_4d
+from ptyrodactyl.multislice.simulations import stem_4d
 from ptyrodactyl.types import (
     STEM4D,
     CalibratedArray,
@@ -132,7 +132,7 @@ def single_slice_ptychography(
     Implementation Logic
     --------------------
     1. **Build forward model** --
-       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d` to
+       Wraps :func:`~ptyrodactyl.multislice.simulations.stem_4d` to
        map ``(pot_slice, beam)`` to simulated 4D-STEM data.
     2. **Construct loss** --
        Creates the loss via
@@ -485,7 +485,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
     Implementation Logic
     --------------------
     1. **Build forward model** --
-       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d` to
+       Wraps :func:`~ptyrodactyl.multislice.simulations.stem_4d` to
        map ``(pot_slice, beam, pos_list)`` to simulated 4D-STEM.
     2. **Construct loss** --
        Creates the loss via
@@ -956,7 +956,7 @@ def single_slice_multi_modal(  # noqa: PLR0915
     Implementation Logic
     --------------------
     1. **Build forward model** --
-       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d`
+       Wraps :func:`~ptyrodactyl.multislice.simulations.stem_4d`
        accepting ``(pot_slice, beam, pos_list)`` where *beam*
        is a :class:`~ptyrodactyl.types.ProbeModes` instance.
     2. **Construct loss** --
@@ -1380,7 +1380,7 @@ def multi_slice_multi_modal(
     Implementation Logic
     --------------------
     1. **Build forward model** --
-       Wraps :func:`~ptyrodactyl.simul.simulations.stem_4d`
+       Wraps :func:`~ptyrodactyl.multislice.simulations.stem_4d`
        accepting ``(pot_slice, beam, pos_list)``.
     2. **Construct loss** --
        Creates the loss via

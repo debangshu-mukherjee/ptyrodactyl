@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.simul.reduce`.
+"""Tests for :mod:`ptyrodactyl.multislice.reduce`.
 
 Extended Summary
 ----------------
@@ -14,7 +14,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ptyrodactyl.simul import apply_distribution, apply_distributions
+from ptyrodactyl.multislice import apply_distribution, apply_distributions
 from ptyrodactyl.types import (
     TRIVIAL,
     ReductionMode,

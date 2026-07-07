@@ -19,9 +19,9 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-import ptyrodactyl.simul as ps
-from ptyrodactyl.simul.parallelized import stem4d_sharded
-from ptyrodactyl.simul.simulations import stem_4d
+import ptyrodactyl.multislice as ps
+from ptyrodactyl.multislice.parallelized import stem4d_sharded
+from ptyrodactyl.multislice.simulations import stem_4d
 from ptyrodactyl.types import (
     create_atomic_slice_data,
     create_detector_config,

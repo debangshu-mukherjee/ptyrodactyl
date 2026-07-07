@@ -1,38 +1,31 @@
-"""Data preprocessing utilities for electron microscopy.
+"""XYZ crystal-structure parsing and atomic data lookups.
 
 Extended Summary
 ----------------
-This module contains utilities for preprocessing electron
-microscopy data before analysis or reconstruction, including
-XYZ and POSCAR file parsing and atomic data lookups.
+This module contains utilities for parsing XYZ crystal structure
+files and for loading atomic-number and Kirkland potential lookup
+tables used by ptyrodactyl.
 
 Routine Listings
 ----------------
-:func:`_load_atomic_numbers`
-    Load atomic number mapping from JSON file.
-:data:`_ATOMIC_NUMBERS`
-    Module-level dict mapping symbols to atomic numbers.
+:func:`_extract_elements_from_comment`
+    Extract element symbols from POSCAR comment line.
 :func:`atomic_symbol`
     Return atomic number for a given atomic symbol string.
+:func:`_load_atomic_numbers`
+    Load atomic number mapping from JSON file.
 :func:`_load_kirkland_csv`
     Load Kirkland potential parameters from CSV file.
-:data:`_KIRKLAND_POTENTIALS`
-    Module-level JAX array of Kirkland parameters.
 :func:`kirkland_potentials`
-    Return preloaded Kirkland scattering factors as JAX
-    array.
+    Return preloaded Kirkland potential parameters.
 :func:`_parse_xyz_metadata`
     Extract metadata from the XYZ comment line.
 :func:`parse_xyz`
-    Parse an XYZ file and return validated
-    :class:`~ptyrodactyl.types.CrystalData`.
-:func:`parse_poscar`
-    Parse a VASP POSCAR file and return validated
-    :class:`~ptyrodactyl.types.CrystalData`.
-:func:`_extract_elements_from_comment`
-    Extract element symbols from POSCAR comment line.
-:func:`parse_crystal`
-    Parse XYZ or POSCAR file, auto-detecting format.
+    Parse an XYZ file and return a validated CrystalData PyTree.
+:data:`_ATOMIC_NUMBERS`
+    Module-level dict mapping symbols to atomic numbers.
+:data:`_KIRKLAND_POTENTIALS`
+    Module-level JAX array of Kirkland parameters.
 
 Notes
 -----
@@ -59,7 +52,6 @@ _KIRKLAND_PATH: Path = (
 _ATOMS_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
 )
-
 
 
 @beartype
@@ -374,179 +366,6 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
     )
 
 
-_NUM_LATTICE_COMPONENTS: int = 3
-_NUM_POSITION_COMPONENTS: int = 3
-
-
-@jaxtyped(typechecker=beartype)
-def parse_poscar(  # noqa: PLR0912, PLR0915
-    file_path: Union[str, Path],
-) -> CrystalData:
-    """Parse a VASP POSCAR file and return a validated CrystalData PyTree.
-
-    Supports VASP 5+ format with element symbols on line 6, as well as
-    older VASP 4 format where element symbols must be inferred from
-    the comment line.
-
-    Parameters
-    ----------
-    file_path : str or Path
-        Path to the POSCAR/CONTCAR file.
-
-    Returns
-    -------
-    crystal_data : CrystalData
-        Validated JAX-compatible structure containing:
-        - positions : Float[Array, "N 3"]
-            Cartesian coordinates in Angstroms
-        - atomic_numbers : Int[Array, " N"]
-            Atomic numbers for each atom
-        - lattice : Float[Array, "3 3"]
-            Lattice vectors in Angstroms
-        - comment : str
-            First line of the POSCAR file
-
-    Raises
-    ------
-    ValueError
-        If file format is invalid, element symbols are missing,
-        or atom counts don't match positions.
-    FileNotFoundError
-        If the specified file does not exist.
-
-    Notes
-    -----
-    POSCAR format (lines):
-    1. Comment, 2. Scaling factor, 3--5. Lattice vectors,
-    6. Element symbols (VASP 5+) or counts (VASP 4),
-    7. Counts (if line 6 has symbols), 8. Optional
-    ``Selective dynamics``, 9. Coordinate type, 10+. Positions.
-
-    Implementation Logic
-    --------------------
-    1. **Read file** -- Load all lines.
-    2. **Parse header** -- Comment and scaling factor.
-    3. **Parse lattice** -- 3x3 vectors, apply scaling.
-    4. **Detect VASP version** -- Letters on line 6 indicate
-       VASP 5+ with explicit element symbols.
-    5. **Parse elements and counts** -- Extract symbols and
-       per-element atom counts.
-    6. **Handle selective dynamics** -- Skip if present.
-    7. **Parse coordinates** -- Direct (fractional) or
-       Cartesian. Convert fractional to Cartesian via
-       ``positions @ lattice``.
-    8. **Build output** -- Construct atomic numbers array
-       and return
-       :class:`~ptyrodactyl.types.CrystalData` PyTree.
-    """
-    with open(file_path, encoding="utf-8") as f:
-        lines: List[str] = f.readlines()
-
-    min_lines: int = 8
-    if len(lines) < min_lines:
-        raise ValueError(
-            f"Invalid POSCAR: expected at least {min_lines} lines, "
-            f"got {len(lines)}."
-        )
-
-    comment: str = lines[0].strip()
-
-    try:
-        scale: float = float(lines[1].strip())
-    except ValueError as err:
-        raise ValueError(
-            "Line 2 must be the universal scaling factor (float)."
-        ) from err
-
-    lattice_rows: List[List[float]] = []
-    for i in range(2, 5):
-        parts: List[str] = lines[i].split()
-        if len(parts) != _NUM_LATTICE_COMPONENTS:
-            raise ValueError(
-                f"Line {i + 1} must have {_NUM_LATTICE_COMPONENTS} lattice "
-                f"vector components, got {len(parts)}."
-            )
-        lattice_rows.append([float(x) for x in parts])
-
-    lattice: Float[Array, "3 3"] = (
-        jnp.array(lattice_rows, dtype=jnp.float64) * scale
-    )
-
-    line_6: str = lines[5].strip()
-    has_symbols: bool = any(c.isalpha() for c in line_6)
-
-    if has_symbols:
-        element_symbols: List[str] = line_6.split()
-        counts_line: str = lines[6].strip()
-        atom_counts: List[int] = [int(x) for x in counts_line.split()]
-        next_line_idx: int = 7
-    else:
-        atom_counts = [int(x) for x in line_6.split()]
-        element_symbols = _extract_elements_from_comment(comment)
-        if len(element_symbols) != len(atom_counts):
-            raise ValueError(
-                "VASP 4 format detected but cannot determine element "
-                "symbols. Use VASP 5+ format with element symbols on line 6."
-            )
-        next_line_idx = 6
-
-    if len(element_symbols) != len(atom_counts):
-        raise ValueError(
-            f"Number of element symbols ({len(element_symbols)}) does not "
-            f"match number of atom counts ({len(atom_counts)})."
-        )
-
-    coord_line: str = lines[next_line_idx].strip()
-    if coord_line.lower().startswith("s"):
-        next_line_idx += 1
-        coord_line = lines[next_line_idx].strip()
-
-    is_direct: bool = coord_line.lower().startswith("d")
-    next_line_idx += 1
-
-    total_atoms: int = sum(atom_counts)
-    if len(lines) < next_line_idx + total_atoms:
-        raise ValueError(
-            f"Expected {total_atoms} atom positions, but file has only "
-            f"{len(lines) - next_line_idx} remaining lines."
-        )
-
-    positions_list: List[List[float]] = []
-    for i in range(next_line_idx, next_line_idx + total_atoms):
-        parts = lines[i].split()
-        if len(parts) < _NUM_POSITION_COMPONENTS:
-            raise ValueError(
-                f"Line {i + 1} must have at least "
-                f"{_NUM_POSITION_COMPONENTS} position coordinates."
-            )
-        positions_list.append(
-            [float(parts[0]), float(parts[1]), float(parts[2])]
-        )
-
-    positions_arr: Float[Array, "N 3"] = jnp.array(
-        positions_list, dtype=jnp.float64
-    )
-
-    if is_direct:
-        positions_arr = positions_arr @ lattice
-
-    atomic_numbers_list: List[int] = []
-    for symbol, count in zip(element_symbols, atom_counts, strict=True):
-        atom_num: int = atomic_symbol(symbol)
-        atomic_numbers_list.extend([atom_num] * count)
-
-    atomic_z_arr: Int[Array, " N"] = jnp.array(
-        atomic_numbers_list, dtype=jnp.int32
-    )
-
-    return create_crystal_data(
-        positions=positions_arr,
-        atomic_numbers=atomic_z_arr,
-        lattice=lattice,
-        comment=comment,
-    )
-
-
 @beartype
 def _extract_elements_from_comment(comment: str) -> List[str]:
     """Extract element symbols from POSCAR comment line.
@@ -580,77 +399,8 @@ def _extract_elements_from_comment(comment: str) -> List[str]:
     return elements
 
 
-@jaxtyped(typechecker=beartype)
-def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
-    """Parse XYZ or POSCAR file, auto-detecting format, returns CrystalData.
-
-    Automatically detects whether the input file is an XYZ or POSCAR/CONTCAR
-    file based on file extension and calls the appropriate parser.
-
-    Parameters
-    ----------
-    file_path : str or Path
-        Path to the crystal structure file (.xyz, POSCAR, or CONTCAR).
-
-    Returns
-    -------
-    crystal_data : CrystalData
-        Validated JAX-compatible structure with atomic positions and numbers.
-
-    Raises
-    ------
-    ValueError
-        If file format cannot be determined or is unsupported.
-    FileNotFoundError
-        If the specified file does not exist.
-
-    Implementation Logic
-    --------------------
-    1. **Check extension** --
-       ``.xyz`` dispatches to :func:`parse_xyz`.
-    2. **Check filename** --
-       Names containing ``POSCAR`` or ``CONTCAR`` dispatch
-       to :func:`parse_poscar`.
-    3. **Content heuristic** --
-       If the first line parses as an integer, assume XYZ;
-       otherwise fall back to POSCAR.
-
-    Notes
-    -----
-    Supported formats: XYZ (``.xyz``), VASP POSCAR/CONTCAR.
-
-    See Also
-    --------
-    :func:`parse_xyz` : Parser for XYZ format files.
-    :func:`parse_poscar` : Parser for VASP POSCAR/CONTCAR
-        files.
-    """
-    path: Path = Path(file_path)
-    filename: str = path.name.lower()
-    suffix: str = path.suffix.lower()
-
-    if suffix == ".xyz":
-        return parse_xyz(file_path)
-
-    if "poscar" in filename or "contcar" in filename:
-        return parse_poscar(file_path)
-
-    with open(path, encoding="utf-8") as f:
-        first_line: str = f.readline().strip()
-
-    try:
-        int(first_line)
-        return parse_xyz(file_path)
-    except ValueError:
-        pass
-
-    return parse_poscar(file_path)
-
-
 __all__: list[str] = [
     "atomic_symbol",
     "kirkland_potentials",
-    "parse_crystal",
-    "parse_poscar",
     "parse_xyz",
 ]

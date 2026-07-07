@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.simul.checked`."""
+"""Tests for :mod:`ptyrodactyl.multislice.checked`."""
 # ruff: noqa: E402, I001
 
 import numpy as np
@@ -11,14 +11,14 @@ from equinox import EquinoxRuntimeError
 
 jax.config.update("jax_enable_x64", True)
 
-from ptyrodactyl.simul import (
+from ptyrodactyl.multislice import (
     checked_cbed_image,
     checked_make_probe,
     checked_stem4d_sharded,
     checked_stem_4d,
 )
-from ptyrodactyl.simul.parallelized import stem4d_sharded
-from ptyrodactyl.simul.simulations import cbed_image, make_probe, stem_4d
+from ptyrodactyl.multislice.parallelized import stem4d_sharded
+from ptyrodactyl.multislice.simulations import cbed_image, make_probe, stem_4d
 from ptyrodactyl.types import (
     create_atomic_slice_data,
     create_detector_config,

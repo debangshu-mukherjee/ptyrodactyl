@@ -1,5 +1,12 @@
 # Changelog
 
+## Plan 05 / Plan 14 — Stage-0 scalar HDF5 slice
+
+- Added the versioned `ptyrodactyl.inout.save_to_h5` / `load_from_h5`
+  boundary for lossless, validated `PotentialSlices` archives.
+- Added required runtime HDF5 support through `h5py`; broader Plan-05 carrier,
+  parser, DFT-interoperability, and electromagnetic schemas remain future work.
+
 ## Plans 01–04 — Revalidation repairs
 
 The implemented foundation plans were revalidated against their strict gates.

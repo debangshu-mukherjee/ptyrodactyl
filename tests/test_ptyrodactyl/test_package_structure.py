@@ -30,7 +30,10 @@ def _parse(path: Path) -> ast.Module:
 def _literal_all(tree: ast.Module, path: Path) -> list[str]:
     for node in tree.body:
         value: ast.expr | None = None
-        if isinstance(node, ast.AnnAssign) and _target_name(node.target) == "__all__":
+        if (
+            isinstance(node, ast.AnnAssign)
+            and _target_name(node.target) == "__all__"
+        ):
             value = node.value
         elif isinstance(node, ast.Assign) and any(
             _target_name(target) == "__all__" for target in node.targets
@@ -63,7 +66,9 @@ def _routine_listings(tree: ast.Module, path: Path) -> dict[str, str]:
     try:
         start = lines.index("Routine Listings") + 1
     except ValueError as exc:
-        raise AssertionError(f"{path}: missing Routine Listings block") from exc
+        raise AssertionError(
+            f"{path}: missing Routine Listings block"
+        ) from exc
 
     listings: dict[str, str] = {}
     current: str | None = None
@@ -73,7 +78,7 @@ def _routine_listings(tree: ast.Module, path: Path) -> dict[str, str]:
         stripped = line.strip()
         if stripped == "" or set(stripped) == {"-"}:
             continue
-        if line.startswith(":func:`") and "`" in line[len(":func:`") :]:
+        if line.startswith((":func:`", ":class:`")) and "`" in line:
             if current is not None:
                 listings[current] = " ".join(summary_parts)
             current = line.split("`", 2)[1]
@@ -116,7 +121,9 @@ def test_public_exports_have_matching_routine_listing_triads() -> None:
             assert symbol in init_listings, (
                 f"{package}.__init__ Routine Listings missing {symbol}"
             )
-            assert symbol in leaf_all, f"{package}: no leaf __all__ exports {symbol}"
+            assert symbol in leaf_all, (
+                f"{package}: no leaf __all__ exports {symbol}"
+            )
             assert len(leaf_all[symbol]) == 1, (
                 f"{package}: {symbol} exported from multiple leaf __all__s: "
                 f"{leaf_all[symbol]}"
@@ -135,7 +142,9 @@ def test_public_exports_have_matching_routine_listing_triads() -> None:
 def test_public_symbols_are_exported_from_one_swept_subpackage() -> None:
     owners: dict[str, str] = {}
     for package in _SWEPT_PACKAGES:
-        package_all = _literal_all(_parse(_module_path(package)), _module_path(package))
+        package_all = _literal_all(
+            _parse(_module_path(package)), _module_path(package)
+        )
         for symbol in package_all:
             previous = owners.setdefault(symbol, package)
             assert previous == package, (

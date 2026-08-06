@@ -9,7 +9,8 @@ I/O is separated from JAX kernels.
 
 - `ptyrodactyl.types` owns Equinox carriers, scalar aliases, physical constants,
   distributions, and validated `create_*` constructors.
-- `ptyrodactyl.inout` owns crystal-file parsers and bundled atomic lookup data.
+- `ptyrodactyl.inout` owns crystal-file parsers, bundled atomic lookup data, and
+  the versioned HDF5 ingest/emit boundary for canonical carriers.
 - `ptyrodactyl.ucell` owns lattice, rotation, and crystal-tilt operations.
 - `ptyrodactyl.multislice` owns multislice amplitudes, detector reductions,
   distribution producers, and 4D-STEM simulation.
@@ -27,7 +28,7 @@ I/O is separated from JAX kernels.
 ```text
 src/ptyrodactyl/
 ├── types/          # carriers, aliases, constants, validated constructors
-├── inout/          # XYZ/POSCAR parsing and lookup assets
+├── inout/          # parsers, lookup assets, and HDF5 ingest/emit
 ├── ucell/          # unit-cell and rotation geometry
 ├── multislice/     # multislice amplitudes, reducers, and integrators
 ├── born/           # convergent-Born utilities
@@ -49,3 +50,5 @@ src/ptyrodactyl/
    and reduced after the complex amplitude kernel.
 5. Symbols are exported from one owning subpackage; removed `ptyrodactyl.simul`
    and `ptyrodactyl.tools.make_*` paths have no compatibility aliases.
+6. Filesystem and third-party file-format access belongs in
+   `ptyrodactyl.inout`, outside differentiable JAX kernels.

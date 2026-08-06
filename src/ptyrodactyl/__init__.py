@@ -38,7 +38,7 @@ The submodules are organized as follows:
 - :mod:`born`
     Convergent Born series simulations.
 - :mod:`inout`
-    Crystal-structure ingestion and lookup exports.
+    Host-world parsers, lookup data, and versioned HDF5 ingest/emit.
 - :mod:`invert`
     Electron microscopy reconstructions, ptychography and
     focal series.

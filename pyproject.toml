@@ -40,6 +40,7 @@ dependencies = [
     "jax>=0.9.2 ; sys_platform == 'linux'",
     "jupyter>=1.1.1",
     "ase>=3.29.0",
+    "h5py>=3.15.1",
 ]
 
 [project.optional-dependencies]

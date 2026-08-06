@@ -58,7 +58,7 @@ _XYZ_COORDS = 3
 _SINGLE_MODE = 1
 
 
-def _shape(value: object) -> tuple[int, ...]:
+def _shape(value: Array) -> tuple[int, ...]:
     return tuple(jnp.shape(value))
 
 
@@ -299,7 +299,7 @@ def _checked_beam(beam: ProbeModes) -> ProbeModes:
 
 
 def _validate_positions_structure(
-    positions: object,
+    positions: Array,
     name: str,
 ) -> None:
     positions_shape: tuple[int, ...] = _shape(positions)
@@ -480,7 +480,7 @@ def checked_make_probe(
         positivity is required.
     ValueError
         If ``image_size`` does not have shape ``(2,)``.
-    
+
     :see: make_probe, checked_cbed_image.
     """
     _raise_if(
@@ -526,7 +526,7 @@ def checked_cbed_image(
         positivity is required.
     ValueError
         If static ranks or spatial grid shapes are incompatible.
-    
+
     :see: cbed_image, checked_make_probe.
     """
     _validate_cbed_structure(pot_slices, beam, "pot_slices")
@@ -577,15 +577,14 @@ def checked_stem_4d(
         positivity is required, or scan positions leave the grid.
     ValueError
         If static ranks or spatial grid shapes are incompatible.
-    
+
     :see: stem_4d, checked_cbed_image.
     """
     _validate_cbed_structure(pot_slice, beam, "pot_slice")
-    _raise_if(
-        detector.scan_positions_px is None,
-        "detector.scan_positions_px is required",
-    )
-    _validate_positions_structure(detector.scan_positions_px, "positions")
+    scan_positions_px = detector.scan_positions_px
+    if scan_positions_px is None:
+        raise ValueError("detector.scan_positions_px is required")
+    _validate_positions_structure(scan_positions_px, "positions")
 
     checked_pot_slice: PotentialSlices = _checked_potential_slices(
         pot_slice,
@@ -593,7 +592,7 @@ def checked_stem_4d(
     )
     checked_beam: ProbeModes = _checked_beam(beam)
     checked_positions: Num[Array, "#P 2"] = _checked_positions_in_pixels(
-        detector.scan_positions_px,
+        scan_positions_px,
         _potential_grid_shape(pot_slice, "pot_slice"),
     )
     checked_microscope: MicroscopeConfig = _checked_microscope(microscope)
@@ -648,16 +647,15 @@ def checked_stem4d_sharded(
         positivity is required, or scan positions leave the grid.
     ValueError
         If static ranks or spatial grid shapes are incompatible.
-    
+
     :see: stem4d_sharded, checked_stem_4d.
     """
-    _raise_if(
-        detector.scan_positions_ang is None,
-        "detector.scan_positions_ang is required",
-    )
+    scan_positions_ang = detector.scan_positions_ang
+    if scan_positions_ang is None:
+        raise ValueError("detector.scan_positions_ang is required")
     _validate_sharded_structure(
         probe_modes.modes,
-        detector.scan_positions_ang,
+        scan_positions_ang,
         sample.atom_coords,
         sample.atom_types,
         sample.slice_z_bounds,
@@ -679,7 +677,7 @@ def checked_stem4d_sharded(
         checked_atom_potentials,
     ) = _checked_sharded_arrays(
         probe_modes.modes,
-        detector.scan_positions_ang,
+        scan_positions_ang,
         sample.atom_coords,
         sample.slice_z_bounds,
         sample.atom_potentials,

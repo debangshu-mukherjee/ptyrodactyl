@@ -24,7 +24,9 @@ def pytest_configure(config: pytest.Config) -> None:
     """
     import ptyrodactyl  # noqa: F401  (import side effect: enables x64)
 
-    assert jax.config.jax_enable_x64, "ptyrodactyl tests require jax_enable_x64"
+    assert jax.config.read("jax_enable_x64"), (
+        "ptyrodactyl tests require jax_enable_x64"
+    )
 
 
 @pytest.fixture

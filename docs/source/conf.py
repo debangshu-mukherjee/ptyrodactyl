@@ -45,8 +45,8 @@ extensions = [
 ]
 
 source_suffix = {
-    ".rst": None,
-    ".md": None,
+    ".rst": "restructuredtext",
+    ".md": "markdown",
 }
 
 templates_path = ["_templates"]
@@ -163,7 +163,7 @@ nitpick_ignore = [
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
     "numpy": ("https://numpy.org/doc/stable/", None),
-    "jax": ("https://jax.readthedocs.io/en/latest/", None),
+    "jax": ("https://docs.jax.dev/en/latest/", None),
 }
 
 html_css_files = ["custom.css"]

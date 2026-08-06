@@ -450,8 +450,7 @@ def wirtinger_grad(
 
     Returns
     -------
-    grad_f : Callable[..., Union[Complex[Array, " ..."], \
-Tuple[Complex[Array, " ..."], ...]]]
+    grad_f : Callable
         A function that returns the Wirtinger gradient(s).
 
     See Also
@@ -476,8 +475,7 @@ Tuple[Complex[Array, " ..."], ...]]]
 
         Returns
         -------
-        wirt_grad : Union[Complex[Array, " ..."], \
-Tuple[Complex[Array, " ..."], ...]]
+        wirt_grad : Complex[Array, " ..."] or tuple
             Wirtinger gradient(s) for the selected arguments.
         """
 

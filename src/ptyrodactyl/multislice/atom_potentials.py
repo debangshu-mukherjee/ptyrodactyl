@@ -260,14 +260,18 @@ def _bessel_kv_small_non_integer(
     result : Float[Array, " ..."]
         Approximation of :math:`K_v(x)`.
     """
-    error_bound: Float[Array, ""] = jnp.asarray(1e-10)
+    error_bound: Float[Array, ""] = jnp.asarray(1e-10, dtype=dtype)
     iv_pos: Float[Array, " ..."] = _bessel_iv_series(v, x, dtype)
     iv_neg: Float[Array, " ..."] = _bessel_iv_series(-v, x, dtype)
     sin_piv: Float[Array, ""] = jnp.sin(jnp.pi * v)
-    pi_over_2sin: Float[Array, ""] = jnp.pi / (2.0 * sin_piv)
+    is_nonsingular: Bool[Array, ""] = jnp.abs(sin_piv) > error_bound
+    safe_sin_piv: Float[Array, ""] = jnp.where(
+        is_nonsingular, sin_piv, jnp.ones_like(sin_piv)
+    )
+    pi_over_2sin: Float[Array, ""] = jnp.pi / (2.0 * safe_sin_piv)
     iv_diff: Float[Array, " ..."] = iv_neg - iv_pos
     result: Float[Array, " ..."] = jnp.where(
-        jnp.abs(sin_piv) > error_bound, pi_over_2sin * iv_diff, 0.0
+        is_nonsingular, pi_over_2sin * iv_diff, jnp.zeros_like(iv_diff)
     )
     return result
 
@@ -300,15 +304,24 @@ def _bessel_kv_small_integer(
     k0: Float[Array, " ..."] = _bessel_k0_series(x, dtype)
 
     i1: Float[Array, " ..."] = jax.scipy.special.i1(x)
-    k1_coeffs: Float[Array, " 5"] = jnp.array(
-        [1.0, -0.5, 0.0625, -0.03125, 0.0234375], dtype=dtype
+    k1_coeffs: Float[Array, " 7"] = jnp.array(
+        [
+            1.0,
+            0.15443144,
+            -0.67278579,
+            -0.18156897,
+            -0.01919402,
+            -0.00110404,
+            -0.00004686,
+        ],
+        dtype=dtype,
     )
     x2: Float[Array, " ..."] = (x * x) / 4.0
-    k1_powers: Float[Array, " ... 5"] = jnp.power(
-        x2[..., jnp.newaxis], jnp.arange(5)
+    k1_powers: Float[Array, " ... 7"] = jnp.power(
+        x2[..., jnp.newaxis], jnp.arange(7)
     )
     k1_poly: Float[Array, " ..."] = jnp.sum(k1_coeffs * k1_powers, axis=-1)
-    log_i1_term: Float[Array, " ..."] = -jnp.log(x / 2.0) * i1
+    log_i1_term: Float[Array, " ..."] = jnp.log(x / 2.0) * i1
     k1: Float[Array, " ..."] = log_i1_term + k1_poly / x
 
     kn_result: Float[Array, " ..."] = _bessel_kn_recurrence(n, x, k0, k1)
@@ -359,7 +372,47 @@ def _bessel_kv_large(
     z: Float[Array, " ..."] = 1.0 / x
     poly: Float[Array, " ..."] = a0 + z * (a1 + z * (a2 + z * (a3 + z * a4)))
 
-    large_x_result: Float[Array, " ..."] = sqrt_term * exp_term * poly
+    asymptotic_result: Float[Array, " ..."] = sqrt_term * exp_term * poly
+
+    # The generic asymptotic expansion is not accurate enough at the x=2
+    # branch boundary to preserve monotonicity. This minimax approximation for
+    # K_0 is continuous there to floating-point accuracy and remains accurate
+    # throughout the large-x regime (Abramowitz and Stegun 9.8.6).
+    y: Float[Array, " ..."] = 2.0 / x
+    k0_poly: Float[Array, " ..."] = 1.25331414 + y * (
+        -0.07832358
+        + y
+        * (
+            0.02189568
+            + y
+            * (
+                -0.01062446
+                + y * (0.00587872 + y * (-0.00251540 + y * 0.00053208))
+            )
+        )
+    )
+    k0_result: Float[Array, " ..."] = exp_term / jnp.sqrt(x) * k0_poly
+    k1_poly: Float[Array, " ..."] = 1.25331414 + y * (
+        0.23498619
+        + y
+        * (
+            -0.03655620
+            + y
+            * (
+                0.01504268
+                + y * (-0.00780353 + y * (0.00325614 + y * -0.00068245))
+            )
+        )
+    )
+    k1_result: Float[Array, " ..."] = exp_term / jnp.sqrt(x) * k1_poly
+    order_tolerance: float = 1e-10
+    is_zero_order: Bool[Array, ""] = jnp.abs(v) < order_tolerance
+    is_one_order: Bool[Array, ""] = jnp.abs(jnp.abs(v) - 1.0) < order_tolerance
+    large_x_result: Float[Array, " ..."] = jnp.where(
+        is_zero_order,
+        k0_result,
+        jnp.where(is_one_order, k1_result, asymptotic_result),
+    )
     return large_x_result
 
 
@@ -428,7 +481,7 @@ def bessel_kv(
     The transition between small- and large-x approximations
     is at ``x = 2.0``. For integer orders ``n > 1``, forward
     recurrence with masked updates is used.
-    
+
     :see: single_atom_potential, kirkland_potentials_crystal.
     """
     v: Float[Array, ""] = jnp.asarray(v)
@@ -439,8 +492,13 @@ def bessel_kv(
     epsilon_tolerance: float = 1e-10
     is_integer: Bool[Array, ""] = jnp.abs(v - v_int) < epsilon_tolerance
 
+    # The reflection formula is singular at integer order. ``jnp.where``
+    # evaluates both branches, so evaluating it with the original integer
+    # order poisons reverse-mode derivatives with NaNs even when the integer
+    # result is selected. Feed that inactive branch a benign half order.
+    non_integer_v: Float[Array, ""] = jnp.where(is_integer, 0.5, v)
     small_x_non_int: Float[Array, " ..."] = _bessel_kv_small_non_integer(
-        v, x, dtype
+        non_integer_v, x, dtype
     )
     small_x_int: Float[Array, " ..."] = _bessel_kv_small_integer(v, x, dtype)
     small_x_vals: Float[Array, " ..."] = jnp.where(
@@ -643,7 +701,7 @@ def single_atom_potential(
     potential_resized : Float[Array, " h w"]
         Projected potential at the target resolution in
         Kirkland units.
-    
+
     :see: bessel_kv, kirkland_potentials_crystal.
     """
     a0: Float[Array, ""] = jnp.asarray(0.5292)
@@ -816,8 +874,10 @@ def _compute_grid_dimensions(
     height_float: Float[Array, ""] = jnp.ceil(y_range / pixel_size)
     width: Int[Array, ""] = width_float.astype(jnp.int32)
     height: Int[Array, ""] = height_float.astype(jnp.int32)
-    width_int: int = int(width)
-    height_int: int = int(height)
+    crop_pixels: int = int(jnp.round(padding / pixel_size))
+    padded_minimum: int = 2 * crop_pixels + 1
+    width_int: int = max(int(width), padded_minimum)
+    height_int: int = max(int(height), padded_minimum)
     return x_min, y_min, width_int, height_int
 
 
@@ -1054,53 +1114,50 @@ def _tile_positions_with_shifts(
         Original positions in Angstroms.
     atomic_numbers : Int[Array, " N"]
         Atomic numbers for the original atoms.
-    shift_vectors : Float[Array, "max_n^3 3"]
+    shift_vectors : Float[Array, "s 3"]
         Lattice shift vectors in Angstroms.
-    mask_flat : Bool[Array, " max_n^3"]
+    mask_flat : Bool[Array, " s"]
         Validity mask for each shift.
 
     Returns
     -------
-    repeated_positions_masked : Float[Array, "max_n^3*N 3"]
+    repeated_positions_masked : Float[Array, "s*N 3"]
         Tiled positions (invalid ones zeroed out).
-    repeated_atomic_numbers_masked : Int[Array, " max_n^3*N"]
+    repeated_atomic_numbers_masked : Int[Array, " s*N"]
         Tiled atomic numbers (invalid ones zeroed).
     """
     n_atoms: int = positions.shape[0]
-    max_n: int = 20
-    max_shifts: int = max_n * max_n * max_n
+    n_shifts: int = shift_vectors.shape[0]
 
     positions_expanded: Float[Array, " 1 N 3"] = positions[None, :, :]
-    positions_broadcast: Float[Array, "max_n^3 N 3"] = jnp.broadcast_to(
-        positions_expanded, (max_shifts, n_atoms, 3)
+    positions_broadcast: Float[Array, "s N 3"] = jnp.broadcast_to(
+        positions_expanded, (n_shifts, n_atoms, 3)
     )
-    shift_vectors_expanded: Float[Array, "max_n^3 1 3"] = shift_vectors[
-        :, None, :
-    ]
-    shifts_broadcast: Float[Array, "max_n^3 N 3"] = jnp.broadcast_to(
-        shift_vectors_expanded, (max_shifts, n_atoms, 3)
+    shift_vectors_expanded: Float[Array, "s 1 3"] = shift_vectors[:, None, :]
+    shifts_broadcast: Float[Array, "s N 3"] = jnp.broadcast_to(
+        shift_vectors_expanded, (n_shifts, n_atoms, 3)
     )
 
-    repeated_positions: Float[Array, "max_n^3 N 3"] = (
+    repeated_positions: Float[Array, "s N 3"] = (
         positions_broadcast + shifts_broadcast
     )
-    total_atoms: int = max_shifts * n_atoms
-    repeated_positions_flat: Float[Array, "max_n^3*N 3"] = (
+    total_atoms: int = n_shifts * n_atoms
+    repeated_positions_flat: Float[Array, "s*N 3"] = (
         repeated_positions.reshape(total_atoms, 3)
     )
 
-    atom_mask: Bool[Array, " max_n^3*N"] = jnp.repeat(mask_flat, n_atoms)
-    atom_mask_float: Float[Array, " max_n^3*N"] = atom_mask.astype(jnp.float32)
-    atom_mask_expanded: Float[Array, "max_n^3*N 1"] = atom_mask_float[:, None]
-    repeated_positions_masked: Float[Array, "max_n^3*N 3"] = (
+    atom_mask: Bool[Array, " s*N"] = jnp.repeat(mask_flat, n_atoms)
+    atom_mask_float: Float[Array, " s*N"] = atom_mask.astype(jnp.float32)
+    atom_mask_expanded: Float[Array, "s*N 1"] = atom_mask_float[:, None]
+    repeated_positions_masked: Float[Array, "s*N 3"] = (
         repeated_positions_flat * atom_mask_expanded
     )
 
-    atomic_numbers_tiled: Int[Array, " max_n^3*N"] = jnp.tile(
-        atomic_numbers, max_shifts
+    atomic_numbers_tiled: Int[Array, " s*N"] = jnp.tile(
+        atomic_numbers, n_shifts
     )
-    atom_mask_int: Int[Array, " max_n^3*N"] = atom_mask.astype(jnp.int32)
-    repeated_atomic_numbers_masked: Int[Array, " max_n^3*N"] = (
+    atom_mask_int: Int[Array, " s*N"] = atom_mask.astype(jnp.int32)
+    repeated_atomic_numbers_masked: Int[Array, " s*N"] = (
         atomic_numbers_tiled * atom_mask_int
     )
 
@@ -1163,25 +1220,33 @@ def _apply_repeats_or_return(
         tuple
             Tiled positions and atomic numbers.
         """
-        mask_flat: Bool[Array, " M"]
-        shift_indices: Int[Array, " M 3"]
-        mask_flat, shift_indices = _build_shift_masks(repeats)
-
-        mask_float: Float[Array, " M"] = mask_flat.astype(jnp.float32)
-        shift_indices_float: Float[Array, " M 3"] = shift_indices.astype(
-            jnp.float32
+        nx, ny, nz = repeat_values
+        ix: Int[Array, " nx"] = jnp.arange(nx, dtype=jnp.int32)
+        iy: Int[Array, " ny"] = jnp.arange(ny, dtype=jnp.int32)
+        iz: Int[Array, " nz"] = jnp.arange(nz, dtype=jnp.int32)
+        ixx: Int[Array, "nx ny nz"]
+        iyy: Int[Array, "nx ny nz"]
+        izz: Int[Array, "nx ny nz"]
+        ixx, iyy, izz = jnp.meshgrid(ix, iy, iz, indexing="ij")
+        shift_indices: Int[Array, " M 3"] = jnp.stack(
+            [ixx.ravel(), iyy.ravel(), izz.ravel()], axis=-1
         )
-        mask_expanded: Float[Array, " M 1"] = mask_float[:, None]
-        shift_indices_masked: Float[Array, " M 3"] = (
-            shift_indices_float * mask_expanded
+        shift_vectors: Float[Array, " M 3"] = (
+            shift_indices.astype(lattice.dtype) @ lattice
         )
-        shift_vectors: Float[Array, " M 3"] = shift_indices_masked @ lattice
+        mask_flat: Bool[Array, " M"] = jnp.ones(
+            shift_vectors.shape[0], dtype=jnp.bool_
+        )
 
         return _tile_positions_with_shifts(
             positions, atomic_numbers, shift_vectors, mask_flat
         )
 
-    needs_repeats: bool = bool(jnp.any(repeats > 1))
+    # Repeats alter the number of atoms, hence they must be concrete whenever
+    # this function is traced. Iterating the closed-over/default array here
+    # keeps the common JIT path static instead of creating a traced predicate.
+    repeat_values: list[int] = repeats.tolist()
+    needs_repeats: bool = any(repeat > 1 for repeat in repeat_values)
     if needs_repeats:
         return _apply_repeats_with_lattice(positions, atomic_numbers, lattice)
     return positions, atomic_numbers
@@ -1367,7 +1432,7 @@ def kirkland_potentials_crystal(
         atom.
     :func:`~ptyrodactyl.types.create_potential_slices` : Factory
         for :class:`~ptyrodactyl.types.PotentialSlices`.
-    
+
     :see: single_atom_potential, cbed_image, stem_4d.
     """
     positions: Float[Array, " N 3"] = crystal_data.positions
@@ -1418,7 +1483,7 @@ def kirkland_potentials_crystal(
         num_slices,
     )
 
-    crop_pixels: int = int(jnp.round(padding / pixel_size))
+    crop_pixels: int = round(float(padding) / float(pixel_size))
     output_height: int = height - 2 * crop_pixels
     output_width: int = width - 2 * crop_pixels
     n_slices_out: int = all_slices.shape[2]

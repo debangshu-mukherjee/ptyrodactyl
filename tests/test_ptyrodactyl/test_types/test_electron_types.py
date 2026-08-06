@@ -16,7 +16,14 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ptyrodactyl.types import combine_axis_updates, create_axis_update
+from ptyrodactyl.types import (
+    combine_axis_updates,
+    create_axis_update,
+    create_calibrated_array,
+    create_potential_slices,
+    create_probe_modes,
+    create_stem4d,
+)
 
 
 def test_eqx_on_error_off_disables_runtime_error() -> None:
@@ -125,3 +132,59 @@ def test_combine_axis_updates_sums_all_deltas() -> None:
         rtol=0.0,
         atol=0.0,
     )
+
+
+@pytest.mark.parametrize("bad_value", [jnp.nan, jnp.inf, -jnp.inf])
+def test_create_calibrated_array_rejects_nonfinite_values(
+    bad_value: float,
+) -> None:
+    """Calibrated arrays reject non-finite data and calibrations."""
+    with pytest.raises(Exception, match="data_array contains non-finite"):
+        array = create_calibrated_array(
+            jnp.asarray([[bad_value]], dtype=jnp.float64),
+            1.0,
+            1.0,
+            True,
+        )
+        jax.block_until_ready(array)
+
+    with pytest.raises(Exception, match="calib_y must be finite"):
+        array = create_calibrated_array(
+            jnp.ones((1, 1), dtype=jnp.float64),
+            bad_value,
+            1.0,
+            True,
+        )
+        jax.block_until_ready(array)
+
+
+@pytest.mark.parametrize("bad_value", [jnp.nan, jnp.inf, -jnp.inf])
+def test_carrier_factories_reject_nonfinite_positive_scalars(
+    bad_value: float,
+) -> None:
+    """Positive scalar fields require both positivity and finiteness."""
+    with pytest.raises(Exception, match="calib must be finite"):
+        modes = create_probe_modes(
+            jnp.ones((2, 2, 1), dtype=jnp.complex128),
+            jnp.ones((1,), dtype=jnp.float64),
+            bad_value,
+        )
+        jax.block_until_ready(modes)
+
+    with pytest.raises(Exception, match="slice_thickness must be finite"):
+        slices = create_potential_slices(
+            jnp.ones((2, 2, 1), dtype=jnp.float64),
+            bad_value,
+            1.0,
+        )
+        jax.block_until_ready(slices)
+
+    with pytest.raises(Exception, match="voltage_kv must be finite"):
+        stem = create_stem4d(
+            jnp.ones((1, 2, 2), dtype=jnp.float64),
+            1.0,
+            1.0,
+            jnp.zeros((1, 2), dtype=jnp.float64),
+            bad_value,
+        )
+        jax.block_until_ready(stem)

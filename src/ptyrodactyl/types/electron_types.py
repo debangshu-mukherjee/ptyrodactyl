@@ -750,7 +750,8 @@ Complex[Array, "..."]]
     -----
     1. Convert inputs to JAX arrays.
     2. Validate array rank and scalar shapes.
-    3. Require positive calibrations with traced error checks.
+    3. Require finite data and finite, positive calibrations with traced
+       error checks.
     4. Create and return a CalibratedArray.
     """
     data_array_arr = jnp.asarray(data_array)
@@ -769,18 +770,21 @@ Complex[Array, "..."]]
     if real_space_arr.shape != scalar_shape:
         raise ValueError("real_space must be a scalar")
 
-    checked_calib_y: Float[Array, ""] = eqx.error_if(
-        calib_y_arr,
-        calib_y_arr <= 0,
-        "calib_y must be positive",
+    checked_data_array = eqx.error_if(
+        data_array_arr,
+        jnp.any(~jnp.isfinite(data_array_arr)),
+        "data_array contains non-finite values",
     )
-    checked_calib_x: Float[Array, ""] = eqx.error_if(
+    checked_calib_y: Float[Array, ""] = _checked_positive_scalar(
+        calib_y_arr,
+        "calib_y",
+    )
+    checked_calib_x: Float[Array, ""] = _checked_positive_scalar(
         calib_x_arr,
-        calib_x_arr <= 0,
-        "calib_x must be positive",
+        "calib_x",
     )
     calibrated_array: CalibratedArray = CalibratedArray(
-        data_array=data_array_arr,
+        data_array=checked_data_array,
         calib_y=checked_calib_y,
         calib_x=checked_calib_x,
         real_space=real_space_arr,
@@ -1007,10 +1011,9 @@ def create_probe_modes(
         weight_sum <= jnp.finfo(jnp.float64).eps,
         "weights must sum to a positive value",
     )
-    checked_calib: Float[Array, ""] = eqx.error_if(
+    checked_calib: Float[Array, ""] = _checked_positive_scalar(
         calib_arr,
-        calib_arr <= 0,
-        "calib must be positive",
+        "calib",
     )
     normalized_weights: Float[Array, " M"] = checked_weights / weight_sum
     probe_modes: ProbeModes = ProbeModes(
@@ -1078,15 +1081,13 @@ def create_potential_slices(
         jnp.any(~jnp.isfinite(slices_arr)),
         "slices contain non-finite values",
     )
-    checked_thickness: Float[Array, ""] = eqx.error_if(
+    checked_thickness: Float[Array, ""] = _checked_positive_scalar(
         thickness_arr,
-        thickness_arr <= 0,
-        "slice_thickness must be positive",
+        "slice_thickness",
     )
-    checked_calib: Float[Array, ""] = eqx.error_if(
+    checked_calib: Float[Array, ""] = _checked_positive_scalar(
         calib_arr,
-        calib_arr <= 0,
-        "calib must be positive",
+        "calib",
     )
     potential_slices: PotentialSlices = PotentialSlices(
         slices=checked_slices,
@@ -1181,20 +1182,17 @@ def create_stem4d(
         jnp.any(~jnp.isfinite(scan_positions_arr)),
         "scan_positions contain non-finite values",
     )
-    checked_real_calib: Float[Array, ""] = eqx.error_if(
+    checked_real_calib: Float[Array, ""] = _checked_positive_scalar(
         real_calib_arr,
-        real_calib_arr <= 0,
-        "real_space_calib must be positive",
+        "real_space_calib",
     )
-    checked_fourier_calib: Float[Array, ""] = eqx.error_if(
+    checked_fourier_calib: Float[Array, ""] = _checked_positive_scalar(
         fourier_calib_arr,
-        fourier_calib_arr <= 0,
-        "fourier_space_calib must be positive",
+        "fourier_space_calib",
     )
-    checked_voltage: Float[Array, ""] = eqx.error_if(
+    checked_voltage: Float[Array, ""] = _checked_positive_scalar(
         voltage_arr,
-        voltage_arr <= 0,
-        "voltage_kv must be positive",
+        "voltage_kv",
     )
     stem4d: STEM4D = STEM4D(
         data=checked_data,

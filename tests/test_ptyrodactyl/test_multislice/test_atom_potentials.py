@@ -16,7 +16,11 @@ from ptyrodactyl.multislice.atom_potentials import (
     bessel_kv,
     kirkland_potentials_crystal,
 )
-from ptyrodactyl.types import create_crystal_data
+from ptyrodactyl.types import (
+    CrystalData,
+    PotentialSlices,
+    create_crystal_data,
+)
 
 
 class TestBesselKv(chex.TestCase):
@@ -69,7 +73,10 @@ class TestBesselKv(chex.TestCase):
         grad_fn = jax.grad(lambda y: self.variant(bessel_kv)(v_scalar, y))
         dk0_dx = grad_fn(x_array)
 
+        assert jnp.isfinite(dk0_dx), f"K_0'({x}) must be finite"
         assert dk0_dx < 0.0, f"K_0'({x}) should be negative"
+        k1_x = self.variant(bessel_kv)(jnp.asarray(1.0), x_array)
+        assert jnp.allclose(dk0_dx, -k1_x, rtol=1e-5, atol=1e-7)
 
         if abs(x - 1.0) > 0.01:
             eps = 1e-4
@@ -184,17 +191,17 @@ class TestBesselKv(chex.TestCase):
         with_jit=True, without_jit=True, with_device=True, with_pmap=True
     )
     @parameterized.parameters(
-        (0.5, 0.5, 1.2417432, 2e-1),
+        (0.5, 0.5, 1.0750476, 1e-5),
         (0.5, 1.0, 0.4610685, 1e-5),
-        (0.5, 2.0, 0.1199377, 1e-3),
-        (0.5, 5.0, 0.0053089, 1e-3),
-        (1.0, 0.5, 1.6564411, 1e0),
-        (1.0, 1.0, 0.6019072, 1e0),
-        (1.0, 2.0, 0.1398659, 2e-1),
-        (1.0, 5.0, 0.0053943, 1e-3),
-        (2.0, 1.0, 1.6248389, 2e0),
-        (2.0, 2.0, 0.2537598, 2e-1),
-        (2.0, 5.0, 0.0054745, 1e-3),
+        (0.5, 2.0, 0.1199377, 1e-5),
+        (0.5, 5.0, 0.0037766, 1e-5),
+        (1.0, 0.5, 1.6564411, 1e-5),
+        (1.0, 1.0, 0.6019072, 1e-5),
+        (1.0, 2.0, 0.1398659, 1e-5),
+        (1.0, 5.0, 0.0040446, 1e-5),
+        (2.0, 1.0, 1.6248389, 1e-5),
+        (2.0, 2.0, 0.2537598, 1e-5),
+        (2.0, 5.0, 0.0053089, 1e-5),
     )
     def test_bessel_kv_general_order(self, v, x, expected, tol) -> None:
         """Test K_v(x) for general orders against known values."""
@@ -529,6 +536,45 @@ class TestSliceAtoms(chex.TestCase):
 class TestKirklandPotentialsXYZ(chex.TestCase):
     """Test suite for the kirkland_potentials_crystal function."""
 
+    def _run_potential(
+        self,
+        crystal_data: CrystalData,
+        pixel_size: float,
+        slice_thickness: float = 1.0,
+        *,
+        padding: float = 4.0,
+        repeats: tuple[int, int, int] = (1, 1, 1),
+        grid_shape: tuple[int, int, int],
+    ) -> PotentialSlices:
+        """Run a variant with the explicit static shape required under JIT."""
+        repeats_array = jnp.asarray(repeats, dtype=jnp.int32)
+        traced_variants = {
+            chex.ChexVariantType.WITH_JIT,
+            chex.ChexVariantType.WITH_PMAP,
+        }
+        variant_type = getattr(self.variant, "type", None)
+        if variant_type in traced_variants:
+
+            def fixed_shape_potential(data: CrystalData) -> PotentialSlices:
+                return kirkland_potentials_crystal(
+                    data,
+                    pixel_size,
+                    slice_thickness,
+                    repeats=repeats_array,
+                    padding=padding,
+                    grid_shape=grid_shape,
+                )
+
+            return self.variant(fixed_shape_potential)(crystal_data)
+
+        return self.variant(kirkland_potentials_crystal)(
+            crystal_data,
+            pixel_size,
+            slice_thickness,
+            repeats=repeats_array,
+            padding=padding,
+        )
+
     @chex.variants(
         with_jit=True, without_jit=True, with_device=True, with_pmap=True
     )
@@ -551,12 +597,16 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         slice_thickness = 1.0
         padding = 2.0
 
-        result = self.variant(kirkland_potentials_crystal)(
-            xyz_data, pixel_size, slice_thickness, padding=padding
+        result = self._run_potential(
+            xyz_data,
+            pixel_size,
+            slice_thickness,
+            padding=padding,
+            grid_shape=(41, 41, 1),
         )
 
         # Check that result has correct structure
-        chex.assert_type(result.slices, jnp.float32)
+        chex.assert_type(result.slices, jnp.float64)
         assert len(result.slices.shape) == 3  # H x W x S
         assert result.slice_thickness == slice_thickness
         assert result.calib == pixel_size
@@ -599,18 +649,20 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.2
         slice_thickness = 1.0
 
-        result = self.variant(kirkland_potentials_crystal)(
-            xyz_data, pixel_size, slice_thickness
+        result = self._run_potential(
+            xyz_data,
+            pixel_size,
+            slice_thickness,
+            grid_shape=(50, 50, 4),
         )
 
         # Should have 4 slices (z from 0 to 3)
         assert result.slices.shape[2] == 4
 
-        # Check that different slices have non-zero values
-        for i in range(4):
-            slice_sum = jnp.sum(result.slices[:, :, i])
-            if i < 3:  # First three slices should have atoms
-                assert slice_sum > 0.0
+        # The atoms at z = 0, 1.5, and 3 occupy slices 0, 1, and 3.
+        slice_sums = jnp.sum(result.slices, axis=(0, 1))
+        assert jnp.all(slice_sums[jnp.array([0, 1, 3])] > 0.0)
+        assert slice_sums[2] == 0.0
 
     @chex.variants(
         with_jit=True, without_jit=True, with_device=True, with_pmap=True
@@ -638,8 +690,11 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.1
         slice_thickness = 1.0
 
-        result = self.variant(kirkland_potentials_crystal)(
-            xyz_data, pixel_size, slice_thickness
+        result = self._run_potential(
+            xyz_data,
+            pixel_size,
+            slice_thickness,
+            grid_shape=(100, 100, 1),
         )
 
         # Should have 1 slice
@@ -690,8 +745,11 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         pixel_size = 0.5
         padding = 3.0
 
-        result = self.variant(kirkland_potentials_crystal)(
-            xyz_data, pixel_size, padding=padding
+        result = self._run_potential(
+            xyz_data,
+            pixel_size,
+            padding=padding,
+            grid_shape=(13, 13, 1),
         )
 
         # Expected size after padding removal
@@ -727,8 +785,11 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
                 comment=None,
             )
 
-            result = self.variant(kirkland_potentials_crystal)(
-                xyz_data, pixel_size, slice_thickness
+            result = self._run_potential(
+                xyz_data,
+                pixel_size,
+                slice_thickness,
+                grid_shape=(81, 81, 1),
             )
             potentials.append(jnp.max(result.slices[:, :, 0]))
 
@@ -764,8 +825,10 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
                 properties=None,
                 comment=None,
             )
-            return self.variant(kirkland_potentials_crystal)(
-                xyz_data, pixel_size
+            return self._run_potential(
+                xyz_data,
+                pixel_size,
+                grid_shape=(41, 41, 1),
             )
 
         # Process each structure
@@ -799,11 +862,14 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         )
 
         pixel_size = 0.1
-        repeats = jnp.array([2, 2, 1])
+        repeats = (2, 2, 1)
 
         # Should work fine with default identity lattice
-        result = self.variant(kirkland_potentials_crystal)(
-            xyz_data, pixel_size, repeats=repeats
+        result = self._run_potential(
+            xyz_data,
+            pixel_size,
+            repeats=repeats,
+            grid_shape=(90, 90, 1),
         )
 
         # With identity lattice and repeats [2,2,1], atoms will be at:
@@ -813,6 +879,24 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
 
         # Check we have one slice (all atoms at z=0)
         assert result.slices.shape[2] == 1
+
+        expected_data = create_crystal_data(
+            positions=jnp.array(
+                [
+                    [0.5, 0.5, 0.0],
+                    [0.5, 1.5, 0.0],
+                    [1.5, 0.5, 0.0],
+                    [1.5, 1.5, 0.0],
+                ]
+            ),
+            atomic_numbers=jnp.full(4, 6),
+        )
+        expected = self._run_potential(
+            expected_data,
+            pixel_size,
+            grid_shape=(90, 90, 1),
+        )
+        chex.assert_trees_all_equal(result, expected)
 
 
 if __name__ == "__main__":

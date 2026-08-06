@@ -35,19 +35,21 @@ import numpy as np
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jax import lax
-from jax.sharding import NamedSharding, PartitionSpec
+from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.multislice import (
     make_probe,
+    probe_modes_to_distribution,
     single_atom_potential,
     stem4d_sharded,
 )
 from ptyrodactyl.multislice.parallelized import cbed_image_from_atoms
-from ptyrodactyl.tools import relativistic_wavelength_ang
+from ptyrodactyl.tools.constants import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
     CrystalData,
+    Distribution,
     create_atomic_slice_data,
     create_detector_config,
     create_microscope_config,
@@ -813,6 +815,14 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         )
     else:
         modes = probe[..., jnp.newaxis]
+    tiled_probe_modes = create_probe_modes(
+        modes=modes,
+        weights=jnp.ones((modes.shape[-1],), dtype=jnp.float64),
+        calib=pixel_size_ang,
+    )
+    mode_distribution: Distribution = probe_modes_to_distribution(
+        tiled_probe_modes,
+    )
 
     devices = jax.devices()
     num_devices: int = len(devices)
@@ -888,6 +898,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
 
         cbed: Float[Array, "H W"] = cbed_image_from_atoms(
             beam=shifted_beam,
+            mode_distribution=mode_distribution,
             atom_coords=local_coords,
             atom_types=atom_types_full,
             slice_z_bounds=slice_z_bounds,

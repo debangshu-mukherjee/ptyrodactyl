@@ -10,6 +10,8 @@ Routine Listings
 ----------------
 :func:`_tree_add`
     Element-wise addition of two PyTrees.
+:func:`_tree_conj`
+    Element-wise complex conjugation of a PyTree.
 :func:`_tree_dot`
     Inner product between two PyTrees.
 :func:`_tree_norm`
@@ -53,11 +55,32 @@ def _tree_add(
 
 
 @jaxtyped(typechecker=beartype)
+def _tree_conj(
+    tree: PyTree,
+) -> PyTree:
+    """Complex-conjugate every leaf of a PyTree.
+
+    Parameters
+    ----------
+    tree : PyTree
+        Input PyTree.
+
+    Returns
+    -------
+    result : PyTree
+        PyTree with every leaf complex-conjugated. Real leaves are
+        unchanged.
+    """
+    result: PyTree = jax.tree_util.tree_map(jnp.conj, tree)
+    return result
+
+
+@jaxtyped(typechecker=beartype)
 def _tree_dot(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> Float[Array, ""]:
-    """Compute inner product between two PyTrees.
+    r"""Compute the real Hermitian inner product of two PyTrees.
 
     Parameters
     ----------
@@ -70,14 +93,25 @@ def _tree_dot(
     Returns
     -------
     result : Float[Array, ""]
-        Sum of element-wise products across all leaves.
+        Real part of the sum of Hermitian products across all leaves,
+        :math:`\operatorname{Re}\sum_i a_i^* b_i`.
+
+    Notes
+    -----
+    Complex parameter trees form a real vector space for real-valued
+    least-squares problems. Taking the real part of the Hermitian product
+    provides its positive-definite inner product while preserving the
+    floating scalar contract required by the Krylov solvers.
     """
     leaves_a, _ = jax.tree_util.tree_flatten(tree_a)
     leaves_b, _ = jax.tree_util.tree_flatten(tree_b)
-    products: list = [
-        jnp.sum(a * b) for a, b in zip(leaves_a, leaves_b, strict=False)
+    products: list[Float[Array, ""]] = [
+        jnp.real(jnp.vdot(a, b))
+        for a, b in zip(leaves_a, leaves_b, strict=False)
     ]
-    result: Float[Array, ""] = jnp.sum(jnp.array(products))
+    result: Float[Array, ""] = (
+        jnp.sum(jnp.stack(products)) if products else jnp.zeros(())
+    )
     return result
 
 
@@ -170,6 +204,7 @@ def _tree_zeros_like(
 
 __all__: list[str] = [
     "_tree_add",
+    "_tree_conj",
     "_tree_dot",
     "_tree_norm",
     "_tree_scalar_mul",

@@ -119,7 +119,7 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
         If atomic symbol is not found in the mapping.
     ValueError
         If atomic symbol is empty.
-    
+
     :see: parse_xyz, parse_poscar.
     """
     cleaned_symbol: str = symbol_string.strip()
@@ -129,9 +129,7 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
 
     normalized_symbol: str = cleaned_symbol.capitalize()
     if normalized_symbol not in _ATOMIC_NUMBERS:
-        available: str = ", ".join(
-            sorted(_ATOMIC_NUMBERS.keys())
-        )
+        available: str = ", ".join(sorted(_ATOMIC_NUMBERS.keys()))
         msg = (
             f"Atomic symbol '{symbol_string}' "
             f"not found. Available symbols: {available}"
@@ -198,7 +196,7 @@ def kirkland_potentials() -> Float[Array, "103 12"]:
     -----
     Data is loaded once at module import time from
     :data:`_KIRKLAND_POTENTIALS`. No file I/O on each call.
-    
+
     :see: single_atom_potential, kirkland_potentials_crystal.
     """
     return _KIRKLAND_POTENTIALS
@@ -298,7 +296,7 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
     Supports both atomic symbols (e.g., ``"H"``, ``"Fe"``)
     and atomic numbers (e.g., ``"1"``, ``"26"``) in the first
     column of atom data.
-    
+
     :see: parse_crystal, parse_poscar, atomic_symbol.
     """
     with open(file_path, encoding="utf-8") as f:
@@ -341,7 +339,7 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
             symbol, x, y, z = parts
         elif len(parts) == columns_extra:
             _: str
-            symbol, x, y, z = parts
+            _, symbol, x, y, z = parts
         else:
             symbol, x, y, z = parts[:4]
 

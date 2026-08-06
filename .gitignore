@@ -96,3 +96,5 @@ target/
 # Local AI assistant notes
 **/CLAUDE.md
 .claude/
+ptyrodactyl-plans/
+ptyrodactyl-plans

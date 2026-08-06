@@ -1,5 +1,28 @@
 # Changelog
 
+## Plans 01–04 — Revalidation repairs
+
+The implemented foundation plans were revalidated against their strict gates.
+The historical 46-test failure baseline is now fully retired instead of being
+deferred to future work.
+
+- Corrected the XYZ five-column parser and aligned its absent-lattice contract.
+- Repaired the integer-order Bessel-K series, stabilized inactive singular
+  branches for autodiff, improved the large-x K0/K1 approximations, and made
+  Kirkland grid/repeat handling safe across eager and traced variants.
+- Made complex Gauss–Newton/Levenberg–Marquardt paths use a real Hermitian tree
+  inner product and primal-space adjoints; conjugate gradient now retains the
+  step that first satisfies its tolerance.
+- Routed atom-backed/sharded CBED through the common distribution reducer, so
+  `stem4d_sharded` honors explicit `ProbeModes.weights` and keeps a complex
+  amplitude seam until the single detector reduction.
+- Tightened every positive factory scalar to reject NaN and infinity under JIT,
+  restored the missing optimizer-oracle regression, and completed the public
+  runtime-typecheck/static-type contract.
+- Replaced stale `simul` documentation/tutorial calls with their owning
+  `multislice`, `inout`, and `types` APIs and added missing package typing
+  markers and API pages.
+
 ## Plan 04 — simul renamed to multislice
 
 Moved: `src/ptyrodactyl/simul` -> `src/ptyrodactyl/multislice`
@@ -82,29 +105,20 @@ and `OptimizableBlock` replace string dispatch (invalid keys raise
 fixed, so `single_slice_ptychography` runs); `annular_detector` takes a
 static `scan_shape`; `decompose_beam_to_modes` requires an explicit PRNG key;
 additive `checked_*` validating wrappers (`checked_make_probe`,
-`checked_cbed`, `checked_stem_4d`, `checked_stem4d_sharded`); the top-level
+`checked_cbed_image`, `checked_stem_4d`, `checked_stem4d_sharded`); the top-level
 bootstrap merges `XLA_FLAGS` per-flag, honors
 `PTYRODACTYL_DISABLE_RUNTIME_CHECKS=1 -> EQX_ON_ERROR=off`, enables an opt-in
 compilation cache (`tools/caching.py`), and exposes an idempotent,
 warn-degrading `init_distributed(..., force=False)`; and the test suite runs
 under LIVE jaxtyping enforcement (`--jaxtyping-packages` in pytest addopts).
 
-### Known-failing baseline (deliberate, owned by future plans)
+### Historical 46-failure baseline retired
 
-46 tests fail at this commit and on GitHub CI, unchanged from the
-pre-Plan-02 baseline — none were introduced or worsened here:
-
-- 27 Bessel-K derivative NaNs and 17 `kirkland_potentials_crystal`
-  shape/jit defects (`test_multislice/test_atom_potentials.py`) — retired by the
-  Lobato potential-layer rebuild (plan 06 in the private plans repo).
-- 2 `parse_xyz` contract drifts (`test_multislice/test_preprocessing.py`) —
-  resolved when the parsers move to `inout/` and its ingest contract is
-  pinned (plans 04/05).
-
-CI is expected to stay red until those plans land; the regression gate for
-this repo is "no NEW failures against the 46-line baseline", enforced during
-review, plus the bit-level unification-gate reference
-(`tests/test_data/plan01_ug_capture.py verify`).
+The 27 Bessel-K failures, 17 `kirkland_potentials_crystal` shape/JIT failures,
+and 2 XYZ-parser contract failures recorded when Plan 02 landed are fixed. The
+suite is expected to remain fully green; the bit-level unification-gate
+reference (`tests/test_data/plan01_ug_capture.py verify`) remains authoritative
+for the preserved Plan-01 numerical path.
 
 ## Interaction-Parameter Physics Fix
 

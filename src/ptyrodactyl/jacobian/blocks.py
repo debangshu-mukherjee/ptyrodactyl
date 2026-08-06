@@ -45,7 +45,7 @@ from beartype.typing import Callable
 from jax import lax
 from jaxtyping import Array, Complex, Float, PyTree, jaxtyped
 
-from ptyrodactyl.jacobian._treemath import _tree_zeros_like
+from ptyrodactyl.jacobian._treemath import _tree_conj, _tree_zeros_like
 from ptyrodactyl.jacobian.solvers import conjugate_gradient
 from ptyrodactyl.types import (
     AberrationParams,
@@ -208,6 +208,9 @@ def block_vjp_operator(
     ----------------
     Computes :math:`J_{\text{block}}^\top u` where
     :math:`J_{\text{block}} = \partial f / \partial \theta_b`.
+    For complex blocks, JAX's cotangent-valued pullback is conjugated
+    into the primal-space adjoint associated with the real Hermitian
+    inner product used by the linear solvers.
 
     Implementation Logic
     --------------------
@@ -244,7 +247,7 @@ def block_vjp_operator(
     ) -> PyTree:
         """Compute J_block^T @ cotangent."""
         full_grad: tuple[PtychoParams] = full_vjp_fn(cotangent)
-        params_grad: PtychoParams = full_grad[0]
+        params_grad: PtychoParams = _tree_conj(full_grad[0])
 
         if block_name is OptimizableBlock.EXIT_WAVE:
             block_gradient: PyTree = params_grad.exit_wave
@@ -642,7 +645,7 @@ def alternating_block_solve(
     --------
     :func:`block_gauss_newton_step` : Single-step primitive.
     """
-    block_schedule = [
+    normalized_schedule: list[list[OptimizableBlock]] = [
         [OptimizableBlock(block_name) for block_name in block_group]
         for block_group in block_schedule
     ]
@@ -656,11 +659,10 @@ def alternating_block_solve(
         return jnp.sqrt(jnp.sum(jnp.abs(residual) ** 2))
 
     def outer_iteration(
-        carry: tuple[PtychoParams, int],
+        params: PtychoParams,
         _: None,
-    ) -> tuple[tuple[PtychoParams, int], Float[Array, ""]]:
+    ) -> tuple[PtychoParams, Float[Array, ""]]:
         """Execute one full pass through block_schedule."""
-        params, iteration = carry
 
         def inner_step(
             params_inner: PtychoParams,
@@ -677,21 +679,18 @@ def alternating_block_solve(
             )
 
         updated_params: PtychoParams = params
-        for block_group in block_schedule:
+        for block_group in normalized_schedule:
             updated_params = inner_step(updated_params, block_group)
 
         residual_norm: Float[Array, ""] = compute_residual_norm(updated_params)
 
-        return (updated_params, iteration + 1), residual_norm
+        return updated_params, residual_norm
 
-    initial_carry: tuple[PtychoParams, int] = (params_init, 0)
-    scan_carry: tuple[PtychoParams, int]
-    residual_history: Float[Array, "num_outer"]
-    scan_carry, residual_history = lax.scan(
-        outer_iteration, initial_carry, None, length=num_outer_iterations
-    )
     final_params: PtychoParams
-    final_params, _ = scan_carry
+    residual_history: Float[Array, "num_outer"]
+    final_params, residual_history = lax.scan(
+        outer_iteration, params_init, None, length=num_outer_iterations
+    )
 
     return final_params, residual_history
 

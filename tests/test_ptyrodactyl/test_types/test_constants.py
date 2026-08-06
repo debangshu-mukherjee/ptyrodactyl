@@ -51,9 +51,10 @@ class TestConstantsContract:
         rank, and ``weak_type=True`` (the promotion-safety contract).
         """
         const, _ = _ALL_CONSTANTS[name]
-        assert const.dtype == jnp.float64
-        assert const.ndim == 0
-        assert const.weak_type
+        const_arr = jnp.asarray(const)
+        assert const_arr.dtype == jnp.float64
+        assert const_arr.ndim == 0
+        assert const_arr.weak_type
 
     @pytest.mark.parametrize("name", sorted(_ALL_CONSTANTS))
     def test_exact_value(self, name: str) -> None:

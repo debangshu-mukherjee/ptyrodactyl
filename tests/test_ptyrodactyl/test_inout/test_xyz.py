@@ -174,8 +174,7 @@ class TestKirklandPotentials(chex.TestCase):
         # No NaN values
         assert not jnp.any(jnp.isnan(kp))
 
-        # Values should be positive (typical for scattering potentials)
-        # Note: Some implementations might have negative values, adjust if needed
+        # The bundled parameterization uses non-negative coefficients.
         assert jnp.all(kp >= 0)
 
         # Check specific known values (first element - Hydrogen)
@@ -307,8 +306,9 @@ H  -0.7570   0.5860   0.0000
             # Check comment
             assert result.comment == "Water molecule"
 
-            # Check no optional fields
-            assert result.lattice is None
+            # CrystalData normalizes an absent lattice to the identity matrix.
+            assert result.lattice is not None
+            assert jnp.array_equal(result.lattice, jnp.eye(3))
             assert result.stress is None
             assert result.energy is None
             assert result.properties is None
@@ -419,12 +419,18 @@ N   1.0   1.0   1.0
 
     def test_parse_xyz_all_features(self) -> None:
         """Test parsing XYZ file with all optional features."""
-        xyz_content = """3
-Lattice="10.0 0.0 0.0 0.0 10.0 0.0 0.0 0.0 10.0" stress="1.0 0.0 0.0 0.0 1.0 0.0 0.0 0.0 1.0" energy=-100.5 Properties=species:S:1:pos:R:3
-C   0.0   0.0   0.0
+        xyz_content = (
+            "3\n"
+            'Lattice="10.0 0.0 0.0 0.0 10.0 '
+            '0.0 0.0 0.0 10.0" '
+            'stress="1.0 0.0 0.0 0.0 1.0 '
+            '0.0 0.0 0.0 1.0" '
+            "energy=-100.5 Properties=species:S:1:pos:R:3\n"
+            """C   0.0   0.0   0.0
 Si  5.0   5.0   5.0
 Ge  2.5   2.5   2.5
 """
+        )
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
@@ -727,7 +733,8 @@ Negative test
 
         try:
             with pytest.raises(
-                EquinoxRuntimeError, match="atomic_numbers must be non-negative"
+                EquinoxRuntimeError,
+                match="atomic_numbers must be non-negative",
             ):
                 parse_xyz(xyz_path)
         finally:
@@ -743,9 +750,7 @@ N   1.0   NaN   1.0
         xyz_path = self.create_temp_xyz_file(xyz_content)
 
         try:
-            with pytest.raises(
-                EquinoxRuntimeError, match="non-finite"
-            ):
+            with pytest.raises(EquinoxRuntimeError, match="non-finite"):
                 parse_xyz(xyz_path)
         finally:
             xyz_path.unlink()

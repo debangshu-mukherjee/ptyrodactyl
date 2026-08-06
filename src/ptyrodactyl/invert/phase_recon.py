@@ -56,7 +56,6 @@ from ptyrodactyl.types import (
     create_potential_slices,
     create_probe_modes,
     scalar_float,
-    scalar_int,
     scalar_num,
 )
 
@@ -97,8 +96,8 @@ def single_slice_ptychography(
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
     slice_thickness: scalar_num,
-    save_every: scalar_int = 10,
-    num_iterations: scalar_int = 1000,
+    save_every: int = 10,
+    num_iterations: int = 1000,
     learning_rate: scalar_float = 0.001,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
@@ -158,10 +157,10 @@ def single_slice_ptychography(
         is applied before optimisation.
     slice_thickness : scalar_num
         Thickness of the potential slice, in Angstroms.
-    save_every : scalar_int, optional
+    save_every : int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : scalar_int, optional
+    num_iterations : int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
     learning_rate : scalar_float, optional
@@ -193,8 +192,14 @@ def single_slice_ptychography(
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
     pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
-    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
-    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
+    voltage_kv: Float[Array, " "] = jnp.asarray(
+        experimental_data.voltage_kv,
+        dtype=jnp.float64,
+    )
+    calib_ang: Float[Array, " "] = jnp.asarray(
+        experimental_data.real_space_calib,
+        dtype=jnp.float64,
+    )
     microscope = create_microscope_config(
         voltage_kv=voltage_kv,
         aperture_mrad=1.0,
@@ -448,8 +453,8 @@ def single_slice_poscorrected(  # noqa: PLR0915
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
     slice_thickness: scalar_num,
-    save_every: scalar_int = 10,
-    num_iterations: scalar_int = 1000,
+    save_every: int = 10,
+    num_iterations: int = 1000,
     learning_rate: Union[scalar_float, Float[Array, "2"]] = 0.01,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
@@ -513,10 +518,10 @@ def single_slice_poscorrected(  # noqa: PLR0915
         Initial guess for the electron beam.
     slice_thickness : scalar_num
         Thickness of the potential slice, in Angstroms.
-    save_every : scalar_int, optional
+    save_every : int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : scalar_int, optional
+    num_iterations : int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
     learning_rate : scalar_float or Float[Array, "2"], optional
@@ -554,8 +559,14 @@ def single_slice_poscorrected(  # noqa: PLR0915
         Adds multi-modal probe support.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
-    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
+    voltage_kv: Float[Array, " "] = jnp.asarray(
+        experimental_data.voltage_kv,
+        dtype=jnp.float64,
+    )
+    calib_ang: Float[Array, " "] = jnp.asarray(
+        experimental_data.real_space_calib,
+        dtype=jnp.float64,
+    )
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
     microscope = create_microscope_config(
         voltage_kv=voltage_kv,
@@ -916,8 +927,8 @@ def single_slice_multi_modal(  # noqa: PLR0915
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: ProbeModes,
     slice_thickness: scalar_num,
-    save_every: scalar_int = 10,
-    num_iterations: scalar_int = 1000,
+    save_every: int = 10,
+    num_iterations: int = 1000,
     learning_rate: Union[scalar_float, Float[Array, "2"]] = 0.01,
     loss_type: str = "mse",
     optimizer_name: str = "adam",
@@ -986,10 +997,10 @@ def single_slice_multi_modal(  # noqa: PLR0915
         weights, and calibration.
     slice_thickness : scalar_num
         Thickness of the potential slice, in Angstroms.
-    save_every : scalar_int, optional
+    save_every : int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : scalar_int, optional
+    num_iterations : int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
     learning_rate : scalar_float or Float[Array, "2"], optional
@@ -1025,8 +1036,14 @@ def single_slice_multi_modal(  # noqa: PLR0915
         Multi-slice variant with position correction.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
-    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
+    voltage_kv: Float[Array, " "] = jnp.asarray(
+        experimental_data.voltage_kv,
+        dtype=jnp.float64,
+    )
+    calib_ang: Float[Array, " "] = jnp.asarray(
+        experimental_data.real_space_calib,
+        dtype=jnp.float64,
+    )
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
     microscope = create_microscope_config(
         voltage_kv=voltage_kv,
@@ -1341,8 +1358,8 @@ def multi_slice_multi_modal(
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: Complex[Array, "H W"],
     slice_thickness: scalar_num,
-    save_every: scalar_int = 10,
-    num_iterations: scalar_int = 1000,
+    save_every: int = 10,
+    num_iterations: int = 1000,
     learning_rate: scalar_float = 0.001,
     pos_learning_rate: scalar_float = 0.01,
     loss_type: str = "mse",
@@ -1404,10 +1421,10 @@ def multi_slice_multi_modal(
         Initial guess for the electron beam.
     slice_thickness : scalar_num
         Thickness of each potential slice, in Angstroms.
-    save_every : scalar_int, optional
+    save_every : int, optional
         Store intermediate results every *save_every* iterations.
         Default is ``10``.
-    num_iterations : scalar_int, optional
+    num_iterations : int, optional
         Total number of optimisation iterations.
         Default is ``1000``.
     learning_rate : scalar_float, optional
@@ -1444,8 +1461,14 @@ def multi_slice_multi_modal(
         Single-slice with multi-modal probe.
     """
     experimental_4dstem: Float[Array, "P H W"] = experimental_data.data
-    voltage_kv: Float[Array, " "] = experimental_data.voltage_kv
-    calib_ang: Float[Array, " "] = experimental_data.real_space_calib
+    voltage_kv: Float[Array, " "] = jnp.asarray(
+        experimental_data.voltage_kv,
+        dtype=jnp.float64,
+    )
+    calib_ang: Float[Array, " "] = jnp.asarray(
+        experimental_data.real_space_calib,
+        dtype=jnp.float64,
+    )
     initial_pos_list: Float[Array, "P 2"] = experimental_data.scan_positions
     microscope = create_microscope_config(
         voltage_kv=voltage_kv,

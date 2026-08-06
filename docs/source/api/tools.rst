@@ -1,67 +1,19 @@
 ptyrodactyl.tools
 =================
 
-.. automodule:: ptyrodactyl.tools
-   :no-members:
-
-Data Types
-----------
-
-.. autoclass:: ptyrodactyl.tools.CalibratedArray
-   :members:
-   :show-inheritance:
-
-.. autoclass:: ptyrodactyl.tools.CrystalData
-   :members:
-   :show-inheritance:
-
-.. autoclass:: ptyrodactyl.tools.CrystalStructure
-   :members:
-   :show-inheritance:
-
-.. autoclass:: ptyrodactyl.tools.PotentialSlices
-   :members:
-   :show-inheritance:
-
-.. autoclass:: ptyrodactyl.tools.ProbeModes
-   :members:
-   :show-inheritance:
-
-.. autoclass:: ptyrodactyl.tools.STEM4D
-   :members:
-   :show-inheritance:
-
-Type Aliases
-------------
-
-.. autodata:: ptyrodactyl.tools.NonJaxNumber
-.. autodata:: ptyrodactyl.tools.ScalarFloat
-.. autodata:: ptyrodactyl.tools.ScalarInt
-.. autodata:: ptyrodactyl.tools.ScalarNumeric
-
-Factory Functions
------------------
-
-.. autofunction:: ptyrodactyl.tools.make_calibrated_array
-.. autofunction:: ptyrodactyl.tools.make_crystal_data
-.. autofunction:: ptyrodactyl.tools.make_crystal_structure
-.. autofunction:: ptyrodactyl.tools.make_potential_slices
-.. autofunction:: ptyrodactyl.tools.make_probe_modes
-.. autofunction:: ptyrodactyl.tools.make_stem4d
-
 Optimizers
 ----------
 
 .. autoclass:: ptyrodactyl.tools.Optimizer
-   :members:
+   :no-members:
    :show-inheritance:
 
 .. autoclass:: ptyrodactyl.tools.OptimizerState
-   :members:
+   :no-members:
    :show-inheritance:
 
 .. autoclass:: ptyrodactyl.tools.LRSchedulerState
-   :members:
+   :no-members:
    :show-inheritance:
 
 .. autofunction:: ptyrodactyl.tools.complex_adam

@@ -1,80 +1,51 @@
-# Package Organization
+# Package organization
 
-## Overview
+Ptyrodactyl is organized around explicit, differentiable operator boundaries.
+Structured carriers and constructors have one owner, forward-model families keep
+complex amplitudes available until an explicit detector reduction, and host-side
+I/O is separated from JAX kernels.
 
-Ptyrodactyl is a typed and tested JAX-based library for electron microscopy and ptychography, utilizing JAX's capabilities for multi-device computation and autodifferentiation. The package is organized into four main modules: `simul` for electron microscopy simulations, `invert` for reconstruction algorithms, `tools` for common utilities including optimizers and loss functions, and `workflows` for high-level meta-functions that orchestrate complete simulation pipelines.
+## Public subpackages
 
-## Module Structure
+- `ptyrodactyl.types` owns Equinox carriers, scalar aliases, physical constants,
+  distributions, and validated `create_*` constructors.
+- `ptyrodactyl.inout` owns crystal-file parsers and bundled atomic lookup data.
+- `ptyrodactyl.ucell` owns lattice, rotation, and crystal-tilt operations.
+- `ptyrodactyl.multislice` owns multislice amplitudes, detector reductions,
+  distribution producers, and 4D-STEM simulation.
+- `ptyrodactyl.born` and `ptyrodactyl.bloch` are sibling forward-model families.
+- `ptyrodactyl.plots` owns presentation-only image and colormap helpers.
+- `ptyrodactyl.invert` and `ptyrodactyl.jacobian` own reconstruction and
+  derivative operations.
+- `ptyrodactyl.tools` contains numerical utilities, optimizer helpers, caching,
+  and sharding support; it does not own domain carriers.
+- `ptyrodactyl.workflows` composes the lower-level packages into end-to-end
+  tasks.
 
-### **ptyrodactyl.simul**
-
-JAX-based electron microscopy simulation toolkit for ptychography and 4D-STEM.
-
-### **ptyrodactyl.invert**
-
-Inverse reconstruction algorithms for electron ptychography including single-slice, position-corrected, and multi-modal reconstruction methods.
-
-### **ptyrodactyl.tools**
-
-Common utilities and shared data structures used throughout the package, including complex-valued optimizers with Wirtinger derivatives.
-
-### **ptyrodactyl.workflows**
-
-High-level workflow functions that combine primitives from `simul` and data structures from `tools` into complete end-to-end pipelines. These meta-functions provide convenient interfaces for common tasks like running full 4D-STEM simulations from structure files.
-
-## Design Principles
-
-### 1. **JAX-First Architecture**
-All functions are designed to be:
-- **Differentiable**: Full support for `jax.grad`
-- **JIT-compilable**: Optimized with `jax.jit`
-- **Vectorizable**: Compatible with `jax.vmap`
-
-### 2. **Type Safety**
-- Type hints using `jaxtyping`
-- Runtime type checking with `beartype`
-- Using `PyTrees` for data containers
-- `PyTrees` are loaded with type-checked factory functions.
-
-## File Organization
-
-The package structure is organized for clarity and maintainability:
+## Source layout
 
 ```text
 src/ptyrodactyl/
-├── __init__.py           # Top-level exports
-├── simul/
-│   ├── __init__.py       # Simul module exports
-│   ├── atom_potentials.py # Atomic potential calculations
-│   ├── geometry.py       # Geometric transformations
-│   ├── preprocessing.py  # Data preprocessing utilities
-│   └── simulations.py    # Forward simulation functions
-├── invert/
-│   ├── __init__.py       # Invert module exports
-│   └── phase_recon.py    # Phase reconstruction algorithms
-├── tools/
-│   ├── __init__.py       # Tools module exports
-│   ├── electron_types.py # Data structures and type definitions
-│   ├── loss_functions.py # Loss function definitions
-│   ├── optimizers.py     # Complex-valued optimizers
-│   └── parallel.py       # Parallel processing utilities
-└── workflows/
-    ├── __init__.py       # Workflows module exports
-    └── stem_4d.py        # End-to-end 4D-STEM workflows
+├── types/          # carriers, aliases, constants, validated constructors
+├── inout/          # XYZ/POSCAR parsing and lookup assets
+├── ucell/          # unit-cell and rotation geometry
+├── multislice/     # multislice amplitudes, reducers, and integrators
+├── born/           # convergent-Born utilities
+├── bloch/          # Bloch-wave utilities
+├── plots/          # visualization helpers
+├── invert/         # reconstruction algorithms
+├── jacobian/       # Jacobian, Fisher, gauge, and solver operations
+├── tools/          # shared numerical/runtime utilities
+└── workflows/      # high-level orchestration
 ```
 
-## Extension Points
+## Design rules
 
-The package is designed to be extensible:
-
-1. **Custom Loss Functions**: Implement new loss functions following the pattern in `tools.loss_functions`
-2. **New Optimizers**: Add optimizers with Wirtinger derivative support
-3. **Additional Reconstructions**: Build on base reconstruction algorithms in `invert.phase_recon`
-4. **Custom Workflows**: Combine existing functions for specific use cases
-
-## Future Directions
-
-The package architecture supports future extensions:
-- Real-time microscopy inversion
-- Additional electron microscopy modalities
-- Machine learning-enhanced reconstructions
+1. Array computation is JAX-first and supports `jax.jit`, `jax.grad`, and
+   `jax.vmap` where the public contract promises them.
+2. Public array functions use jaxtyping and runtime checking.
+3. Carriers are constructed through `ptyrodactyl.types.create_*` functions.
+4. Coherent/incoherent averaging is represented by an explicit `Distribution`
+   and reduced after the complex amplitude kernel.
+5. Symbols are exported from one owning subpackage; removed `ptyrodactyl.simul`
+   and `ptyrodactyl.tools.make_*` paths have no compatibility aliases.

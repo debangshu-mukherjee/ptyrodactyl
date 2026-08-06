@@ -103,6 +103,8 @@ if os.environ.get("PTYRODACTYL_DISABLE_RUNTIME_CHECKS", "0") == "1":
     os.environ.setdefault("EQX_ON_ERROR", "off")
 
 import jax  # noqa: E402
+from beartype import beartype  # noqa: E402
+from jaxtyping import jaxtyped  # noqa: E402
 
 jax.config.update("jax_enable_x64", True)
 
@@ -116,6 +118,7 @@ if _cache_requested:
     enable_compilation_cache()
 
 
+@jaxtyped(typechecker=beartype)
 def init_distributed(
     coordinator_address: str | None = None,
     *,

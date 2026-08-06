@@ -39,11 +39,13 @@ from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.multislice.simulations import (
     _cbed_amplitude_from_slice_provider,
+    probe_modes_to_distribution,
 )
 from ptyrodactyl.types import (
     STEM4D,
     AtomicSliceData,
     DetectorConfig,
+    Distribution,
     MicroscopeConfig,
     ProbeModes,
     create_stem4d,
@@ -51,6 +53,8 @@ from ptyrodactyl.types import (
     scalar_int,
     scalar_num,
 )
+
+from .reduce import apply_distribution
 
 
 @jaxtyped(typechecker=beartype)
@@ -183,7 +187,7 @@ def cbed_amplitude_from_atoms(
     atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Complex[Array, "H W M"]:
     """Compute CBED detector amplitudes with on-the-fly slice generation.
-    
+
     :see: cbed_image_from_atoms, stem4d_sharded.
     """
     h: int = beam.shape[0]
@@ -226,6 +230,7 @@ def cbed_amplitude_from_atoms(
 @jax.jit
 def cbed_image_from_atoms(
     beam: Complex[Array, "H W M"],
+    mode_distribution: Distribution,
     atom_coords: Float[Array, "N 3"],
     atom_types: Int[Array, " N"],
     slice_z_bounds: Float[Array, "S 2"],
@@ -236,10 +241,10 @@ def cbed_image_from_atoms(
 ) -> Float[Array, "H W"]:
     """Compute CBED intensity from atom slices through the reducer.
 
-    The array-only sharded signature has no explicit mode-weight argument, so
-    the retained mode axis is reduced with unit weights. That preserves the
-    legacy interpretation that callers pass already scaled modes.
-    
+    ``mode_distribution`` indexes the retained mode axis of the complex
+    amplitude exactly once. The shared reducer then performs the only
+    detector ``|.|^2`` and weighted mode reduction on this path.
+
     :see: cbed_amplitude_from_atoms, stem4d_sharded.
     """
     amplitudes: Complex[Array, "H W M"] = cbed_amplitude_from_atoms(
@@ -252,20 +257,17 @@ def cbed_image_from_atoms(
         calib_ang=calib_ang,
         atom_mask=atom_mask,
     )
-    mode_count: int = amplitudes.shape[-1]
-    unit_weights: Float[Array, " M"] = jnp.ones(
-        (mode_count,),
-        dtype=jnp.float64,
-    )
-    mode_intensities: Float[Array, "M H W"] = jnp.moveaxis(
-        jnp.abs(amplitudes) ** 2,
-        -1,
-        0,
-    )
-    cbed_pattern: Float[Array, "H W"] = jnp.einsum(
-        "m,mhw->hw",
-        unit_weights,
-        mode_intensities,
+
+    def _mode_amplitude(
+        sample: Float[Array, " D"],
+    ) -> Complex[Array, "H W"]:
+        mode_idx: Int[Array, ""] = sample[0].astype(jnp.int32)
+        amplitude: Complex[Array, "H W"] = amplitudes[..., mode_idx]
+        return amplitude
+
+    cbed_pattern: Float[Array, "H W"] = apply_distribution(
+        mode_distribution,
+        _mode_amplitude,
     )
     return cbed_pattern
 
@@ -341,6 +343,9 @@ def stem4d_sharded(
         probe_modes.modes,
         axes=(0, 1),
     )
+    mode_distribution: Distribution = probe_modes_to_distribution(
+        probe_modes,
+    )
     qy: Float[Array, " H"] = jnp.fft.fftfreq(h, d=calib_ang)
     qx: Float[Array, " W"] = jnp.fft.fftfreq(w, d=calib_ang)
     qya: Float[Array, "H W"]
@@ -348,7 +353,7 @@ def stem4d_sharded(
     qya, qxa = jnp.meshgrid(qy, qx, indexing="ij")
 
     def _shift_probe(
-        position_ang: Float[Array, " 2"]
+        position_ang: Float[Array, " 2"],
     ) -> Complex[Array, "H W M"]:
         """Shift probe modes via Fourier phase ramp.
 
@@ -375,7 +380,7 @@ def stem4d_sharded(
         return shifted_beam
 
     def _process_single_position(
-        position_ang: Float[Array, " 2"]
+        position_ang: Float[Array, " 2"],
     ) -> Float[Array, "H W"]:
         """Compute CBED pattern for a single scan position.
 
@@ -393,6 +398,7 @@ def stem4d_sharded(
 
         cbed_pattern: Float[Array, "H W"] = cbed_image_from_atoms(
             beam=current_beam,
+            mode_distribution=mode_distribution,
             atom_coords=sample.atom_coords,
             atom_types=sample.atom_types,
             slice_z_bounds=sample.slice_z_bounds,
@@ -404,7 +410,7 @@ def stem4d_sharded(
         return cbed_pattern
 
     def _process_batch(
-        positions_batch: Float[Array, "B 2"]
+        positions_batch: Float[Array, "B 2"],
     ) -> Float[Array, "B H W"]:
         """Process a batch of positions (one shard).
 

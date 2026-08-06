@@ -73,7 +73,7 @@ from ptyrodactyl.multislice._ensemble_axes import (
     _POSITION_DIM,
     _PROBE_MODE_DIM,
 )
-from ptyrodactyl.tools import relativistic_wavelength_ang
+from ptyrodactyl.tools.constants import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
@@ -1251,9 +1251,11 @@ def decompose_beam_to_modes(
     original_intensity: Float[Array, " tp"] = jnp.square(jnp.abs(beam_flat))
     weights: Float[Array, " mm"] = jnp.zeros(mode_count, dtype=jnp.float64)
     weights = weights.at[0].set(first_mode_weight)
-    remaining_weight: scalar_float = (1.0 - first_mode_weight) / max(
-        1, mode_count - 1
-    )
+    remaining_weight: scalar_float
+    if mode_count > 1:
+        remaining_weight = (1.0 - first_mode_weight) / (mode_count - 1)
+    else:
+        remaining_weight = jnp.asarray(0.0, dtype=jnp.float64)
     weights = weights.at[1:].set(remaining_weight)
     sqrt_intensity: Float[Array, " tp 1"] = jnp.sqrt(
         original_intensity

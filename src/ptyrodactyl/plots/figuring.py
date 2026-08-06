@@ -19,13 +19,13 @@ Routine Listings
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import List, Optional, Tuple, Union
+from beartype.typing import Dict, List, Literal, Sequence, Tuple, Union
 from jax import lax
 from jax.image import resize
 from jaxtyping import Array, Float, Int, jaxtyped
 from matplotlib.colors import LinearSegmentedColormap
 
-from ptyrodactyl.tools import relativistic_wavelength_ang
+from ptyrodactyl.tools.constants import relativistic_wavelength_ang
 from ptyrodactyl.types import scalar_float, scalar_num
 
 
@@ -75,15 +75,13 @@ def clip_cbed(
     -------
     resized : Float[Array, "Ho Wo"]
         Clipped and resized CBED pattern.
-    
+
     :see: contrast_stretch, create_phosphor_colormap.
     """
     h: int = cbed.shape[0]
     w: int = cbed.shape[1]
 
-    wavelength_ang: Float[Array, " "] = (
-        relativistic_wavelength_ang(voltage_kv)
-    )
+    wavelength_ang: Float[Array, " "] = relativistic_wavelength_ang(voltage_kv)
     mrad_per_inv_ang: Float[Array, " "] = wavelength_ang * 1000.0
 
     extent_inv_ang: Float[Array, " "] = extent_mrad / mrad_per_inv_ang
@@ -151,7 +149,7 @@ def contrast_stretch(
     -------
     final_result : Float[Array, " H W"] | Float[Array, " N H W"]
         Rescaled image(s) with same shape as input.
-    
+
     :see: clip_cbed, create_phosphor_colormap.
     """
     original_shape: Tuple[int, ...] = series.shape
@@ -202,9 +200,9 @@ def contrast_stretch(
     return final_result
 
 
-@beartype
+@jaxtyped(typechecker=beartype)
 def create_phosphor_colormap(
-    name: Optional[str] = "phosphor",
+    name: str = "phosphor",
 ) -> LinearSegmentedColormap:
     """Create a custom colormap that simulates a phosphor screen appearance.
 
@@ -236,36 +234,41 @@ def create_phosphor_colormap(
     4. **Construct Colormap** --
        Create and return LinearSegmentedColormap with
        the custom color segment dictionary.
-    
+
     :see: contrast_stretch, clip_cbed.
     """
-    colors: List[
-        Tuple[scalar_float, Tuple[scalar_float, scalar_float, scalar_float]]
-    ] = [
+    colors: List[Tuple[float, Tuple[float, float, float]]] = [
         (0.0, (0.0, 0.0, 0.0)),
         (0.4, (0.0, 0.05, 0.0)),
         (0.7, (0.15, 0.85, 0.15)),
         (0.9, (0.45, 0.95, 0.45)),
         (1.0, (0.8, 1.0, 0.8)),
     ]
-    positions: List[scalar_float] = [x[0] for x in colors]
-    rgb_values: List[Tuple[scalar_float, scalar_float, scalar_float]] = [
-        x[1] for x in colors
-    ]
-    red: List[Tuple[scalar_float, scalar_float, scalar_float]] = [
+    positions: List[float] = [x[0] for x in colors]
+    rgb_values: List[Tuple[float, float, float]] = [x[1] for x in colors]
+    red: List[Tuple[float, float, float]] = [
         (pos, rgb[0], rgb[0])
         for pos, rgb in zip(positions, rgb_values, strict=True)
     ]
-    green: List[Tuple[scalar_float, scalar_float, scalar_float]] = [
+    green: List[Tuple[float, float, float]] = [
         (pos, rgb[1], rgb[1])
         for pos, rgb in zip(positions, rgb_values, strict=True)
     ]
-    blue: List[Tuple[scalar_float, scalar_float, scalar_float]] = [
+    blue: List[Tuple[float, float, float]] = [
         (pos, rgb[2], rgb[2])
         for pos, rgb in zip(positions, rgb_values, strict=True)
     ]
+    alpha: List[Tuple[float, float, float]] = [
+        (0.0, 1.0, 1.0),
+        (1.0, 1.0, 1.0),
+    ]
+    segment_data: Dict[
+        Literal["red", "green", "blue", "alpha"],
+        Sequence[Tuple[float, ...]],
+    ] = {"red": red, "green": green, "blue": blue, "alpha": alpha}
     cmap: LinearSegmentedColormap = LinearSegmentedColormap(
-        name, {"red": red, "green": green, "blue": blue}
+        name,
+        segment_data,
     )
     return cmap
 

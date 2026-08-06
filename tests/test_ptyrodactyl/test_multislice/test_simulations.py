@@ -171,6 +171,32 @@ def test_decompose_beam_to_modes_fixed_key_reproducible() -> None:
     )
 
 
+def test_decompose_beam_to_single_mode_jits_with_static_mode_count() -> None:
+    """The one-mode boundary avoids traced Python maximum operations."""
+    beam = create_calibrated_array(
+        jnp.ones((4, 4), dtype=jnp.complex128),
+        0.5,
+        0.5,
+        True,
+    )
+    jitted_decompose = jax.jit(
+        decompose_beam_to_modes,
+        static_argnames=("num_modes",),
+    )
+
+    result = jitted_decompose(
+        beam,
+        num_modes=1,
+        key=jax.random.PRNGKey(3),
+    )
+
+    assert result.modes.shape == (4, 4, 1)
+    assert np.array_equal(
+        np.asarray(result.weights),
+        np.ones((1,), dtype=np.float64),
+    )
+
+
 def test_probe_modes_to_distribution_uses_explicit_weights() -> None:
     """Probe mode distributions carry samples and weights explicitly."""
     modes = jnp.ones((2, 2, 3), dtype=jnp.complex128)

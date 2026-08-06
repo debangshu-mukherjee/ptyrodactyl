@@ -41,6 +41,7 @@ from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray, PyTree, jaxtyped
 
 from ptyrodactyl.jacobian._treemath import (
     _tree_add,
+    _tree_conj,
     _tree_dot,
     _tree_scalar_mul,
     _tree_sub,
@@ -137,12 +138,17 @@ def conjugate_gradient(
         p_new: PyTree = _tree_add(r_new, _tree_scalar_mul(beta, state.p))
         new_iteration: Int[Array, ""] = state.iteration + 1
 
-        converged: Bool[Array, ""] = r_dot_r_new < tolerance_squared
+        converged: Bool[Array, ""] = state.r_dot_r < tolerance_squared
         x_out: PyTree = lax.cond(converged, lambda: state.x, lambda: x_new)
         r_out: PyTree = lax.cond(converged, lambda: state.r, lambda: r_new)
         p_out: PyTree = lax.cond(converged, lambda: state.p, lambda: p_new)
         r_dot_r_out: Float[Array, ""] = lax.cond(
             converged, lambda: state.r_dot_r, lambda: r_dot_r_new
+        )
+        iteration_out: Int[Array, ""] = lax.cond(
+            converged,
+            lambda: state.iteration,
+            lambda: new_iteration,
         )
 
         new_state: CGState = CGState(
@@ -150,7 +156,7 @@ def conjugate_gradient(
             r=r_out,
             p=p_out,
             r_dot_r=r_dot_r_out,
-            iteration=new_iteration,
+            iteration=iteration_out,
         )
         return new_state, None
 
@@ -221,9 +227,13 @@ def gauss_newton_step(
     prediction: Float[Array, "..."] = forward_fn(params)
     residual: Float[Array, "..."] = prediction - data
     vjp_fn: Callable = vjp_operator(forward_fn, params)
-    gradient: PyTree = vjp_fn(residual)
+    gradient: PyTree = _tree_conj(vjp_fn(residual))
 
-    jtj_fn: Callable = jtj_operator(forward_fn, params)
+    raw_jtj_fn: Callable = jtj_operator(forward_fn, params)
+
+    def jtj_fn(vector: PyTree) -> PyTree:
+        """Apply the real-Hermitian normal operator."""
+        return _tree_conj(raw_jtj_fn(vector))
 
     x0: PyTree = _tree_zeros_like(params)
     step, _ = conjugate_gradient(
@@ -397,8 +407,12 @@ def levenberg_marquardt_step(
     residual_norm_current: Float[Array, ""] = jnp.sum(residual**2)
 
     vjp_fn: Callable = vjp_operator(forward_fn, params)
-    gradient: PyTree = vjp_fn(residual)
-    jtj_fn: Callable = jtj_operator(forward_fn, params)
+    gradient: PyTree = _tree_conj(vjp_fn(residual))
+    raw_jtj_fn: Callable = jtj_operator(forward_fn, params)
+
+    def jtj_fn(vector: PyTree) -> PyTree:
+        """Apply the real-Hermitian normal operator."""
+        return _tree_conj(raw_jtj_fn(vector))
 
     def damped_operator(v: PyTree) -> PyTree:
         """Apply (J^T J + lambda I) to v."""

@@ -8,6 +8,7 @@ Welcome to ptyrodactyl's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   installation
    organization
    api
    tutorials/index

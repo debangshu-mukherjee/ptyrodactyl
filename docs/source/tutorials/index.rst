@@ -7,8 +7,9 @@ This section contains interactive Jupyter notebooks demonstrating how to use pty
    :maxdepth: 1
    :caption: Tutorial Notebooks
 
-   ../../../tutorials/CBEDs/CBED_MoS2
-   ../../../tutorials/CBEDs/CBED_Speed
+   Bi2Se3 CBED <CBED_Bi2Se3>
+   CBED performance <CBED_Speed>
+   MoS2 4D-STEM <mos2_gb>
 
 .. note::
 

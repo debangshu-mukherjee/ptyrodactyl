@@ -1,4 +1,7 @@
-"""Tests for atom_potentials module."""
+"""Tests for atom_potentials module.
+
+:see: :func:`ptyrodactyl.multislice.single_atom_potential`
+"""
 # ruff: noqa: E402
 
 import unittest
@@ -33,7 +36,7 @@ from ptyrodactyl.types import (
         (79, 16835.066119859865, 6296.83419348897),
     ],
 )
-def test_explicit_kirkland_replays_pre_plan06_reference(
+def test_explicit_kirkland_matches_captured_element_reference(
     atomic_number: int,
     expected_sum: float,
     expected_maximum: float,
@@ -148,7 +151,10 @@ def test_single_atom_center_translation_is_material_and_differentiable(
 
 
 class TestBesselKv(chex.TestCase):
-    """Test suite for the bessel_kv function."""
+    """Test suite for the bessel_kv function.
+
+    :see: :func:`ptyrodactyl.multislice.bessel_kv`
+    """
 
     @chex.variants(
         with_jit=True, without_jit=True, with_device=True, with_pmap=True
@@ -658,7 +664,10 @@ class TestSliceAtoms(chex.TestCase):
 
 
 class TestCrystalPotentialSlices(chex.TestCase):
-    """Test suite for the crystal_potential_slices function."""
+    """Test suite for the crystal_potential_slices function.
+
+    :see: :func:`ptyrodactyl.multislice.crystal_potential_slices`
+    """
 
     def _run_potential(
         self,

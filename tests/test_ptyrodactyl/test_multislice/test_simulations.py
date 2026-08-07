@@ -1,4 +1,15 @@
-"""Tests for :mod:`ptyrodactyl.multislice.simulations`."""
+"""Tests for :mod:`ptyrodactyl.multislice.simulations`.
+
+:see: :func:`ptyrodactyl.multislice.aberration`
+:see: :func:`ptyrodactyl.multislice.decompose_beam_to_modes`
+:see: :func:`ptyrodactyl.multislice.fourier_calib`
+:see: :func:`ptyrodactyl.multislice.fourier_coords`
+:see: :func:`ptyrodactyl.multislice.make_probe`
+:see: :func:`ptyrodactyl.multislice.propagation_func`
+:see: :func:`ptyrodactyl.multislice.shift_beam_fourier`
+:see: :func:`ptyrodactyl.multislice.stem_4d`
+:see: :func:`ptyrodactyl.multislice.transmission_func`
+"""
 # ruff: noqa: E402, I001
 
 import inspect
@@ -46,7 +57,11 @@ from ptyrodactyl.types import (
 
 
 def test_public_integrator_signatures_have_at_most_six_parameters() -> None:
-    """Carrierized public integrators stay below the IM7 signature cap."""
+    """Public integrator signatures accept at most six parameters.
+
+    :see: :func:`ptyrodactyl.multislice.aberration`
+    :see: :func:`ptyrodactyl.multislice.stem_4d`
+    """
     public_integrators = (
         aberration,
         annular_detector,
@@ -67,7 +82,10 @@ def test_public_integrator_signatures_have_at_most_six_parameters() -> None:
 
 
 def test_annular_detector_static_scan_shape_and_jit() -> None:
-    """Annular detector reshapes with a static raster and JIT-compiles."""
+    """Annular detector reshapes with a static raster and JIT-compiles.
+
+    :see: :func:`ptyrodactyl.multislice.annular_detector`
+    """
     positions = jnp.array(
         [
             [0.0, 0.0],
@@ -198,7 +216,10 @@ def test_decompose_beam_to_single_mode_jits_with_static_mode_count() -> None:
 
 
 def test_probe_modes_to_distribution_uses_explicit_weights() -> None:
-    """Probe mode distributions carry samples and weights explicitly."""
+    """Probe mode distributions carry samples and weights explicitly.
+
+    :see: :func:`ptyrodactyl.multislice.probe_modes_to_distribution`
+    """
     modes = jnp.ones((2, 2, 3), dtype=jnp.complex128)
     weights = jnp.array([0.5, 0.3, 0.2], dtype=jnp.float64)
     probe = create_probe_modes(modes, weights, 0.5)
@@ -220,7 +241,11 @@ def test_probe_modes_to_distribution_uses_explicit_weights() -> None:
 
 
 def test_cbed_image_ensemble_axes_match_explicit_composition() -> None:
-    """A jitter axis inside MicroscopeConfig matches explicit composition."""
+    """A jitter axis inside MicroscopeConfig matches explicit composition.
+
+    :see: :func:`ptyrodactyl.multislice.bind_cbed_axes`
+    :see: :func:`ptyrodactyl.multislice.cbed_image`
+    """
     pot_slices = create_potential_slices(
         jnp.zeros((8, 8, 1), dtype=jnp.float64),
         1.0,
@@ -349,15 +374,17 @@ def test_forward_carrier_dynamic_scalars_have_finite_gradients() -> None:
 
 
 def test_cbed_amplitude_phase_gradient_survives_intensity_seam() -> None:
-    """Amplitude keeps phase information that the intensity path removes."""
+    """Amplitude keeps phase information that the intensity path removes.
+
+    :see: :func:`ptyrodactyl.multislice.cbed_amplitude`
+    """
     pot_slices = create_potential_slices(
         jnp.zeros((4, 4, 1), dtype=jnp.float64),
         1.0,
         0.5,
     )
     base = (
-        jnp.arange(1, 17, dtype=jnp.float64).reshape(4, 4)
-        + 0.125j
+        jnp.arange(1, 17, dtype=jnp.float64).reshape(4, 4) + 0.125j
     ).astype(jnp.complex128)
 
     def probe_with_phase(phase):

@@ -1,4 +1,8 @@
-"""Tests for :mod:`ptyrodactyl.types.potential_types`."""
+"""Tests for :mod:`ptyrodactyl.types.potential_types`.
+
+:see: :class:`ptyrodactyl.types.Potential3D`
+:see: :func:`ptyrodactyl.types.create_potential_3d`
+"""
 
 import jax
 import jax.numpy as jnp

@@ -5,6 +5,12 @@ Extended Summary
 Placeholder mirroring ``src/ptyrodactyl/jacobian/blocks.py`` per the
 tests-mirror-src layout; coverage to be added with the module's
 plan-driven rework.
+
+:see: :func:`ptyrodactyl.jacobian.block_jtj_operator`
+:see: :func:`ptyrodactyl.jacobian.block_vjp_operator`
+:see: :func:`ptyrodactyl.jacobian.compute_block_gradient`
+:see: :func:`ptyrodactyl.jacobian.cross_block_jtj_operator`
+:see: :func:`ptyrodactyl.jacobian.split_params`
 """
 
 import equinox as eqx
@@ -49,7 +55,10 @@ def _complex_linear_forward(params: PtychoParams):
 
 
 def test_block_jacobian_operator_rejects_invalid_block_name() -> None:
-    """Invalid block labels raise at operator construction."""
+    """Invalid block labels raise at operator construction.
+
+    :see: :func:`ptyrodactyl.jacobian.block_jacobian_operator`
+    """
     with pytest.raises(ValueError, match="not a valid OptimizableBlock"):
         block_jacobian_operator(
             _tiny_forward,
@@ -59,7 +68,10 @@ def test_block_jacobian_operator_rejects_invalid_block_name() -> None:
 
 
 def test_block_gauss_newton_step_updates_complex_exit_wave() -> None:
-    """A block GN step reduces residuals along both complex components."""
+    """A block GN step reduces residuals along both complex components.
+
+    :see: :func:`ptyrodactyl.jacobian.block_gauss_newton_step`
+    """
     params = eqx.tree_at(
         lambda p: p.exit_wave.wave,
         _tiny_ptycho_params(),
@@ -87,7 +99,10 @@ def test_block_gauss_newton_step_updates_complex_exit_wave() -> None:
 
 
 def test_alternating_block_solve_complex_exit_wave_jit() -> None:
-    """The complex exit-wave block remains a valid JIT/scan carry."""
+    """The complex exit-wave block remains a valid JIT/scan carry.
+
+    :see: :func:`ptyrodactyl.jacobian.alternating_block_solve`
+    """
     params = eqx.tree_at(
         lambda p: p.exit_wave.wave,
         _tiny_ptycho_params(),

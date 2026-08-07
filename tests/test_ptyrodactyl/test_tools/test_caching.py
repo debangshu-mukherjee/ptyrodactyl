@@ -1,3 +1,8 @@
+"""Test :mod:`ptyrodactyl.tools.caching`.
+
+:see: :func:`ptyrodactyl.tools.enable_compilation_cache`
+"""
+
 import os
 import subprocess
 import sys
@@ -33,6 +38,11 @@ def _run_script(script: str, env: dict[str, str] | None = None):
 
 
 def test_import_opt_in_configures_compilation_cache(tmp_path) -> None:
+    """Prove import opt-in configures a usable cache below the requested path.
+
+    Start a clean subprocess with a temporary cache root, run one JIT function,
+    and inspect the resolved JAX cache path and public helper result.
+    """
     env = _clean_env()
     env["PTYRODACTYL_CACHE_DIR"] = str(tmp_path)
     env["PTYRODACTYL_COMPILATION_CACHE"] = "1"
@@ -72,6 +82,12 @@ def test_import_opt_in_configures_compilation_cache(tmp_path) -> None:
 def test_enable_compilation_cache_returns_bool_and_is_idempotent(
     tmp_path,
 ) -> None:
+    """Prove repeated cache enablement returns true Boolean results.
+
+    Call the public helper twice with one temporary root in a clean subprocess.
+
+    :see: :func:`ptyrodactyl.tools.enable_compilation_cache`
+    """
     env = _clean_env()
     env["CACHE_UNDER_TEST"] = str(tmp_path)
 

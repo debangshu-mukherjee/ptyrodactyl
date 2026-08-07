@@ -10,11 +10,15 @@ exact identity :math:`\\sigma_H = 2 k_0 \\sigma`. These pins exist
 because a previous implementation used :math:`\\hbar^2` where
 :math:`h^2` is required, inflating sigma by :math:`(2\\pi)^2`; any
 reappearance of that class of bug must fail loudly here.
+
+:see: :func:`ptyrodactyl.tools.relativistic_mass`
+:see: :func:`ptyrodactyl.tools.relativistic_wavelength_ang`
 """
 
 import jax.numpy as jnp
 import pytest
 
+import ptyrodactyl.tools
 from ptyrodactyl.tools import (
     helmholtz_coupling,
     phase_interaction_parameter,
@@ -24,7 +28,10 @@ from ptyrodactyl.types import C_LIGHT, E_CHARGE, M_E
 
 
 class TestPhaseInteractionParameter:
-    """Pins sigma = 2*pi*m*e*lambda/h**2 in rad/(V·Angstrom)."""
+    """Pins sigma = 2*pi*m*e*lambda/h**2 in rad/(V·Angstrom).
+
+    :see: :func:`ptyrodactyl.tools.phase_interaction_parameter`
+    """
 
     @pytest.mark.parametrize(
         ("voltage_kv", "expected"),
@@ -37,6 +44,10 @@ class TestPhaseInteractionParameter:
     def test_reference_values(
         self, voltage_kv: float, expected: float
     ) -> None:
+        """Match published sigma in rad/(V Angstrom) within 1e-4 relative.
+
+        Compare each parameterized voltage with its tabulated value.
+        """
         sigma = phase_interaction_parameter(voltage_kv)
         assert sigma == pytest.approx(expected, rel=1e-4)
 
@@ -66,18 +77,26 @@ class TestPhaseInteractionParameter:
         )
 
     def test_zero_dim_float64(self) -> None:
+        """Prove sigma at 100 kV is rank-zero float64 by shape and dtype."""
         sigma = phase_interaction_parameter(100.0)
         assert sigma.shape == ()
         assert sigma.dtype == jnp.float64
 
     def test_monotonically_decreasing_in_voltage(self) -> None:
+        """Prove sigma decreases from 60 to 300 kV.
+
+        Require every adjacent sampled-voltage difference to be negative.
+        """
         voltages = jnp.asarray([60.0, 100.0, 200.0, 300.0])
         sigmas = jnp.stack([phase_interaction_parameter(v) for v in voltages])
         assert bool(jnp.all(jnp.diff(sigmas) < 0.0))
 
 
 class TestHelmholtzCoupling:
-    """Pins sigma_H = 2*m*e/hbar**2 in 1/(V·Angstrom^2)."""
+    """Pins sigma_H = 2*m*e/hbar**2 in 1/(V·Angstrom^2).
+
+    :see: :func:`ptyrodactyl.tools.helmholtz_coupling`
+    """
 
     @pytest.mark.parametrize(
         ("voltage_kv", "expected"),
@@ -89,6 +108,10 @@ class TestHelmholtzCoupling:
     def test_reference_values(
         self, voltage_kv: float, expected: float
     ) -> None:
+        """Match sigma_H in 1/(V Angstrom^2) within 1e-4 relative.
+
+        Compare each parameterized voltage with its tabulated value.
+        """
         sigma_h = helmholtz_coupling(voltage_kv)
         assert sigma_h == pytest.approx(expected, rel=1e-4)
 
@@ -111,6 +134,7 @@ class TestHelmholtzCoupling:
         )
 
     def test_zero_dim_float64(self) -> None:
+        """Prove sigma_H at 100 kV is rank-zero float64 by shape and dtype."""
         sigma_h = helmholtz_coupling(100.0)
         assert sigma_h.shape == ()
         assert sigma_h.dtype == jnp.float64
@@ -118,6 +142,4 @@ class TestHelmholtzCoupling:
 
 def test_buggy_name_removed() -> None:
     """The (2*pi)^2-inflated `interaction_parameter` must stay gone."""
-    import ptyrodactyl.tools as tools
-
-    assert not hasattr(tools, "interaction_parameter")
+    assert not hasattr(ptyrodactyl.tools, "interaction_parameter")

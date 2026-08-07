@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+- Retained the Gauss-Newton and Levenberg-Marquardt updates that first cross
+  their convergence tolerances, then froze parameters, solver scalars, and
+  iteration counts on subsequent scan steps.
+- Added validated `create_fisher_state`, `create_cg_state`, `create_gn_state`,
+  `create_lm_state`, and `create_lanczos_state` factories to the canonical
+  `ptyrodactyl.types` surface.
+- Routed conjugate-gradient, Gauss-Newton, Levenberg-Marquardt, and Lanczos
+  solver states through their factories without changing valid-path values,
+  dtypes, or PyTree structure.
+- Exported `cbed_amplitude_from_atoms` and `cbed_image_from_atoms` from their
+  owning `ptyrodactyl.multislice` package surface.
+- Exported the existing `OPTIMIZERS` registry from its owning
+  `ptyrodactyl.invert` package surface.
+- Removed the stray `distributions` entry from `ptyrodactyl.types.__all__`;
+  shared distribution symbols remain available from `ptyrodactyl.types`.
+
 ## Plan 06 — Lobato IAM and volumetric potential
 
 - Made Lobato--Van Dyck the default independent-atom form factor and projected

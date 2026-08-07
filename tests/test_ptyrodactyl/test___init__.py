@@ -35,6 +35,7 @@ def _run_script(script: str, env: dict[str, str] | None = None):
 
 
 def test_double_import_reload_is_safe() -> None:
+    """Prove a clean subprocess can import and reload the package once."""
     result = _run_script(
         """
         import importlib
@@ -49,6 +50,10 @@ def test_double_import_reload_is_safe() -> None:
 
 
 def test_xla_flags_are_merged_with_existing_operator_flags() -> None:
+    """Prove CPU defaults preserve an operator-supplied XLA flag.
+
+    Inspect the merged ``XLA_FLAGS`` value in a clean subprocess.
+    """
     env = _clean_env()
     custom_flag = "--xla_force_host_platform_device_count=2"
     env["XLA_FLAGS"] = custom_flag
@@ -72,12 +77,22 @@ def test_xla_flags_are_merged_with_existing_operator_flags() -> None:
 def test_init_distributed_returns_false_without_env_opt_in(
     monkeypatch,
 ) -> None:
+    """Prove distributed setup returns false without its opt-in variable.
+
+    Remove the variable with ``monkeypatch`` before calling the public helper.
+
+    :see: :func:`ptyrodactyl.init_distributed`
+    """
     monkeypatch.delenv("PTYRODACTYL_DISTRIBUTED", raising=False)
 
     assert ptyrodactyl.init_distributed() is False
 
 
 def test_distributed_init_warning_does_not_crash_import() -> None:
+    """Prove a forced distributed failure warns without breaking import.
+
+    Replace JAX setup in a subprocess and inspect its warning and exit.
+    """
     env = _clean_env()
     env["PTYRODACTYL_COORDINATOR_ADDRESS"] = "127.0.0.1:1"
     env["PTYRODACTYL_DISTRIBUTED"] = "1"
@@ -112,6 +127,10 @@ def test_distributed_init_warning_does_not_crash_import() -> None:
 
 
 def test_runtime_check_toggle_sets_eqx_on_error_and_disables_raise() -> None:
+    """Prove the runtime-check opt-out permits a negative calibration.
+
+    Compare subprocess exits and errors with runtime checks enabled and off.
+    """
     script = """
         import os
 
@@ -157,4 +176,8 @@ def test_runtime_check_toggle_sets_eqx_on_error_and_disables_raise() -> None:
 
 
 def test_init_distributed_is_public() -> None:
+    """Prove distributed setup is a top-level public export.
+
+    Inspect membership in the package's literal ``__all__`` list.
+    """
     assert "init_distributed" in ptyrodactyl.__all__

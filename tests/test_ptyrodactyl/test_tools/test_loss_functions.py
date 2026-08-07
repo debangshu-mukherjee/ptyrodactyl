@@ -1,4 +1,7 @@
-"""Tests for :mod:`ptyrodactyl.tools.loss_functions`."""
+"""Tests for :mod:`ptyrodactyl.tools.loss_functions`.
+
+:see: :func:`ptyrodactyl.tools.create_loss_function`
+"""
 
 import jax
 import jax.numpy as jnp

@@ -9,9 +9,9 @@ exports, and Equinox PyTree round-tripping.
 
 Notes
 -----
-The gradient test is the TC5 gate: normalization must use
-``jax.lax.cond`` rather than data-dependent Python control flow so
-``jax.grad`` can pass through positive weights.
+The gradient test requires normalization to use ``jax.lax.cond`` rather than
+data-dependent Python control flow. This design lets ``jax.grad`` pass through
+positive weights.
 """
 
 import chex
@@ -34,7 +34,6 @@ from ptyrodactyl.types.distributions import _normalize_probability_weights
 class TestDistributionFactories:
     """Verify distribution factories and constants.
 
-    :see: :mod:`ptyrodactyl.types.distributions`
 
     Extended Summary
     ----------------
@@ -42,6 +41,13 @@ class TestDistributionFactories:
     ``ValueError``, validate weight data with ``eqx.error_if``, normalize
     differentiably, and preserve static metadata across PyTree
     flatten/unflatten.
+
+    :see: :class:`ptyrodactyl.types.Distribution`
+    :see: :class:`ptyrodactyl.types.ReductionMode`
+    :see: :func:`ptyrodactyl.types.create_distribution`
+    :see: :func:`ptyrodactyl.types.create_trivial_distribution`
+    :see: :obj:`ptyrodactyl.types.TRIVIAL_DISTRIBUTION`
+    :see: :obj:`ptyrodactyl.types.TRIVIAL`
     """
 
     def test_create_distribution_rejects_nonmatrix_samples(self) -> None:
@@ -100,7 +106,7 @@ class TestDistributionFactories:
         ----------------
         Positive weights flow through the normalizer and into a scalar
         objective. The resulting gradient must be finite, verifying the
-        differentiability gate for the ``jax.lax.cond`` implementation.
+        traced differentiability of the ``jax.lax.cond`` implementation.
         """
 
         def objective(weights: jax.Array) -> jax.Array:

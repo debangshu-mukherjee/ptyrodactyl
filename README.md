@@ -1,21 +1,42 @@
-[![PyPI Downloads](https://static.pepy.tech/badge/ptyrodactyl)](https://pepy.tech/projects/ptyrodactyl)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyPI version](https://badge.fury.io/py/ptyrodactyl.svg)](https://badge.fury.io/py/ptyrodactyl)
 [![Documentation Status](https://readthedocs.org/projects/ptyrodactyl/badge/?version=latest)](https://ptyrodactyl.readthedocs.io/en/latest/?badge=latest)
+[![Tests](https://github.com/debangshu-mukherjee/ptyrodactyl/actions/workflows/tests.yml/badge.svg)](https://github.com/debangshu-mukherjee/ptyrodactyl/actions/workflows/tests.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://github.com/debangshu-mukherjee/ptyrodactyl/blob/main/LICENSE.md)
 [![DOI](https://zenodo.org/badge/905915185.svg)](https://doi.org/10.5281/zenodo.14861992)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![codecov](https://codecov.io/gh/debangshu-mukherjee/ptyrodactyl/branch/main/graph/badge.svg)](https://codecov.io/gh/debangshu-mukherjee/ptyrodactyl)
-[![Tests](https://github.com/debangshu-mukherjee/ptyrodactyl/workflows/Tests/badge.svg)](https://github.com/debangshu-mukherjee/ptyrodactyl/actions)
 
-# Ptychography through Differentiable Programming
+# ptyrodactyl
 
-The aim of this project is to write the _forward_ problem: aka writing the microscope data generation, both for electron and optical microscopes in [JAX](https://github.com/google/jax) so that it's end to end differentiable and using this differentiability to run modern optimizers such as [Adam](
-https://doi.org/10.48550/arXiv.1412.6980
-) and [Adagrad](https://arxiv.org/abs/2003.02395) to solve for the inverse problem - which is ptychography in our case.
+Ptyrodactyl composes differentiable electron-scattering forward models in
+[JAX](https://github.com/jax-ml/jax). It keeps physical reductions explicit so
+inverse methods can optimize declared microscope and specimen parameters.
 
-All the work here is in Python, performed on a x64 based processor workstation, running Ubuntu Linux 22.04. However, none of the packages here have Linux as a dependency, so this should run in Windows/Mac environments too -- just the path commands may be a bit different.
+The package supports Python 3.12 through 3.14. CPU execution is the reference
+development path. A CUDA-capable GPU is optional.
 
-This will install the package as `ptyrodactyl`, which is the package that all the codes are.
+## Installation
 
+Install the published package from PyPI:
 
-The codes themselves are in the _src_ directory, following the modern toml convention as the _ptyrodactyl_ folder.
+```bash
+python -m pip install ptyrodactyl
+```
+
+For development, clone the repository and synchronize the locked environment:
+
+```bash
+git clone https://github.com/debangshu-mukherjee/ptyrodactyl.git
+cd ptyrodactyl
+uv sync --extra dev
+```
+
+Use `uv sync --extra dev_cuda` only on a supported Linux CUDA system.
+
+## Documentation and contributions
+
+Read the [documentation](https://ptyrodactyl.readthedocs.io/) for package
+organization, API details, and tutorials. Read
+[CONTRIBUTING.md](https://github.com/debangshu-mukherjee/ptyrodactyl/blob/main/CONTRIBUTING.md)
+before changing code, tests, documentation, or packaging.
+
+The project uses the MIT License. See
+[LICENSE.md](https://github.com/debangshu-mukherjee/ptyrodactyl/blob/main/LICENSE.md).

@@ -21,8 +21,6 @@ from absl.testing import parameterized
 from beartype import beartype
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-from ptyrodactyl.types import MOTT_BETHE_VOLT_ANGSTROM_SQ
-
 from ptyrodactyl.bloch.bloch_forward import (
     bloch_beam_amplitudes,
     bloch_thickness_series,
@@ -33,6 +31,7 @@ from ptyrodactyl.bloch.bloch_forward import (
     structure_matrix,
     two_beam_pendellosung,
 )
+from ptyrodactyl.types import MOTT_BETHE_VOLT_ANGSTROM_SQ
 
 jax.config.update("jax_enable_x64", True)
 
@@ -97,7 +96,7 @@ class TestExcitationErrors(chex.TestCase):
     Covers the Ewald-sphere excitation-error formula for multiple reflections,
     including the origin beam whose excitation error must be exactly zero.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.excitation_errors`
+    :see: :func:`ptyrodactyl.bloch.excitation_errors`
     """
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -151,7 +150,7 @@ class TestStructureMatrix(chex.TestCase):
     off-diagonal Fourier coupling scaled by ``lambda / (4 pi)``, and Hermitian
     symmetry for Hermitian Fourier inputs.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.structure_matrix`
+    :see: :func:`ptyrodactyl.bloch.structure_matrix`
     """
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -208,7 +207,7 @@ class TestScatteringMatrix(chex.TestCase):
     Pendellosung intensity and verifies finite differentiation at a degenerate
     zone-axis-like matrix.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.scattering_matrix`
+    :see: :func:`ptyrodactyl.bloch.scattering_matrix`
     """
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -356,7 +355,7 @@ class TestBlochBeamAmplitudes(chex.TestCase):
     Covers single-thickness beam amplitudes as scattering-matrix columns and
     verifies that gradients flow from diffracted intensity to Fourier coupling.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.bloch_beam_amplitudes`
+    :see: :func:`ptyrodactyl.bloch.bloch_beam_amplitudes`
     """
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -474,7 +473,7 @@ class TestBlochThicknessSeries(chex.TestCase):
     Covers uniform-thickness propagation by ``lax.scan`` against direct matrix
     exponentials at selected accumulated thicknesses.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.bloch_thickness_series`
+    :see: :func:`ptyrodactyl.bloch.bloch_thickness_series`
     """
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -571,7 +570,7 @@ class TestExtinctionDistance(chex.TestCase):
     Covers the two-beam extinction-distance formula and positivity for a
     silicon 220-like Fourier coefficient at 100 kV.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.extinction_distance`
+    :see: :func:`ptyrodactyl.bloch.extinction_distance`
     """
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -613,7 +612,7 @@ class TestTwoBeamPendellosung(chex.TestCase):
     follows ``sin^2(pi t / xi_g)`` and reaches unity at half an extinction
     distance.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.two_beam_pendellosung`
+    :see: :func:`ptyrodactyl.bloch.two_beam_pendellosung`
     """
 
     @chex.variants(with_jit=True, without_jit=True)
@@ -660,7 +659,7 @@ class TestFourierPotentialFromGrid(chex.TestCase):
     Covers normalized DFT sampling of requested integer Miller/voxel indices,
     including negative-index wrapping through the supplied grid shape.
 
-    :see: :func:`~ptyrodactyl.bloch.bloch_forward.fourier_potential_from_grid`
+    :see: :func:`ptyrodactyl.bloch.fourier_potential_from_grid`
     """
 
     @chex.variants(with_jit=True, without_jit=True)

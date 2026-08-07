@@ -1,4 +1,7 @@
-"""Tests for :mod:`ptyrodactyl.invert.phase_recon`."""
+"""Tests for :mod:`ptyrodactyl.invert.phase_recon`.
+
+:see: :obj:`ptyrodactyl.invert.OPTIMIZERS`
+"""
 # ruff: noqa: E402, I001
 
 import numpy as np
@@ -56,7 +59,10 @@ def _assert_scalar_equal(actual, expected) -> None:
 
 
 def test_single_slice_ptychography_runs_and_regresses() -> None:
-    """The base reconstructor runs and returns fixed-seed values."""
+    """The base reconstructor runs and returns fixed-seed values.
+
+    :see: :func:`ptyrodactyl.invert.single_slice_ptychography`
+    """
     experimental, potential, beam, *_ = _tiny_recon_inputs()
 
     output = single_slice_ptychography(
@@ -80,7 +86,10 @@ def test_single_slice_ptychography_runs_and_regresses() -> None:
 
 
 def test_single_slice_poscorrected_regresses() -> None:
-    """Position-corrected single-slice reconstruction is fixed-seed stable."""
+    """Position-corrected single-slice reconstruction is fixed-seed stable.
+
+    :see: :func:`ptyrodactyl.invert.single_slice_poscorrected`
+    """
     experimental, potential, beam, *_ = _tiny_recon_inputs()
 
     output = single_slice_poscorrected(
@@ -104,7 +113,10 @@ def test_single_slice_poscorrected_regresses() -> None:
 
 
 def test_single_slice_multi_modal_regresses() -> None:
-    """Multi-modal single-slice reconstruction is fixed-seed stable."""
+    """Multi-modal single-slice reconstruction is fixed-seed stable.
+
+    :see: :func:`ptyrodactyl.invert.single_slice_multi_modal`
+    """
     experimental, _, _, potential_array, _, modes = _tiny_recon_inputs()
 
     output = single_slice_multi_modal(
@@ -119,10 +131,8 @@ def test_single_slice_multi_modal_regresses() -> None:
 
     assert output[3].shape == (4, 4, 2)
     assert output[4].shape == (4, 4, 2, 2)
-    # Re-pinned at Plan-03 IM2+IM3: stem_4d now honors the explicit
-    # ProbeModes.weights ([0.7, 0.3] here) that the deleted `cbed` kernel
-    # silently ignored — the forward physics for manually built non-uniform
-    # weights changed by design (CHANGELOG: cbed -> cbed_amplitude/cbed_image).
+    # The explicit ProbeModes weights ([0.7, 0.3] here) determine this pinned
+    # result. The obsolete CBED kernel silently ignored nonuniform weights.
     _assert_scalar_equal(output[0][0, 0], 0.02866311714678175 + 0j)
     _assert_scalar_equal(
         output[1].modes[0, 0, 0],
@@ -132,7 +142,10 @@ def test_single_slice_multi_modal_regresses() -> None:
 
 
 def test_multi_slice_multi_modal_regresses() -> None:
-    """Multi-slice multi-modal reconstruction is fixed-seed stable."""
+    """Multi-slice multi-modal reconstruction is fixed-seed stable.
+
+    :see: :func:`ptyrodactyl.invert.multi_slice_multi_modal`
+    """
     experimental, _, _, potential_array, beam_array, _ = _tiny_recon_inputs()
 
     output = multi_slice_multi_modal(

@@ -8,10 +8,12 @@ the expected dynamic PyTree leaf behavior. The factory tests pin the
 field assembly contract while checking the new two-tier validation
 behavior.
 
+:see: :class:`ptyrodactyl.types.OptimizableBlock`
+
 Notes
 -----
-The scan tests cover the TC4 gate: ``GNState`` and ``CGState`` must be
-valid traced carries under ``jax.lax.scan`` and ``jax.jit``.
+The scan tests require ``GNState`` and ``CGState`` to remain valid traced
+carries under ``jax.lax.scan`` and ``jax.jit``.
 """
 
 import chex
@@ -23,17 +25,22 @@ from beartype.typing import Any
 from jaxtyping import Array, Float
 
 from ptyrodactyl.types import (
-    CGState,
-    GNState,
-    LMState,
     AberrationParams,
+    CGState,
     ExitWaveParams,
     FisherState,
     GeometryParams,
+    GNState,
     LanczosState,
+    LMState,
     PositionParams,
     ProbeModeParams,
     PtychoParams,
+    create_cg_state,
+    create_fisher_state,
+    create_gn_state,
+    create_lanczos_state,
+    create_lm_state,
     create_ptycho_params,
 )
 
@@ -55,10 +62,9 @@ def _ptycho_inputs(rng_key: jax.Array) -> dict[str, Any]:
         rng_key,
         4,
     )
-    exit_wave: Array = (
-        jax.random.normal(wave_real_key, (4, 5), dtype=jnp.float64)
-        + 1j * jax.random.normal(wave_imag_key, (4, 5), dtype=jnp.float64)
-    )
+    exit_wave: Array = jax.random.normal(
+        wave_real_key, (4, 5), dtype=jnp.float64
+    ) + 1j * jax.random.normal(wave_imag_key, (4, 5), dtype=jnp.float64)
     inputs: dict[str, Any] = {
         "exit_wave": exit_wave,
         "zernike_coeffs": jnp.array([0.0, 0.1, -0.2], dtype=jnp.float64),
@@ -162,7 +168,9 @@ def _carrier_case(
     zeros: Float[Array, " n"] = jnp.zeros(4, dtype=jnp.float64)
     alpha_beta: Float[Array, " k"] = jnp.zeros(3, dtype=jnp.float64)
 
-    cases: dict[str, tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]]
+    cases: dict[
+        str, tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]
+    ]
     cases = {
         "exit_wave": (
             ExitWaveParams,
@@ -297,9 +305,9 @@ def _carrier_case(
             5,
         ),
     }
-    case: tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int] = cases[
-        case_name
-    ]
+    case: tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int] = (
+        cases[case_name]
+    )
     return case
 
 
@@ -332,13 +340,24 @@ def _assert_carrier_round_trip(
 class TestJacobianCarriers:
     """Verify jacobian carrier construction and PyTree behavior.
 
-    :see: :mod:`ptyrodactyl.types.jacobian_types`
 
     Extended Summary
     ----------------
     This suite covers all eleven public carriers. Each case is
     constructed once positionally and once with keywords, then checked for
     Equinox inheritance and dynamic leaf round-tripping.
+
+    :see: :class:`ptyrodactyl.types.AberrationParams`
+    :see: :class:`ptyrodactyl.types.CGState`
+    :see: :class:`ptyrodactyl.types.ExitWaveParams`
+    :see: :class:`ptyrodactyl.types.FisherState`
+    :see: :class:`ptyrodactyl.types.GeometryParams`
+    :see: :class:`ptyrodactyl.types.GNState`
+    :see: :class:`ptyrodactyl.types.LanczosState`
+    :see: :class:`ptyrodactyl.types.LMState`
+    :see: :class:`ptyrodactyl.types.PositionParams`
+    :see: :class:`ptyrodactyl.types.ProbeModeParams`
+    :see: :class:`ptyrodactyl.types.PtychoParams`
     """
 
     @pytest.mark.parametrize(
@@ -397,13 +416,14 @@ class TestJacobianCarriers:
 class TestCreatePtychoParams:
     """Verify the relocated ptychography factory.
 
-    :see: :func:`ptyrodactyl.types.create_ptycho_params`
 
     Extended Summary
     ----------------
     This suite checks valid-output field assembly and verifies that
     structural errors are raised as ``ValueError`` while data-dependent
     violations raise through ``eqx.error_if``.
+
+    :see: :func:`ptyrodactyl.types.create_ptycho_params`
     """
 
     def test_assembles_parameter_blocks(
@@ -482,6 +502,237 @@ class TestCreatePtychoParams:
             jax.block_until_ready(params.probe_modes.mode_weights)
 
 
+class TestCreateSolverStates:
+    """Verify validated solver-state factory behavior.
+
+    :see: :func:`ptyrodactyl.types.create_cg_state`
+    :see: :func:`ptyrodactyl.types.create_fisher_state`
+    :see: :func:`ptyrodactyl.types.create_gn_state`
+    :see: :func:`ptyrodactyl.types.create_lanczos_state`
+    :see: :func:`ptyrodactyl.types.create_lm_state`
+
+    Extended Summary
+    ----------------
+    These tests compare each valid factory result with direct carrier
+    construction, exercise JIT compilation, and force traced value errors.
+    """
+
+    def test_valid_factories_preserve_carrier_leaves_and_dtypes(self) -> None:
+        """Match direct construction for valid solver-state inputs."""
+        vector: Float[Array, " n"] = jnp.arange(4, dtype=jnp.float64)
+        zeros: Float[Array, " n"] = jnp.zeros_like(vector)
+        matrix: Float[Array, "n n"] = jnp.eye(3, dtype=jnp.float64)
+        coefficients: Float[Array, " k"] = jnp.zeros(3, dtype=jnp.float64)
+        iteration = jnp.array(0, dtype=jnp.int32)
+        residual_norm = jnp.array(1.0, dtype=jnp.float64)
+        params = {"vector": vector}
+
+        actual_states: tuple[eqx.Module, ...] = (
+            create_fisher_state(matrix, iteration),
+            create_cg_state(
+                zeros,
+                vector,
+                vector,
+                residual_norm,
+                iteration,
+            ),
+            create_gn_state(params, residual_norm, iteration),
+            create_lm_state(
+                params,
+                residual_norm,
+                jnp.array(0.1, dtype=jnp.float64),
+                iteration,
+            ),
+            create_lanczos_state(
+                zeros,
+                vector,
+                coefficients,
+                coefficients,
+                iteration,
+            ),
+        )
+        expected_states: tuple[eqx.Module, ...] = (
+            FisherState(matrix, iteration),
+            CGState(zeros, vector, vector, residual_norm, iteration),
+            GNState(params, residual_norm, iteration),
+            LMState(
+                params,
+                residual_norm,
+                jnp.array(0.1, dtype=jnp.float64),
+                iteration,
+            ),
+            LanczosState(
+                zeros,
+                vector,
+                coefficients,
+                coefficients,
+                iteration,
+            ),
+        )
+
+        chex.assert_trees_all_equal(actual_states, expected_states)
+
+    def test_valid_factories_compile_under_jit(self) -> None:
+        """Compile all five factories without changing their valid leaves."""
+        vector: Float[Array, " n"] = jnp.arange(4, dtype=jnp.float64)
+        zeros: Float[Array, " n"] = jnp.zeros_like(vector)
+        matrix: Float[Array, "n n"] = jnp.eye(3, dtype=jnp.float64)
+        coefficients: Float[Array, " k"] = jnp.zeros(3, dtype=jnp.float64)
+        iteration = jnp.array(0, dtype=jnp.int32)
+        residual_norm = jnp.array(1.0, dtype=jnp.float64)
+        params = {"vector": vector}
+
+        states: tuple[eqx.Module, ...] = (
+            jax.jit(create_fisher_state)(matrix, iteration),
+            jax.jit(create_cg_state)(
+                zeros,
+                vector,
+                vector,
+                residual_norm,
+                iteration,
+            ),
+            jax.jit(create_gn_state)(params, residual_norm, iteration),
+            jax.jit(create_lm_state)(
+                params,
+                residual_norm,
+                jnp.array(0.1, dtype=jnp.float64),
+                iteration,
+            ),
+            jax.jit(create_lanczos_state)(
+                zeros,
+                vector,
+                coefficients,
+                coefficients,
+                iteration,
+            ),
+        )
+        ready_states: tuple[eqx.Module, ...] = jax.block_until_ready(states)
+
+        chex.assert_tree_all_finite(ready_states)
+
+    def test_factories_reject_invalid_static_structure(self) -> None:
+        """Raise ValueError for incompatible static state structures."""
+        vector: Float[Array, " n"] = jnp.ones(3, dtype=jnp.float64)
+        iteration = jnp.array(0, dtype=jnp.int32)
+
+        with pytest.raises(ValueError, match="square matrix"):
+            create_fisher_state(vector, iteration)
+        with pytest.raises(ValueError, match="PyTree structures"):
+            create_cg_state(
+                {"x": vector},
+                (vector,),
+                {"x": vector},
+                jnp.array(1.0),
+                iteration,
+            )
+        with pytest.raises(ValueError, match="matching shapes"):
+            create_lanczos_state(
+                vector,
+                jnp.ones(4),
+                vector,
+                vector,
+                iteration,
+            )
+
+    def test_factories_reject_invalid_traced_values_eagerly(self) -> None:
+        """Reject non-finite and out-of-bound eager scalar state values."""
+        vector: Float[Array, " n"] = jnp.ones(3, dtype=jnp.float64)
+        zeros: Float[Array, " n"] = jnp.zeros_like(vector)
+        iteration = jnp.array(0, dtype=jnp.int32)
+        runtime_errors = (
+            eqx.EquinoxRuntimeError,
+            jax.errors.JaxRuntimeError,
+            ValueError,
+        )
+
+        with pytest.raises(runtime_errors, match="non-finite"):
+            state = create_fisher_state(
+                jnp.array([[jnp.nan]], dtype=jnp.float64),
+                iteration,
+            )
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="non-negative"):
+            state = create_cg_state(
+                zeros,
+                vector,
+                vector,
+                jnp.array(-1.0),
+                iteration,
+            )
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="non-negative"):
+            state = create_gn_state(vector, jnp.array(-1.0), iteration)
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="positive"):
+            state = create_lm_state(
+                vector,
+                jnp.array(1.0),
+                jnp.array(0.0),
+                iteration,
+            )
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="non-negative"):
+            state = create_lanczos_state(
+                zeros,
+                vector,
+                zeros,
+                -vector,
+                iteration,
+            )
+            jax.block_until_ready(state)
+
+    def test_factories_reject_invalid_traced_values_under_jit(self) -> None:
+        """Reject invalid scalar state values from compiled factories."""
+        vector: Float[Array, " n"] = jnp.ones(3, dtype=jnp.float64)
+        zeros: Float[Array, " n"] = jnp.zeros_like(vector)
+        iteration = jnp.array(0, dtype=jnp.int32)
+        runtime_errors = (
+            eqx.EquinoxRuntimeError,
+            jax.errors.JaxRuntimeError,
+            ValueError,
+        )
+
+        with pytest.raises(runtime_errors, match="non-finite"):
+            state = jax.jit(create_fisher_state)(
+                jnp.array([[jnp.nan]], dtype=jnp.float64),
+                iteration,
+            )
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="non-negative"):
+            state = jax.jit(create_cg_state)(
+                zeros,
+                vector,
+                vector,
+                jnp.array(-1.0),
+                iteration,
+            )
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="non-negative"):
+            state = jax.jit(create_gn_state)(
+                vector,
+                jnp.array(-1.0),
+                iteration,
+            )
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="positive"):
+            state = jax.jit(create_lm_state)(
+                vector,
+                jnp.array(1.0),
+                jnp.array(0.0),
+                iteration,
+            )
+            jax.block_until_ready(state)
+        with pytest.raises(runtime_errors, match="coefficient length"):
+            state = jax.jit(create_lanczos_state)(
+                zeros,
+                vector,
+                zeros,
+                zeros,
+                jnp.array(4, dtype=jnp.int32),
+            )
+            jax.block_until_ready(state)
+
+
 class TestJacobianStateScans:
     """Verify solver states as traced scan carries.
 
@@ -490,8 +741,8 @@ class TestJacobianStateScans:
 
     Extended Summary
     ----------------
-    These tests pin the TC4 behavior that ``GNState`` and ``CGState`` are
-    valid dynamic PyTree carries for ``jax.lax.scan`` under ``jax.jit``.
+    These tests prove that ``GNState`` and ``CGState`` are valid dynamic
+    PyTree carries for ``jax.lax.scan`` under ``jax.jit``.
     """
 
     def test_gn_state_scan_traces_and_runs(self) -> None:
@@ -566,7 +817,9 @@ class TestJacobianStateScans:
         fields to catch static-field regressions.
         """
 
-        def run_scan(initial_state: CGState) -> tuple[CGState, Float[Array, " steps"]]:
+        def run_scan(
+            initial_state: CGState,
+        ) -> tuple[CGState, Float[Array, " steps"]]:
             """Run a fixed-length CGState scan."""
 
             def step(

@@ -1,4 +1,8 @@
-"""Tests for :mod:`ptyrodactyl.multislice.producers`."""
+"""Tests for :mod:`ptyrodactyl.multislice.producers`.
+
+:see: :func:`ptyrodactyl.multislice.coherence_to_distribution`
+:see: :func:`ptyrodactyl.multislice.position_jitter_to_distribution`
+"""
 
 import chex
 import jax
@@ -84,6 +88,11 @@ def _cbed_loss_for_axes(axes, beam):
 
 
 def test_zero_width_axes_are_noop_against_plain_cbed_image():
+    """Prove zero-width explicit axes preserve the plain CBED intensity.
+
+    Compare mode, zero-Angstrom jitter, and zero-eV/mrad coherence reduction
+    against :func:`cbed_image` at ``rtol=atol=1e-10``.
+    """
     pot_slices = _tiny_potential()
     beam = _probe_modes(mode_count=2)
     mode_axis = probe_modes_to_distribution(beam)
@@ -106,6 +115,11 @@ def test_zero_width_axes_are_noop_against_plain_cbed_image():
 
 
 def test_cursor_walk_two_by_two_columns_arrive_in_tuple_order():
+    """Prove axis columns reach position and coherence updates in tuple order.
+
+    Select one sample per axis with zero-one weights and compare the encoded
+    two-by-two intensity exactly against its expected complex field.
+    """
     position_axis = create_distribution(
         samples=jnp.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=jnp.float64),
         weights=jnp.asarray([0.0, 1.0], dtype=jnp.float64),
@@ -152,6 +166,10 @@ def test_cursor_walk_two_by_two_columns_arrive_in_tuple_order():
 
 
 def test_jitter_sigma_zero_and_near_zero_gradients_are_finite():
+    """Prove CBED jitter gradients stay finite at 0 and 1e-30 Angstroms.
+
+    Differentiate the summed intensity through a two-node jitter distribution.
+    """
     beam = _probe_modes()
 
     def objective(sigma_ang):
@@ -169,6 +187,11 @@ def test_jitter_sigma_zero_and_near_zero_gradients_are_finite():
 
 
 def test_coherence_zero_and_near_zero_gradients_are_finite():
+    """Prove coherence gradients stay finite at zero and near-zero widths.
+
+    Differentiate summed CBED intensity at 0 and 1e-30 eV energy spread and
+    at 0 and 1e-30 mrad angular divergence using two-node distributions.
+    """
     beam = _probe_modes()
 
     def energy_objective(energy_spread_ev):
@@ -201,6 +224,12 @@ def test_coherence_zero_and_near_zero_gradients_are_finite():
 
 
 def test_real_tiny_cbed_bind_has_finite_end_to_end_gradients():
+    """Prove a bound CBED model has finite physical and probe gradients.
+
+    Differentiate at 0.05-Angstrom jitter, 0.1-eV energy spread with
+    0.02-mrad divergence, and unit probe scale.
+    """
+
     def jitter_objective(sigma_ang):
         beam = _probe_modes()
         jitter = position_jitter_to_distribution(sigma_ang, 2)
@@ -235,6 +264,11 @@ def test_real_tiny_cbed_bind_has_finite_end_to_end_gradients():
 
 
 def test_nonzero_jitter_reduces_focused_probe_peak_intensity():
+    """Prove 0.35-Angstrom jitter lowers the focused probe peak.
+
+    Compare the maximum CBED intensity from a three-node jitter distribution
+    with the maximum from the zero-width single-node distribution.
+    """
     beam = _probe_modes()
     zero_jitter = position_jitter_to_distribution(0.0, 1)
     nonzero_jitter = position_jitter_to_distribution(0.35, 3)

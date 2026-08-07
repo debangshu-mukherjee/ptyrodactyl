@@ -20,7 +20,11 @@ from ptyrodactyl.born.green import (
 
 
 def test_green_helpers_tiny_grid_smoke() -> None:
-    """Exercise Green's-function helpers on a tiny grid."""
+    """Exercise Green's-function helpers on a tiny grid.
+
+    :see: :func:`ptyrodactyl.born.reciprocal_coords`
+    :see: :func:`ptyrodactyl.born.wavenumber_background`
+    """
     k_squared = jnp.ones((2, 2, 2))
     k0_squared = wavenumber_background(k_squared)
     scattering_potential = k_squared.astype(jnp.complex128) - k0_squared
@@ -36,7 +40,10 @@ def test_green_helpers_tiny_grid_smoke() -> None:
 
 
 def test_convergence_parameter_rejects_unit_safety_factor() -> None:
-    """Safety factor must be strictly above the convergence bound."""
+    """Safety factor must be strictly above the convergence bound.
+
+    :see: :func:`ptyrodactyl.born.convergence_parameter`
+    """
     with pytest.raises(
         ValueError,
         match="safety_factor must be greater than 1.0",
@@ -48,7 +55,10 @@ def test_convergence_parameter_rejects_unit_safety_factor() -> None:
 
 
 def test_green_function_fourier_rejects_nonfinite_k0_squared() -> None:
-    """Non-finite scalar Green inputs raise through eqx.error_if."""
+    """Non-finite scalar Green inputs raise through eqx.error_if.
+
+    :see: :func:`ptyrodactyl.born.green_function_fourier`
+    """
     with pytest.raises(Exception, match="k0_squared must be finite"):
         g0_tilde = green_function_fourier(
             (2, 2, 2),

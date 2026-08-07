@@ -83,7 +83,9 @@ def _carrier_case(
     converged: jax.Array = jnp.array(True, dtype=jnp.bool_)
     samples: jax.Array = jnp.arange(6, dtype=jnp.float64).reshape(3, 2)
 
-    cases: dict[str, tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]]
+    cases: dict[
+        str, tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]
+    ]
     cases = {
         "problem": (
             ReconProblem,
@@ -168,9 +170,9 @@ def _carrier_case(
             6,
         ),
     }
-    case: tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int] = cases[
-        case_name
-    ]
+    case: tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int] = (
+        cases[case_name]
+    )
     return case
 
 
@@ -195,7 +197,6 @@ def _assert_static_fields_excluded(instance: eqx.Module) -> None:
 class TestReconCarriers:
     """Verify reconstruction carrier construction and PyTree behavior.
 
-    :see: :mod:`ptyrodactyl.types.recon_types`
 
     Extended Summary
     ----------------
@@ -203,6 +204,11 @@ class TestReconCarriers:
     is constructed once positionally and once with keywords, then checked
     for Equinox inheritance, static-field exclusion, and dynamic leaf
     round-tripping.
+
+    :see: :class:`ptyrodactyl.types.LaplaceUncertainty`
+    :see: :class:`ptyrodactyl.types.PosteriorSamples`
+    :see: :class:`ptyrodactyl.types.ReconProblem`
+    :see: :class:`ptyrodactyl.types.ReconResult`
     """
 
     @pytest.mark.parametrize(
@@ -250,16 +256,17 @@ class TestReconCarriers:
 class TestCreateReconFactories:
     """Verify reconstruction factory validation.
 
-    :see: :func:`ptyrodactyl.types.create_recon_problem`
-    :see: :func:`ptyrodactyl.types.create_recon_result`
-    :see: :func:`ptyrodactyl.types.create_laplace_uncertainty`
-    :see: :func:`ptyrodactyl.types.create_posterior_samples`
 
     Extended Summary
     ----------------
     This suite covers structural failures reported as ``ValueError`` and
     representative data-dependent failures reported through
     ``eqx.error_if``.
+
+    :see: :func:`ptyrodactyl.types.create_laplace_uncertainty`
+    :see: :func:`ptyrodactyl.types.create_posterior_samples`
+    :see: :func:`ptyrodactyl.types.create_recon_problem`
+    :see: :func:`ptyrodactyl.types.create_recon_result`
     """
 
     def test_create_recon_problem_validates_callable(self) -> None:

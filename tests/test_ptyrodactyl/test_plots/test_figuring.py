@@ -1,4 +1,7 @@
-"""Tests for plotting and visualization helpers."""
+"""Tests for plotting and visualization helpers.
+
+:see: :func:`ptyrodactyl.plots.clip_cbed`
+"""
 # ruff: noqa: E402
 
 import unittest
@@ -18,7 +21,10 @@ from ptyrodactyl.plots import (
 
 
 class TestContrastStretch(chex.TestCase):
-    """Test suite for percentile contrast stretching."""
+    """Test suite for percentile contrast stretching.
+
+    :see: :func:`ptyrodactyl.plots.contrast_stretch`
+    """
 
     def test_contrast_stretch_2d_static_rank(self) -> None:
         """2D input returns a 2D image with fixed values."""
@@ -54,7 +60,10 @@ class TestContrastStretch(chex.TestCase):
 
 
 class TestCreatePhosphorColormap(chex.TestCase):
-    """Test suite for phosphor colormap construction."""
+    """Test suite for phosphor colormap construction.
+
+    :see: :func:`ptyrodactyl.plots.create_phosphor_colormap`
+    """
 
     def test_create_phosphor_colormap_returns_finite_rgba(self) -> None:
         """Default colormap returns finite 256-sample RGBA values."""

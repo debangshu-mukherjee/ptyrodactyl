@@ -1,8 +1,23 @@
 """Regression tests for the historical complex optimizer oracle.
 
-The hand-written optimizers are retained as a migration oracle until Plan 11
-replaces them. These tests pin their existing Plan-02 behavior; they do not
-promote that legacy implementation over the corrected Plan-11 formulation.
+The tests pin the retained complex-gradient convention against an immutable
+historical artifact. They do not promote that implementation as a new default.
+
+:see: :class:`ptyrodactyl.tools.LRSchedulerState`
+:see: :class:`ptyrodactyl.tools.Optimizer`
+:see: :class:`ptyrodactyl.tools.OptimizerState`
+:see: :func:`ptyrodactyl.tools.adagrad_update`
+:see: :func:`ptyrodactyl.tools.adam_update`
+:see: :func:`ptyrodactyl.tools.complex_adagrad`
+:see: :func:`ptyrodactyl.tools.complex_rmsprop`
+:see: :func:`ptyrodactyl.tools.create_cosine_scheduler`
+:see: :func:`ptyrodactyl.tools.create_step_scheduler`
+:see: :func:`ptyrodactyl.tools.create_warmup_cosine_scheduler`
+:see: :func:`ptyrodactyl.tools.init_adagrad`
+:see: :func:`ptyrodactyl.tools.init_adam`
+:see: :func:`ptyrodactyl.tools.init_rmsprop`
+:see: :func:`ptyrodactyl.tools.init_scheduler_state`
+:see: :func:`ptyrodactyl.tools.rmsprop_update`
 """
 
 from pathlib import Path
@@ -10,7 +25,8 @@ from pathlib import Path
 import chex
 import jax.numpy as jnp
 import numpy as np
-from jaxtyping import Array
+from jaxtyping import Array, Shaped
+from numpy.typing import NDArray
 
 from ptyrodactyl.tools.optimizers import complex_adam, wirtinger_grad
 
@@ -19,14 +35,17 @@ _ORACLE_PATH = (
 )
 
 
-def _load_oracle() -> dict[str, np.ndarray]:
+def _load_oracle() -> dict[str, Shaped[NDArray, "..."]]:
     """Load independent copies of every stored optimizer-oracle array."""
     with np.load(_ORACLE_PATH) as archive:
         oracle = {name: archive[name].copy() for name in archive.files}
     return oracle
 
 
-def _assert_bit_equal(actual: Array, expected: np.ndarray) -> None:
+def _assert_bit_equal(
+    actual: Array,
+    expected: Shaped[NDArray, "..."],
+) -> None:
     """Assert both tree equality and exact stored-array equality."""
     chex.assert_trees_all_close(
         actual,
@@ -38,7 +57,10 @@ def _assert_bit_equal(actual: Array, expected: np.ndarray) -> None:
 
 
 def test_wirtinger_grad_matches_known_complex_quadratic() -> None:
-    """Match the closed-form derivative of a real complex-domain objective."""
+    """Match the closed-form derivative of a real complex-domain objective.
+
+    :see: :func:`ptyrodactyl.tools.wirtinger_grad`
+    """
     oracle = _load_oracle()
     params = jnp.asarray(oracle["params0"])
 
@@ -53,8 +75,11 @@ def test_wirtinger_grad_matches_known_complex_quadratic() -> None:
     _assert_bit_equal(actual, expected)
 
 
-def test_complex_adam_two_step_matches_plan01_oracle() -> None:
-    """Replay the two default-parameter Adam steps captured before Plan 02."""
+def test_complex_adam_two_step_matches_historical_oracle() -> None:
+    """Replay two captured default-parameter Adam steps exactly.
+
+    :see: :func:`ptyrodactyl.tools.complex_adam`
+    """
     oracle = _load_oracle()
     params0 = jnp.asarray(oracle["params0"])
     grads = jnp.asarray(oracle["grads"])

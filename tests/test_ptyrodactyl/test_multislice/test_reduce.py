@@ -7,6 +7,9 @@ and incoherent cases, trivial identity behavior, gradients, JIT static
 branching, multi-axis cursor semantics, and single-axis agreement. The bound
 kernels here are intentionally toy closures, not multislice kernels, so the
 tests assert that the reducer imposes no kernel-family-specific contract.
+
+:see: :func:`ptyrodactyl.multislice.apply_distribution`
+:see: :func:`ptyrodactyl.multislice.apply_distributions`
 """
 
 import chex

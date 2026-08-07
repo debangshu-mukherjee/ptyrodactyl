@@ -7,6 +7,13 @@ Pins the weak-typing contract of the physical constants: each constant is a
 with lower-precision arrays does not promote them (the constants behave like
 Python scalars in dtype promotion). Also pins exact values and the
 ``__all__`` surface.
+
+:see: :obj:`ptyrodactyl.types.C_LIGHT`
+:see: :obj:`ptyrodactyl.types.E_CHARGE`
+:see: :obj:`ptyrodactyl.types.H_PLANCK`
+:see: :obj:`ptyrodactyl.types.M0C2_EV`
+:see: :obj:`ptyrodactyl.types.M_E`
+:see: :obj:`ptyrodactyl.types.MOTT_BETHE_VOLT_ANGSTROM_SQ`
 """
 
 import jax.numpy as jnp
@@ -19,8 +26,8 @@ from ptyrodactyl.types import (
     H_PLANCK,
     HBAR,
     M0C2_EV,
-    MOTT_BETHE_VOLT_ANGSTROM_SQ,
     M_E,
+    MOTT_BETHE_VOLT_ANGSTROM_SQ,
 )
 
 _ALL_CONSTANTS = {
@@ -38,7 +45,8 @@ _ALL_CONSTANTS = {
 class TestConstantsContract:
     """Validate dtype, weak typing, and values of every physical constant.
 
-    :see: :mod:`ptyrodactyl.types.constants`
+    :see: :obj:`ptyrodactyl.types.A_BOHR`
+    :see: :obj:`ptyrodactyl.types.HBAR`
     """
 
     @pytest.mark.parametrize("name", sorted(_ALL_CONSTANTS))

@@ -120,7 +120,7 @@ ignore-init-module = true
 quiet = true
 
 [tool.ruff]
-include = ["pyproject.toml", "src/**/*.py"]
+include = ["pyproject.toml", "src/**/*.py", "tests/**/*.py"]
 line-length = 79
 target-version = "py312"
 exclude = [

@@ -1,4 +1,8 @@
-"""Stage-0 tests for bundled atomic form-factor tables."""
+"""Test bundled atomic form-factor table provenance and loading.
+
+:see: :func:`ptyrodactyl.inout.kirkland_potentials`
+:see: :func:`ptyrodactyl.inout.lobato_potentials`
+"""
 
 import hashlib
 from importlib.resources import files
@@ -195,7 +199,7 @@ def test_tables_support_jit_indexing_and_coefficient_gradients() -> None:
 
 
 def test_xyz_module_no_longer_owns_form_factor_data() -> None:
-    """The Plan-06 hard move leaves no loader or table alias in XYZ."""
+    """XYZ exposes neither form-factor loaders nor cached table aliases."""
     assert not hasattr(xyz, "kirkland_potentials")
     assert not hasattr(xyz, "_KIRKLAND_POTENTIALS")
     assert "kirkland_potentials" not in xyz.__all__

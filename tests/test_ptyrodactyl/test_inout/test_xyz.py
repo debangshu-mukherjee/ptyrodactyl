@@ -20,7 +20,10 @@ from ptyrodactyl.inout.xyz import (
 
 
 class TestAtomicSymbol(chex.TestCase):
-    """Test atomic_symbol function and related functionality."""
+    """Test atomic_symbol function and related functionality.
+
+    :see: :func:`ptyrodactyl.inout.atomic_symbol`
+    """
 
     def test_atomic_symbol_basic(self) -> None:
         """Test basic atomic symbol lookups."""
@@ -134,7 +137,10 @@ class TestAtomicSymbol(chex.TestCase):
 
 
 class TestParseXYZ(chex.TestCase):
-    """Test parse_xyz function and XYZ file parsing functionality."""
+    """Test parse_xyz function and XYZ file parsing functionality.
+
+    :see: :func:`ptyrodactyl.inout.parse_xyz`
+    """
 
     def create_temp_xyz_file(self, content: str) -> Path:
         """Helper to create temporary XYZ files for testing."""

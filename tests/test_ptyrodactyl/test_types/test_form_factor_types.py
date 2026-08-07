@@ -1,4 +1,8 @@
-"""Stage-0 tests for validated form-factor parameter carriers."""
+"""Test validated form-factor parameter carriers.
+
+:see: :func:`ptyrodactyl.types.create_kirkland_parameters`
+:see: :func:`ptyrodactyl.types.create_lobato_parameters`
+"""
 
 import equinox as eqx
 import jax
@@ -42,7 +46,11 @@ def _kirkland_inputs() -> tuple[jax.Array, ...]:
 
 
 def test_factories_create_float64_equinox_pytrees_under_jit() -> None:
-    """Valid factories preserve every coefficient as a dynamic JAX leaf."""
+    """Valid factories preserve every coefficient as a dynamic JAX leaf.
+
+    :see: :class:`ptyrodactyl.types.KirklandParameters`
+    :see: :class:`ptyrodactyl.types.LobatoParameters`
+    """
     lobato = jax.jit(create_lobato_parameters)(*_lobato_inputs())
     kirkland = jax.jit(create_kirkland_parameters)(*_kirkland_inputs())
     jax.block_until_ready((lobato.amplitudes, kirkland.gaussian_scales))

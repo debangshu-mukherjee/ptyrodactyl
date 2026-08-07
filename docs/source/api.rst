@@ -10,11 +10,14 @@ Submodules
 .. toctree::
    :maxdepth: 1
 
-   api/multislice
+   api/bloch
+   api/born
    api/inout
-   api/ucell
-   api/plots
-   api/types
    api/invert
+   api/jacobian
+   api/multislice
+   api/plots
    api/tools
+   api/types
+   api/ucell
    api/workflows

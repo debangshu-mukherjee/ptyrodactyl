@@ -1,4 +1,8 @@
-"""Tests for :mod:`ptyrodactyl.multislice.potential_volume`."""
+"""Tests for :mod:`ptyrodactyl.multislice.potential_volume`.
+
+:see: :func:`ptyrodactyl.multislice.crystal_potential_volume`
+:see: :func:`ptyrodactyl.multislice.single_atom_potential_3d`
+"""
 
 import inspect
 

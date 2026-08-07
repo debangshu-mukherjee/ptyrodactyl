@@ -1,4 +1,9 @@
-"""Tests for :mod:`ptyrodactyl.multislice.parallelized`."""
+"""Tests for :mod:`ptyrodactyl.multislice.parallelized`.
+
+:see: :func:`ptyrodactyl.multislice.cbed_amplitude_from_atoms`
+:see: :func:`ptyrodactyl.multislice.cbed_image_from_atoms`
+:see: :func:`ptyrodactyl.multislice.stem4d_sharded`
+"""
 # ruff: noqa: E402, I001
 
 import numpy as np
@@ -28,10 +33,14 @@ _VOLTAGE_KV = jnp.asarray(80.0, dtype=jnp.float64)
 
 
 def _distinct_modes():
-    mode_zero = jnp.zeros(
-        (_GRID_SIZE, _GRID_SIZE),
-        dtype=jnp.complex128,
-    ).at[0, 0].set(1.0 + 0.25j)
+    mode_zero = (
+        jnp.zeros(
+            (_GRID_SIZE, _GRID_SIZE),
+            dtype=jnp.complex128,
+        )
+        .at[0, 0]
+        .set(1.0 + 0.25j)
+    )
     mode_one = jnp.ones(
         (_GRID_SIZE, _GRID_SIZE),
         dtype=jnp.complex128,
@@ -76,7 +85,10 @@ def _cbed_from_atoms(beam, mode_distribution, sample):
 
 
 def test_cbed_from_atoms_retains_complex_seam_and_single_mode_bit_identity():
-    """Atom-backed CBED reduces only after retaining complex mode fields."""
+    """Atom-backed CBED reduces only after retaining complex mode fields.
+
+    :see: :func:`ptyrodactyl.multislice.cbed_amplitude_from_atoms`
+    """
     sample, _, _ = _atom_backed_inputs()
     modes = _distinct_modes()[..., :1]
     probe = create_probe_modes(

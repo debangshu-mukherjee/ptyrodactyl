@@ -1,4 +1,4 @@
-"""Stage-0 scalar sign, unit-chain, and forward-smoke regression."""
+"""Test Lobato potential signs, units, and Born forward coupling."""
 
 import jax.numpy as jnp
 
@@ -12,8 +12,8 @@ from ptyrodactyl.tools import helmholtz_coupling, relativistic_wavelength_ang
 from ptyrodactyl.types import create_crystal_data
 
 
-def test_stage0_lobato_scalar_forward_smoke() -> None:
-    """A Lobato voltage field traverses the positive SC-1 coupling chain."""
+def test_lobato_potential_has_finite_nonzero_born_response() -> None:
+    """A positive Lobato voltage field yields a finite Born response."""
     shape = (6, 6, 6)
     spacing = 0.5
     crystal = create_crystal_data(

@@ -1,4 +1,7 @@
-"""Tests for :mod:`ptyrodactyl.multislice.checked`."""
+"""Tests for :mod:`ptyrodactyl.multislice.checked`.
+
+:see: :func:`ptyrodactyl.multislice.checked_cbed_image`
+"""
 # ruff: noqa: E402, I001
 
 import numpy as np
@@ -151,6 +154,13 @@ def _sharded_inputs(scale=1.0):
 
 
 def test_checked_make_probe_transparent_jit_grad_and_raises():
+    """Prove checked probe creation preserves values and validation.
+
+    Compare eager and JIT arrays exactly, differentiate defocus in Angstroms,
+    and require a runtime error for a negative accelerating voltage in kV.
+
+    :see: :func:`ptyrodactyl.multislice.checked_make_probe`
+    """
     microscope = _microscope()
     detector = _detector()
     expected = make_probe(microscope, detector)
@@ -197,6 +207,13 @@ def test_checked_make_probe_transparent_jit_grad_and_raises():
 
 
 def test_checked_cbed_image_transparent_jit_grad_vmap_and_raises():
+    """Prove checked CBED preserves execution and rejects nonfinite slices.
+
+    Compare eager and JIT arrays exactly, differentiate the potential scale,
+    and check a two-item vectorized batch before injecting a NaN.
+
+    :see: :func:`ptyrodactyl.multislice.checked_cbed_image`
+    """
     pot_slices = _valid_potential_slices()
     beam = _valid_probe_modes()
     microscope = _microscope()
@@ -250,6 +267,13 @@ def test_checked_cbed_image_transparent_jit_grad_vmap_and_raises():
 
 
 def test_checked_stem_4d_transparent_jit_grad_and_raises():
+    """Prove checked 4D-STEM preserves execution and validates scan pixels.
+
+    Compare eager and JIT arrays exactly, differentiate the potential scale,
+    and require rejection when a scan coordinate reaches the 16-pixel bound.
+
+    :see: :func:`ptyrodactyl.multislice.checked_stem_4d`
+    """
     pot_slice = _valid_potential_slices()
     beam = _valid_probe_modes()
     microscope = _microscope()
@@ -299,6 +323,13 @@ def test_checked_stem_4d_transparent_jit_grad_and_raises():
 
 
 def test_checked_stem4d_sharded_transparent_jit_grad_and_raises():
+    """Prove checked sharded 4D-STEM preserves execution and bounds checks.
+
+    Compare eager and JIT arrays exactly, differentiate atomic potentials,
+    and reject an 8.1-Angstrom scan coordinate outside the potential grid.
+
+    :see: :func:`ptyrodactyl.multislice.checked_stem4d_sharded`
+    """
     (
         probe_mode_array,
         scan_positions_ang,

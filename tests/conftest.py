@@ -22,7 +22,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config : pytest.Config
         The pytest configuration object (unused beyond the hook contract).
     """
-    import ptyrodactyl  # noqa: F401  (import side effect: enables x64)
+    import ptyrodactyl  # noqa: F401, PLC0415  (enables x64 after hooks)
 
     assert jax.config.read("jax_enable_x64"), (
         "ptyrodactyl tests require jax_enable_x64"

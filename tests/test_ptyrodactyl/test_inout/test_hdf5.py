@@ -1,4 +1,8 @@
-"""Regression tests for the Stage-0 HDF5 ingest/emit slice."""
+"""Test lossless HDF5 potential ingest and emission.
+
+:see: :class:`ptyrodactyl.inout.HDF5SchemaError`
+:see: :func:`ptyrodactyl.inout.load_from_h5`
+"""
 
 from pathlib import Path
 
@@ -38,7 +42,7 @@ def _save_sample(path: Path) -> PotentialSlices:
 def test_scalar_potential_round_trip_is_bit_exact_and_versioned(
     tmp_path: Path,
 ) -> None:
-    """The F0 scalar-potential carrier uses the canonical lossless schema."""
+    """The scalar-potential carrier uses the canonical lossless schema."""
     path = tmp_path / "potential.h5"
     expected = _save_sample(path)
 
@@ -63,7 +67,10 @@ def test_scalar_potential_round_trip_is_bit_exact_and_versioned(
 def test_large_potential_uses_lossless_gzip_compression(
     tmp_path: Path,
 ) -> None:
-    """Large scalar-potential arrays are chunked and gzip-compressed."""
+    """Large scalar-potential arrays are chunked and gzip-compressed.
+
+    :see: :func:`ptyrodactyl.inout.save_to_h5`
+    """
     path = tmp_path / "large-potential.h5"
     values = jnp.arange(256 * 256 * 2, dtype=jnp.float64).reshape(256, 256, 2)
     expected = create_potential_slices(values, 2.0, 0.25)

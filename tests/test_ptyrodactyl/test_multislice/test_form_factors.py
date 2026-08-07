@@ -1,4 +1,9 @@
-"""Independent Stage-0 physics tests for Plan-06 form factors."""
+"""Test independent form-factor physics and parameterization agreement.
+
+:see: :func:`ptyrodactyl.multislice.atomic_form_factor`
+:see: :func:`ptyrodactyl.multislice.lobato_bandlimited_peak`
+:see: :func:`ptyrodactyl.multislice.projected_atom_potential`
+"""
 
 from collections.abc import Callable
 
@@ -266,7 +271,13 @@ def test_dispatcher_coordinate_gradients_are_finite(
 
 
 def test_primitive_coefficient_gradients_are_finite() -> None:
-    """Every validated coefficient leaf remains differentiable in physics."""
+    """Every validated coefficient leaf remains differentiable in physics.
+
+    :see: :func:`ptyrodactyl.multislice.kirkland_form_factor`
+    :see: :func:`ptyrodactyl.multislice.kirkland_projected_potential`
+    :see: :func:`ptyrodactyl.multislice.lobato_form_factor`
+    :see: :func:`ptyrodactyl.multislice.lobato_projected_potential`
+    """
     lobato_row = lobato_potentials()[13]
     lobato_params = create_lobato_parameters(
         lobato_row[0::2],
@@ -298,7 +309,7 @@ def test_primitive_coefficient_gradients_are_finite() -> None:
 
 
 @pytest.mark.parametrize("atomic_number", [6, 14, 79])
-def test_form_factor_parameterizations_agree_over_stage0_band(
+def test_form_factor_parameterizations_agree_through_four_inverse_angstroms(
     atomic_number: int,
 ) -> None:
     """C/Si/Au agree within 0.6% over g = 0--4 inverse Angstroms."""
@@ -320,7 +331,7 @@ def test_form_factor_parameterizations_agree_over_stage0_band(
 
 
 @pytest.mark.parametrize("atomic_number", [6, 14, 79])
-def test_projected_parameterizations_agree_over_stage0_radius(
+def test_projected_parameterizations_agree_over_reference_radii(
     atomic_number: int,
 ) -> None:
     """C/Si/Au agree within 3% over r = 0.05--1.5 Angstroms."""

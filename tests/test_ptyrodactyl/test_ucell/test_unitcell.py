@@ -1,4 +1,7 @@
-"""Tests for geometry module - rotation matrices and geometric transformations."""
+"""Test rotation matrices and geometric transformations.
+
+:see: :func:`ptyrodactyl.ucell.tilt_crystal`
+"""
 
 import unittest
 
@@ -7,8 +10,6 @@ import jax
 import jax.numpy as jnp
 from absl.testing import parameterized
 
-jax.config.update("jax_enable_x64", True)
-
 from ptyrodactyl.ucell import (
     reciprocal_lattice,
     rotate_structure,
@@ -16,9 +17,14 @@ from ptyrodactyl.ucell import (
     rotmatrix_vectors,
 )
 
+jax.config.update("jax_enable_x64", True)
+
 
 class TestRotmatrixVectors(chex.TestCase):
-    """Test suite for rotmatrix_vectors function."""
+    """Test suite for rotmatrix_vectors function.
+
+    :see: :func:`ptyrodactyl.ucell.rotmatrix_vectors`
+    """
 
     def setUp(self) -> None:
         """Set up test vectors."""
@@ -113,7 +119,7 @@ class TestRotmatrixVectors(chex.TestCase):
         self.assertAlmostEqual(jnp.linalg.det(R), 1.0, places=10)
 
     def test_special_cases_numerically_stable(self) -> None:
-        """Test numerical stability for nearly parallel/antiparallel vectors."""
+        """Test stability for nearly parallel and antiparallel vectors."""
         v1 = jnp.array([1.0, 0.0, 0.0])
         v2_nearly_parallel = jnp.array([1.0, 1e-9, 0.0])
         v2_nearly_antiparallel = jnp.array([-1.0, 1e-9, 0.0])
@@ -128,7 +134,10 @@ class TestRotmatrixVectors(chex.TestCase):
 
 
 class TestRotmatrixAxis(chex.TestCase):
-    """Test suite for rotmatrix_axis function."""
+    """Test suite for rotmatrix_axis function.
+
+    :see: :func:`ptyrodactyl.ucell.rotmatrix_axis`
+    """
 
     def setUp(self) -> None:
         """Set up test axes and angles."""
@@ -246,7 +255,10 @@ class TestRotmatrixAxis(chex.TestCase):
 
 
 class TestRotateStructure(chex.TestCase):
-    """Test suite for rotate_structure function."""
+    """Test suite for rotate_structure function.
+
+    :see: :func:`ptyrodactyl.ucell.rotate_structure`
+    """
 
     def setUp(self) -> None:
         """Set up test structure data."""
@@ -384,7 +396,10 @@ class TestRotateStructure(chex.TestCase):
 
 
 class TestReciprocalLattice(chex.TestCase):
-    """Test suite for reciprocal_lattice function."""
+    """Test suite for reciprocal_lattice function.
+
+    :see: :func:`ptyrodactyl.ucell.reciprocal_lattice`
+    """
 
     def setUp(self) -> None:
         """Set up test lattice structures."""
@@ -511,7 +526,7 @@ class TestReciprocalLattice(chex.TestCase):
         (100.0,),
     )
     def test_scaling_invariance(self, scale) -> None:
-        """Test that scaling real lattice inversely scales reciprocal lattice."""
+        """Test inverse reciprocal-lattice scaling after real-space scaling."""
         scaled_cell = self.cubic_cell * scale
         recip_scaled = reciprocal_lattice(scaled_cell)
 
@@ -525,7 +540,7 @@ class TestGeometryIntegration(chex.TestCase):
     """Integration tests combining multiple geometry functions."""
 
     def test_rotation_matrices_compatibility(self) -> None:
-        """Test that rotmatrix_vectors and rotmatrix_axis produce compatible results."""
+        """Compare vector-based and axis-based rotation matrices."""
         v1 = jnp.array([1.0, 0.0, 0.0])
         v2 = jnp.array([0.0, 1.0, 0.0])
 
@@ -566,7 +581,7 @@ class TestGeometryIntegration(chex.TestCase):
         assert jnp.allclose(rotated_recip, expected_rotated_recip, atol=1e-10)
 
     def test_full_workflow(self) -> None:
-        """Test complete workflow: create structure, rotate, compute reciprocal."""
+        """Test structure rotation followed by reciprocal-lattice creation."""
         cell = jnp.array(
             [
                 [3.0, 0.0, 0.0],

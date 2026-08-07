@@ -1,5 +1,25 @@
 # Changelog
 
+## Plan 06 — Lobato IAM and volumetric potential
+
+- Made Lobato--Van Dyck the default independent-atom form factor and projected
+  potential, with Kirkland retained only through explicit
+  `parameterization="kirkland"`; the explicit Kirkland path preserves the
+  pre-change projected-potential numerics. For C, Si, and Au, CI bounds the
+  two form factors to 0.6% over 0--4 inverse Angstroms and their projected
+  potentials to 3% over radii 0.05--1.5 Angstroms.
+- Hard-renamed `kirkland_potentials_crystal` to
+  `crystal_potential_slices` with no compatibility alias.
+- Added the closed-form band-limited Lobato peak and differentiable
+  reciprocal-space `Potential3D` builders for single atoms and crystals.
+- Moved the Kirkland coefficient loader to the shared form-factor data module
+  and added the validated Lobato coefficient table and parameter carriers.
+- Aligned CI with the declared Python 3.12--3.14 support matrix and put JAX
+  transformations outside runtime type checking so fresh environments using
+  JAX 0.11.0 and jaxtyping 0.3.11 can import the package.
+- Adopted a ptyrodactyl-native contributor guide with the JAX 0.11 decorator,
+  fresh-environment, and initialized-allocation rules learned in this slice.
+
 ## Plan 05 / Plan 14 — Stage-0 scalar HDF5 slice
 
 - Added the versioned `ptyrodactyl.inout.save_to_h5` / `load_from_h5`

@@ -1,428 +1,907 @@
 # Contributing to ptyrodactyl
 
-Thank you for your interest in contributing to ptyrodactyl! This guide describes how the
-codebase is written — type hinting, documentation, validation, testing, and tooling — so
-your contributions match the existing standards.
+Thank you for contributing to ptyrodactyl. This guide defines the standards
+for physics, differentiability, types, documentation, testing, and packaging.
 
-> **A note on target conventions.** This guide codifies the conventions the project is
-> converging to under the `plans/` roadmap (plans 00–12). A few structural items — the
-> single `ptyrodactyl.types` home, `eqx.Module` carriers, the `multislice`/`born`/`bloch`
-> forward families, and the `recon` inverse-problem package — are **mid-rollout**: write
-> *new* code to the target conventions below, and follow the migration in `plans/` when
-> touching code that has not yet been moved.
+The runtime repository and the planning repository are separate Git
+repositories. A local `ptyrodactyl-plans` symlink can expose the plans beside
+the code, but plan state does not belong in runtime names. Follow the current
+authorized plan when a change is plan-driven. Follow this guide for every new
+or changed code surface.
 
 ## Core Principle: Invertible Modularity
 
-ptyrodactyl's modules are differentiable operators, and the boundaries between them are the
-boundaries at which the inverse problem is solved. A forward model built from clean but
-*opaque* boxes can only be run forwards; one built from boxes that never discard a gradient
-can be run backwards just as well — you attach a loss at any seam and solve for what produced
-the data (the object transmission function, the probe, the 3D potential, the aberrations, the
-scan positions, the sample orientation, the partial coherence) while freezing the rest. This
-invertibility is the codebase's core asset.
+Ptyrodactyl composes electron-scattering forward models from differentiable
+operators. The same operator boundaries are the boundaries of the inverse
+problem. A loss can attach to a detector terminal or to an intermediate field
+and optimize the potential, atom positions, probe, aberrations, scan positions,
+or other declared parameters.
 
-It is also the headline: ptyrodactyl computes electron scattering with the **Convergent Born
-Series** (exact 3D, no paraxial or slicing approximation), and because every seam of that
-forward model keeps a gradient, **3D ptychography, 3D off-axis holography, and 3D focal-series
-reconstruction are the same `solve()`** — one differentiable model, three measurement
-terminals (see `plans/future/12_born_first_revision_plan.md`).
+This design rests on one invariant:
 
-The principle rests on one invariant:
+> **Reductions stay explicit, late, and differentiable. No module collapses
+> information it is not forced to.**
 
-> **Reductions stay explicit, late, and differentiable. No module collapses information it
-> is not forced to.**
+Apply this invariant as follows:
 
-Concretely, for electron ptychography / 4D-STEM:
+- Keep incident, intermediate, exit, and detector-plane wavefields complex.
+  Apply `|psi|^2` only at an explicit detector reduction.
+- Sum coherent samples as amplitudes before the modulus square. Sum
+  incoherent samples as weighted intensities after the modulus square.
+- Represent probe modes, position jitter, and partial coherence through an
+  explicit `Distribution`. Do not hide these averages inside a propagation
+  kernel.
+- Keep a three-dimensional `Potential3D` unsliced when the downstream Born or
+  Bloch model needs a volume. Projection and multislice slicing are explicit
+  model choices, not implicit producer behavior.
+- Keep the detector reduction separate from reusable amplitude producers such
+  as `cbed_amplitude`.
+- Treat a gradient as part of the physics. A zero, NaN, wrong-sign, or
+  conjugated gradient is a physics defect even when the forward value looks
+  correct.
 
-- **Keep the wavefield complex; take `|ψ|²` once, at the detector plane only.** The exit
-  wave, the propagated diffraction-plane field, and every intermediate must stay complex
-  through the forward model. The single intensity reduction is the final detector step —
-  never inside a reusable kernel that a downstream stage (a mixed-state sum, a coherent
-  average, a multislice/Born propagation) might want to use coherently.
-- **Express every average as an explicit weighted sum over a `Distribution`, summed late.**
-  Mixed-state probe modes, scan-position jitter, partial spatial/temporal coherence, and
-  finite source size are *incoherent distributions* over latent samples; their reduction is
-  a weighted sum of intensities applied at the detector, not a convolution or quadrature
-  baked into a kernel.
-- **Prefer the analytic coherent-average limit** over a hard, irreversible collapse, and use
-  `jnp.where` / `lax.cond` and continuous fields rather than discrete swaps or data-dependent
-  Python control flow, so every parameter keeps a derivative.
-
-The failure mode is silent: when a module performs a hard, non-differentiable, or premature
-reduction, the forward model still looks correct — only invertibility breaks, and only at
-that one seam. Treat any such reduction as a design smell to be justified explicitly in
-review, not an implementation detail. The JAX-First rules below are the mechanics of
-upholding this principle.
+A premature reduction can preserve a forward image while destroying one
+inverse seam. Review every non-differentiable operation and every reduction
+with that failure mode in mind.
 
 ## Development Setup
 
 ### Prerequisites
 
-- Python 3.13 (`requires-python = ">3.12, <3.15"`)
-- [uv](https://docs.astral.sh/uv/) (package and environment manager)
-- Git
-- CUDA-compatible GPU (optional, for acceleration)
+- Python 3.12 through 3.14. The project metadata declares
+  `>=3.12,<3.15`. Python 3.11 is not supported.
+- [uv](https://docs.astral.sh/uv/) for environments, locking, builds, and
+  publishing.
+- Git.
+- A CUDA-capable GPU is optional. CPU execution is the reference development
+  path.
 
-### Installation for Development
+JAX 0.11 requires Python 3.12 or newer. Do not test a JAX 0.11 change only in
+an old Python 3.11 environment. The supported Python matrix is 3.12, 3.13, and
+3.14.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/debangshu-mukherjee/ptyrodactyl.git
-   cd ptyrodactyl
-   ```
+### Installation
 
-2. **Install in development mode:**
-   ```bash
-   # Everything (docs, tests, notebooks, dev tooling)
-   uv sync --extra dev
+Clone the repository and synchronize the development extra:
 
-   # With CUDA support as well
-   uv sync --extra dev_cuda
-   ```
-
-   The dependency groups are defined in `pyproject.toml`.
-
-3. **Install pre-commit hooks:**
-   ```bash
-   pre-commit install
-   ```
-
-### Project Structure
-
-The target module map (see `plans/future/00_rheedium_parity_roadmap.md` §2 and
-`plans/future/12_born_first_revision_plan.md` §2):
-
+```bash
+git clone https://github.com/debangshu-mukherjee/ptyrodactyl.git
+cd ptyrodactyl
+python --version
+uv sync --extra dev
 ```
+
+Use the CUDA development extra only on a supported Linux system:
+
+```bash
+uv sync --extra dev_cuda
+```
+
+The available extras are `cuda`, `docs`, `test`, `notebooks`, `dev`, and
+`dev_cuda`. Do not document or invoke an `all` extra unless the project adds
+one.
+
+Use the lock file for normal development and CI-like checks:
+
+```bash
+uv lock --check
+uv run --frozen python -c "import ptyrodactyl; print(ptyrodactyl.__version__)"
+```
+
+### Import-time environment contract
+
+`src/ptyrodactyl/__init__.py` owns import-time JAX configuration. It performs
+these actions before it imports the public subpackages:
+
+- merges the package CPU defaults into an existing `XLA_FLAGS` value;
+- honors `PTYRODACTYL_DISABLE_RUNTIME_CHECKS=1` through `EQX_ON_ERROR`;
+- imports JAX and enables 64-bit precision;
+- optionally enables the compilation cache through
+  `PTYRODACTYL_CACHE_DIR` or `PTYRODACTYL_COMPILATION_CACHE=1`;
+- optionally initializes distributed execution through
+  `PTYRODACTYL_DISTRIBUTED=1`.
+
+Do not move physical-constant materialization ahead of the x64 configuration.
+Do not overwrite operator-supplied XLA flags. Keep new import-time side
+effects in the top-level package and justify them in review.
+
+### Project structure
+
+```text
 ptyrodactyl/
 ├── src/ptyrodactyl/
-│   ├── types/             # The single home for every carrier, alias, constant, create_* factory
-│   ├── multislice/        # Legacy multislice / projected-potential forward model (CBED, 4D-STEM) — faster
-│   ├── born/              # Convergent Born Series forward model (exact) — the headline; owns Schwartz (born/schwartz.py)
-│   ├── bloch/             # Bloch-wave forward family — periodic-crystal reference / cross-validation
-│   ├── recon/             # Inverse problem: ReconProblem/ReconResult, solve(), losses, transforms, uncertainty, gauge, distributed Schwartz
-│   ├── audit/             # Physics-invariant audit suite + reference benchmarking
-│   ├── harness/           # Agent-runnable automaton process-boundary contract
-│   ├── inout/             # The JAX↔world airlock: parsers, GPAW/DFT ingest, PyTree↔HDF5 codec
-│   ├── ucell/             # Crystallography / unit-cell math (reciprocal lattice, rotations, wavelength)
-│   ├── plots/             # Visualization utilities
-│   └── tools/             # Numerical + parallel/distributed helpers only (no types, no optimizers)
-├── tests/                 # Test suite (mirrors src layout, see below)
-├── docs/                  # Sphinx documentation
-├── data/                  # Sample data files
-├── plans/                 # Planning documents (architecture + physics)
-└── tutorials/             # Paired Jupyter notebooks (.ipynb + .py)
+│   ├── types/          # carriers, aliases, constants, create_* factories
+│   ├── inout/          # parsers, coefficient data, and HDF5 ingest/emit
+│   ├── ucell/          # lattice, rotation, and crystal geometry
+│   ├── multislice/     # IAM potentials, amplitudes, reducers, and 4D-STEM
+│   ├── born/           # convergent-Born operators
+│   ├── bloch/          # Bloch-wave operators
+│   ├── invert/         # reconstruction algorithms
+│   ├── jacobian/       # Jacobian, Fisher, gauge, and solver operations
+│   ├── plots/          # presentation-only helpers
+│   ├── tools/          # numerical, optimizer, cache, and parallel helpers
+│   └── workflows/      # end-to-end compositions
+├── tests/
+│   ├── test_ptyrodactyl/  # mirrors the source package
+│   └── test_data/         # fixtures and pinned regression artifacts
+├── docs/source/           # Sphinx sources
+└── tutorials/             # tutorial notebooks
 ```
 
-Each subpackage is a namespace package exposing its public API through `__init__.py` with an
-explicit `__all__`. The top-level `src/ptyrodactyl/__init__.py` enables 64-bit precision
-(`jax.config.update("jax_enable_x64", True)`) and sets CPU threading XLA flags **before** JAX
-is imported, and optionally initializes multi-host distributed execution. Keep import-time
-side effects confined to that module.
+The package boundaries have specific roles:
+
+- `types` owns shared carriers and their validation contracts.
+- `inout` is the host-world boundary. Filesystem access, NumPy parsing, HDF5,
+  and packaged lookup data belong here.
+- `multislice`, `born`, and `bloch` are sibling forward-model families.
+- `invert` and `jacobian` own inverse and derivative operations.
+- `workflows` composes lower-level APIs. It does not become a second owner for
+  their symbols.
+
+Read `docs/source/organization.md` before changing a package boundary.
 
 ## Coding Standards
 
-### JAX-First Development
+### JAX-first development
 
-ptyrodactyl is built on JAX for differentiable, high-performance computation. All new code
-must follow JAX best practices:
+Ptyrodactyl uses JAX for traced, differentiable numerical work. Follow these
+rules for array kernels:
 
-**Required JAX Patterns:**
-- Use `jax.lax.scan` instead of Python `for` loops over array data
-- Use `jax.lax.cond` / `jnp.where` instead of data-dependent `if`/`else`
-- Use `.at[].set()` for array updates instead of in-place modification
-- Keep functions purely functional — no side effects, no global mutable state
-- Decorate computational functions with `@jax.jit` where appropriate
-- Code must remain traceable for `jit`, `grad`, `vmap`, and `pmap`
+- Keep functions pure. Do not mutate global state or perform I/O in a traced
+  function.
+- Use vectorization or `jax.lax.scan` for loops over traced array data.
+  Python loops remain valid for small static structures and host-side I/O.
+- Use `jax.lax.cond`, `jax.lax.switch`, or `jnp.where` for data-dependent
+  traced control flow.
+- Use `.at[...]` updates instead of in-place mutation.
+- Keep array shapes stable under `jax.jit`, `jax.grad`, and `jax.vmap`.
+- Mark only genuine compile-time structure as static. A value that should carry
+  a gradient must not appear in `static_argnames`.
+- Place JIT at a useful boundary. A tiny helper does not need its own JIT if a
+  public caller already compiles the complete operation.
+- Call `jax.block_until_ready` in timing tests and in tests that must force a
+  deferred runtime error.
 
 ```python
-# ❌ Wrong - Python loops and conditionals over array data
-def bad_function(x):
-    result = []
-    for i in range(len(x)):
-        if x[i] > 0:
-            result.append(x[i] * 2)
-    return jnp.array(result)
+# Wrong: Python flow depends on traced array values.
+def positive_scale(values):
+    output = []
+    for value in values:
+        if value > 0:
+            output.append(2.0 * value)
+    return jnp.asarray(output)
 
 
-# ✅ Correct - vectorized JAX
+# Correct: the output shape is stable and the operation is traceable.
 @jaxtyped(typechecker=beartype)
-def good_function(x: Float[Array, " n"]) -> Float[Array, " n"]:
-    return jnp.where(x > 0, x * 2, x)
+def positive_scale(
+    values: Float[Array, " n"],
+) -> Float[Array, " n"]:
+    scaled: Float[Array, " n"] = jnp.where(
+        values > 0.0,
+        2.0 * values,
+        values,
+    )
+    return scaled
 ```
 
-### Prefer the ecosystem over hand-rolled numerics
+### JAX 0.11 and jaxtyping 0.3 lessons
 
-**Before writing any numerical routine** — a solver, a fixed-point iteration, a special
-function, an interpolation/rotation, a linear solve, a PyTree op — check for an
-`equinox`-family / `jax.scipy` / ecosystem implementation **first**. Hand-roll only when none
-exists, and **state the why in the PR**. The inversion engine is `optimistix` / `optax` /
-`lineax` (with `blackjax` for posteriors); PyTrees are `equinox`; runtime typing is
-`jaxtyping` / `beartype`; testing is `chex` / `hypothesis`. Re-implementing what the ecosystem
-already solved is the anti-pattern this rule exists to stop.
+JAX 0.11 and jaxtyping 0.3.11 are compatible for dtype and shape
+annotations. Do not add a dependency cap to avoid an invalid decorator stack.
+Fix the stack.
 
-### Optimizer & complex-parameter policy
+Runtime type checking must wrap the original Python function. The JAX
+transformation then wraps that checked function. Write the JAX decorator
+outermost and the jaxtyping decorator immediately above the function:
 
-Complex-valued parameters (object transmission, probe) are **real-ified** at the optimizer
-boundary — carry `z = x + iy` as a stacked real pytree `(x, y)`, run *stock* `optax` /
-`optimistix` on the resulting real problem, and re-complexify only inside the forward model.
+```python
+@jax.jit
+@jaxtyped(typechecker=beartype)
+def transmission(
+    potential: Float[Array, "H W"],
+) -> Complex[Array, "H W"]:
+    result: Complex[Array, "H W"] = jnp.exp(1j * potential)
+    return result
+```
 
-- **Do not hand-roll Wirtinger derivatives or Wirtinger optimizers.** `jax.grad` of a
-  real-valued loss already computes the Wirtinger gradient; on the real-ified representation
-  the problem is an ordinary `ℝ^{2n} → ℝ` optimization where stock optimizers are correct by
-  construction (no conjugation convention to get wrong, no `g²`-vs-`|g|²` second-moment trap).
-- Real-ification is also what makes `optimistix`'s least-squares / minimisers correct — its
-  complex support is explicitly "a work in progress, [that] may still return incorrect
-  results."
-- The 3D Born inverse problem recovers a **real** potential `φ(r)`; complex parameters appear
-  only in the legacy 2D projected ptychography. See
-  `plans/future/12_born_first_revision_plan.md` §1.
+For static arguments, use the direct JAX decorator factory:
 
-### Type Hinting with jaxtyping and beartype
+```python
+@jax.jit(static_argnames=("grid_shape",))
+@jaxtyped(typechecker=beartype)
+def build_grid(
+    grid_shape: tuple[int, int, int],
+    spacing: Float[Array, ""],
+) -> Float[Array, "Nx Ny Nz"]:
+    """..."""
+```
 
-Every public function is runtime-typechecked with the `@jaxtyped(typechecker=beartype)`
-decorator stack and annotated with `jaxtyping` shape/dtype specs:
+Do not write this stack:
+
+```python
+@jaxtyped(typechecker=beartype)
+@jax.jit
+def wrong_order(...): ...
+```
+
+Do not use `functools.partial(jax.jit, ...)` as a decorator factory. The direct
+`@jax.jit(...)` form gives `ty` a usable callable signature and avoids an
+unnecessary wrapper. Runtime type checking must receive the original Python
+function, not a JAX `PjitFunction`. A wrong order can fail during import when
+jaxtyping inspects `__globals__`. The AST guard in
+`tests/test_ptyrodactyl/test_package_structure.py` rejects the reversed stack.
+
+JAX 0.11 also makes the uninitialized contract of `jnp.empty` observable. Do
+not assume that `jnp.empty` contains zeros or any deterministic value. Use
+`jnp.zeros` when zero initialization matters. Use `jnp.full` when another
+initial value matters. Use `jnp.empty` only when every element is definitely
+written before any read, and test that property. The production source should
+normally have no need for `jnp.empty`. The current production tree has no
+`jnp.empty` call. Its one host-side `np.empty` allocation is fully populated
+by the form-factor loader before use.
+
+When changing JAX, jaxtyping, beartype, NumPy, or Python support, run a fresh
+unconstrained wheel installation in addition to the locked development suite.
+The fresh check is described under Packaging.
+
+### Numerical and differentiability rules
+
+- Prefer JAX, `jax.scipy`, Equinox, Optax, SciPy, and NumPy primitives already
+  declared by the project over a new local implementation.
+- Do not add a numerical dependency only because another repository uses it.
+  Add dependencies in the owning, reviewed environment change.
+- Require `jax.grad` to agree with a central finite difference for every new
+  differentiable primitive. Check real and imaginary directions separately
+  when a complex field is optimized.
+- A finite gradient is not enough. Add a nonzero-sensitivity tripwire when the
+  physics predicts sensitivity.
+- Keep real-valued objectives real. State the complex-gradient convention for
+  any optimizer-facing API.
+- Preserve the captured convention of the historical complex optimizer path
+  until its owning migration changes it. Do not silently mix a Wirtinger
+  derivative, a conjugated gradient, and a real-coordinate optimizer.
+- Guard unsafe branch inputs before evaluating operations that can create NaN
+  or infinity. Sanitizing only the selected output of `jnp.where` does not
+  make the unused branch gradient safe.
+- Do not differentiate raw eigenvectors at a degeneracy. Differentiate a
+  gauge-invariant projector, spectral quantity, or another declared invariant.
+
+### Type hints with jaxtyping and beartype
+
+Every public array function uses `@jaxtyped(typechecker=beartype)` and a
+jaxtyping dtype/shape contract.
+
+Pure-Python host functions use precise Python annotations, beartype where it
+adds value, and explicit schema validation. Do not force a JAX array contract
+onto the HDF5 or filesystem boundary.
 
 ```python
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
-from ptyrodactyl.types import STEM4D, ReconProblem, scalar_float
+from ptyrodactyl.types import ProbeModes, scalar_float
 
 
 @jaxtyped(typechecker=beartype)
-def simulate_cbed(
-    potential: Complex[Array, "H W"],
-    beam: Complex[Array, "H W"],
-    voltage_kV: scalar_float,
-) -> Float[Array, "H W"]:
-    """..."""
+def weighted_probe(
+    probe: ProbeModes,
+    scale: scalar_float,
+) -> Complex[Array, "H W M"]:
+    scaled_modes: Complex[Array, "H W M"] = (
+        probe.modes * jnp.asarray(scale)
+    )
+    return scaled_modes
 ```
 
-**Type Hinting Rules:**
-- All parameters and return values are annotated; multiple returns use
-  `beartype.typing.Tuple[...]`.
-- Annotate intermediate variables inside function bodies too — e.g.
-  `alpha_rad: Float[Array, ""] = jnp.deg2rad(alpha)`.
-- **Assign before returning.** Bind a function's result to a type-annotated variable and
-  return that name, rather than returning a bare expression — so the returned value carries an
-  explicit type at its definition site.
-- Use descriptive dimension names in shape specs: `Num[Array, "N 4"]`,
-  `Float[Array, " n 3"]`, scalars as `Float[Array, ""]`.
-- Prefer the scalar aliases from `ptyrodactyl.types` (`scalar_float`, `scalar_int`,
-  `scalar_bool`, `scalar_num`) for scalar arguments; these are unions accepting both Python
-  scalars and 0-d JAX arrays.
-- Import shared types from `ptyrodactyl.types`, not by re-defining them.
-- Import typing constructs (`Optional`, `Union`, `Tuple`, `List`, `Dict`, `TypeAlias`) from
-  `beartype.typing`, not the stdlib `typing` module.
+Apply these rules:
 
-### Custom Types and PyTrees
+- Annotate every parameter and return value.
+- Annotate important intermediate arrays and every returned variable.
+- Assign before returning. Bind the result to a type-annotated name, then
+  return that name.
+- Use descriptive dimension names. Examples include
+  `Complex[Array, "H W M"]`, `Float[Array, "P H W"]`, and
+  `Float[Array, "N 3"]`.
+- Use `Float[Array, ""]` for a rank-zero float array. Follow the existing
+  whitespace convention only where a touched module requires migration-free
+  consistency.
+- Prefer `scalar_float`, `scalar_int`, `scalar_bool`, and `scalar_num` from
+  `ptyrodactyl.types` for public scalar arguments that accept Python and JAX
+  scalars.
+- Import `Optional`, `Union`, `Tuple`, `List`, `Dict`, and related runtime
+  typing constructs from `beartype.typing` when beartype must inspect them.
+- Import shared carriers, aliases, and constants from `ptyrodactyl.types`.
+  Do not redefine them in a consuming module.
 
-**All types live in `ptyrodactyl.types` — no exceptions.** Every structured data type — every
-`eqx.Module` PyTree, every container, every type alias, **and every `create_*` constructor
-that builds one** — is defined under `src/ptyrodactyl/types/` and **nowhere else**. Every
-other subpackage (`simul_multislice`, `simul_born`, `recon`, `ucell`, `inout`, `plots`,
-`tools`, `audit`, `harness`) **imports** its types from `ptyrodactyl.types`; it must **not**
-define its own PyTree, container, or `create_*` factory. Why: a single import surface, one
-PyTree flatten/unflatten registration per type, one home for the validation (`create_*`)
-contract, and no duplicate carriers drifting across modules. A result/parameter container that
-"feels local" to a solver or producer (e.g. a `ReconResult`) is **still a type**: it goes in
-`ptyrodactyl.types`, not beside the function that returns it.
-
-Structured data types are **Equinox modules** (`eqx.Module`): immutable JAX PyTrees that flow
-through `jit`/`grad`/`vmap`. Static, non-array metadata fields are declared with
-`eqx.field(static=True)` so they are excluded from the differentiable leaves.
+For host-side NumPy arrays, never annotate a bare `np.ndarray`. Import
+`NDArray` from `numpy.typing` and place it inside a jaxtyping specification:
 
 ```python
-import equinox as eqx
-from jaxtyping import Array, Complex, Float
+from jaxtyping import Float, Int
+from numpy.typing import NDArray
 
 
-class ReconResult(eqx.Module):
-    """JAX-compatible reconstruction result PyTree.
-
-    :see: :class:`~.test_recon_types.TestReconResult`
-    ...
-    """
-
-    params: Complex[Array, "H W"]
-    loss: Float[Array, ""]
-    iterations: int = eqx.field(static=True)
-    solver_status: str = eqx.field(static=True)
+def accumulate_counts(
+    values: Float[NDArray, " n"],
+    counts: Int[NDArray, " n"],
+) -> Float[NDArray, " n"]:
+    weighted: Float[NDArray, " n"] = values * counts
+    return weighted
 ```
 
-### Validation Pattern for Factory Functions
+Do not alias `numpy.ndarray` as `NDArray`. Do not use a bare `NDArray`, which
+leaves its scalar type variable unbound.
 
-Custom types are constructed through `create_*` factory functions that validate inputs. These
-factories live in `ptyrodactyl.types` **next to the type they build** (never in the consuming
-subpackage). Use a two-tier approach:
+### Imports and ownership
 
-- **Static shape/structure checks** that can be resolved at trace time use plain Python
-  `raise ValueError`.
-- **Data-dependent (traced) checks** use `equinox.error_if`, which raises at runtime without
-  breaking `jit`. **Never NaN-poison** invalid inputs via `lax.cond` — that silently corrupts
-  downstream gradients; raise instead.
+New and touched cross-subpackage imports use the public owning subpackage. For
+example, use `from ptyrodactyl.types import Potential3D`. Do not add a reach
+into `ptyrodactyl.types.potential_types` from another subpackage. Some legacy
+deep imports remain; migrate them only in an authorized owning change.
 
-### Documentation Standards
+A cross-subpackage name is public. Its leaf module, package `__init__.py`,
+`__all__`, and Routine Listings must expose it. Deep relative imports are for
+private communication inside one subpackage.
 
-Docstrings follow the **NumPy / numpydoc convention** (enforced by Ruff's `pydocstyle` rules
-and a source-only `pydoclint` pass). Coverage is checked by `interrogate` (`fail-under = 90`).
-Do **not** use ad-hoc section headers — stick to the numpydoc sections.
+Do not add renamed ptyrodactyl imports in new or touched code. Standard
+ecosystem aliases such as `jnp`, `np`, `eqx`, and `plt` remain valid. Migrate
+an existing project alias only when the change owns all affected call sites.
 
-#### Module Docstrings
+### Custom types and PyTrees
 
-Each module starts with a one-line summary, an `Extended Summary`, a `Routine Listings`
-section cross-referencing every public object, and a `Notes` section where relevant.
-**Package `__init__.py` docstrings additionally include a submodule-organization block** in the
-Extended Summary — "The submodules are organized as follows:" with one ``- :mod:`name```
-bullet + one-line description per submodule, matching each submodule's own summary line.
-**Ordering is normative:** submodule entries in the Extended Summary block are alphabetical; and
-`Routine Listings` entries are grouped **classes first, then functions, then objects** —
-alphabetical within each group. Classes and functions never appear in the Extended Summary;
-submodules never appear in Routine Listings. Use the
-correct Sphinx role in `Routine Listings`: `:func:` for functions, `:class:` for
-classes/PyTrees, `:obj:` for type aliases and constants, and `:mod:` for submodules.
+`ptyrodactyl.types` is the canonical home for shared carriers, PyTrees, type
+aliases, physical constants, and validated `create_*` factories. A result
+container is still a type. Do not define it beside its producer merely because
+only one producer uses it today.
 
-**Every public object is listed in three places, and all three must agree:**
+Use `eqx.Module` for structured numerical data. Dynamic array fields remain
+PyTree leaves. Declare non-array metadata with `eqx.field(static=True)` only
+when it must not participate in transformations.
 
-1. In its own **module**, at the **top** in the docstring's `Routine Listings`, **and**
-2. at the **bottom** in that module's `__all__`, **and**
-3. in the **subpackage `__init__.py`** — repeated in `__init__.py`'s own `Routine Listings`
-   *and* `__all__`.
+```python
+class Distribution(eqx.Module):
+    """Store a weighted distribution over latent samples."""
 
-A symbol missing from any of the three is a defect. When you add, rename, or remove a public
-function, update **all three** in the same change, and keep the one-line summary
-**verbatim-identical** across both `Routine Listings`.
+    samples: Float[Array, "N D"]
+    weights: Float[Array, "N"]
+    reduction: ReductionMode = eqx.field(static=True)
+    axis_id: Optional[str] = eqx.field(static=True, default=None)
+```
 
-**Export once, from the module that owns it — no compatibility re-exports.** Each public symbol
-has exactly **one** canonical export path: the module that *defines* it, surfaced through *its
-own* subpackage's `__init__.py`. Do **not** add a second export of the same symbol from any
-other module or subpackage — not to preserve an old import location, not "for convenience," not
-as a forwarding alias. When a symbol **moves or is renamed, it moves**: update every import
-site and **delete** the old one in the *same* change — no shim, no alias, no
-`DeprecationWarning`. The only migration record is a `CHANGELOG.md` note.
+Static metadata participates in compilation cache identity. Keep it small,
+hashable, and scientifically explicit. Do not mark a physical fit parameter
+static merely to make tracing easier.
 
-#### Function and Class Docstrings
+Construct public carriers through their `create_*` factory. Direct Equinox
+construction is for the factory implementation and narrowly justified tests.
 
-- Open with a single imperative summary line.
-- Add a `:see:` Sphinx cross-reference linking the object to its test class (e.g.
-  `:see: :class:`~.test_unitcell.TestReciprocalLattice``). The test class carries the matching
-  **back-reference**, so the link is **bidirectional** in the rendered docs.
-- `Parameters` and `Returns` repeat the type and describe each item. Name the return values
-  (numpydoc `name : type` form) so `pydoclint` is satisfied — and since functions **return a
-  type-annotated variable rather than a bare expression**, the `Returns` name **must be that
-  variable's name**.
-- **Mark static (non-traced) parameters** — anything passed through
-  `jax.jit(static_argnames=...)`, a Python `int`/`str`/`bool` flag driving shape/control flow,
-  or an `eqx.field(static=True)` value — because changing it forces re-tracing.
-- Use `Notes` (often a numbered list) for the algorithm/flow, `See Also` for related functions,
-  `Attributes` for `eqx.Module` fields, `Raises` where relevant. Use a raw string (`r"""`) when
-  the docstring contains LaTeX/backslashes.
+### Validation in factories
 
-### Code Style
+Use two validation tiers:
 
-Style is enforced by Ruff (`line-length = 79`, double quotes). Key conventions:
+- Use Python `ValueError` for static rank, shape, enum, string, and structure
+  checks that tracing can resolve.
+- Use `equinox.error_if` for finite, sign, bound, normalization, and other
+  value checks that can receive tracers.
 
-- **Variable Names**: descriptive `snake_case`; long names over abbreviations. Scientific
-  single-letter symbols (`G`, `σ_e`, `ε`) are permitted where they mirror the physics.
-- **No inline comments for explanation**: explanations belong in docstrings. Comments are
-  reserved for non-obvious rationale (the *why*, not the *what*).
-- **Pure functions**: no side effects; return new data.
-- **Imports**: sorted by isort; `jax` and `jaxtyping` are treated as known third-party.
-  Imports inside functions are used only to guard optional dependencies or platform branches.
+```python
+@jaxtyped(typechecker=beartype)
+def create_lobato_parameters(
+    amplitudes: Float[Array, "..."],
+    scales: Float[Array, "..."],
+) -> LobatoParameters:
+    amplitudes_array: Float[Array, " 5"] = jnp.asarray(
+        amplitudes,
+        dtype=jnp.float64,
+    )
+    scales_array: Float[Array, " 5"] = jnp.asarray(
+        scales,
+        dtype=jnp.float64,
+    )
+    if amplitudes_array.shape != (5,) or scales_array.shape != (5,):
+        raise ValueError("Lobato coefficients must have shape (5,)")
+
+    checked_amplitudes: Float[Array, " 5"] = eqx.error_if(
+        amplitudes_array,
+        jnp.any(~jnp.isfinite(amplitudes_array)),
+        "Lobato amplitudes must be finite",
+    )
+    checked_scales: Float[Array, " 5"] = eqx.error_if(
+        scales_array,
+        jnp.any(~jnp.isfinite(scales_array))
+        | jnp.any(scales_array <= 0.0),
+        "Lobato scales must be finite and positive",
+    )
+    parameters: LobatoParameters = LobatoParameters(
+        amplitudes=checked_amplitudes,
+        scales=checked_scales,
+    )
+    return parameters
+```
+
+Attach the checked value to the returned computation. An unused
+`eqx.error_if` result can be removed by tracing. Reject Python booleans
+explicitly when `bool` could masquerade as atomic number zero or one.
+
+Do not replace rejection with NaN poisoning. Invalid scientific inputs must
+fail closed in eager and compiled execution.
+
+### Units, coordinates, and physical conventions
+
+State units on every public physical quantity. Current canonical conventions
+include:
+
+- lengths and real-space coordinates in Angstroms;
+- reciprocal spatial frequencies in inverse Angstroms;
+- angular scattering-vector magnitude `q` in radians per Angstrom, with
+  `g = q / (2*pi)` in cycles per Angstrom where required;
+- accelerating voltage in kilovolts at microscope API boundaries;
+- electrostatic `Potential3D.volume` in volts;
+- projected `PotentialSlices` and projected atomic potentials in
+  volt-Angstroms;
+- aperture and tilt angles in milliradians unless a signature says otherwise;
+- crystallographic cell angles in degrees;
+- `Potential3D.volume` storage order `(z, y, x)`, while geometry tuples use
+  physical `(x, y, z)` order.
+
+Do not use `eV` as a synonym for an electrostatic voltage field. Preserve the
+declared additive potential reference, boundary convention, coefficient
+normalization, band limit, and provenance. Do not silently subtract a mean or
+discard the Fourier zero mode.
+
+Use standard zero-based, end-exclusive Python indexing. State axis order in
+the type annotation and docstring when it is not evident.
+
+Lobato--Van Dyck is the default independent-atom parameterization. Kirkland is
+available only through explicit `parameterization="kirkland"`. Do not create a
+second Kirkland-default entry point or duplicate either coefficient loader.
+
+### Naming uses domain terms
+
+Name code for electron microscopy, physics, mathematics, or software
+structure. Do not put plan numbers, work-package labels, gates, stages,
+sprints, or agent names in public APIs, modules, tests, or new data schemas.
+
+```python
+# Wrong: a tracking label hides the verified property.
+def test_plan06_gate_lb3() -> None: ...
+
+
+# Correct: the name states the physics property.
+def test_projected_potential_matches_zero_frequency_slice() -> None: ...
+```
+
+Historical regression artifacts can retain stable names when a rename would
+break their audit trail. New scientific tests and APIs use domain terms.
+
+## Documentation Standards
+
+### Numpydoc and technical prose
+
+Docstrings use the NumPy/numpydoc convention. Ruff enforces the configured
+docstring rules. `pyproject.toml` contains the current pydoclint settings; do
+not weaken a correct jaxtyping annotation merely to satisfy a parser.
+
+Write repository prose in Simplified Technical English:
+
+- Keep instructions to 20 words when practical.
+- Keep descriptions to 25 words when practical.
+- Use active voice and identify the actor.
+- Use present tense for descriptions and the imperative for instructions.
+- Use one term for one concept.
+- State units and axis order explicitly.
+- Avoid idioms and long noun clusters.
+- Keep technical names such as PyTree, 4D-STEM, Lobato--Van Dyck, and
+  `jnp.where` consistent.
+
+These rules apply to docstrings, Markdown, and notebook Markdown cells.
+
+### Module docstrings and public exports
+
+Every public module contains:
+
+1. a one-line summary;
+2. an `Extended Summary` when the module needs more context;
+3. a `Routine Listings` section for every public symbol;
+4. `Notes` or `References` when required by the physics.
+
+A package `__init__.py` also lists its public submodules in its extended
+summary. Keep submodules alphabetical. Group Routine Listings as classes,
+functions, then objects. Sort each group alphabetically.
+
+Use `:class:` for carriers and classes, `:func:` for functions, `:obj:` for
+aliases and constants, and `:mod:` for submodules.
+
+List every public symbol in four synchronized locations:
+
+1. the leaf module Routine Listings;
+2. the leaf module `__all__`;
+3. the subpackage Routine Listings;
+4. the subpackage `__all__`.
+
+Copy the symbol's summary verbatim into both Routine Listings. Export each
+symbol from exactly one owning leaf module and one owning subpackage. The
+package-structure tests enforce this contract on the migrated surfaces.
+
+When a symbol moves, update every consumer and delete the old export in the
+same change. Do not add a forwarding alias, compatibility module, or
+`DeprecationWarning`. Record the migration in `CHANGELOG.md`.
+
+### Function docstrings
+
+A public function docstring uses the following order, omitting sections that
+do not apply:
+
+1. summary line;
+2. extended summary;
+3. `:see:` test cross-reference;
+4. `Implementation Logic`;
+5. `Parameters`;
+6. `Returns` or `Yields`;
+7. `Raises`;
+8. `Notes`;
+9. `References`;
+10. `See Also`;
+11. `Examples`.
+
+Use an imperative summary that fits on one line. Copy that summary verbatim
+to both Routine Listings.
+
+Document every parameter in signature order. Copy the annotated type. State
+units and defaults. Mark a static argument and explain that changing it causes
+retracing.
+
+Name every returned value after the annotated local variable returned by the
+body. For a tuple, document each element in order. Document every explicit
+`ValueError`. Document traced runtime rejection as the relevant Equinox or JAX
+runtime error when that detail helps callers.
+
+Use `Implementation Logic` for multi-step algorithms. Keep the steps aligned
+with the code. Use `Notes` for a direct formula and for approximation,
+boundary, normalization, gauge, and differentiability limits.
+
+Give every public object a `:see:` reference to its test class or test module.
+Give the test a back-reference to the object. Land both sides together.
+
+Use a raw docstring when LaTeX contains backslashes. Use unique reference
+footnote labels across one module because Sphinx renders the module on one
+page.
+
+### Class and factory docstrings
+
+An `eqx.Module` docstring documents every field in declaration order under
+`Attributes`. Mark every `eqx.field(static=True)` value as static. State its
+units and interpretation.
+
+Do not add a custom constructor docstring for an Equinox carrier. Put the
+construction and validation contract on the `create_*` factory. Name the
+factory in `See Also`.
+
+The factory docstring separates structural `ValueError` checks from traced
+value checks. Its `Returns` name matches the annotated carrier variable.
+
+### Code style
+
+Ruff configures a 79-character line length, Python 3.12 syntax, double quotes,
+and import sorting. Follow these additional rules:
+
+- Use descriptive `snake_case` names. Use a short symbol only when it matches
+  a displayed physical formula.
+- Put explanations in docstrings. Keep inline comments for necessary rationale
+  or tool directives.
+- Keep imports at module scope unless an optional dependency or a documented
+  cycle requires a local import.
+- Use no star imports.
+- Keep `__all__` a literal list so the structure tests can inspect it.
+- Preserve user-visible exceptions and messages when a change does not own an
+  API break.
 
 ## Testing
 
-The test suite uses `pytest` with `chex`, `absl.testing.parameterized`, `hypothesis`, and
-`pytest-xdist`. Runtime jaxtyping/beartype checking is active during tests via the
-`--jaxtyping-packages=ptyrodactyl,beartype.beartype` pytest flag, so shape/dtype bugs surface
-as test failures.
+The suite uses pytest, chex, NumPy testing helpers, pytest-cov, and
+pytest-xdist. The pytest configuration activates live jaxtyping and beartype
+checking with `--jaxtyping-packages=ptyrodactyl,beartype.beartype`.
 
-### Test Layout
+Hypothesis is not currently a declared test dependency. Do not add an
+untracked property-test dependency in an unrelated change. Use parameterized
+deterministic cases until the environment change that owns Hypothesis lands.
 
-Tests mirror the source layout under `tests/test_ptyrodactyl/`, with shared helpers in
-`tests/_factories.py`, `tests/_assertions.py`, `tests/_types.py`. Test files are named
-`test_<module>.py`; test classes `Test*` (typically `chex.TestCase`); test functions `test_*`.
-Reuse the shared helpers instead of hand-rolling fixture data.
+### Layout
 
-### Writing Tests
+Tests mirror the source tree:
 
-- Prefer `chex` assertions over bare `assert` for arrays: `chex.assert_shape`,
-  `chex.assert_type`, `chex.assert_tree_all_finite`, `chex.assert_trees_all_close`.
-- Use `absl.testing.parameterized` for table-driven cases, and `chex` variants
-  (`@chex.variants`) to exercise functions under JIT and eager.
-- Use `hypothesis` for property-based tests of numerical / physics invariants.
-- Test both correctness and JAX compatibility (`jit`/`grad`/`vmap` where relevant) — in
-  particular, **grad must flow** through every differentiable function.
+```text
+tests/test_ptyrodactyl/
+├── test_inout/
+├── test_ucell/
+├── test_multislice/
+├── test_born/
+├── test_bloch/
+├── test_invert/
+├── test_jacobian/
+├── test_plots/
+├── test_tools/
+├── test_types/
+└── test_workflows/
+```
 
-### Test Code Conventions
+Name a test file `test_<module>.py`. Name a test class `Test<Symbol>` when a
+class groups one public symbol. Name a test function for the property it
+verifies.
 
-Tests are first-class source: `tests/**/*.py` is in **both** the Ruff and `ty` scope and runs
-under live jaxtyping/beartype checking, so the same style discipline as `src/` applies.
+Test modules do not define `__all__` or Routine Listings. They are not a
+public import surface.
 
-- **Type-hint test bodies and helpers exactly as in `src/`.**
-- **Document *what* and *how* on every test, class, and module (numpydoc).** A test's docstring
-  is its specification: open with an imperative summary, then an `Extended Summary` stating
-  **what** is verified (with units and tolerances), and a `Notes` section describing **how**.
-  Test docstrings are published to Read the Docs as a Testing / Validation reference.
-- **Mirror the source layout, and make the `:see:` cross-reference bidirectional** (source →
-  test *and* test → source).
-- **No `__all__` or `Routine Listings` in test modules.**
-- **Private helpers are `_`-prefixed and local; reused fixtures go in the shared helpers.**
+### Scientific evidence
+
+Use the strongest available independent truth:
+
+- a closed-form result;
+- a conservation, symmetry, normalization, adjoint, or gauge invariant;
+- a published table value with its units and convention;
+- an independently generated and provenance-pinned artifact;
+- systematic convergence under grid, band-limit, slice, or solver
+  refinement.
+
+A stored output from ptyrodactyl is a regression capture, not an independent
+physics oracle. Use it to prove unchanged behavior for the same
+parameterization. Pair it with physics evidence when correctness is at issue.
+
+Keep external generators and heavyweight reference implementations outside
+the runtime package and normal test environment unless their dependency is
+explicitly declared. Commit immutable data, hashes, conventions, and
+provenance. Tests consume the artifact; they do not silently regenerate it.
+
+For atomic form factors, examples of independent anchors include the hydrogen
+Bethe normalization, published band-limited Lobato values, analytic projection
+identities, and refinement convergence. Kirkland-to-Lobato closeness is a
+cross-check, not a proof that either model is exact.
+
+### Required numerical tests
+
+For each changed numerical primitive, test the applicable properties:
+
+- values and units against independent evidence;
+- shape, dtype, and finiteness;
+- eager and `jax.jit` agreement;
+- `jax.vmap` compatibility;
+- `jax.grad` against central finite differences;
+- a nonzero-gradient tripwire for sensitive parameters;
+- rejection of invalid Python values;
+- rejection of invalid traced values;
+- translation, periodicity, additivity, symmetry, or gauge behavior;
+- convergence under the discretization the function introduces.
+
+Prefer `chex.assert_shape`, `chex.assert_tree_all_finite`, and
+`chex.assert_trees_all_close` for arrays and PyTrees. NumPy's testing helpers
+remain appropriate for scalar and independent reference comparisons. A plain
+`assert` is appropriate for metadata and exact Boolean contracts.
+
+### Two-tier rejection tests
+
+Exercise both validation tiers. A traced error can be deferred until the
+result is consumed:
+
+```python
+with pytest.raises(ValueError, match="must be positive"):
+    create_example(jnp.ones((2, 2)), spacing=-1.0)
+
+compiled = jax.jit(lambda spacing: create_example(jnp.ones((2, 2)), spacing))
+with pytest.raises(
+    (equinox.EquinoxRuntimeError, jax.errors.JaxRuntimeError, ValueError),
+    match="must be positive",
+):
+    result = compiled(jnp.asarray(-1.0))
+    jax.block_until_ready(result)
+```
+
+Do not accept a traced invalid value merely because the eager path rejects a
+Python scalar.
+
+### Test documentation
+
+Treat a test docstring as a compact specification. State what property the
+test proves and how it proves it. Include units, parameterization, and
+tolerances. Add bidirectional `:see:` references on migrated documentation
+surfaces.
+
+Keep private helpers local and `_`-prefixed. Move a helper into shared test
+support only after more than one module needs it.
+
+### Running tests
+
+Run the full deterministic CPU suite:
+
+```bash
+MPLCONFIGDIR=/tmp/ptyrodactyl-mpl uv run --frozen pytest -q -n 0
+```
+
+Run a focused module or test:
+
+```bash
+uv run --frozen pytest -q -n 0 \
+  tests/test_ptyrodactyl/test_multislice/test_form_factors.py
+uv run --frozen pytest -q -n 0 \
+  tests/test_ptyrodactyl/test_multislice/test_form_factors.py::test_hydrogen_zero_angle_form_factor_is_bohr_radius
+```
+
+Run coverage when a change affects a broad surface:
+
+```bash
+uv run --frozen pytest tests/ \
+  --cov=src/ptyrodactyl --cov-report=term-missing
+```
+
+The historical Plan-01 numerical capture has its own verifier:
+
+```bash
+MPLCONFIGDIR=/tmp/ptyrodactyl-mpl \
+  uv run --frozen python tests/test_data/plan01_ug_capture.py verify
+```
+
+Do not update a pinned capture merely to make a failure disappear. Explain the
+intended behavior change and update its provenance in the same review.
 
 ## Tutorial Notebooks
 
-Tutorials live in `tutorials/` as Jupyter notebooks paired with Jupytext percent scripts
-(`.ipynb` plus `.py`). **Explanation lives in markdown cells, not code comments** — narrative,
-motivation, and the physics belong in `# %% [markdown]` blocks. After editing a paired
-notebook, run `uv run jupytext --sync tutorials/<notebook>.ipynb` and commit the synced `.py`
-and output-stripped `.ipynb` together.
+The current tutorial tree contains committed `.ipynb` notebooks. Keep
+explanations, motivation, units, and physics in Markdown cells. Keep code cells
+small and reproducible. Remove outputs before committing unless an owning
+documentation change explicitly requires rendered output.
+
+The repository does not yet declare Jupytext or provide paired percent
+scripts. Do not claim that notebooks are paired until the tooling and pairs
+land together. If the project adopts Jupytext, update this section and commit
+the `.ipynb` and `.py` pair in sync.
 
 ## Pull Request Process
 
-### Before Submitting
+### Before submitting
+
+Run the gates that the current repository declares:
 
 ```bash
-ruff check src/ tests/
-ruff format src/ tests/
-pydoclint src/
-ty check
-pre-commit run --all-files
-pytest
-cd docs/ && uv run make html
+uv lock --check
+uv run --frozen ruff check pyproject.toml src tests
+uv run --frozen ruff format --check src tests
+uv run --frozen ty check
+git diff --check
+MPLCONFIGDIR=/tmp/ptyrodactyl-mpl uv run --frozen pytest -q -n 0
 ```
 
-### PR Guidelines
+Build documentation with warnings as errors after documentation changes:
 
-1. **Branch Naming:** descriptive, e.g. `feature/born-tem-terminal` or
-   `fix/complex-optimizer-conjugation`.
-2. **Commit Messages:** a clear imperative subject line followed by a bulleted body.
-3. **PR Description:** include what the PR does, why it's needed, how to test it, and any
-   breaking changes.
+```bash
+uv sync --extra docs
+uv run --frozen sphinx-build -a -E -W -b html \
+  docs/source docs/build/html
+```
 
-### Review Process
+`pyproject.toml` contains pydoclint and interrogate configuration, but the
+current `dev` extra does not declare every associated executable. Run these
+checks when the executable exists in the active environment. Do not describe
+them as a reproducible required gate until their dependencies and baseline are
+declared in the repository.
 
-All PRs require passing CI tests, a code review approval, documentation updates where
-applicable, and no merge conflicts. **Differentiability is an acceptance criterion**: a change
-that breaks `jax.grad` through a touched seam has failed even if every test passes.
+The repository currently has no `.pre-commit-config.yaml`. Run the explicit
+commands above. When pre-commit configuration lands, update this guide in the
+same change.
 
-## API Evolution (zero-legacy)
+### PR description and review
 
-The codebase carries **no compatibility layer**. When an API changes:
+Use a descriptive branch name, such as `feature/lobato-volume` or
+`fix/projected-potential-gradient`.
 
-- **No shims, aliases, re-exports, or `DeprecationWarning`s** are kept alive for old import
-  paths or signatures.
-- Update every call site and **delete** the old path in the *same* change; two implementations
-  or import paths never ship together.
-- The **only** migration record is a `CHANGELOG.md` note documenting the rename/removal and the
-  new path.
-- Prefer getting the API right over preserving a wrong one — a clean break with a changelog
-  entry beats a forwarding alias that quietly rots.
+Write an imperative commit subject. In the PR description, state:
+
+- the behavior and boundary changed;
+- the scientific or software reason;
+- the independent evidence and test commands;
+- gradient, unit, sign, and parameterization effects;
+- public API and schema changes;
+- fresh-install evidence when dependencies or packaging changed.
+
+Differentiability is an acceptance criterion. A change that breaks a touched
+gradient seam has failed even if its forward regression tests pass.
+
+## API Evolution: Zero Legacy
+
+Ptyrodactyl is pre-1.0 and uses a zero-legacy policy:
+
+- Add no compatibility shim, forwarding alias, duplicate re-export, or
+  `DeprecationWarning` for a removed API.
+- Update every call site and delete the old path in the same change.
+- Keep one implementation and one canonical import path.
+- Record the migration in `CHANGELOG.md`.
+- Preserve an explicitly supported secondary physical model through a named
+  option, not a second default entry point.
+
+This policy does not authorize an unrelated API break. Scope the break to its
+owning change and include migration notes.
+
+## Packaging and Fresh-Environment Validation
+
+`pyproject.toml` is the source of truth for package metadata and the CalVer
+version. The build backend is `uv_build`. Use uv for builds and publication.
+
+```bash
+uv build
+uv publish
+```
+
+Do not use an editable checkout as the only packaging test. A wheel can omit
+coefficient tables, `py.typed` markers, or other package data even when source
+tests pass.
+
+For dependency, Python, JAX, jaxtyping, NumPy, package-data, or build changes,
+create a disposable environment and let the wheel metadata resolve the newest
+compatible dependencies. Do not reuse `uv.lock`, a constraint file, or the
+project `.venv` for this check.
+
+```bash
+fresh_dir="$(mktemp -d)"
+uv build --wheel --out-dir "$fresh_dir/dist"
+uv venv --python 3.13 --no-project "$fresh_dir/venv"
+uv pip install --python "$fresh_dir/venv/bin/python" \
+  "$fresh_dir"/dist/ptyrodactyl-*.whl
+(
+  cd "$fresh_dir"
+  "$fresh_dir/venv/bin/python" -c '
+import jax, jaxtyping, numpy, ptyrodactyl
+print(
+    jax.__version__,
+    jaxtyping.__version__,
+    numpy.__version__,
+    ptyrodactyl.__version__,
+)
+'
+)
+```
+
+Run a small scientific smoke test from outside the source tree. Exercise a
+public form-factor or forward-model path, not only `import ptyrodactyl`.
+Confirm these properties:
+
+- Python is in the supported 3.12--3.14 range;
+- JAX 0.11 and jaxtyping 0.3.11 import together when they are the current
+  unconstrained resolution;
+- the top-level x64 setup takes effect;
+- packaged Lobato and Kirkland assets load with the expected shapes;
+- one JIT-compiled, runtime-typechecked public function executes;
+- the result is finite and has the expected dtype and units.
+
+Also build the source distribution for a release candidate. Build a wheel from
+that source distribution and repeat the smoke test when package-data rules
+changed.
+
+Do not respond to a fresh-environment failure by adding arbitrary dependency
+caps. Identify whether the defect is Python support, decorator order, changed
+initialization semantics, removed API, or missing package data. Add a cap only
+when an actual incompatibility requires one and the review records the reason.
+
+## Issue Guidelines
+
+A bug report includes a minimal reproducer, expected behavior, actual
+behavior, Python version, JAX version, jaxtyping version, NumPy version,
+platform, and accelerator type.
+
+A wrong-gradient report also includes the differentiated parameter, scalar
+loss, automatic derivative, finite-difference derivative, step size, and
+tolerance.
+
+A feature request states the scientific use case, required units and
+conventions, intended module owner, differentiability requirements, and likely
+performance effect.
 
 ## Getting Help
 
-- **Questions:** Open a discussion or issue
-- **Documentation:** Check the [docs](https://github.com/debangshu-mukherjee/ptyrodactyl)
+- Open a GitHub discussion or issue for questions.
+- Read the Sphinx sources under `docs/source/`.
+- Read `docs/source/organization.md` for package ownership.
+- Consult the separate `ptyrodactyl-plans` repository for authorized roadmap
+  scope and physics canons.
 
-Thank you for contributing to ptyrodactyl and advancing differentiable electron microscopy!
+Thank you for advancing differentiable electron scattering and ptychography
+with ptyrodactyl.

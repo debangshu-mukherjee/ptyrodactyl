@@ -103,8 +103,8 @@ from ptyrodactyl.types import (
 from .reduce import apply_distribution, apply_distributions
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def transmission_func(
     pot_slice: Float[Array, " a b"], voltage_kv: scalar_num
 ) -> Complex[Array, " a b"]:
@@ -130,7 +130,7 @@ def transmission_func(
     Parameters
     ----------
     pot_slice : Float[Array, " a b"]
-        Projected potential slice in Kirkland units.
+        Projected potential slice in volt-Angstroms.
     voltage_kv : scalar_num
         Microscope operating voltage in kiloelectronvolts.
 
@@ -158,8 +158,8 @@ def transmission_func(
     return trans
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit(static_argnames=["imsize_y", "imsize_x"])
+@jaxtyped(typechecker=beartype)
 def propagation_func(
     imsize_y: scalar_int,
     imsize_x: scalar_int,
@@ -417,8 +417,8 @@ def make_probe(
     return probe_real_space
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def aberration(
     fourier_coord: Float[Array, " H W"],
     lambda_angstrom: scalar_float,
@@ -532,8 +532,8 @@ def _cbed_amplitude_from_slice_provider(
     return detector_amplitude
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def cbed_amplitude(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
@@ -550,7 +550,7 @@ def cbed_amplitude(
     ----------
     pot_slices : PotentialSlices
         Potential slices. ``slices`` has shape ``(H, W, S)``
-        in Kirkland units; ``slice_thickness`` in Angstroms;
+        in volt-Angstroms; ``slice_thickness`` in Angstroms;
         ``calib`` pixel size in Angstroms.
     beam : ProbeModes
         Electron beam. ``modes`` has shape ``(H, W, M)``;
@@ -887,8 +887,8 @@ def _validate_axis_maps(
         raise ValueError("multimode probes require a first probe_modes axis")
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def cbed_image(
     pot_slices: PotentialSlices,
     beam: ProbeModes,
@@ -979,8 +979,8 @@ def cbed_image(
     return cbed_pytree
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def shift_beam_fourier(
     beam: Union[Float[Array, " hh ww *mm"], Complex[Array, " hh ww *mm"]],
     pos: Float[Array, " #pp 2"],
@@ -1071,8 +1071,8 @@ def shift_beam_fourier(
     return all_shifted_beams
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def stem_4d(
     pot_slice: PotentialSlices,
     beam: ProbeModes,

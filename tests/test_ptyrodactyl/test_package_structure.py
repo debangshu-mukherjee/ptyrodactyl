@@ -14,6 +14,14 @@ _SWEPT_PACKAGES = (
     "ptyrodactyl.plots",
     "ptyrodactyl.multislice",
 )
+_PLAN06_TYPE_EXPORTS = (
+    "KirklandParameters",
+    "LobatoParameters",
+    "Potential3D",
+    "create_kirkland_parameters",
+    "create_lobato_parameters",
+    "create_potential_3d",
+)
 
 
 def _module_path(module_name: str) -> Path:
@@ -152,6 +160,33 @@ def test_public_symbols_are_exported_from_one_swept_subpackage() -> None:
             )
 
 
+def test_plan06_types_have_one_matching_public_owner() -> None:
+    """Plan-06 carriers and factories have one canonical type export."""
+    package_name = "ptyrodactyl.types"
+    package = importlib.import_module(package_name)
+    init_path = _module_path(package_name)
+    init_tree = _parse(init_path)
+    init_all = _literal_all(init_tree, init_path)
+    init_listings = _routine_listings(init_tree, init_path)
+
+    for symbol in _PLAN06_TYPE_EXPORTS:
+        owners: list[Path] = []
+        for leaf_path in _leaf_modules(package_name):
+            if symbol in _literal_all(_parse(leaf_path), leaf_path):
+                owners.append(leaf_path)
+
+        assert symbol in init_all
+        assert symbol in init_listings
+        assert len(owners) == 1, f"{symbol!r} leaf owners: {owners}"
+        leaf_path = owners[0]
+        leaf_module = importlib.import_module(
+            f"{package_name}.{leaf_path.stem}"
+        )
+        leaf_listings = _routine_listings(_parse(leaf_path), leaf_path)
+        assert leaf_listings.get(symbol) == init_listings[symbol]
+        assert getattr(package, symbol) is getattr(leaf_module, symbol)
+
+
 def test_source_uses_no_star_imports() -> None:
     source_root = Path(ptyrodactyl.__file__).parent
     offenders: list[str] = []
@@ -160,6 +195,35 @@ def test_source_uses_no_star_imports() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and any(
                 alias.name == "*" for alias in node.names
+            ):
+                offenders.append(f"{path}:{node.lineno}")
+    assert offenders == []
+
+
+def test_jax_jit_wraps_runtime_typechecking() -> None:
+    """JIT transformations wrap runtime type checking on Python functions."""
+    source_root = Path(ptyrodactyl.__file__).parent
+    offenders: list[str] = []
+    for path in sorted(source_root.rglob("*.py")):
+        tree = _parse(path)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            decorators = [ast.unparse(item) for item in node.decorator_list]
+            jit_indices = [
+                index
+                for index, decorator in enumerate(decorators)
+                if decorator.startswith(("jax.jit", "partial(jax.jit"))
+            ]
+            type_indices = [
+                index
+                for index, decorator in enumerate(decorators)
+                if decorator.startswith("jaxtyped(")
+            ]
+            if (
+                jit_indices
+                and type_indices
+                and min(jit_indices) > min(type_indices)
             ):
                 offenders.append(f"{path}:{node.lineno}")
     assert offenders == []

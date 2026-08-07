@@ -17,8 +17,12 @@ The submodules are organized as follows:
     Probability distribution types for ptyrodactyl ensembles.
 - :mod:`electron_types`
     Electron microscopy carriers and factories.
+- :mod:`form_factor_types`
+    Atomic form-factor coefficient carriers and factories.
 - :mod:`jacobian_types`
     Jacobian parameter and solver-state carriers.
+- :mod:`potential_types`
+    Three-dimensional scalar-potential carrier and factory.
 - :mod:`recon_types`
     Reconstruction problem and result carriers.
 
@@ -52,12 +56,16 @@ Routine Listings
     State container for Gauss-Newton iteration.
 :class:`GeometryParams`
     Rotation angle, centre offset, ellipticity.
+:class:`KirklandParameters`
+    Kirkland Lorentzian and Gaussian amplitude/scale pairs.
 :class:`LMState`
     State container for Levenberg-Marquardt iteration.
 :class:`LanczosState`
     State container for Lanczos tridiagonalisation.
 :class:`LaplaceUncertainty`
     Laplace-approximation uncertainty carrier.
+:class:`LobatoParameters`
+    Lobato--Van Dyck amplitude/scale pairs.
 :class:`LossType`
     Loss-function selection enum.
 :class:`OptimizableBlock`
@@ -66,6 +74,8 @@ Routine Listings
     Per-scan-point position corrections.
 :class:`PosteriorSamples`
     Posterior sample diagnostics carrier.
+:class:`Potential3D`
+    Band-limited scalar electrostatic potential on an orthogonal grid.
 :class:`PotentialSlices`
     Potential slices for multi-slice simulations.
 :class:`ProbeModeParams`
@@ -94,6 +104,8 @@ Routine Listings
     Create DetectorConfig with runtime validation.
 :func:`create_ensemble_axes`
     Create EnsembleAxes with runtime validation.
+:func:`create_kirkland_parameters`
+    Create validated Kirkland coefficients for one element.
 :func:`create_microscope_config`
     Create MicroscopeConfig with runtime validation.
 :func:`create_crystal_data`
@@ -104,8 +116,12 @@ Routine Listings
     Create a validated Distribution.
 :func:`create_laplace_uncertainty`
     Create a LaplaceUncertainty with runtime validation.
+:func:`create_lobato_parameters`
+    Create validated Lobato--Van Dyck coefficients for one element.
 :func:`create_posterior_samples`
     Create PosteriorSamples with runtime validation.
+:func:`create_potential_3d`
+    Create a Potential3D with structural and traced-value validation.
 :func:`create_potential_slices`
     Create a PotentialSlices with runtime validation.
 :func:`create_probe_modes`
@@ -221,6 +237,12 @@ from .electron_types import (
     create_probe_modes,
     create_stem4d,
 )
+from .form_factor_types import (
+    KirklandParameters,
+    LobatoParameters,
+    create_kirkland_parameters,
+    create_lobato_parameters,
+)
 from .jacobian_types import (
     AberrationParams,
     CGState,
@@ -236,6 +258,7 @@ from .jacobian_types import (
     PtychoParams,
     create_ptycho_params,
 )
+from .potential_types import Potential3D, create_potential_3d
 from .recon_types import (
     LaplaceUncertainty,
     PosteriorSamples,
@@ -267,9 +290,11 @@ __all__: list[str] = [
     "GeometryParams",
     "HBAR",
     "H_PLANCK",
+    "KirklandParameters",
     "LMState",
     "LanczosState",
     "LaplaceUncertainty",
+    "LobatoParameters",
     "LossType",
     "M0C2_EV",
     "MOTT_BETHE_VOLT_ANGSTROM_SQ",
@@ -278,6 +303,7 @@ __all__: list[str] = [
     "OptimizableBlock",
     "PositionParams",
     "PosteriorSamples",
+    "Potential3D",
     "PotentialSlices",
     "ProbeModeParams",
     "ProbeModes",
@@ -297,9 +323,12 @@ __all__: list[str] = [
     "create_distribution",
     "create_detector_config",
     "create_ensemble_axes",
+    "create_kirkland_parameters",
     "create_laplace_uncertainty",
+    "create_lobato_parameters",
     "create_microscope_config",
     "create_posterior_samples",
+    "create_potential_3d",
     "create_potential_slices",
     "create_probe_modes",
     "create_ptycho_params",

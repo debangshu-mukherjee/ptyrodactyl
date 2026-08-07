@@ -7,6 +7,7 @@ import chex
 import jax
 import jax.numpy as jnp
 import numpy as np
+import pytest
 from absl.testing import parameterized
 
 jax.config.update("jax_enable_x64", True)
@@ -14,13 +15,136 @@ jax.config.update("jax_enable_x64", True)
 from ptyrodactyl.multislice.atom_potentials import (
     _slice_atoms,
     bessel_kv,
-    kirkland_potentials_crystal,
+    crystal_potential_slices,
+    single_atom_potential,
 )
 from ptyrodactyl.types import (
     CrystalData,
     PotentialSlices,
     create_crystal_data,
 )
+
+
+@pytest.mark.parametrize(
+    ("atomic_number", "expected_sum", "expected_maximum"),
+    [
+        (6, 3304.630500664369, 599.0660669230273),
+        (14, 7467.50633667953, 1309.8209272295387),
+        (79, 16835.066119859865, 6296.83419348897),
+    ],
+)
+def test_explicit_kirkland_replays_pre_plan06_reference(
+    atomic_number: int,
+    expected_sum: float,
+    expected_maximum: float,
+) -> None:
+    """Explicit Kirkland preserves the captured C/Si/Au numerical path."""
+    potential = single_atom_potential(
+        atomic_number,
+        0.2,
+        (16, 16),
+        supersampling=2,
+        parameterization="kirkland",
+    )
+
+    np.testing.assert_allclose(
+        np.asarray(jnp.sum(potential)),
+        expected_sum,
+        rtol=2e-15,
+    )
+    np.testing.assert_allclose(
+        np.asarray(jnp.max(potential)),
+        expected_maximum,
+        rtol=2e-15,
+    )
+
+
+@pytest.mark.parametrize("parameterization", ["lobato", "kirkland"])
+def test_single_atom_explicit_zero_center_preserves_centered_kernel(
+    parameterization: str,
+) -> None:
+    """An explicit origin retains the established centered-kernel result."""
+    omitted_center = single_atom_potential(
+        14,
+        0.2,
+        (16, 16),
+        supersampling=2,
+        parameterization=parameterization,
+    )
+    explicit_zero = single_atom_potential(
+        14,
+        0.2,
+        (16, 16),
+        center_coords=jnp.zeros(2, dtype=jnp.float64),
+        supersampling=2,
+        parameterization=parameterization,
+    )
+
+    np.testing.assert_array_equal(
+        np.asarray(explicit_zero),
+        np.asarray(omitted_center),
+    )
+
+
+@pytest.mark.parametrize("parameterization", ["lobato", "kirkland"])
+def test_single_atom_center_translation_is_material_and_differentiable(
+    parameterization: str,
+) -> None:
+    """Both projected models retain their public sub-pixel position seam."""
+    center = jnp.array([0.13, -0.17], dtype=jnp.float64)
+    zero_center = jnp.zeros(2, dtype=jnp.float64)
+    axis = jnp.linspace(-1.0, 1.0, 16, dtype=jnp.float64)
+    y_weights, x_weights = jnp.meshgrid(axis, axis, indexing="ij")
+    weights = (
+        0.37 * x_weights - 0.61 * y_weights + 0.23 * x_weights * y_weights
+    )
+
+    def loss(center_coords: jax.Array) -> jax.Array:
+        potential = single_atom_potential(
+            14,
+            0.2,
+            (16, 16),
+            center_coords=center_coords,
+            supersampling=2,
+            parameterization=parameterization,
+        )
+        return jnp.mean(weights * potential)
+
+    centered = single_atom_potential(
+        14,
+        0.2,
+        (16, 16),
+        center_coords=zero_center,
+        supersampling=2,
+        parameterization=parameterization,
+    )
+    shifted = single_atom_potential(
+        14,
+        0.2,
+        (16, 16),
+        center_coords=center,
+        supersampling=2,
+        parameterization=parameterization,
+    )
+    relative_change = jnp.linalg.norm(shifted - centered) / jnp.linalg.norm(
+        centered
+    )
+    gradient = jax.grad(loss)(center)
+    direction = jnp.array([0.6, -0.8], dtype=jnp.float64)
+    step = 1e-5
+    finite_difference = (
+        loss(center + step * direction) - loss(center - step * direction)
+    ) / (2.0 * step)
+
+    assert relative_change > 1e-3
+    assert jnp.all(jnp.isfinite(gradient))
+    assert jnp.linalg.norm(gradient) > 1e-6
+    np.testing.assert_allclose(
+        np.asarray(jnp.vdot(gradient, direction)),
+        np.asarray(finite_difference),
+        rtol=2e-5,
+        atol=1e-7,
+    )
 
 
 class TestBesselKv(chex.TestCase):
@@ -533,8 +657,8 @@ class TestSliceAtoms(chex.TestCase):
         assert len(unique_atom_indices) == len(jnp.unique(atom_numbers))
 
 
-class TestKirklandPotentialsXYZ(chex.TestCase):
-    """Test suite for the kirkland_potentials_crystal function."""
+class TestCrystalPotentialSlices(chex.TestCase):
+    """Test suite for the crystal_potential_slices function."""
 
     def _run_potential(
         self,
@@ -545,6 +669,7 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         padding: float = 4.0,
         repeats: tuple[int, int, int] = (1, 1, 1),
         grid_shape: tuple[int, int, int],
+        parameterization: str = "kirkland",
     ) -> PotentialSlices:
         """Run a variant with the explicit static shape required under JIT."""
         repeats_array = jnp.asarray(repeats, dtype=jnp.int32)
@@ -556,23 +681,70 @@ class TestKirklandPotentialsXYZ(chex.TestCase):
         if variant_type in traced_variants:
 
             def fixed_shape_potential(data: CrystalData) -> PotentialSlices:
-                return kirkland_potentials_crystal(
+                return crystal_potential_slices(
                     data,
                     pixel_size,
                     slice_thickness,
                     repeats=repeats_array,
                     padding=padding,
                     grid_shape=grid_shape,
+                    parameterization=parameterization,
                 )
 
             return self.variant(fixed_shape_potential)(crystal_data)
 
-        return self.variant(kirkland_potentials_crystal)(
+        return self.variant(crystal_potential_slices)(
             crystal_data,
             pixel_size,
             slice_thickness,
             repeats=repeats_array,
             padding=padding,
+            parameterization=parameterization,
+        )
+
+    def test_default_parameterization_is_lobato(self) -> None:
+        """Assert every projected entry point defaults to Lobato."""
+        default = single_atom_potential(
+            atom_no=14,
+            pixel_size=0.2,
+            grid_shape=(16, 16),
+            supersampling=2,
+        )
+        explicit_lobato = single_atom_potential(
+            atom_no=14,
+            pixel_size=0.2,
+            grid_shape=(16, 16),
+            supersampling=2,
+            parameterization="lobato",
+        )
+        chex.assert_trees_all_equal(default, explicit_lobato)
+
+        crystal = create_crystal_data(
+            positions=jnp.array(
+                [[0.5, 0.5, 0.2], [1.0, 1.0, 0.7]],
+                dtype=jnp.float64,
+            ),
+            atomic_numbers=jnp.array([6, 14], dtype=jnp.int32),
+            lattice=jnp.eye(3, dtype=jnp.float64) * 2.0,
+        )
+        default_slices = crystal_potential_slices(
+            crystal,
+            0.25,
+            padding=0.25,
+            supersampling=1,
+            grid_shape=(4, 4, 1),
+        )
+        explicit_lobato_slices = crystal_potential_slices(
+            crystal,
+            0.25,
+            padding=0.25,
+            supersampling=1,
+            grid_shape=(4, 4, 1),
+            parameterization="lobato",
+        )
+        chex.assert_trees_all_equal(
+            default_slices,
+            explicit_lobato_slices,
         )
 
     @chex.variants(

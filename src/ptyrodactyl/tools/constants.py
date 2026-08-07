@@ -49,8 +49,8 @@ from ptyrodactyl.types import (
 )
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def relativistic_wavelength_ang(
     voltage_kv: scalar_num,
 ) -> Float[Array, " "]:
@@ -112,8 +112,8 @@ def relativistic_wavelength_ang(
     return lambda_ang
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def phase_interaction_parameter(
     voltage_kv: scalar_num,
 ) -> Float[Array, " "]:
@@ -184,8 +184,8 @@ def phase_interaction_parameter(
     return sigma
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def helmholtz_coupling(
     voltage_kv: scalar_num,
 ) -> Float[Array, " "]:
@@ -257,8 +257,8 @@ def helmholtz_coupling(
     return sigma_h
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def relativistic_mass(
     voltage_kv: scalar_num,
 ) -> Float[Array, " "]:

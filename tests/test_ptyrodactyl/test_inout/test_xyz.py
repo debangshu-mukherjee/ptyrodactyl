@@ -13,10 +13,8 @@ from equinox import EquinoxRuntimeError
 
 from ptyrodactyl.inout.xyz import (
     _ATOMIC_NUMBERS,
-    _KIRKLAND_POTENTIALS,
     _parse_xyz_metadata,
     atomic_symbol,
-    kirkland_potentials,
     parse_xyz,
 )
 
@@ -133,132 +131,6 @@ class TestAtomicSymbol(chex.TestCase):
 
         for symbol, expected_number in elements:
             assert atomic_symbol(symbol) == expected_number
-
-
-class TestKirklandPotentials(chex.TestCase):
-    """Test kirkland_potentials function and related functionality."""
-
-    def test_kirkland_potentials_shape(self) -> None:
-        """Test that kirkland_potentials returns correct shape."""
-        kp = kirkland_potentials()
-        assert kp.shape == (103, 12)
-
-    def test_kirkland_potentials_dtype(self) -> None:
-        """Test that kirkland_potentials returns float64 JAX array."""
-        kp = kirkland_potentials()
-        assert kp.dtype == jnp.float64
-
-    def test_kirkland_potentials_is_jax_array(self) -> None:
-        """Test that kirkland_potentials returns a JAX array."""
-        kp = kirkland_potentials()
-        assert isinstance(kp, jnp.ndarray)
-
-    def test_kirkland_potentials_preloaded(self) -> None:
-        """Test that Kirkland potentials are preloaded into memory."""
-        # Verify that _KIRKLAND_POTENTIALS exists and has correct properties
-        assert isinstance(_KIRKLAND_POTENTIALS, jnp.ndarray)
-        assert _KIRKLAND_POTENTIALS.shape == (103, 12)
-        assert _KIRKLAND_POTENTIALS.dtype == jnp.float64
-
-        # Verify that kirkland_potentials returns the same object (no copy)
-        kp = kirkland_potentials()
-        assert kp is _KIRKLAND_POTENTIALS
-
-    def test_kirkland_potentials_values(self) -> None:
-        """Test that kirkland potentials contain reasonable values."""
-        kp = kirkland_potentials()
-
-        # All values should be finite
-        assert jnp.all(jnp.isfinite(kp))
-
-        # No NaN values
-        assert not jnp.any(jnp.isnan(kp))
-
-        # The bundled parameterization uses non-negative coefficients.
-        assert jnp.all(kp >= 0)
-
-        # Check specific known values (first element - Hydrogen)
-        # These are from the actual CSV file
-        expected_h_first_four = jnp.array(
-            [0.0355221981, 0.225354459, 0.0262782423, 0.225354636]
-        )
-        assert jnp.allclose(kp[0, :4], expected_h_first_four, rtol=1e-9)
-
-    @chex.variants(with_jit=True, without_jit=True)
-    def test_kirkland_potentials_jax_operations(self) -> None:
-        """Test that kirkland potentials work with JAX operations."""
-        kp = kirkland_potentials()
-
-        # Test in JIT-compiled function
-        def get_element_potential(idx):
-            return kp[idx]
-
-        # Get potential for Carbon (Z=6, index=5)
-        carbon_potential = self.variant(get_element_potential)(5)
-        assert carbon_potential.shape == (12,)
-
-        # Test vectorized operations
-        def sum_potentials(indices):
-            return kp[indices].sum(axis=1)
-
-        indices = jnp.array([0, 5, 78])  # H, C, Au
-        sums = self.variant(sum_potentials)(indices)
-        assert sums.shape == (3,)
-
-        # Test gradient computation
-        def potential_dot(params, element_idx):
-            return jnp.dot(params, kp[element_idx])
-
-        grad_fn = jax.grad(potential_dot)
-        params = jnp.ones(12)
-        gradient = self.variant(grad_fn)(params, 5)  # Carbon
-        assert gradient.shape == (12,)
-        assert jnp.allclose(
-            gradient, kp[5]
-        )  # Gradient should equal the potentials
-
-    @chex.variants(with_jit=True, without_jit=True)
-    def test_kirkland_potentials_indexing(self) -> None:
-        """Test various indexing operations on kirkland potentials."""
-        kp = kirkland_potentials()
-
-        # Test indexing operations through JAX transformations
-        def get_single_element():
-            return kp[0]
-
-        hydrogen = self.variant(get_single_element)()
-        assert hydrogen.shape == (12,)
-
-        def get_multiple_elements():
-            return kp[:10]
-
-        first_ten = self.variant(get_multiple_elements)()
-        assert first_ten.shape == (10, 12)
-
-        # Fancy indexing (JAX requires array for list indexing)
-        def get_selected_elements():
-            return kp[jnp.array([0, 5, 78])]  # H, C, Au
-
-        selected = self.variant(get_selected_elements)()
-        assert selected.shape == (3, 12)
-
-        # Column slicing
-        def get_first_param():
-            return kp[:, 0]
-
-        first_param = self.variant(get_first_param)()
-        assert first_param.shape == (103,)
-
-    def test_kirkland_potentials_immutability(self) -> None:
-        """Test that the returned array reference maintains data integrity."""
-        kp1 = kirkland_potentials()
-        kp2 = kirkland_potentials()
-
-        # Both calls should return the same object
-        assert kp1 is kp2
-
-        # Values should be identical
-        assert jnp.array_equal(kp1, kp2)
 
 
 class TestParseXYZ(chex.TestCase):

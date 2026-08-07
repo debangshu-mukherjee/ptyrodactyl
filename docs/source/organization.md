@@ -7,13 +7,17 @@ I/O is separated from JAX kernels.
 
 ## Public subpackages
 
-- `ptyrodactyl.types` owns Equinox carriers, scalar aliases, physical constants,
+- `ptyrodactyl.types` owns Equinox carriers, including the volts-based
+  `Potential3D` interchange field, scalar aliases, physical constants,
   distributions, and validated `create_*` constructors.
-- `ptyrodactyl.inout` owns crystal-file parsers, bundled atomic lookup data, and
-  the versioned HDF5 ingest/emit boundary for canonical carriers.
+- `ptyrodactyl.inout` owns crystal-file parsers, bundled Lobato--Van Dyck and
+  Kirkland coefficient data, atomic lookup data, and the versioned HDF5
+  ingest/emit boundary for canonical carriers.
 - `ptyrodactyl.ucell` owns lattice, rotation, and crystal-tilt operations.
-- `ptyrodactyl.multislice` owns multislice amplitudes, detector reductions,
-  distribution producers, and 4D-STEM simulation.
+- `ptyrodactyl.multislice` owns the Lobato-default independent-atom potential
+  producers, projected multislice amplitudes, detector reductions,
+  distribution producers, and 4D-STEM simulation. Its volumetric producer
+  returns an unsliced `Potential3D`; it does not perform a beam-axis collapse.
 - `ptyrodactyl.born` and `ptyrodactyl.bloch` are sibling forward-model families.
 - `ptyrodactyl.plots` owns presentation-only image and colormap helpers.
 - `ptyrodactyl.invert` and `ptyrodactyl.jacobian` own reconstruction and
@@ -30,7 +34,7 @@ src/ptyrodactyl/
 ├── types/          # carriers, aliases, constants, validated constructors
 ├── inout/          # parsers, lookup assets, and HDF5 ingest/emit
 ├── ucell/          # unit-cell and rotation geometry
-├── multislice/     # multislice amplitudes, reducers, and integrators
+├── multislice/     # IAM potentials, multislice amplitudes, and reducers
 ├── born/           # convergent-Born utilities
 ├── bloch/          # Bloch-wave utilities
 ├── plots/          # visualization helpers

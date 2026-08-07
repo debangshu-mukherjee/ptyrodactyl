@@ -42,8 +42,8 @@ from ptyrodactyl.types import (
 )
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def rotmatrix_vectors(
     v1: Real[Array, " 3"], v2: Real[Array, " 3"]
 ) -> Float[Array, "3 3"]:
@@ -182,8 +182,8 @@ def rotmatrix_vectors(
     return rotation_matrix
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def rotmatrix_axis(
     axis: Real[Array, " 3"], theta: scalar_num
 ) -> Float[Array, "3 3"]:
@@ -264,8 +264,8 @@ def rotmatrix_axis(
     return rot_matrix
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def rotate_structure(
     coords: Real[Array, " N 4"],
     cell: Real[Array, "3 3"],

@@ -28,8 +28,6 @@ designed for use with JAX's ``shard_map`` for distributed
 execution across TPU/GPU pods.
 """
 
-from functools import partial
-
 import jax
 import jax.numpy as jnp
 from beartype import beartype
@@ -57,8 +55,8 @@ from ptyrodactyl.types import (
 from .reduce import apply_distribution
 
 
+@jax.jit(static_argnames=["grid_shape"])
 @jaxtyped(typechecker=beartype)
-@partial(jax.jit, static_argnames=["grid_shape"])
 def _compute_slice_potential(
     atom_coords: Float[Array, "N 3"],
     atom_types: Int[Array, " N"],
@@ -113,7 +111,7 @@ def _compute_slice_potential(
     Returns
     -------
     slice_potential : Float[Array, "H W"]
-        The computed potential slice in Kirkland units.
+        The computed projected potential slice in volt-Angstroms.
     """
     h: int
     w: int
@@ -174,8 +172,8 @@ def _compute_slice_potential(
     return slice_potential
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def cbed_amplitude_from_atoms(
     beam: Complex[Array, "H W M"],
     atom_coords: Float[Array, "N 3"],
@@ -226,8 +224,8 @@ def cbed_amplitude_from_atoms(
     return detector_amplitude
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def cbed_image_from_atoms(
     beam: Complex[Array, "H W M"],
     mode_distribution: Distribution,

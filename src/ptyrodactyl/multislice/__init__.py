@@ -14,10 +14,15 @@ Submodules
 - :mod:`atom_potentials`
     Functions for generating atomic potentials and slices from
     coordinates.
+- :mod:`form_factors`
+    Lobato--Van Dyck and Kirkland atomic form factors and projected
+    potentials.
 - :mod:`checked`
     JIT-safe validating wrappers for simulation kernels.
 - :mod:`parallelized`
     Sharded simulation functions for distributed computing.
+- :mod:`potential_volume`
+    Band-limited volumetric independent-atom potential builders.
 - :mod:`producers`
     Distribution producers and CBED axis binders.
 - :mod:`reduce`
@@ -31,10 +36,14 @@ The submodules are organized as follows:
 
 - :mod:`atom_potentials`
     Atomic potential calculations for electron microscopy.
+- :mod:`form_factors`
+    Atomic form factors and projected potentials.
 - :mod:`checked`
     JIT-safe validating wrappers for simulation kernels.
 - :mod:`parallelized`
     Parallelized simulation functions for distributed microscopy.
+- :mod:`potential_volume`
+    Band-limited volumetric independent-atom potential builders.
 - :mod:`producers`
     Distribution producers and CBED axis binders.
 - :mod:`reduce`
@@ -53,6 +62,8 @@ Routine Listings
 :func:`apply_distributions`
     Reduce multiple weighted distribution axes to detector
     intensity.
+:func:`atomic_form_factor`
+    Evaluate an atomic form factor, using Lobato by default.
 :func:`bessel_kv`
     Modified Bessel function of the second kind K_v(x).
 :func:`bind_cbed_axes`
@@ -74,15 +85,27 @@ Routine Listings
     Validate 4D-STEM inputs and run the bare 4D-STEM kernel.
 :func:`coherence_to_distribution`
     Build the incoherent chromatic/angular coherence distribution.
+:func:`crystal_potential_slices`
+    Convert :class:`~ptyrodactyl.types.CrystalData` to
+    :class:`~ptyrodactyl.types.PotentialSlices`.
+:func:`crystal_potential_volume`
+    Superimpose atomic voltage fields and return a Potential3D carrier.
 :func:`decompose_beam_to_modes`
     Decompose electron beam into orthogonal modes.
 :func:`fourier_calib`
     Calculate Fourier space calibration from real space.
 :func:`fourier_coords`
     Generate Fourier space coordinate arrays.
-:func:`kirkland_potentials_crystal`
-    Convert :class:`~ptyrodactyl.types.CrystalData` to
-    :class:`~ptyrodactyl.types.PotentialSlices`.
+:func:`kirkland_form_factor`
+    Evaluate the Kirkland reciprocal-space form factor.
+:func:`kirkland_projected_potential`
+    Evaluate the Kirkland projected real-space potential.
+:func:`lobato_bandlimited_peak`
+    Evaluate the on-nucleus peak of a band-limited Lobato potential.
+:func:`lobato_form_factor`
+    Evaluate the Lobato--Van Dyck reciprocal-space form factor.
+:func:`lobato_projected_potential`
+    Evaluate the Lobato--Van Dyck projected real-space potential.
 :func:`make_probe`
     Create electron probe with specified aberrations.
 :func:`position_jitter_to_distribution`
@@ -90,13 +113,17 @@ Routine Listings
     distribution.
 :func:`probe_modes_to_distribution`
     Return the explicit incoherent distribution for probe modes.
+:func:`projected_atom_potential`
+    Evaluate an atomic projected potential, using Lobato by default.
 :func:`propagation_func`
     Compute Fresnel propagation function.
 :func:`shift_beam_fourier`
     Shift electron beam in Fourier space for scanning.
 :func:`single_atom_potential`
-    Projected potential of a single atom via Kirkland
+    Projected potential of a single atom via selectable IAM
     parameterization.
+:func:`single_atom_potential_3d`
+    Build one band-limited atomic voltage field on an orthogonal grid.
 :func:`stem4d_sharded`
     Generate 4D-STEM data from sharded beams and atom
     coordinates.
@@ -132,7 +159,7 @@ from ptyrodactyl.multislice.simulations import (
 
 from .atom_potentials import (
     bessel_kv,
-    kirkland_potentials_crystal,
+    crystal_potential_slices,
     single_atom_potential,
 )
 from .checked import (
@@ -141,7 +168,20 @@ from .checked import (
     checked_stem4d_sharded,
     checked_stem_4d,
 )
+from .form_factors import (
+    atomic_form_factor,
+    kirkland_form_factor,
+    kirkland_projected_potential,
+    lobato_bandlimited_peak,
+    lobato_form_factor,
+    lobato_projected_potential,
+    projected_atom_potential,
+)
 from .parallelized import stem4d_sharded
+from .potential_volume import (
+    crystal_potential_volume,
+    single_atom_potential_3d,
+)
 from .producers import (
     coherence_to_distribution,
     position_jitter_to_distribution,
@@ -153,6 +193,7 @@ __all__: list[str] = [
     "annular_detector",
     "apply_distribution",
     "apply_distributions",
+    "atomic_form_factor",
     "bessel_kv",
     "bind_cbed_axes",
     "cbed_amplitude",
@@ -162,16 +203,24 @@ __all__: list[str] = [
     "checked_stem4d_sharded",
     "checked_stem_4d",
     "coherence_to_distribution",
+    "crystal_potential_slices",
+    "crystal_potential_volume",
     "decompose_beam_to_modes",
     "fourier_calib",
     "fourier_coords",
-    "kirkland_potentials_crystal",
+    "kirkland_form_factor",
+    "kirkland_projected_potential",
+    "lobato_bandlimited_peak",
+    "lobato_form_factor",
+    "lobato_projected_potential",
     "make_probe",
     "position_jitter_to_distribution",
     "probe_modes_to_distribution",
+    "projected_atom_potential",
     "propagation_func",
     "shift_beam_fourier",
     "single_atom_potential",
+    "single_atom_potential_3d",
     "stem_4d",
     "stem4d_sharded",
     "transmission_func",

@@ -29,8 +29,8 @@ from ptyrodactyl.tools.constants import relativistic_wavelength_ang
 from ptyrodactyl.types import scalar_float, scalar_num
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def clip_cbed(
     cbed: Float[Array, "H W"],
     fourier_calib_inv_ang: scalar_float,
@@ -112,8 +112,8 @@ def clip_cbed(
     return resized
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def contrast_stretch(
     series: Union[Float[Array, " H W"], Float[Array, " N H W"]],
     p1: scalar_float,

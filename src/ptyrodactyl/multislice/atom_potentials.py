@@ -2,9 +2,9 @@
 
 Extended Summary
 ----------------
-Functions for calculating projected atomic potentials using
-Kirkland scattering factors and assembling them into potential
-slices for multislice simulations. Supports periodic boundary
+Functions for calculating projected atomic potentials using selectable
+Lobato--Van Dyck or Kirkland scattering factors and assembling them into
+potential slices for multislice simulations. Supports periodic boundary
 handling and FFT-based sub-pixel atom positioning.
 
 Routine Listings
@@ -25,14 +25,13 @@ Routine Listings
     Exact formula for K_{1/2}(x).
 :func:`bessel_kv`
     Modified Bessel function of the second kind K_v(x).
-:func:`_calculate_bessel_contributions`
-    Bessel contributions to the atomic potential.
-:func:`_calculate_gaussian_contributions`
-    Gaussian contributions to the atomic potential.
+:func:`crystal_potential_slices`
+    Convert :class:`~ptyrodactyl.types.CrystalData` to
+    :class:`~ptyrodactyl.types.PotentialSlices`.
 :func:`_downsample_potential`
     Downsample supersampled potential to target resolution.
 :func:`single_atom_potential`
-    Projected potential of a single atom via Kirkland
+    Projected potential of a single atom via selectable IAM
     parameterization.
 :func:`_slice_atoms`
     Partition atoms into slices along the z-axis.
@@ -48,9 +47,6 @@ Routine Listings
     Apply periodic repeats or return unchanged positions.
 :func:`_build_potential_lookup`
     Build lookup table for atomic potentials.
-:func:`kirkland_potentials_crystal`
-    Convert :class:`~ptyrodactyl.types.CrystalData` to
-    :class:`~ptyrodactyl.types.PotentialSlices`.
 
 Notes
 -----
@@ -59,15 +55,12 @@ partitioning, periodic image expansion, Bessel function
 calculations, and potential lookup tables.
 """
 
-from functools import partial
-
 import jax
 import jax.numpy as jnp
 from beartype import beartype
 from beartype.typing import Optional, Tuple
 from jaxtyping import Array, Bool, Complex, Float, Int, Real, jaxtyped
 
-from ptyrodactyl.inout import kirkland_potentials
 from ptyrodactyl.types import (
     CrystalData,
     PotentialSlices,
@@ -76,6 +69,8 @@ from ptyrodactyl.types import (
     scalar_int,
     scalar_num,
 )
+
+from .form_factors import projected_atom_potential
 
 
 def _bessel_iv_series(
@@ -435,8 +430,8 @@ def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
     return k_half_result
 
 
-@jaxtyped(typechecker=beartype)
 @jax.jit
+@jaxtyped(typechecker=beartype)
 def bessel_kv(
     v: scalar_float,
     x: Float[Array, " ..."],
@@ -482,7 +477,7 @@ def bessel_kv(
     is at ``x = 2.0``. For integer orders ``n > 1``, forward
     recurrence with masked updates is used.
 
-    :see: single_atom_potential, kirkland_potentials_crystal.
+    :see: single_atom_potential, crystal_potential_slices.
     """
     v: Float[Array, ""] = jnp.asarray(v)
     x: Float[Array, " ..."] = jnp.asarray(x)
@@ -519,73 +514,6 @@ def bessel_kv(
     )
 
     return final_result
-
-
-def _calculate_bessel_contributions(
-    kirk_params: Float[Array, " 12"],
-    r: Float[Array, " h w"],
-    term1: Float[Array, ""],
-) -> Float[Array, " h w"]:
-    r"""Evaluate the three Bessel :math:`K_0` terms of the Kirkland potential.
-
-    Parameters
-    ----------
-    kirk_params : Float[Array, " 12"]
-        Kirkland parameters for one element (first 6 used).
-    r : Float[Array, " h w"]
-        Radial distance grid in Angstroms.
-    term1 : Float[Array, ""]
-        Prefactor :math:`4\pi^2 a_0 e_k`.
-
-    Returns
-    -------
-    Float[Array, " h w"]
-        Sum of three Bessel contributions scaled by *term1*.
-    """
-    bessel_term1: Float[Array, " h w"] = kirk_params[0] * bessel_kv(
-        0.0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[1]) * r
-    )
-    bessel_term2: Float[Array, " h w"] = kirk_params[2] * bessel_kv(
-        0.0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[3]) * r
-    )
-    bessel_term3: Float[Array, " h w"] = kirk_params[4] * bessel_kv(
-        0.0, 2.0 * jnp.pi * jnp.sqrt(kirk_params[5]) * r
-    )
-    return term1 * (bessel_term1 + bessel_term2 + bessel_term3)
-
-
-def _calculate_gaussian_contributions(
-    kirk_params: Float[Array, " 12"],
-    r: Float[Array, " h w"],
-    term2: Float[Array, ""],
-) -> Float[Array, " h w"]:
-    r"""Evaluate the three Gaussian terms of the Kirkland potential.
-
-    Parameters
-    ----------
-    kirk_params : Float[Array, " 12"]
-        Kirkland parameters for one element (last 6 used).
-    r : Float[Array, " h w"]
-        Radial distance grid in Angstroms.
-    term2 : Float[Array, ""]
-        Prefactor :math:`2\pi^2 a_0 e_k`.
-
-    Returns
-    -------
-    Float[Array, " h w"]
-        Sum of three Gaussian contributions scaled by
-        *term2*.
-    """
-    gauss_term1: Float[Array, " h w"] = (
-        kirk_params[6] / kirk_params[7]
-    ) * jnp.exp(-(jnp.pi**2 / kirk_params[7]) * r**2)
-    gauss_term2: Float[Array, " h w"] = (
-        kirk_params[8] / kirk_params[9]
-    ) * jnp.exp(-(jnp.pi**2 / kirk_params[9]) * r**2)
-    gauss_term3: Float[Array, " h w"] = (
-        kirk_params[10] / kirk_params[11]
-    ) * jnp.exp(-(jnp.pi**2 / kirk_params[11]) * r**2)
-    return term2 * (gauss_term1 + gauss_term2 + gauss_term3)
 
 
 def _downsample_potential(
@@ -637,48 +565,36 @@ def _downsample_potential(
     return potential_resized
 
 
+@jax.jit(static_argnames=["grid_shape", "supersampling", "parameterization"])
 @jaxtyped(typechecker=beartype)
-@partial(jax.jit, static_argnames=["grid_shape", "supersampling"])
 def single_atom_potential(
     atom_no: scalar_int,
     pixel_size: scalar_float,
     grid_shape: Tuple[int, int],
     center_coords: Optional[Float[Array, " 2"]] = None,
     supersampling: int = 4,
+    *,
+    parameterization: str = "lobato",
 ) -> Float[Array, " h w"]:
     r"""Compute projected potential of a single atom.
 
     Extended Summary
     ----------------
-    Uses the Kirkland parameterization of electron scattering
-    factors, which decomposes the projected potential into
-    three Bessel :math:`K_0` terms and three Gaussian terms:
-
-    .. math::
-
-        V(r) = 4\pi^2 a_0 e_k \sum_{i=1}^{3}
-        a_i\,K_0(2\pi\sqrt{b_i}\,r)
-        + 2\pi^2 a_0 e_k \sum_{i=1}^{3}
-        \frac{c_i}{d_i}\,
-        \exp\!\left(-\frac{\pi^2}{d_i}\,r^2\right)
+    Uses the Lobato--Van Dyck parameterization by default, with the
+    historical Kirkland model available only by explicit selection.
 
     Implementation Logic
     --------------------
-    1. **Physical constants** --
-       Bohr radius :math:`a_0 = 0.5292` Angstroms,
-       :math:`e_k = 14.4` eV Angstroms.
-    2. **Load Kirkland parameters** --
-       12 coefficients for the specified element.
-    3. **Supersampled coordinate grid** --
+    1. **Supersampled coordinate grid** --
        ``grid_shape * supersampling`` with step size
        ``pixel_size / supersampling``.
-    4. **Radial distances** --
+    2. **Radial distances** --
        ``r = sqrt(dx^2 + dy^2 + eps)`` to avoid NaN at
        the origin.
-    5. **Evaluate potential** --
-       :func:`_calculate_bessel_contributions` +
-       :func:`_calculate_gaussian_contributions`.
-    6. **Downsample** --
+    3. **Evaluate potential** --
+       :func:`~ptyrodactyl.multislice.form_factors.projected_atom_potential`
+       selects the requested analytic parameterization.
+    4. **Downsample** --
        Average over supersampling pixels via
        :func:`_downsample_potential`.
 
@@ -695,24 +611,17 @@ def single_atom_potential(
         If ``None``, centers at grid origin.
     supersampling : int, optional
         Supersampling factor. Default is 4.
+    parameterization : str, optional
+        ``"lobato"`` (default) or explicit ``"kirkland"``.
 
     Returns
     -------
     potential_resized : Float[Array, " h w"]
         Projected potential at the target resolution in
-        Kirkland units.
+        volt-Angstroms.
 
-    :see: bessel_kv, kirkland_potentials_crystal.
+    :see: bessel_kv, crystal_potential_slices.
     """
-    a0: Float[Array, ""] = jnp.asarray(0.5292)
-    ek: Float[Array, ""] = jnp.asarray(14.4)
-    term1: Float[Array, ""] = 4.0 * (jnp.pi**2) * a0 * ek
-    term2: Float[Array, ""] = 2.0 * (jnp.pi**2) * a0 * ek
-    kirkland_array: Float[Array, " 103 12"] = kirkland_potentials()
-    atom_idx: Int[Array, ""] = jnp.asarray(atom_no - 1).astype(jnp.int32)
-    kirk_params: Float[Array, " 12"] = jax.lax.dynamic_slice(
-        kirkland_array, (atom_idx, jnp.int32(0)), (1, 12)
-    )[0]
     step_size: Float[Array, ""] = jnp.asarray(pixel_size / supersampling)
     grid_height: int = grid_shape[0] * supersampling
     grid_width: int = grid_shape[1] * supersampling
@@ -724,10 +633,10 @@ def single_atom_potential(
         center_y: Float[Array, ""] = center_coords[1]
     y_coords: Float[Array, " h"] = (
         jnp.arange(grid_height) - grid_height // 2
-    ) * step_size + center_y
+    ) * step_size
     x_coords: Float[Array, " w"] = (
         jnp.arange(grid_width) - grid_width // 2
-    ) * step_size + center_x
+    ) * step_size
     ya: Float[Array, " h w"]
     xa: Float[Array, " h w"]
     ya, xa = jnp.meshgrid(y_coords, x_coords, indexing="ij")
@@ -736,13 +645,11 @@ def single_atom_potential(
         (xa - center_x) ** 2 + (ya - center_y) ** 2 + epsilon
     )
 
-    part1: Float[Array, " h w"] = _calculate_bessel_contributions(
-        kirk_params, r, term1
+    supersampled_potential: Float[Array, " h w"] = projected_atom_potential(
+        atom_no,
+        r,
+        parameterization=parameterization,
     )
-    part2: Float[Array, " h w"] = _calculate_gaussian_contributions(
-        kirk_params, r, term2
-    )
-    supersampled_potential: Float[Array, " h w"] = part1 + part2
 
     target_height: int = grid_shape[0]
     target_width: int = grid_shape[1]
@@ -1259,6 +1166,7 @@ def _build_potential_lookup(
     width: int,
     pixel_size: scalar_float,
     supersampling: scalar_int,
+    parameterization: str,
 ) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
     """Build lookup table of precomputed atomic potentials.
 
@@ -1274,6 +1182,8 @@ def _build_potential_lookup(
         Pixel size in Angstroms.
     supersampling : scalar_int
         Supersampling factor.
+    parameterization : str
+        ``"lobato"`` or explicit ``"kirkland"``.
 
     Returns
     -------
@@ -1306,12 +1216,14 @@ def _build_potential_lookup(
         Float[Array, " h w"]
             Potential (zeros if invalid).
         """
+        safe_atom_no: Int[Array, ""] = jnp.where(is_valid, atom_no, 1)
         potential = single_atom_potential(
-            atom_no=atom_no,
+            atom_no=safe_atom_no,
             pixel_size=pixel_size,
             grid_shape=(height, width),
             center_coords=jnp.array([0.0, 0.0]),
             supersampling=supersampling,
+            parameterization=parameterization,
         )
         return jnp.where(is_valid, potential, jnp.zeros((height, width)))
 
@@ -1358,7 +1270,7 @@ def _build_potential_lookup(
 
 
 @jaxtyped(typechecker=beartype)
-def kirkland_potentials_crystal(
+def crystal_potential_slices(
     crystal_data: CrystalData,
     pixel_size: scalar_float,
     slice_thickness: scalar_float = 1.0,
@@ -1366,6 +1278,8 @@ def kirkland_potentials_crystal(
     padding: scalar_float = 4.0,
     supersampling: scalar_int = 4,
     grid_shape: Optional[Tuple[int, int, int]] = None,
+    *,
+    parameterization: str = "lobato",
 ) -> PotentialSlices:
     """Convert :class:`~ptyrodactyl.types.CrystalData` to potential slices.
 
@@ -1412,6 +1326,8 @@ def kirkland_potentials_crystal(
     grid_shape : Tuple[int, int, int], optional
         Static ``(height, width, n_slices)`` for JIT. If
         ``None``, dimensions are computed dynamically.
+    parameterization : str, optional
+        ``"lobato"`` (default) or explicit ``"kirkland"``.
 
     Returns
     -------
@@ -1473,7 +1389,12 @@ def kirkland_potentials_crystal(
     atomic_potentials: Float[Array, " 118 h w"]
     atom_to_idx_array: Int[Array, " 119"]
     atomic_potentials, atom_to_idx_array = _build_potential_lookup(
-        atom_nums, height, width, pixel_size, supersampling
+        atom_nums,
+        height,
+        width,
+        pixel_size,
+        supersampling,
+        parameterization,
     )
 
     all_slices: Float[Array, " h w n_slices"] = _process_all_slices(
@@ -1504,6 +1425,6 @@ def kirkland_potentials_crystal(
 
 __all__: list[str] = [
     "bessel_kv",
-    "kirkland_potentials_crystal",
+    "crystal_potential_slices",
     "single_atom_potential",
 ]

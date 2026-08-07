@@ -2,9 +2,8 @@
 
 Extended Summary
 ----------------
-This module contains utilities for parsing XYZ crystal structure
-files and for loading atomic-number and Kirkland potential lookup
-tables used by ptyrodactyl.
+This module contains utilities for parsing XYZ crystal-structure files and
+for loading the atomic-number lookup used by ptyrodactyl.
 
 Routine Listings
 ----------------
@@ -14,24 +13,18 @@ Routine Listings
     Return atomic number for a given atomic symbol string.
 :func:`_load_atomic_numbers`
     Load atomic number mapping from JSON file.
-:func:`_load_kirkland_csv`
-    Load Kirkland potential parameters from CSV file.
-:func:`kirkland_potentials`
-    Return preloaded Kirkland potential parameters.
 :func:`_parse_xyz_metadata`
     Extract metadata from the XYZ comment line.
 :func:`parse_xyz`
     Parse an XYZ file and return a validated CrystalData PyTree.
 :data:`_ATOMIC_NUMBERS`
     Module-level dict mapping symbols to atomic numbers.
-:data:`_KIRKLAND_POTENTIALS`
-    Module-level JAX array of Kirkland parameters.
 
 Notes
 -----
-Internal functions (prefixed with underscore) handle loading
-atomic number mappings, Kirkland potentials from CSV, and
-parsing XYZ metadata.
+Internal functions (prefixed with underscore) handle loading atomic-number
+mappings and parsing XYZ metadata. Form-factor tables have their single home
+in :mod:`ptyrodactyl.inout.form_factor_data`.
 """
 
 import json
@@ -39,16 +32,12 @@ import re
 from pathlib import Path
 
 import jax.numpy as jnp
-import numpy as np
 from beartype import beartype
 from beartype.typing import Any, Dict, List, Optional, Union
 from jaxtyping import Array, Float, Int, jaxtyped
 
 from ptyrodactyl.types import CrystalData, create_crystal_data, scalar_int
 
-_KIRKLAND_PATH: Path = (
-    Path(__file__).resolve().parent / "luggage" / "Kirkland_Potentials.csv"
-)
 _ATOMS_PATH: Path = (
     Path(__file__).resolve().parent / "luggage" / "atom_numbers.json"
 )
@@ -138,68 +127,6 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
 
     atomic_number: scalar_int = _ATOMIC_NUMBERS[normalized_symbol]
     return atomic_number
-
-
-@jaxtyped(typechecker=beartype)
-def _load_kirkland_csv(
-    file_path: Optional[Path] = _KIRKLAND_PATH,
-) -> Float[Array, "103 12"]:
-    """Load Kirkland potential parameters from CSV file.
-
-    Parameters
-    ----------
-    file_path : Path, optional
-        Custom path to CSV file, defaults to module path.
-
-    Returns
-    -------
-    Float[Array, "103 12"]
-        Kirkland potential parameters as JAX array.
-
-    Raises
-    ------
-    FileNotFoundError
-        If CSV file is not found.
-    ValueError
-        If CSV dimensions are incorrect.
-
-    Notes
-    -----
-    Uses numpy to load CSV then converts to JAX array for performance.
-    """
-    kirkland_numpy: np.ndarray = np.loadtxt(  # type: ignore[call-overload]
-        file_path, delimiter=",", dtype=np.float64
-    )
-    if kirkland_numpy.shape != (103, 12):
-        raise ValueError(
-            f"Expected CSV shape (103, 12), got {kirkland_numpy.shape}"
-        )
-    kirkland_data: Float[Array, "103 12"] = jnp.asarray(
-        kirkland_numpy, dtype=jnp.float64
-    )
-    return kirkland_data
-
-
-_KIRKLAND_POTENTIALS: Float[Array, "103 12"] = _load_kirkland_csv()
-
-
-@jaxtyped(typechecker=beartype)
-def kirkland_potentials() -> Float[Array, "103 12"]:
-    """Return preloaded Kirkland potential parameters.
-
-    Returns
-    -------
-    kirkland_data : Float[Array, "103 12"]
-        Kirkland potential parameters for elements 1--103.
-
-    Notes
-    -----
-    Data is loaded once at module import time from
-    :data:`_KIRKLAND_POTENTIALS`. No file I/O on each call.
-
-    :see: single_atom_potential, kirkland_potentials_crystal.
-    """
-    return _KIRKLAND_POTENTIALS
 
 
 @beartype
@@ -405,6 +332,5 @@ def _extract_elements_from_comment(comment: str) -> List[str]:
 
 __all__: list[str] = [
     "atomic_symbol",
-    "kirkland_potentials",
     "parse_xyz",
 ]

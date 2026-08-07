@@ -1,8 +1,8 @@
 """Capture / verify the Plan-01 UG regression reference (not a pytest module).
 
 Usage:
-    python tests/plan01_ug_capture.py capture
-    python tests/plan01_ug_capture.py verify
+    python tests/test_data/plan01_ug_capture.py capture
+    python tests/test_data/plan01_ug_capture.py verify
 
 The reference is a fixed-seed CBED + 4D-STEM + sharded 4D-STEM + gradient
 capture. It was re-captured at Plan-03 IM7 after carrier bundling of the

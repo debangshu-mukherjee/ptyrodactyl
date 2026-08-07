@@ -9,37 +9,14 @@ late detector reducers. It is named for the algorithm family rather than a
 generic simulation bucket; :mod:`ptyrodactyl.born` remains a sibling
 subpackage for convergent Born series simulations.
 
-Submodules
-----------
-- :mod:`atom_potentials`
-    Functions for generating atomic potentials and slices from
-    coordinates.
-- :mod:`form_factors`
-    Lobato--Van Dyck and Kirkland atomic form factors and projected
-    potentials.
-- :mod:`checked`
-    JIT-safe validating wrappers for simulation kernels.
-- :mod:`parallelized`
-    Sharded simulation functions for distributed computing.
-- :mod:`potential_volume`
-    Band-limited volumetric independent-atom potential builders.
-- :mod:`producers`
-    Distribution producers and CBED axis binders.
-- :mod:`reduce`
-    Distribution-axis reducers for detector intensity formation.
-- :mod:`simulations`
-    Forward simulation functions for electron beam propagation,
-    CBED patterns, and 4D-STEM data generation with aberration
-    calculations.
-
 The submodules are organized as follows:
 
 - :mod:`atom_potentials`
     Atomic potential calculations for electron microscopy.
-- :mod:`form_factors`
-    Atomic form factors and projected potentials.
 - :mod:`checked`
     JIT-safe validating wrappers for simulation kernels.
+- :mod:`form_factors`
+    Atomic form factors and projected potentials.
 - :mod:`parallelized`
     Parallelized simulation functions for distributed microscopy.
 - :mod:`potential_volume`
@@ -54,83 +31,79 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :func:`aberration`
-    Calculate aberration phase for the electron probe.
+    Calculate the aberration phase for the electron probe.
 :func:`annular_detector`
-    Simulate annular detector for STEM imaging.
+    Integrate 4D-STEM data with an annular detector.
 :func:`apply_distribution`
-    Reduce one weighted distribution axis to detector intensity.
+    Apply the late detector reduction for one distribution axis.
 :func:`apply_distributions`
-    Reduce multiple weighted distribution axes to detector
-    intensity.
+    Apply the late detector reduction for multiple distribution axes.
 :func:`atomic_form_factor`
-    Evaluate an atomic form factor, using Lobato by default.
+    Evaluate an atomic form factor with Lobato as the default.
 :func:`bessel_kv`
-    Modified Bessel function of the second kind K_v(x).
+    Compute the modified Bessel function :math:`K_v(x)`.
 :func:`bind_cbed_axes`
-    Bind distribution cursor rows to the single-mode CBED
-    amplitude kernel.
+    Return a CBED amplitude closure bound to distribution-axis columns.
 :func:`cbed_amplitude`
-    Simulate complex CBED detector amplitudes.
+    Return complex CBED detector fields for each probe mode.
+:func:`cbed_amplitude_from_atoms`
+    Compute CBED detector amplitudes with on-the-fly slice generation.
 :func:`cbed_image`
-    Simulate convergent beam electron diffraction intensity patterns.
+    Simulate a CBED intensity image via explicit mode reduction.
+:func:`cbed_image_from_atoms`
+    Compute CBED intensity from atom slices through the reducer.
 :func:`checked_cbed_image`
     Validate CBED inputs and run the bare CBED intensity kernel.
 :func:`checked_make_probe`
-    Validate probe-construction inputs and run the bare probe
-    kernel.
+    Validate probe-construction inputs and run the bare probe kernel.
 :func:`checked_stem4d_sharded`
-    Validate sharded 4D-STEM inputs and run the bare sharded
-    4D-STEM kernel.
+    Validate sharded 4D-STEM inputs and run the bare sharded kernel.
 :func:`checked_stem_4d`
     Validate 4D-STEM inputs and run the bare 4D-STEM kernel.
 :func:`coherence_to_distribution`
-    Build the incoherent chromatic/angular coherence distribution.
+    Build an incoherent chromatic/angular coherence distribution.
 :func:`crystal_potential_slices`
-    Convert :class:`~ptyrodactyl.types.CrystalData` to
-    :class:`~ptyrodactyl.types.PotentialSlices`.
+    Convert :class:`~ptyrodactyl.types.CrystalData` to potential slices.
 :func:`crystal_potential_volume`
-    Superimpose atomic voltage fields and return a Potential3D carrier.
+    Build a full 3D IAM voltage field from atom positions.
 :func:`decompose_beam_to_modes`
-    Decompose electron beam into orthogonal modes.
+    Decompose an electron beam into orthogonal modes.
 :func:`fourier_calib`
-    Calculate Fourier space calibration from real space.
+    Compute Fourier-space calibration from real-space parameters.
 :func:`fourier_coords`
     Generate Fourier space coordinate arrays.
 :func:`kirkland_form_factor`
-    Evaluate the Kirkland reciprocal-space form factor.
+    Evaluate the Kirkland electron form factor.
 :func:`kirkland_projected_potential`
-    Evaluate the Kirkland projected real-space potential.
+    Evaluate the Kirkland projected electrostatic potential.
 :func:`lobato_bandlimited_peak`
     Evaluate the on-nucleus peak of a band-limited Lobato potential.
 :func:`lobato_form_factor`
-    Evaluate the Lobato--Van Dyck reciprocal-space form factor.
+    Evaluate the Lobato--Van Dyck electron form factor.
 :func:`lobato_projected_potential`
-    Evaluate the Lobato--Van Dyck projected real-space potential.
+    Evaluate the Lobato--Van Dyck projected electrostatic potential.
 :func:`make_probe`
-    Create electron probe with specified aberrations.
+    Create an electron probe with spherical aberrations.
 :func:`position_jitter_to_distribution`
-    Build the incoherent two-dimensional position-jitter
-    distribution.
+    Build an incoherent two-dimensional position-jitter distribution.
 :func:`probe_modes_to_distribution`
     Return the explicit incoherent distribution for probe modes.
 :func:`projected_atom_potential`
-    Evaluate an atomic projected potential, using Lobato by default.
+    Evaluate an atomic projected potential with Lobato as the default.
 :func:`propagation_func`
-    Compute Fresnel propagation function.
+    Compute the Fresnel propagation function for multislice.
 :func:`shift_beam_fourier`
-    Shift electron beam in Fourier space for scanning.
+    Shift beam to new position(s) via Fourier phase ramp.
 :func:`single_atom_potential`
-    Projected potential of a single atom via selectable IAM
-    parameterization.
+    Compute projected potential of a single atom.
 :func:`single_atom_potential_3d`
-    Build one band-limited atomic voltage field on an orthogonal grid.
+    Build one band-limited three-dimensional atomic potential.
 :func:`stem4d_sharded`
-    Generate 4D-STEM data from sharded beams and atom
-    coordinates.
+    Generate 4D-STEM data with on-the-fly beam shifting and slices.
 :func:`stem_4d`
-    Generate 4D-STEM data with multiple probe positions.
+    Generate 4D-STEM data at multiple probe positions.
 :func:`transmission_func`
-    Calculate transmission function for a potential slice.
+    Calculate the complex transmission function of a potential slice.
 
 Notes
 -----
@@ -177,7 +150,11 @@ from .form_factors import (
     lobato_projected_potential,
     projected_atom_potential,
 )
-from .parallelized import stem4d_sharded
+from .parallelized import (
+    cbed_amplitude_from_atoms,
+    cbed_image_from_atoms,
+    stem4d_sharded,
+)
 from .potential_volume import (
     crystal_potential_volume,
     single_atom_potential_3d,
@@ -197,7 +174,9 @@ __all__: list[str] = [
     "bessel_kv",
     "bind_cbed_axes",
     "cbed_amplitude",
+    "cbed_amplitude_from_atoms",
     "cbed_image",
+    "cbed_image_from_atoms",
     "checked_cbed_image",
     "checked_make_probe",
     "checked_stem4d_sharded",

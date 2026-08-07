@@ -22,87 +22,88 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :func:`a_optimality`
-    A-optimality criterion: trace(F^{-1}).
+    Compute A-optimality criterion: trace(F^{-1}).
 :func:`alternating_block_solve`
     Solve via alternating block updates following a schedule.
 :func:`block_gauss_newton_step`
-    Gauss-Newton step updating only specified blocks.
+    Perform a Gauss-Newton step updating only specified blocks.
 :func:`block_jacobian_operator`
-    JVP operator for a single parameter block.
+    Construct a JVP operator for a single parameter block.
 :func:`block_jtj_operator`
-    J^T J operator for a single parameter block.
+    Construct a J^T J operator for a single parameter block.
 :func:`block_vjp_operator`
-    VJP operator for a single parameter block.
+    Construct a VJP operator for a single parameter block.
 :func:`compute_block_gradient`
-    Gradient J^T r for a single parameter block.
+    Compute the gradient J^T r for a single parameter block.
 :func:`condition_number`
-    Condition number of Fisher information matrix.
+    Compute condition number of Fisher information matrix.
 :func:`conjugate_gradient`
-    Matrix-free CG solver for symmetric PSD systems.
+    Solve A x = b via conjugate gradient.
 :func:`cross_block_jtj_operator`
-    Cross-block J^T J operator for Schur complements.
+    Construct a cross-block J^T J operator.
 :func:`d_optimality`
-    D-optimality criterion: log det(F).
+    Compute D-optimality criterion: log det(F).
 :func:`decompose_gauge_observable`
-    Split vector into gauge and observable components.
+    Decompose a perturbation into gauge and observable parts.
 :func:`e_optimality`
-    E-optimality criterion: lambda_min(F).
+    Compute E-optimality criterion: lambda_min(F).
 :func:`effective_fisher`
-    Fisher information after marginalising nuisances.
+    Compute Fisher information after marginalising nuisances.
 :func:`effective_nullspace_dimension`
-    Count dimensions below noise threshold.
+    Count singular values below the noise floor.
 :func:`effective_rank`
-    Count observable dimensions above noise threshold.
+    Count observable dimensions above the noise floor.
 :func:`fisher_diagonal`
-    Fast diagonal approximation of Fisher information.
+    Estimate diagonal of Fisher information via Hutchinson.
 :func:`fisher_eigenspectrum`
-    Eigenvalues of Fisher matrix via Lanczos.
+    Estimate eigenspectrum of Fisher information via Lanczos.
 :func:`fisher_information`
-    Compute Fisher information matrix at a parameter point.
+    Compute the Fisher information matrix.
 :func:`fisher_information_operator`
-    Matrix-free Fisher information operator.
+    Construct a matrix-free Fisher information operator.
 :func:`gauge_invariant_norm`
-    Norm in quotient space (modulo gauge).
+    Compute the norm in quotient space modulo gauge.
 :func:`gauge_orbit_distance`
-    Distance between two points modulo gauge.
+    Compute distance between two points modulo gauge.
 :func:`gauss_newton_solve`
-    Full Gauss-Newton iteration to convergence.
+    Solve nonlinear least-squares via iterated Gauss-Newton.
 :func:`gauss_newton_step`
-    Single Gauss-Newton update step.
+    Compute a single Gauss-Newton update step.
 :func:`hvp_gauss_newton`
-    Gauss-Newton Hessian-vector product operator.
+    Construct the Gauss-Newton Hessian-vector product operator.
 :func:`information_gain`
-    Information gain from adding measurements.
+    Compute information gain from adding measurements.
 :func:`jtj_operator`
-    Normal equations operator J^T J @ v.
+    Construct the normal equations operator J^T J.
 :func:`jvp_operator`
-    Jacobian-vector product J @ v.
+    Construct a Jacobian-vector product operator J @ v.
 :func:`lanczos_tridiagonal`
-    Lanczos algorithm for tridiagonalising operators.
+    Compute the Lanczos tridiagonalisation of a symmetric operator.
 :func:`levenberg_marquardt_solve`
-    Full Levenberg-Marquardt iteration to convergence.
+    Solve nonlinear least-squares via Levenberg-Marquardt.
 :func:`levenberg_marquardt_step`
-    Single LM update step with adaptive damping.
+    Compute a single Levenberg-Marquardt update step.
 :func:`nullspace_vectors_lanczos`
-    Estimate nullspace basis via shifted inverse Lanczos.
+    Estimate basis vectors for the Jacobian nullspace.
 :func:`optimal_weights_e_criterion`
-    Optimal weights for stacking under E-optimality.
+    Find optimal weights under E-optimality.
 :func:`project_to_nullspace`
-    Project perturbation onto gauge subspace.
+    Project a perturbation onto the gauge (nullspace) subspace.
 :func:`project_to_observable`
-    Project perturbation onto observable subspace.
+    Project a perturbation onto the observable subspace.
 :func:`random_gauge_direction`
     Sample a random direction from the gauge subspace.
 :func:`schur_complement`
     Marginalise nuisance parameters via Schur complement.
 :func:`singular_spectrum`
-    Estimate singular values of Jacobian via Lanczos.
+    Estimate the singular spectrum of the Jacobian.
 :func:`split_params`
-    Extract individual blocks from combined params.
+    Extract individual parameter blocks from combined params.
 :func:`stack_fisher`
     Combine Fisher matrices from multiple conditions.
 :func:`vjp_operator`
-    Vector-Jacobian product J^T @ u.
+    Construct a vector-Jacobian product operator J^T @ u.
+
 """
 
 from .blocks import (

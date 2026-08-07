@@ -10,22 +10,22 @@ onto, and quotient out gauge freedom.
 Routine Listings
 ----------------
 :func:`decompose_gauge_observable`
-    Split vector into gauge and observable components.
+    Decompose a perturbation into gauge and observable parts.
 :func:`effective_rank`
-    Count observable dimensions above noise threshold.
+    Count observable dimensions above the noise floor.
 :func:`gauge_invariant_norm`
-    Compute norm in quotient space (modulo gauge).
+    Compute the norm in quotient space modulo gauge.
 :func:`gauge_orbit_distance`
-    Distance between two points modulo gauge.
+    Compute distance between two points modulo gauge.
 :func:`nullspace_vectors_lanczos`
-    Estimate nullspace basis vectors via shifted inverse
-    Lanczos.
+    Estimate basis vectors for the Jacobian nullspace.
 :func:`project_to_nullspace`
-    Project parameter perturbation onto gauge subspace.
+    Project a perturbation onto the gauge (nullspace) subspace.
 :func:`project_to_observable`
-    Project parameter perturbation onto observable subspace.
+    Project a perturbation onto the observable subspace.
 :func:`random_gauge_direction`
     Sample a random direction from the gauge subspace.
+
 """
 
 import jax
@@ -57,6 +57,8 @@ def nullspace_vectors_lanczos(
     eigenvectors corresponding to the smallest eigenvalues.
     Eigenvectors with eigenvalue below *threshold* are
     considered nullspace (gauge) directions.
+
+    :see: :mod:`~.test_gauge`
 
     Implementation Logic
     --------------------
@@ -160,7 +162,10 @@ def nullspace_vectors_lanczos(
             lambda: vectors,
         )
 
-        return (vectors_new, alphas_new, betas_new)
+        result: tuple[
+            Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]
+        ] = (vectors_new, alphas_new, betas_new)
+        return result
 
     lanczos_vectors, alpha, beta = lax.fori_loop(
         0, k, lanczos_body, (lanczos_vectors, alpha, beta)
@@ -190,7 +195,10 @@ def nullspace_vectors_lanczos(
     )
     nullspace_basis = nullspace_basis / (norms + 1e-12)
 
-    return nullspace_basis, eigenvalues
+    nullspace_result: tuple[
+        Float[Array, "num_vectors n"], Float[Array, "num_vectors"]
+    ] = nullspace_basis, eigenvalues
+    return nullspace_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -209,6 +217,8 @@ def project_to_nullspace(
     The gauge component of a perturbation is the part that
     produces no measurable change.  This is the projection
     onto the nullspace of *J*.
+
+    :see: :mod:`~.test_gauge`
 
     Implementation Logic
     --------------------
@@ -297,6 +307,8 @@ def project_to_observable(
     measurable change.  This is the orthogonal complement of
     the nullspace projection.
 
+    :see: :mod:`~.test_gauge`
+
     Implementation Logic
     --------------------
     1. **Compute gauge component** --
@@ -364,6 +376,8 @@ def decompose_gauge_observable(
     :math:`\delta\theta_{\text{obs}} \in \operatorname{col}(
     J^\top)`.
 
+    :see: :mod:`~.test_gauge`
+
     Implementation Logic
     --------------------
     1. **Gauge component** --
@@ -407,7 +421,11 @@ def decompose_gauge_observable(
         random_seed,
     )
     observable_component: PyTree = _tree_sub(perturbation, gauge_component)
-    return gauge_component, observable_component
+    decomposition: tuple[PyTree, PyTree] = (
+        gauge_component,
+        observable_component,
+    )
+    return decomposition
 
 
 @jaxtyped(typechecker=beartype)
@@ -426,6 +444,8 @@ def effective_rank(
     :math:`\sigma_i > \eta` where :math:`\eta` is the noise
     floor.  This is the dimension of the subspace that can be
     reliably recovered from data at the given SNR.
+
+    :see: :mod:`~.test_gauge`
 
     Implementation Logic
     --------------------
@@ -515,7 +535,13 @@ def effective_rank(
         alphas_new: Float[Array, "k"] = alphas.at[iteration].set(alpha_i)
         betas_new: Float[Array, "k"] = betas.at[iteration].set(beta_i)
 
-        return (v_c, v_next, alphas_new, betas_new)
+        result: tuple[
+            Float[Array, "n"],
+            Float[Array, "n"],
+            Float[Array, "k"],
+            Float[Array, "k"],
+        ] = (v_c, v_next, alphas_new, betas_new)
+        return result
 
     _, _, alpha, beta = lax.fori_loop(
         0, k, lanczos_step, (v_prev, v_curr, alpha, beta)
@@ -554,6 +580,8 @@ def gauge_invariant_norm(
     This is the L2 norm of the observable component only.  Two
     perturbations that differ by a gauge direction have the same
     gauge-invariant norm.
+
+    :see: :mod:`~.test_gauge`
 
     Implementation Logic
     --------------------
@@ -618,6 +646,8 @@ def random_gauge_direction(
     :math:`\theta + \alpha \, g` produces measurements
     identical to :math:`\theta` for any :math:`\alpha`, where
     *g* is the returned gauge direction.
+
+    :see: :mod:`~.test_gauge`
 
     Implementation Logic
     --------------------
@@ -706,6 +736,8 @@ def gauge_orbit_distance(
     This measures the physically meaningful difference between
     parameter configurations by projecting the difference onto
     the observable subspace and computing its norm.
+
+    :see: :mod:`~.test_gauge`
 
     Implementation Logic
     --------------------

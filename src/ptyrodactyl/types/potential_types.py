@@ -11,9 +11,9 @@ forward model cannot silently reinterpret the field.
 Routine Listings
 ----------------
 :class:`Potential3D`
-    Band-limited scalar electrostatic potential on an orthogonal grid.
+    Store a band-limited scalar electrostatic potential in volts.
 :func:`create_potential_3d`
-    Create a Potential3D with structural and traced-value validation.
+    Create a validated three-dimensional electrostatic potential.
 
 Notes
 -----
@@ -43,36 +43,44 @@ type _StaticXYZ = Sequence[float] | Num[Array, " 3"]
 class Potential3D(eqx.Module):
     """Store a band-limited scalar electrostatic potential in volts.
 
+    :see: :mod:`~.test_potential_types`
+
     Attributes
     ----------
     volume : Float[Array, "nz ny nx"]
         Sampled electrostatic potential in volts.  This is the carrier's only
         dynamic PyTree leaf.
     voxel_size : tuple[float, float, float]
-        Voxel spacing ``(dx, dy, dz)`` in Angstroms.
+        Static voxel spacing ``(dx, dy, dz)`` in Angstroms.
     box_size : tuple[float, float, float]
-        Periodic box lengths ``(Lx, Ly, Lz)`` in Angstroms.
+        Static periodic box lengths ``(Lx, Ly, Lz)`` in Angstroms.
     origin : tuple[float, float, float]
-        Physical coordinate of sample ``volume[0, 0, 0]``, in Angstroms and
-        ``(x, y, z)`` order.
+        Static physical coordinate of sample ``volume[0, 0, 0]``, in
+        Angstroms and ``(x, y, z)`` order.
     units : str
-        Potential units.  The canonical value is exactly ``"V"``; energy
-        units such as ``"eV"`` are rejected by the factory.
+        Static potential units. The canonical value is exactly ``"V"``;
+        energy units such as ``"eV"`` are rejected by the factory.
     reference_value : float
-        Additive electrostatic reference value in volts.
+        Static additive electrostatic reference value in volts.
     reference_semantics : str
-        Physical meaning of the additive reference.  It must be explicit;
-        an unspecified or silently mean-zeroed reference is invalid.
+        Static physical meaning of the additive reference. It must be
+        explicit; an unspecified or silently mean-zeroed reference is
+        invalid.
     boundary : str
-        Boundary convention used to construct the field.
+        Static boundary convention used to construct the field.
     producer : str
-        Name and version of the potential producer.
+        Static name and version of the potential producer.
     provenance_hash : str
-        Lower-case SHA-256 digest identifying the producer coefficients.
+        Static lower-case SHA-256 digest identifying producer coefficients.
     coefficient_normalization : str
-        Declared continuous-transform and discrete-FFT normalization.
+        Static continuous-transform and discrete-FFT normalization.
     band_limit : float
-        Spherical potential band limit in cycles per Angstrom.
+        Static spherical potential band limit in cycles per Angstrom.
+
+    See Also
+    --------
+    :func:`create_potential_3d`
+        Create and validate a :class:`Potential3D`.
     """
 
     volume: Float[Array, "nz ny nx"]
@@ -113,7 +121,8 @@ def _nonempty_text(value: str, name: str) -> str:
     """Validate and normalize one required static text declaration."""
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string")
-    return value.strip()
+    result: str = value.strip()
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -133,6 +142,8 @@ def create_potential_3d(  # noqa: PLR0912, PLR0913, PLR0915
     band_limit: scalar_num,
 ) -> Potential3D:
     """Create a validated three-dimensional electrostatic potential.
+
+    :see: :mod:`~.test_potential_types`
 
     Parameters
     ----------

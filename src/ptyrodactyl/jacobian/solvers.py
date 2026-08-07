@@ -12,23 +12,22 @@ and :func:`jax.lax.fori_loop`.
 Routine Listings
 ----------------
 :func:`conjugate_gradient`
-    Matrix-free CG solver for symmetric PSD systems.
+    Solve A x = b via conjugate gradient.
 :func:`effective_nullspace_dimension`
-    Count dimensions below noise threshold.
+    Count singular values below the noise floor.
 :func:`gauss_newton_solve`
-    Full Gauss-Newton iteration to convergence.
+    Solve nonlinear least-squares via iterated Gauss-Newton.
 :func:`gauss_newton_step`
-    Single Gauss-Newton update step.
+    Compute a single Gauss-Newton update step.
 :func:`lanczos_tridiagonal`
-    Lanczos algorithm for tridiagonalising symmetric
-    operators.
+    Compute the Lanczos tridiagonalisation of a symmetric operator.
 :func:`levenberg_marquardt_solve`
-    Full LM iteration to convergence.
+    Solve nonlinear least-squares via Levenberg-Marquardt.
 :func:`levenberg_marquardt_step`
-    Single LM update step with adaptive damping.
+    Compute a single Levenberg-Marquardt update step.
 :func:`singular_spectrum`
-    Estimate singular values of Jacobian via Lanczos on
-    J^T J.
+    Estimate the singular spectrum of the Jacobian.
+
 """
 
 import jax
@@ -48,7 +47,16 @@ from ptyrodactyl.jacobian._treemath import (
     _tree_zeros_like,
 )
 from ptyrodactyl.jacobian.operators import jtj_operator, vjp_operator
-from ptyrodactyl.types import CGState, GNState, LanczosState, LMState
+from ptyrodactyl.types import (
+    CGState,
+    GNState,
+    LanczosState,
+    LMState,
+    create_cg_state,
+    create_gn_state,
+    create_lanczos_state,
+    create_lm_state,
+)
 
 
 @jaxtyped(typechecker=beartype)
@@ -67,6 +75,8 @@ def conjugate_gradient(
     This is satisfied by :math:`J^\top J` operators arising
     from linearised least-squares.  The iteration is executed
     via :func:`jax.lax.scan` for JIT compatibility.
+
+    :see: :mod:`~.test_solvers`
 
     Implementation Logic
     --------------------
@@ -113,7 +123,7 @@ def conjugate_gradient(
         initial_residual, initial_residual
     )
 
-    initial_state: CGState = CGState(
+    initial_state: CGState = create_cg_state(
         x=x0,
         r=initial_residual,
         p=initial_residual,
@@ -151,21 +161,23 @@ def conjugate_gradient(
             lambda: new_iteration,
         )
 
-        new_state: CGState = CGState(
+        new_state: CGState = create_cg_state(
             x=x_out,
             r=r_out,
             p=p_out,
             r_dot_r=r_dot_r_out,
             iteration=iteration_out,
         )
-        return new_state, None
+        result: tuple[CGState, None] = new_state, None
+        return result
 
     final_state, _ = lax.scan(
         cg_step, initial_state, None, length=max_iterations
     )
     solution: PyTree = final_state.x
     iterations: Int[Array, ""] = final_state.iteration
-    return solution, iterations
+    solve_result: tuple[PyTree, Int[Array, ""]] = solution, iterations
+    return solve_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -183,6 +195,8 @@ def gauss_newton_step(
     Solves the linearised normal equations
     :math:`J^\top J \, \delta = J^\top r` using CG, where *J*
     is the Jacobian at current params and *r* is the residual.
+
+    :see: :mod:`~.test_solvers`
 
     Implementation Logic
     --------------------
@@ -233,7 +247,8 @@ def gauss_newton_step(
 
     def jtj_fn(vector: PyTree) -> PyTree:
         """Apply the real-Hermitian normal operator."""
-        return _tree_conj(raw_jtj_fn(vector))
+        result: PyTree = _tree_conj(raw_jtj_fn(vector))
+        return result
 
     x0: PyTree = _tree_zeros_like(params)
     step, _ = conjugate_gradient(
@@ -245,7 +260,8 @@ def gauss_newton_step(
     new_residual: Float[Array, "..."] = new_prediction - data
     residual_norm: Float[Array, ""] = jnp.sqrt(jnp.sum(new_residual**2))
 
-    return new_params, residual_norm
+    step_result: tuple[PyTree, Float[Array, ""]] = new_params, residual_norm
+    return step_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -260,14 +276,16 @@ def gauss_newton_solve(
 ) -> tuple[PyTree, GNState]:
     """Solve nonlinear least-squares via iterated Gauss-Newton.
 
+    :see: :mod:`~.test_solvers`
+
     Implementation Logic
     --------------------
     1. **Initialise** --
        Evaluate residual norm at *params_init*.
     2. **Iterate** --
-       For each iteration, compute a GN step and check
-       convergence.  Freeze state once the residual norm
-       drops below *tolerance*.
+       For each active iteration, compute and retain a GN step. Freeze later
+       scan iterations only when the incoming residual norm is already below
+       *tolerance*, including the iteration counter.
     3. **Return** --
        Final parameters and the :class:`GNState`.
 
@@ -306,7 +324,7 @@ def gauss_newton_solve(
     initial_residual: Float[Array, "..."] = initial_prediction - data
     initial_norm: Float[Array, ""] = jnp.sqrt(jnp.sum(initial_residual**2))
 
-    initial_state: GNState = GNState(
+    initial_state: GNState = create_gn_state(
         params=params_init,
         residual_norm=initial_norm,
         iteration=jnp.array(0),
@@ -317,28 +335,53 @@ def gauss_newton_solve(
         _: None,
     ) -> tuple[GNState, None]:
         """Execute one GN iteration with convergence check."""
-        new_params, new_norm = gauss_newton_step(
-            forward_fn, state.params, data, cg_max_iterations, cg_tolerance
+
+        def freeze_update() -> tuple[PyTree, Float[Array, ""]]:
+            """Retain an incoming state that is already converged."""
+            frozen_update: tuple[PyTree, Float[Array, ""]] = (
+                state.params,
+                state.residual_norm,
+            )
+            return frozen_update
+
+        def compute_update() -> tuple[PyTree, Float[Array, ""]]:
+            """Compute one active Gauss-Newton update."""
+            active_update: tuple[PyTree, Float[Array, ""]] = gauss_newton_step(
+                forward_fn,
+                state.params,
+                data,
+                cg_max_iterations,
+                cg_tolerance,
+            )
+            return active_update
+
+        was_converged: Bool[Array, ""] = state.residual_norm < tolerance
+        params_out: PyTree
+        norm_out: Float[Array, ""]
+        params_out, norm_out = lax.cond(
+            was_converged,
+            freeze_update,
+            compute_update,
         )
-        converged: Bool[Array, ""] = new_norm < tolerance
-        params_out: PyTree = lax.cond(
-            converged, lambda: state.params, lambda: new_params
+        iteration_out: Int[Array, ""] = jnp.where(
+            was_converged,
+            state.iteration,
+            state.iteration + 1,
         )
-        norm_out: Float[Array, ""] = lax.cond(
-            converged, lambda: state.residual_norm, lambda: new_norm
-        )
-        new_state: GNState = GNState(
+        new_state: GNState = create_gn_state(
             params=params_out,
             residual_norm=norm_out,
-            iteration=state.iteration + 1,
+            iteration=iteration_out,
         )
-        return new_state, None
+        result: tuple[GNState, None] = new_state, None
+        return result
 
     final_state, _ = lax.scan(
         gn_iteration, initial_state, None, length=max_iterations
     )
     params_final: PyTree = final_state.params
-    return params_final, final_state
+    solve_result: tuple[PyTree, GNState] = params_final, final_state
+    return solve_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -357,6 +400,8 @@ def levenberg_marquardt_step(
     LM interpolates between Gauss-Newton (small damping) and
     gradient descent (large damping).  Solves
     :math:`(J^\top J + \lambda I)\,\delta = J^\top r`.
+
+    :see: :mod:`~.test_solvers`
 
     Implementation Logic
     --------------------
@@ -412,7 +457,8 @@ def levenberg_marquardt_step(
 
     def jtj_fn(vector: PyTree) -> PyTree:
         """Apply the real-Hermitian normal operator."""
-        return _tree_conj(raw_jtj_fn(vector))
+        result: PyTree = _tree_conj(raw_jtj_fn(vector))
+        return result
 
     def damped_operator(v: PyTree) -> PyTree:
         """Apply (J^T J + lambda I) to v."""
@@ -467,7 +513,12 @@ def levenberg_marquardt_step(
         lambda: jnp.sqrt(residual_norm_current),
     )
 
-    return new_params, new_residual_norm, new_damping
+    step_result: tuple[PyTree, Float[Array, ""], Float[Array, ""]] = (
+        new_params,
+        new_residual_norm,
+        new_damping,
+    )
+    return step_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -489,13 +540,16 @@ def levenberg_marquardt_solve(
     problems or when far from the solution.  Adaptively adjusts
     the damping parameter between iterations.
 
+    :see: :mod:`~.test_solvers`
+
     Implementation Logic
     --------------------
     1. **Initialise** --
        Evaluate residual norm and set initial damping.
     2. **Iterate** --
-       For each iteration, compute an LM step with adaptive
-       damping.  Freeze state once converged.
+       For each active iteration, compute and retain an LM step with adaptive
+       damping. Freeze later scan iterations only when the incoming residual
+       norm is already below *tolerance*, including damping and iteration.
     3. **Return** --
        Final parameters and the :class:`LMState`.
 
@@ -535,7 +589,7 @@ def levenberg_marquardt_solve(
     initial_residual: Float[Array, "..."] = initial_prediction - data
     initial_norm: Float[Array, ""] = jnp.sqrt(jnp.sum(initial_residual**2))
 
-    initial_state: LMState = LMState(
+    initial_state: LMState = create_lm_state(
         params=params_init,
         residual_norm=initial_norm,
         damping=jnp.array(damping_init),
@@ -547,37 +601,69 @@ def levenberg_marquardt_solve(
         _: None,
     ) -> tuple[LMState, None]:
         """Execute one LM iteration with convergence check."""
-        new_params, new_norm, new_damping = levenberg_marquardt_step(
-            forward_fn,
-            state.params,
-            data,
-            state.damping,
-            cg_max_iterations,
-            cg_tolerance,
+
+        def freeze_update() -> tuple[
+            PyTree,
+            Float[Array, ""],
+            Float[Array, ""],
+        ]:
+            """Retain an incoming state that is already converged."""
+            frozen_update: tuple[
+                PyTree,
+                Float[Array, ""],
+                Float[Array, ""],
+            ] = (state.params, state.residual_norm, state.damping)
+            return frozen_update
+
+        def compute_update() -> tuple[
+            PyTree,
+            Float[Array, ""],
+            Float[Array, ""],
+        ]:
+            """Compute one active Levenberg-Marquardt update."""
+            active_update: tuple[
+                PyTree,
+                Float[Array, ""],
+                Float[Array, ""],
+            ] = levenberg_marquardt_step(
+                forward_fn,
+                state.params,
+                data,
+                state.damping,
+                cg_max_iterations,
+                cg_tolerance,
+            )
+            return active_update
+
+        was_converged: Bool[Array, ""] = state.residual_norm < tolerance
+        params_out: PyTree
+        norm_out: Float[Array, ""]
+        damping_out: Float[Array, ""]
+        params_out, norm_out, damping_out = lax.cond(
+            was_converged,
+            freeze_update,
+            compute_update,
         )
-        converged: Bool[Array, ""] = new_norm < tolerance
-        params_out: PyTree = lax.cond(
-            converged, lambda: state.params, lambda: new_params
+        iteration_out: Int[Array, ""] = jnp.where(
+            was_converged,
+            state.iteration,
+            state.iteration + 1,
         )
-        norm_out: Float[Array, ""] = lax.cond(
-            converged, lambda: state.residual_norm, lambda: new_norm
-        )
-        damping_out: Float[Array, ""] = lax.cond(
-            converged, lambda: state.damping, lambda: new_damping
-        )
-        new_state: LMState = LMState(
+        new_state: LMState = create_lm_state(
             params=params_out,
             residual_norm=norm_out,
             damping=damping_out,
-            iteration=state.iteration + 1,
+            iteration=iteration_out,
         )
-        return new_state, None
+        result: tuple[LMState, None] = new_state, None
+        return result
 
     final_state, _ = lax.scan(
         lm_iteration, initial_state, None, length=max_iterations
     )
     params_final: PyTree = final_state.params
-    return params_final, final_state
+    solve_result: tuple[PyTree, LMState] = params_final, final_state
+    return solve_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -594,6 +680,8 @@ def lanczos_tridiagonal(
     Krylov subspace and produces a tridiagonal matrix whose
     eigenvalues approximate the extremal eigenvalues of the
     original operator.
+
+    :see: :mod:`~.test_solvers`
 
     Implementation Logic
     --------------------
@@ -635,7 +723,7 @@ def lanczos_tridiagonal(
     v0_norm: Float[Array, ""] = jnp.linalg.norm(initial_vector)
     v0_normalized: Float[Array, "n"] = initial_vector / v0_norm
 
-    initial_state: LanczosState = LanczosState(
+    initial_state: LanczosState = create_lanczos_state(
         v_prev=jnp.zeros(n),
         v_curr=v0_normalized,
         alpha=jnp.zeros(k),
@@ -670,21 +758,23 @@ def lanczos_tridiagonal(
             beta_i
         )
 
-        new_state: LanczosState = LanczosState(
+        new_state: LanczosState = create_lanczos_state(
             v_prev=state.v_curr,
             v_curr=v_next,
             alpha=new_alpha,
             beta=new_beta,
             iteration=state.iteration + 1,
         )
-        return new_state, None
+        result: tuple[LanczosState, None] = new_state, None
+        return result
 
     final_state, _ = lax.scan(lanczos_step, initial_state, None, length=k)
 
     alpha: Float[Array, "k"] = final_state.alpha
     beta: Float[Array, "k-1"] = final_state.beta[:-1]
 
-    return alpha, beta
+    tridiagonal: tuple[Float[Array, "k"], Float[Array, "k-1"]] = alpha, beta
+    return tridiagonal
 
 
 @jaxtyped(typechecker=beartype)
@@ -704,6 +794,8 @@ def singular_spectrum(
     Lanczos algorithm approximates extremal eigenvalues well,
     giving accurate estimates of the largest and smallest
     singular values.
+
+    :see: :mod:`~.test_solvers`
 
     Implementation Logic
     --------------------
@@ -797,6 +889,8 @@ def effective_nullspace_dimension(
     unobservable: they contribute more noise amplification than
     signal recovery.  This count gives the effective dimension
     of the gauge subspace under finite SNR.
+
+    :see: :mod:`~.test_solvers`
 
     Implementation Logic
     --------------------

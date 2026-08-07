@@ -13,11 +13,9 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :func:`crystal2stem4d`
-    4D-STEM simulation from :class:`CrystalData` with
-    automatic sharding.
+    4D-STEM simulation from crystal data with automatic sharding.
 :func:`crystal2stem4d_tiled`
-    Tiled 4D-STEM simulation for large samples with fixed
-    memory per tile.
+    Tiled 4D-STEM simulation for arbitrarily large samples.
 
 Notes
 -----

@@ -7,18 +7,10 @@ for loading the atomic-number lookup used by ptyrodactyl.
 
 Routine Listings
 ----------------
-:func:`_extract_elements_from_comment`
-    Extract element symbols from POSCAR comment line.
 :func:`atomic_symbol`
     Return atomic number for a given atomic symbol string.
-:func:`_load_atomic_numbers`
-    Load atomic number mapping from JSON file.
-:func:`_parse_xyz_metadata`
-    Extract metadata from the XYZ comment line.
 :func:`parse_xyz`
     Parse an XYZ file and return a validated CrystalData PyTree.
-:data:`_ATOMIC_NUMBERS`
-    Module-level dict mapping symbols to atomic numbers.
 
 Notes
 -----
@@ -82,6 +74,8 @@ _ATOMIC_NUMBERS: Dict[str, int] = _load_atomic_numbers()
 @jaxtyped(typechecker=beartype)
 def atomic_symbol(symbol_string: str) -> scalar_int:
     """Return atomic number for a given atomic symbol string.
+
+    :see: :class:`~.test_xyz.TestAtomicSymbol`
 
     Implementation Logic
     --------------------
@@ -201,6 +195,8 @@ def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
 def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
     """Parse an XYZ file and return a validated CrystalData PyTree.
 
+    :see: :class:`~.test_xyz.TestParseXYZ`
+
     Parameters
     ----------
     file_path : str or Path
@@ -286,7 +282,7 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
     )
     atomic_z_arr: Int[Array, " N"] = jnp.array(atomic_numbers, dtype=jnp.int32)
 
-    return create_crystal_data(
+    crystal_data: CrystalData = create_crystal_data(
         positions=positions_arr,
         atomic_numbers=atomic_z_arr,
         lattice=metadata.get("lattice"),
@@ -295,6 +291,7 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
         properties=metadata.get("properties"),
         comment=comment,
     )
+    return crystal_data
 
 
 @beartype

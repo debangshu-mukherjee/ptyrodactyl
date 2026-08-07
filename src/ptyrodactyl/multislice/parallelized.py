@@ -10,16 +10,12 @@ multiple devices.
 
 Routine Listings
 ----------------
-:func:`_compute_slice_potential`
-    Compute potential slice on-the-fly by summing atom type
-    contributions.
 :func:`cbed_amplitude_from_atoms`
-    Compute CBED amplitudes with on-the-fly potential slice generation.
+    Compute CBED detector amplitudes with on-the-fly slice generation.
 :func:`cbed_image_from_atoms`
-    Compute CBED intensity with on-the-fly potential slice generation.
+    Compute CBED intensity from atom slices through the reducer.
 :func:`stem4d_sharded`
-    Generate 4D-STEM data from sharded beams and atom
-    coordinates.
+    Generate 4D-STEM data with on-the-fly beam shifting and slices.
 
 Notes
 -----
@@ -187,6 +183,32 @@ def cbed_amplitude_from_atoms(
     """Compute CBED detector amplitudes with on-the-fly slice generation.
 
     :see: cbed_image_from_atoms, stem4d_sharded.
+
+    :see: :mod:`~.test_parallelized`
+
+    Parameters
+    ----------
+    beam : Complex[Array, "H W M"]
+        Incident probe modes.
+    atom_coords : Float[Array, "N 3"]
+        Cartesian atom coordinates in Angstroms.
+    atom_types : Int[Array, " N"]
+        Atom-type indices into ``atom_potentials``.
+    slice_z_bounds : Float[Array, "S 2"]
+        Lower and upper z bounds for each slice in Angstroms.
+    atom_potentials : Float[Array, "T H W"]
+        Projected potential template for each atom type.
+    voltage_kv : scalar_num
+        Accelerating voltage in kilovolts.
+    calib_ang : scalar_float
+        Real-space pixel calibration in Angstroms.
+    atom_mask : Optional[Float[Array, " N"]], optional
+        Per-atom inclusion weights; all atoms are included by default.
+
+    Returns
+    -------
+    detector_amplitude : Complex[Array, "H W M"]
+        Complex detector-plane amplitude for every probe mode.
     """
     h: int = beam.shape[0]
     w: int = beam.shape[1]
@@ -244,6 +266,34 @@ def cbed_image_from_atoms(
     detector ``|.|^2`` and weighted mode reduction on this path.
 
     :see: cbed_amplitude_from_atoms, stem4d_sharded.
+
+    :see: :mod:`~.test_parallelized`
+
+    Parameters
+    ----------
+    beam : Complex[Array, "H W M"]
+        Incident probe modes.
+    mode_distribution : Distribution
+        Weighted incoherent probe-mode distribution.
+    atom_coords : Float[Array, "N 3"]
+        Cartesian atom coordinates in Angstroms.
+    atom_types : Int[Array, " N"]
+        Atom-type indices into ``atom_potentials``.
+    slice_z_bounds : Float[Array, "S 2"]
+        Lower and upper z bounds for each slice in Angstroms.
+    atom_potentials : Float[Array, "T H W"]
+        Projected potential template for each atom type.
+    voltage_kv : scalar_num
+        Accelerating voltage in kilovolts.
+    calib_ang : scalar_float
+        Real-space pixel calibration in Angstroms.
+    atom_mask : Optional[Float[Array, " N"]], optional
+        Per-atom inclusion weights; all atoms are included by default.
+
+    Returns
+    -------
+    cbed_pattern : Float[Array, "H W"]
+        Incoherently reduced CBED intensity.
     """
     amplitudes: Complex[Array, "H W M"] = cbed_amplitude_from_atoms(
         beam=beam,
@@ -288,6 +338,8 @@ def stem4d_sharded(
     simulation of large datasets. Fully JIT-compilable and
     designed for use with JAX's sharding primitives.
 
+    :see: :mod:`~.test_parallelized`
+
     Implementation Logic
     --------------------
     1. **Pre-compute Fourier quantities** --
@@ -325,6 +377,11 @@ def stem4d_sharded(
         Complete 4D-STEM dataset containing diffraction
         patterns, real- and Fourier-space calibrations,
         scan positions, and accelerating voltage.
+
+    Raises
+    ------
+    ValueError
+        If ``detector.scan_positions_ang`` is ``None``.
 
     :see: cbed_image_from_atoms, checked_stem4d_sharded.
     """
@@ -422,7 +479,10 @@ def stem4d_sharded(
         Float[Array, "B H W"]
             CBED patterns for the batch.
         """
-        return jax.vmap(_process_single_position)(positions_batch)
+        result: Float[Array, "B H W"] = jax.vmap(_process_single_position)(
+            positions_batch
+        )
+        return result
 
     if mesh is not None:
         sharded_compute = jax.shard_map(

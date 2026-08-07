@@ -15,7 +15,7 @@ directly before their first JIT compilation.
 Routine Listings
 ----------------
 :func:`enable_compilation_cache`
-    Point JAX's persistent compilation cache at a directory.
+    Enable JAX's persistent compilation cache.
 
 Notes
 -----
@@ -52,7 +52,8 @@ def _architecture_tag() -> str:
         if flags
         else "noflags"
     )
-    return f"{system}-{machine}-{digest}"
+    result: str = f"{system}-{machine}-{digest}"
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -68,6 +69,8 @@ def enable_compilation_cache(
     Configures the XLA persistent cache so compiled executables are written to
     and reloaded from disk across processes. Call before the first compilation
     for the executables of interest to be cached.
+
+    :see: :mod:`~.test_caching`
 
     Parameters
     ----------
@@ -90,6 +93,7 @@ def enable_compilation_cache(
         ``True`` when the cache directory was created and JAX configuration was
         updated, ``False`` when setup failed.
     """
+    enabled: bool = False
     try:
         root: str = (
             cache_dir
@@ -112,8 +116,9 @@ def enable_compilation_cache(
             min_entry_size_bytes,
         )
     except Exception:
-        return False
-    return True
+        return enabled
+    enabled: bool = True
+    return enabled
 
 
 __all__: list[str] = [

@@ -13,11 +13,9 @@ Routine Listings
 :func:`checked_cbed_image`
     Validate CBED inputs and run the bare CBED intensity kernel.
 :func:`checked_make_probe`
-    Validate probe-construction inputs and run the bare probe
-    kernel.
+    Validate probe-construction inputs and run the bare probe kernel.
 :func:`checked_stem4d_sharded`
-    Validate sharded 4D-STEM inputs and run the bare sharded
-    4D-STEM kernel.
+    Validate sharded 4D-STEM inputs and run the bare sharded kernel.
 :func:`checked_stem_4d`
     Validate 4D-STEM inputs and run the bare 4D-STEM kernel.
 
@@ -59,7 +57,8 @@ _SINGLE_MODE = 1
 
 
 def _shape(value: Array) -> tuple[int, ...]:
-    return tuple(jnp.shape(value))
+    result: tuple[int, ...] = tuple(jnp.shape(value))
+    return result
 
 
 def _raise_if(condition: bool, message: str) -> None:
@@ -79,11 +78,12 @@ def _checked_positive_scalar(
         ~jnp.isfinite(value_arr),
         f"{name} must be finite",
     )
-    return eqx.error_if(
+    result: Num[Array, ""] = eqx.error_if(
         checked_value,
         checked_value <= 0,
         f"{name} must be positive",
     )
+    return result
 
 
 def _checked_finite_scalar(
@@ -92,11 +92,12 @@ def _checked_finite_scalar(
 ) -> Num[Array, ""]:
     value_arr: Num[Array, ""] = jnp.asarray(value)
     _raise_if(value_arr.shape != (), f"{name} must be a scalar")
-    return eqx.error_if(
+    result: Num[Array, ""] = eqx.error_if(
         value_arr,
         ~jnp.isfinite(value_arr),
         f"{name} must be finite",
     )
+    return result
 
 
 def _checked_nonnegative_scalar(
@@ -104,11 +105,12 @@ def _checked_nonnegative_scalar(
     name: str,
 ) -> Num[Array, ""]:
     checked_value: Num[Array, ""] = _checked_finite_scalar(value, name)
-    return eqx.error_if(
+    result: Num[Array, ""] = eqx.error_if(
         checked_value,
         checked_value < 0,
         f"{name} must be non-negative",
     )
+    return result
 
 
 def _checked_microscope(microscope: MicroscopeConfig) -> MicroscopeConfig:
@@ -120,7 +122,7 @@ def _checked_microscope(microscope: MicroscopeConfig) -> MicroscopeConfig:
         _checked_finite_scalar(microscope.c3_ang, "c3_ang"),
         _checked_finite_scalar(microscope.c5_ang, "c5_ang"),
     )
-    return eqx.tree_at(
+    result: MicroscopeConfig = eqx.tree_at(
         lambda config: (
             config.voltage_kv,
             config.aperture_mrad,
@@ -131,6 +133,7 @@ def _checked_microscope(microscope: MicroscopeConfig) -> MicroscopeConfig:
         microscope,
         checked_values,
     )
+    return result
 
 
 def _checked_detector(detector: DetectorConfig) -> DetectorConfig:
@@ -148,7 +151,7 @@ def _checked_detector(detector: DetectorConfig) -> DetectorConfig:
         checked_outer < checked_inner,
         "collection_outer_mrad must be >= collection_inner_mrad",
     )
-    checked_detector = eqx.tree_at(
+    checked_detector: DetectorConfig = eqx.tree_at(
         lambda config: (
             config.real_space_calib_ang,
             config.probe_calibration_pm,
@@ -203,7 +206,8 @@ def _potential_grid_shape(
         len(slices_shape) not in (_MATRIX_RANK, _CUBE_RANK),
         f"{name}.slices must be 2D or 3D",
     )
-    return slices_shape[0], slices_shape[1]
+    result: tuple[int, int] = slices_shape[0], slices_shape[1]
+    return result
 
 
 def _beam_grid_shape(beam: ProbeModes, name: str) -> tuple[int, int]:
@@ -225,7 +229,8 @@ def _beam_grid_shape(beam: ProbeModes, name: str) -> tuple[int, int]:
         weights_shape != (num_modes,),
         f"{name}.weights must have shape (M,)",
     )
-    return modes_shape[0], modes_shape[1]
+    result: tuple[int, int] = modes_shape[0], modes_shape[1]
+    return result
 
 
 def _validate_cbed_structure(
@@ -268,11 +273,12 @@ def _checked_potential_slices(
         ~jnp.isfinite(jnp.asarray(checked_pot_slices.calib)),
         f"{name}.calib must be finite",
     )
-    return eqx.error_if(
+    result: PotentialSlices = eqx.error_if(
         checked_pot_slices,
         jnp.asarray(checked_pot_slices.calib) <= 0,
         f"{name}.calib must be positive",
     )
+    return result
 
 
 def _checked_beam(beam: ProbeModes) -> ProbeModes:
@@ -291,11 +297,12 @@ def _checked_beam(beam: ProbeModes) -> ProbeModes:
         ~jnp.isfinite(jnp.asarray(checked_beam.calib)),
         "beam.calib must be finite",
     )
-    return eqx.error_if(
+    result: ProbeModes = eqx.error_if(
         checked_beam,
         jnp.asarray(checked_beam.calib) <= 0,
         "beam.calib must be positive",
     )
+    return result
 
 
 def _validate_positions_structure(
@@ -322,7 +329,7 @@ def _checked_positions_in_pixels(
     height: int
     width: int
     height, width = grid_shape
-    return eqx.error_if(
+    result: Num[Array, "#P 2"] = eqx.error_if(
         checked_positions,
         jnp.any(
             (checked_positions[:, 0] < 0)
@@ -332,6 +339,7 @@ def _checked_positions_in_pixels(
         ),
         "positions must be within pot_slice grid bounds",
     )
+    return result
 
 
 def _validate_sharded_structure(
@@ -445,13 +453,20 @@ def _checked_sharded_arrays(
         ),
         "scan_positions_ang must be within atom_potentials grid bounds",
     )
-    return (
+    result: tuple[
+        Complex[Array, "H W M"],
+        Float[Array, "P 2"],
+        Float[Array, "N 3"],
+        Float[Array, "S 2"],
+        Float[Array, "T H W"],
+    ] = (
         checked_probe_modes,
         checked_scan_positions,
         checked_atom_coords,
         checked_slice_z_bounds,
         checked_atom_potentials,
     )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -460,6 +475,8 @@ def checked_make_probe(
     detector: DetectorConfig,
 ) -> Complex[Array, " h w"]:
     """Validate probe-construction inputs and run the bare probe kernel.
+
+    :see: :func:`~.test_checked_make_probe_transparent_jit_grad_and_raises`
 
     Parameters
     ----------
@@ -504,6 +521,8 @@ def checked_cbed_image(
     microscope: MicroscopeConfig,
 ) -> CalibratedArray:
     """Validate CBED inputs and run the bare CBED intensity kernel.
+
+    :see: :mod:`~.test_checked`
 
     Parameters
     ----------
@@ -553,6 +572,8 @@ def checked_stem_4d(
     detector: DetectorConfig,
 ) -> STEM4D:
     """Validate 4D-STEM inputs and run the bare 4D-STEM kernel.
+
+    :see: :func:`~.test_checked_stem_4d_transparent_jit_grad_and_raises`
 
     Parameters
     ----------
@@ -621,6 +642,8 @@ def checked_stem4d_sharded(
     mesh: Optional[Mesh] = None,
 ) -> STEM4D:
     """Validate sharded 4D-STEM inputs and run the bare sharded kernel.
+
+    :see: :func:`~.test_checked_stem4d_sharded_transparent_jit_grad_and_raises`
 
     Parameters
     ----------

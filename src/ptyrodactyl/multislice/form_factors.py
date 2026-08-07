@@ -9,19 +9,20 @@ atomic-number dispatchers load the bundled coefficients and default to Lobato.
 Routine Listings
 ----------------
 :func:`atomic_form_factor`
-    Evaluate an atomic form factor, using Lobato by default.
+    Evaluate an atomic form factor with Lobato as the default.
 :func:`kirkland_form_factor`
-    Evaluate the Kirkland reciprocal-space form factor.
+    Evaluate the Kirkland electron form factor.
 :func:`kirkland_projected_potential`
-    Evaluate the Kirkland projected real-space potential.
+    Evaluate the Kirkland projected electrostatic potential.
 :func:`lobato_bandlimited_peak`
     Evaluate the on-nucleus peak of a band-limited Lobato potential.
 :func:`lobato_form_factor`
-    Evaluate the Lobato--Van Dyck reciprocal-space form factor.
+    Evaluate the Lobato--Van Dyck electron form factor.
 :func:`lobato_projected_potential`
-    Evaluate the Lobato--Van Dyck projected real-space potential.
+    Evaluate the Lobato--Van Dyck projected electrostatic potential.
 :func:`projected_atom_potential`
-    Evaluate an atomic projected potential, using Lobato by default.
+    Evaluate an atomic projected potential with Lobato as the default.
+
 """
 
 import math
@@ -31,20 +32,15 @@ import jax.numpy as jnp
 from beartype import beartype
 from jaxtyping import Array, Float, Int, jaxtyped
 
-from ptyrodactyl.inout.form_factor_data import (
-    kirkland_potentials,
-    lobato_potentials,
-)
+from ptyrodactyl.inout import kirkland_potentials, lobato_potentials
 from ptyrodactyl.types import (
     MOTT_BETHE_VOLT_ANGSTROM_SQ,
-    scalar_float,
-    scalar_int,
-)
-from ptyrodactyl.types.form_factor_types import (
     KirklandParameters,
     LobatoParameters,
     create_kirkland_parameters,
     create_lobato_parameters,
+    scalar_float,
+    scalar_int,
 )
 
 _TWO_PI: scalar_float = 2.0 * jnp.pi
@@ -83,7 +79,8 @@ def _checked_atom_index(atom_no: scalar_int) -> Int[Array, ""]:
         (atomic_number < 1) | (atomic_number > _MAX_ATOMIC_NUMBER),
         "atom_no must be between 1 and 103",
     )
-    return checked_atomic_number - 1
+    result: Int[Array, ""] = checked_atomic_number - 1
+    return result
 
 
 def _load_lobato_parameters(atom_no: scalar_int) -> LobatoParameters:
@@ -96,7 +93,10 @@ def _load_lobato_parameters(atom_no: scalar_int) -> LobatoParameters:
     scales: Float[Array, " 5"] = row[
         jnp.asarray(_LOBATO_SCALE_INDICES, dtype=jnp.int32)
     ]
-    return create_lobato_parameters(amplitudes=amplitudes, scales=scales)
+    result: LobatoParameters = create_lobato_parameters(
+        amplitudes=amplitudes, scales=scales
+    )
+    return result
 
 
 def _load_kirkland_parameters(atom_no: scalar_int) -> KirklandParameters:
@@ -109,12 +109,13 @@ def _load_kirkland_parameters(atom_no: scalar_int) -> KirklandParameters:
     scales: Float[Array, " 6"] = row[
         jnp.asarray(_KIRKLAND_SCALE_INDICES, dtype=jnp.int32)
     ]
-    return create_kirkland_parameters(
+    result: KirklandParameters = create_kirkland_parameters(
         lorentzian_amplitudes=amplitudes[:3],
         lorentzian_scales=scales[:3],
         gaussian_amplitudes=amplitudes[3:],
         gaussian_scales=scales[3:],
     )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -123,6 +124,8 @@ def lobato_form_factor(
     q: Float[Array, "..."],
 ) -> Float[Array, "..."]:
     r"""Evaluate the Lobato--Van Dyck electron form factor.
+
+    :see: :func:`~.test_primitive_coefficient_gradients_are_finite`
 
     Parameters
     ----------
@@ -163,6 +166,8 @@ def kirkland_form_factor(
     q: Float[Array, "..."],
 ) -> Float[Array, "..."]:
     r"""Evaluate the Kirkland electron form factor.
+
+    :see: :func:`~.test_primitive_coefficient_gradients_are_finite`
 
     Parameters
     ----------
@@ -210,7 +215,8 @@ def _bessel_kv(
     # the single numerical source used by both parameterizations.
     from .atom_potentials import bessel_kv  # noqa: PLC0415
 
-    return bessel_kv(order, argument)
+    result: Float[Array, "..."] = bessel_kv(order, argument)
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -219,6 +225,8 @@ def lobato_projected_potential(
     r: Float[Array, "..."],
 ) -> Float[Array, "..."]:
     r"""Evaluate the Lobato--Van Dyck projected electrostatic potential.
+
+    :see: :func:`~.test_primitive_coefficient_gradients_are_finite`
 
     Parameters
     ----------
@@ -270,6 +278,8 @@ def kirkland_projected_potential(
 ) -> Float[Array, "..."]:
     r"""Evaluate the Kirkland projected electrostatic potential.
 
+    :see: :func:`~.test_primitive_coefficient_gradients_are_finite`
+
     Parameters
     ----------
     params : KirklandParameters
@@ -285,7 +295,7 @@ def kirkland_projected_potential(
     Notes
     -----
     The legacy ``0.5292 * 14.4`` normalization is intentionally retained so
-    selecting Kirkland reproduces pre-Plan-06 projected potentials exactly.
+    selecting Kirkland reproduces the legacy projected-potential reference.
     """
     checked_r: Float[Array, "..."] = _checked_radius(r)
     r_safe: Float[Array, "..."] = jnp.maximum(checked_r, 1e-10)
@@ -337,6 +347,8 @@ def atomic_form_factor(
 ) -> Float[Array, "..."]:
     """Evaluate an atomic form factor with Lobato as the default.
 
+    :see: :mod:`~.test_form_factors`
+
     Parameters
     ----------
     atom_no : scalar_int
@@ -358,8 +370,14 @@ def atomic_form_factor(
     """
     _validate_parameterization(parameterization)
     if parameterization == "lobato":
-        return lobato_form_factor(_load_lobato_parameters(atom_no), q)
-    return kirkland_form_factor(_load_kirkland_parameters(atom_no), q)
+        form_factor: Float[Array, "..."] = lobato_form_factor(
+            _load_lobato_parameters(atom_no), q
+        )
+    else:
+        form_factor: Float[Array, "..."] = kirkland_form_factor(
+            _load_kirkland_parameters(atom_no), q
+        )
+    return form_factor
 
 
 @jaxtyped(typechecker=beartype)
@@ -370,6 +388,8 @@ def projected_atom_potential(
     parameterization: str = "lobato",
 ) -> Float[Array, "..."]:
     """Evaluate an atomic projected potential with Lobato as the default.
+
+    :see: :mod:`~.test_form_factors`
 
     Parameters
     ----------
@@ -392,8 +412,14 @@ def projected_atom_potential(
     """
     _validate_parameterization(parameterization)
     if parameterization == "lobato":
-        return lobato_projected_potential(_load_lobato_parameters(atom_no), r)
-    return kirkland_projected_potential(_load_kirkland_parameters(atom_no), r)
+        potential: Float[Array, "..."] = lobato_projected_potential(
+            _load_lobato_parameters(atom_no), r
+        )
+    else:
+        potential: Float[Array, "..."] = kirkland_projected_potential(
+            _load_kirkland_parameters(atom_no), r
+        )
+    return potential
 
 
 @jaxtyped(typechecker=beartype)
@@ -402,6 +428,8 @@ def lobato_bandlimited_peak(
     g_max: scalar_float,
 ) -> Float[Array, ""]:
     r"""Evaluate the on-nucleus peak of a band-limited Lobato potential.
+
+    :see: :mod:`~.test_form_factors`
 
     Parameters
     ----------

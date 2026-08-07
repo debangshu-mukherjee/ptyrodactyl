@@ -10,23 +10,23 @@ symmetries.
 
 Routine Listings
 ----------------
-:func:`structure_matrix`
-    Assemble the dynamical matrix from Fourier potentials and excitation
-    errors.
-:func:`excitation_errors`
-    Compute Ewald-sphere excitation errors for reflected beams.
-:func:`scattering_matrix`
-    Propagate beam amplitudes through a slab by matrix exponential.
 :func:`bloch_beam_amplitudes`
-    Compute amplitudes at one thickness from an incident-beam condition.
+    Compute beam amplitudes at one thickness.
 :func:`bloch_thickness_series`
-    Compute amplitudes over uniform thickness steps with ``lax.scan``.
-:func:`two_beam_pendellosung`
-    Evaluate the analytic two-beam Pendellosung solution.
+    Compute amplitudes across uniform thickness steps.
+:func:`excitation_errors`
+    Compute Ewald-sphere excitation errors.
 :func:`extinction_distance`
     Compute the two-beam extinction distance.
 :func:`fourier_potential_from_grid`
-    Sample Fourier potential coefficients from a real-space grid.
+    Sample Fourier potential coefficients from a grid.
+:func:`scattering_matrix`
+    Propagate beam amplitudes with a matrix exponential.
+:func:`structure_matrix`
+    Assemble the Bloch dynamical structure matrix.
+:func:`two_beam_pendellosung`
+    Evaluate the two-beam Pendellosung amplitudes.
+
 """
 
 import jax
@@ -44,19 +44,21 @@ def excitation_errors(
 ) -> Float[Array, "n_beams"]:
     """Compute Ewald-sphere excitation errors.
 
+    :see: :class:`~.test_bloch_forward.TestExcitationErrors`
+
     Parameters
     ----------
-    reflection_vectors
+    reflection_vectors : Float[Array, "n_beams 3"]
         Reciprocal-lattice vectors ``g`` in inverse Angstroms.
-    tilt_vector
+    tilt_vector : Float[Array, "3"]
         Incident-beam propagation direction, dimensionless.
-    wavenumber
+    wavenumber : Float[Array, ""]
         Incident wavenumber magnitude ``k0 = 2 pi / lambda`` in radians per
         Angstrom.
 
     Returns
     -------
-    Float[Array, "n_beams"]
+    excitation : Float[Array, "n_beams"]
         Excitation error ``s_g`` per beam in inverse Angstroms.
 
     Notes
@@ -64,8 +66,6 @@ def excitation_errors(
     Uses ``s_g = -(2 k_vec . g + |g|^2) / (2 |k_vec|)`` with the
     normalized tilted incident direction. The origin reflection therefore has
     zero excitation error.
-
-    :see: :class:`~.test_bloch_forward.TestExcitationErrors`
     """
     incident_wavevector: Float[Array, "3"] = (
         wavenumber * tilt_vector / jnp.linalg.norm(tilt_vector)
@@ -90,27 +90,27 @@ def structure_matrix(
 ) -> Complex[Array, "n_beams n_beams"]:
     """Assemble the Bloch dynamical structure matrix.
 
+    :see: :class:`~.test_bloch_forward.TestStructureMatrix`
+
     Parameters
     ----------
-    fourier_potential
+    fourier_potential : Complex[Array, "n_beams n_beams"]
         Matrix of Fourier potential coefficients ``U_{g-h}`` in inverse
         Angstroms squared.
-    excitation
+    excitation : Float[Array, "n_beams"]
         Excitation error ``s_g`` per beam in inverse Angstroms.
-    wavelength
+    wavelength : Float[Array, ""]
         Electron wavelength ``lambda`` in Angstroms.
 
     Returns
     -------
-    Complex[Array, "n_beams n_beams"]
+    matrix : Complex[Array, "n_beams n_beams"]
         Structure matrix ``A`` in inverse Angstroms.
 
     Notes
     -----
     Off-diagonal entries use ``A_gh = lambda U_{g-h} / (4 pi)`` and the
     diagonal is replaced by the excitation errors.
-
-    :see: :class:`~.test_bloch_forward.TestStructureMatrix`
     """
     off_diagonal: Complex[Array, "n_beams n_beams"] = (
         fourier_potential * wavelength / (4.0 * jnp.pi)
@@ -132,26 +132,26 @@ def scattering_matrix(
 ) -> Complex[Array, "n_beams n_beams"]:
     """Propagate beam amplitudes with a matrix exponential.
 
+    :see: :class:`~.test_bloch_forward.TestScatteringMatrix`
+
     Parameters
     ----------
-    matrix
+    matrix : Complex[Array, "n_beams n_beams"]
         Structure matrix ``A`` in inverse Angstroms.
-    thickness
+    thickness : Float[Array, ""]
         Slab thickness ``t`` in Angstroms.
-    wavelength
+    wavelength : Float[Array, ""]
         Electron wavelength in Angstroms, retained for interface symmetry.
 
     Returns
     -------
-    Complex[Array, "n_beams n_beams"]
+    propagator : Complex[Array, "n_beams n_beams"]
         Scattering matrix ``S(t)``, dimensionless.
 
     Notes
     -----
     Uses ``S(t) = expm(2 pi i A t)`` rather than an eigendecomposition so the
     propagator remains differentiable at repeated Bloch eigenvalues.
-
-    :see: :class:`~.test_bloch_forward.TestScatteringMatrix`
     """
     del wavelength
     exponent: Complex[Array, "n_beams n_beams"] = (
@@ -175,34 +175,34 @@ def bloch_beam_amplitudes(
 ) -> Complex[Array, "n_beams"]:
     """Compute beam amplitudes at one thickness.
 
+    :see: :class:`~.test_bloch_forward.TestBlochBeamAmplitudes`
+
     Parameters
     ----------
-    fourier_potential
+    fourier_potential : Complex[Array, "n_beams n_beams"]
         Fourier potential matrix ``U_{g-h}`` in inverse Angstroms squared.
-    reflection_vectors
+    reflection_vectors : Float[Array, "n_beams 3"]
         Reciprocal-lattice vectors ``g`` in inverse Angstroms.
-    tilt_vector
+    tilt_vector : Float[Array, "3"]
         Incident-beam propagation direction, dimensionless.
-    wavenumber
+    wavenumber : Float[Array, ""]
         Incident wavenumber ``k0`` in radians per Angstrom.
-    wavelength
+    wavelength : Float[Array, ""]
         Electron wavelength ``lambda`` in Angstroms.
-    thickness
+    thickness : Float[Array, ""]
         Slab thickness ``t`` in Angstroms.
-    incident_index
+    incident_index : Int[Array, ""]
         Index of the reflection carrying the incident unit amplitude.
 
     Returns
     -------
-    Complex[Array, "n_beams"]
+    amplitudes : Complex[Array, "n_beams"]
         Complex beam amplitudes ``psi_g`` at thickness ``t``.
 
     Notes
     -----
     This is the selected incident-beam column of the scattering matrix after
     assembling excitation errors and the structure matrix.
-
-    :see: :class:`~.test_bloch_forward.TestBlochBeamAmplitudes`
     """
     excitation: Float[Array, "n_beams"] = excitation_errors(
         reflection_vectors, tilt_vector, wavenumber
@@ -230,36 +230,36 @@ def bloch_thickness_series(
 ) -> Complex[Array, "n_steps n_beams"]:
     """Compute amplitudes across uniform thickness steps.
 
+    :see: :class:`~.test_bloch_forward.TestBlochThicknessSeries`
+
     Parameters
     ----------
-    fourier_potential
+    fourier_potential : Complex[Array, "n_beams n_beams"]
         Fourier potential matrix ``U_{g-h}`` in inverse Angstroms squared.
-    reflection_vectors
+    reflection_vectors : Float[Array, "n_beams 3"]
         Reciprocal-lattice vectors ``g`` in inverse Angstroms.
-    tilt_vector
+    tilt_vector : Float[Array, "3"]
         Incident-beam propagation direction, dimensionless.
-    wavenumber
+    wavenumber : Float[Array, ""]
         Incident wavenumber ``k0`` in radians per Angstrom.
-    wavelength
+    wavelength : Float[Array, ""]
         Electron wavelength ``lambda`` in Angstroms.
-    thickness_step
+    thickness_step : Float[Array, ""]
         Thickness increment per step in Angstroms.
-    n_steps
+    n_steps : int
         Number of thickness steps; this is static for JAX tracing.
-    incident_index
+    incident_index : Int[Array, ""]
         Index of the reflection carrying the incident unit amplitude.
 
     Returns
     -------
-    Complex[Array, "n_steps n_beams"]
+    series : Complex[Array, "n_steps n_beams"]
         Beam amplitudes at each accumulated thickness.
 
     Notes
     -----
     Builds the single-step scattering matrix once, initializes the incident
     beam, and records repeated applications with ``jax.lax.scan``.
-
-    :see: :class:`~.test_bloch_forward.TestBlochThicknessSeries`
     """
     excitation: Float[Array, "n_beams"] = excitation_errors(
         reflection_vectors, tilt_vector, wavenumber
@@ -282,11 +282,16 @@ def bloch_thickness_series(
         _: None,
     ) -> Tuple[Complex[Array, "n_beams"], Complex[Array, "n_beams"]]:
         advanced: Complex[Array, "n_beams"] = step_propagator @ state
-        return advanced, advanced
+        result: Tuple[Complex[Array, "n_beams"], Complex[Array, "n_beams"]] = (
+            advanced,
+            advanced,
+        )
+        return result
 
-    _: Complex[Array, "n_beams"]
-    series: Complex[Array, "n_steps n_beams"]
-    _, series = jax.lax.scan(scan_step, initial_state, None, length=n_steps)
+    scan_result: Tuple[
+        Complex[Array, "n_beams"], Complex[Array, "n_steps n_beams"]
+    ] = jax.lax.scan(scan_step, initial_state, None, length=n_steps)
+    series: Complex[Array, "n_steps n_beams"] = scan_result[1]
     return series
 
 
@@ -297,24 +302,24 @@ def extinction_distance(
 ) -> Float[Array, ""]:
     """Compute the two-beam extinction distance.
 
+    :see: :class:`~.test_bloch_forward.TestExtinctionDistance`
+
     Parameters
     ----------
-    fourier_coefficient
+    fourier_coefficient : Complex[Array, ""]
         Fourier potential coefficient ``U_g`` in inverse Angstroms squared.
-    wavelength
+    wavelength : Float[Array, ""]
         Electron wavelength ``lambda`` in Angstroms.
 
     Returns
     -------
-    Float[Array, ""]
+    distance : Float[Array, ""]
         Extinction distance ``xi_g`` in Angstroms.
 
     Notes
     -----
     Uses ``xi_g = 2 pi / (lambda |U_g|)``, the exact-Bragg thickness scale
     for complete two-beam intensity transfer.
-
-    :see: :class:`~.test_bloch_forward.TestExtinctionDistance`
     """
     modulus: Float[Array, ""] = jnp.abs(fourier_coefficient)
     distance: Float[Array, ""] = 2.0 * jnp.pi / (wavelength * modulus)
@@ -330,20 +335,22 @@ def two_beam_pendellosung(
 ) -> Complex[Array, "2"]:
     """Evaluate the two-beam Pendellosung amplitudes.
 
+    :see: :class:`~.test_bloch_forward.TestTwoBeamPendellosung`
+
     Parameters
     ----------
-    fourier_coefficient
+    fourier_coefficient : Complex[Array, ""]
         Fourier potential coefficient ``U_g`` in inverse Angstroms squared.
-    excitation_error
+    excitation_error : Float[Array, ""]
         Excitation error ``s_g`` in inverse Angstroms.
-    wavelength
+    wavelength : Float[Array, ""]
         Electron wavelength ``lambda`` in Angstroms.
-    thickness
+    thickness : Float[Array, ""]
         Slab thickness ``t`` in Angstroms.
 
     Returns
     -------
-    Complex[Array, "2"]
+    amplitudes : Complex[Array, "2"]
         Transmitted amplitude followed by diffracted amplitude.
 
     Notes
@@ -351,8 +358,6 @@ def two_beam_pendellosung(
     At exact Bragg condition, the diffracted intensity follows
     ``sin^2(pi t / xi_g)``. Nonzero excitation error enters through the
     effective two-beam wavevector.
-
-    :see: :class:`~.test_bloch_forward.TestTwoBeamPendellosung`
     """
     coupling: Float[Array, ""] = (
         wavelength * jnp.abs(fourier_coefficient) / (4.0 * jnp.pi)
@@ -388,26 +393,26 @@ def fourier_potential_from_grid(
 ) -> Complex[Array, "n_beams"]:
     """Sample Fourier potential coefficients from a grid.
 
+    :see: :class:`~.test_bloch_forward.TestFourierPotentialFromGrid`
+
     Parameters
     ----------
-    potential_grid
+    potential_grid : Float[Array, "nx ny nz"]
         Real-space scattering potential in inverse Angstroms squared.
-    miller_indices
+    miller_indices : Int[Array, "n_beams 3"]
         Integer voxel-frequency indices of the requested reflections.
-    grid_shape
+    grid_shape : Int[Array, "3"]
         Voxel counts along each axis, used to wrap negative indices.
 
     Returns
     -------
-    Complex[Array, "n_beams"]
+    coefficients : Complex[Array, "n_beams"]
         Fourier potential coefficients ``U_g`` in inverse Angstroms squared.
 
     Notes
     -----
     The discrete Fourier transform is normalized by the voxel count before
     coefficients are gathered at modulo-wrapped integer frequency indices.
-
-    :see: :class:`~.test_bloch_forward.TestFourierPotentialFromGrid`
     """
     transform: Complex[Array, "nx ny nz"] = (
         jnp.fft.fftn(potential_grid) / potential_grid.size
@@ -419,3 +424,15 @@ def fourier_potential_from_grid(
         wrapped_indices[:, 0], wrapped_indices[:, 1], wrapped_indices[:, 2]
     ]
     return coefficients
+
+
+__all__: list[str] = [
+    "bloch_beam_amplitudes",
+    "bloch_thickness_series",
+    "excitation_errors",
+    "extinction_distance",
+    "fourier_potential_from_grid",
+    "scattering_matrix",
+    "structure_matrix",
+    "two_beam_pendellosung",
+]

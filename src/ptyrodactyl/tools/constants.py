@@ -33,18 +33,10 @@ from jax import Array
 from jaxtyping import Float, jaxtyped
 
 from ptyrodactyl.types import (
-    C_LIGHT as _C_LIGHT,
-)
-from ptyrodactyl.types import (
-    E_CHARGE as _E_CHARGE,
-)
-from ptyrodactyl.types import (
-    H_PLANCK as _H_PLANCK,
-)
-from ptyrodactyl.types import (
-    M_E as _M_E,
-)
-from ptyrodactyl.types import (
+    C_LIGHT,
+    E_CHARGE,
+    H_PLANCK,
+    M_E,
     scalar_num,
 )
 
@@ -66,6 +58,8 @@ def relativistic_wavelength_ang(
 
     where :math:`V` is the accelerating voltage and :math:`m_e`
     is the electron rest mass.
+
+    :see: :mod:`~.test_constants`
 
     Implementation Logic
     --------------------
@@ -99,10 +93,10 @@ def relativistic_wavelength_ang(
     -----
     Uses CODATA 2018 constants.
     """
-    h: Float[Array, " "] = jnp.float64(_H_PLANCK)
-    m: Float[Array, " "] = jnp.float64(_M_E)
-    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
-    c: Float[Array, " "] = jnp.float64(_C_LIGHT)
+    h: Float[Array, " "] = jnp.float64(H_PLANCK)
+    m: Float[Array, " "] = jnp.float64(M_E)
+    e: Float[Array, " "] = jnp.float64(E_CHARGE)
+    c: Float[Array, " "] = jnp.float64(C_LIGHT)
 
     ev: Float[Array, " "] = jnp.float64(voltage_kv) * jnp.float64(1000.0) * e
     numerator: Float[Array, " "] = jnp.square(h) * jnp.square(c)
@@ -139,6 +133,8 @@ def phase_interaction_parameter(
     0.92440\times 10^{-3}`, :math:`\sigma(300\,\mathrm{kV}) =
     0.65262\times 10^{-3}` rad/(V·Angstrom).
 
+    :see: :class:`~.test_constants.TestPhaseInteractionParameter`
+
     Implementation Logic
     --------------------
     1. **Compute relativistic mass** --
@@ -173,8 +169,8 @@ def phase_interaction_parameter(
     lam_m: Float[Array, " "] = relativistic_wavelength_ang(
         voltage_kv
     ) * jnp.float64(1e-10)
-    h: Float[Array, " "] = jnp.float64(_H_PLANCK)
-    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
+    h: Float[Array, " "] = jnp.float64(H_PLANCK)
+    e: Float[Array, " "] = jnp.float64(E_CHARGE)
 
     sigma_si: Float[Array, " "] = (
         2.0 * jnp.pi * m_rel * e * lam_m / jnp.square(h)
@@ -219,6 +215,8 @@ def helmholtz_coupling(
     :math:`\sigma_H(300\,\mathrm{kV}) = 0.41656`
     1/(V·Angstrom^2).
 
+    :see: :class:`~.test_constants.TestHelmholtzCoupling`
+
     Implementation Logic
     --------------------
     1. **Compute relativistic mass** --
@@ -246,8 +244,8 @@ def helmholtz_coupling(
         Relativistic mass used in computation.
     """
     m_rel: Float[Array, " "] = relativistic_mass(voltage_kv)
-    h: Float[Array, " "] = jnp.float64(_H_PLANCK)
-    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
+    h: Float[Array, " "] = jnp.float64(H_PLANCK)
+    e: Float[Array, " "] = jnp.float64(E_CHARGE)
 
     sigma_h_si: Float[Array, " "] = (
         8.0 * jnp.square(jnp.pi) * m_rel * e / jnp.square(h)
@@ -273,6 +271,8 @@ def relativistic_mass(
 
         m = m_e\left(1 + \frac{eV}{m_e c^2}\right)
 
+    :see: :mod:`~.test_constants`
+
     Parameters
     ----------
     voltage_kv : scalar_num
@@ -288,9 +288,9 @@ def relativistic_mass(
     :func:`relativistic_wavelength_ang` :
         Wavelength at the same voltage.
     """
-    m: Float[Array, " "] = jnp.float64(_M_E)
-    e: Float[Array, " "] = jnp.float64(_E_CHARGE)
-    c: Float[Array, " "] = jnp.float64(_C_LIGHT)
+    m: Float[Array, " "] = jnp.float64(M_E)
+    e: Float[Array, " "] = jnp.float64(E_CHARGE)
+    c: Float[Array, " "] = jnp.float64(C_LIGHT)
 
     ev: Float[Array, " "] = jnp.float64(voltage_kv) * jnp.float64(1000.0) * e
     m_rel: Float[Array, " "] = m * (1.0 + ev / (m * jnp.square(c)))

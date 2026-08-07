@@ -7,20 +7,16 @@ crystal structures in electron microscopy simulations.
 
 Routine Listings
 ----------------
-:func:`rotmatrix_vectors`
-    Compute a rotation matrix that rotates one vector to align
-    with another.
-:func:`rotmatrix_axis`
-    Generate a rotation matrix for rotation around an arbitrary
-    axis.
-:func:`rotate_structure`
-    Apply rotation transformations to crystal structures.
 :func:`reciprocal_lattice`
-    Compute reciprocal lattice vectors from real-space unit
-    cell.
+    Compute reciprocal lattice vectors from a real-space cell.
+:func:`rotate_structure`
+    Apply rotation to a crystal structure.
+:func:`rotmatrix_axis`
+    Generate a rotation matrix around an arbitrary axis.
+:func:`rotmatrix_vectors`
+    Compute a rotation matrix that rotates v1 to align with v2.
 :func:`tilt_crystal`
-    Tilt :class:`~ptyrodactyl.types.CrystalData` by alpha and
-    beta angles (TEM stage-like tilts).
+    Tilt :class:`~ptyrodactyl.types.CrystalData` by alpha and beta.
 
 Notes
 -----
@@ -62,6 +58,8 @@ def rotmatrix_vectors(
     where :math:`K` is the skew-symmetric matrix of the unit
     rotation axis.
 
+    :see: :class:`~.test_unitcell.TestRotmatrixVectors`
+
     Implementation Logic
     --------------------
     1. **Normalize input vectors** --
@@ -97,7 +95,7 @@ def rotmatrix_vectors(
     -----
     Fully JIT-compilable. Uses ``jax.lax.cond`` for the
     parallel/anti-parallel branching logic.
-    
+
     :see: rotmatrix_axis, rotate_structure.
     """
     v1: Float[Array, " 3"] = v1 / jnp.linalg.norm(v1)
@@ -200,6 +198,8 @@ def rotmatrix_axis(
             + (1 - \cos\theta)\,\hat{n}\otimes\hat{n}
             + \sin\theta\,[\hat{n}]_\times
 
+    :see: :class:`~.test_unitcell.TestRotmatrixAxis`
+
     Implementation Logic
     --------------------
     1. **Normalize rotation axis** --
@@ -232,7 +232,7 @@ def rotmatrix_axis(
     -----
     Fully JIT-compilable. The resulting matrix is orthogonal
     with determinant +1.
-    
+
     :see: rotmatrix_vectors, rotate_structure, tilt_crystal.
     """
     axis: Float[Array, " 3"] = axis / jnp.linalg.norm(axis)
@@ -280,6 +280,8 @@ def rotate_structure(
     given rotation matrix. Optionally applies an additional
     in-plane rotation around the z-axis.
 
+    :see: :class:`~.test_unitcell.TestRotateStructure`
+
     Implementation Logic
     --------------------
     1. **Extract positions** --
@@ -322,7 +324,7 @@ def rotate_structure(
         and angle.
     :func:`rotmatrix_vectors` : Build rotation matrix from two
         vectors.
-    
+
     :see: rotmatrix_axis, rotmatrix_vectors, tilt_crystal.
     """
     rotated_coords: Real[Array, " N 3"] = coords[:, 1:4] @ rotation_matrix.T
@@ -345,9 +347,10 @@ def rotate_structure(
         rotated_coords_in_plane: Float[Array, " N 3"] = (
             rotated_coords_with_ids[:, 1:4] @ in_plane_rotation.T
         )
-        return jnp.hstack(
+        result: Float[Array, " N 4"] = jnp.hstack(
             (rotated_coords_with_ids[:, 0:1], rotated_coords_in_plane)
         )
+        return result
 
     def _no_inplane_rotation() -> Float[Array, " N 4"]:
         """Return coordinates unchanged (no-op branch).
@@ -357,12 +360,17 @@ def rotate_structure(
         Float[Array, " N 4"]
             Unmodified rotated coordinates.
         """
-        return rotated_coords_with_ids
+        result: Float[Array, " N 4"] = rotated_coords_with_ids
+        return result
 
     rotated_coords_final: Float[Array, " N 4"] = jax.lax.cond(
         theta != 0, _apply_inplane_rotation, _no_inplane_rotation
     )
-    return (rotated_coords_final, rotated_cell)
+    rotation_result: Tuple[Float[Array, " N 4"], Float[Array, "3 3"]] = (
+        rotated_coords_final,
+        rotated_cell,
+    )
+    return rotation_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -381,6 +389,8 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
         (\mathbf{a}_j \times \mathbf{a}_k)}{
         \mathbf{a}_1 \cdot
         (\mathbf{a}_2 \times \mathbf{a}_3)}
+
+    :see: :class:`~.test_unitcell.TestReciprocalLattice`
 
     Implementation Logic
     --------------------
@@ -404,7 +414,7 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
     reciprocal_cell : Float[Array, "3 3"]
         Reciprocal lattice matrix where rows are reciprocal
         vectors b1, b2, b3 in inverse Angstroms.
-    
+
     :see: rotate_structure, tilt_crystal.
     """
     a1: Float[Array, " 3"]
@@ -415,7 +425,8 @@ def reciprocal_lattice(cell: Real[Array, "3 3"]) -> Float[Array, "3 3"]:
     b1: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a2, a3) / vv
     b2: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a3, a1) / vv
     b3: Float[Array, " 3"] = 2 * jnp.pi * jnp.cross(a1, a2) / vv
-    return jnp.stack([b1, b2, b3])
+    reciprocal_cell: Float[Array, "3 3"] = jnp.stack([b1, b2, b3])
+    return reciprocal_cell
 
 
 @jaxtyped(typechecker=beartype)
@@ -438,6 +449,8 @@ def tilt_crystal(
 
     The function is fully differentiable with respect to both
     angles, enabling gradient-based orientation optimization.
+
+    :see: :mod:`~.test_unitcell`
 
     Implementation Logic
     --------------------
@@ -478,7 +491,7 @@ def tilt_crystal(
         angle.
     :func:`rotate_structure` : Lower-level rotation for
         coords + cell arrays.
-    
+
     :see: rotmatrix_axis, rotate_structure.
     """
     x_axis: Float[Array, " 3"] = jnp.array([1.0, 0.0, 0.0])

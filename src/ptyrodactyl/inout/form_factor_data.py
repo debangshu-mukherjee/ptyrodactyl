@@ -27,7 +27,8 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
-from jaxtyping import Array, Float, jaxtyped
+from jaxtyping import Array, Float, Int, jaxtyped
+from numpy.typing import NDArray
 
 _ELEMENT_COUNT: int = 103
 _KIRKLAND_COEFFICIENT_COUNT: int = 12
@@ -38,7 +39,7 @@ _LOBATO_PATH: Path = _LUGGAGE_DIR / "Lobato_van_Dyck.csv"
 
 
 def _validate_coefficients(
-    coefficients: np.ndarray,
+    coefficients: Float[NDArray, "rows columns"],
     *,
     expected_shape: tuple[int, int],
     scale_columns: slice,
@@ -79,7 +80,7 @@ def _load_kirkland_csv(
         If the table has the wrong shape or invalid coefficients.
     """
     resolved_path: Path = _KIRKLAND_PATH if file_path is None else file_path
-    kirkland_numpy: np.ndarray = np.loadtxt(
+    kirkland_numpy: Float[NDArray, "103 12"] = np.loadtxt(
         resolved_path,
         delimiter=",",
         dtype=np.float64,
@@ -126,21 +127,21 @@ def _load_lobato_csv(
     canonical row representation.
     """
     resolved_path: Path = _LOBATO_PATH if file_path is None else file_path
-    atomic_numbers: np.ndarray = np.loadtxt(
+    atomic_numbers: Int[NDArray, "103"] = np.loadtxt(
         resolved_path,
         delimiter=",",
         dtype=np.int64,
         skiprows=1,
         usecols=(0,),
     )
-    grouped: np.ndarray = np.loadtxt(
+    grouped: Float[NDArray, "103 10"] = np.loadtxt(
         resolved_path,
         delimiter=",",
         dtype=np.float64,
         skiprows=1,
         usecols=range(2, 12),
     )
-    expected_atomic_numbers: np.ndarray = np.arange(
+    expected_atomic_numbers: Int[NDArray, "103"] = np.arange(
         1,
         _ELEMENT_COUNT + 1,
         dtype=np.int64,
@@ -156,7 +157,7 @@ def _load_lobato_csv(
         table_name="Lobato",
     )
 
-    interleaved: np.ndarray = np.empty(
+    interleaved: Float[NDArray, "103 10"] = np.empty(
         (_ELEMENT_COUNT, _LOBATO_COEFFICIENT_COUNT),
         dtype=np.float64,
     )
@@ -177,6 +178,8 @@ _LOBATO_POTENTIALS: Float[Array, "103 10"] = _load_lobato_csv()
 def kirkland_potentials() -> Float[Array, "103 12"]:
     """Return preloaded Kirkland potential parameters.
 
+    :see: :mod:`~.test_form_factor_data`
+
     Returns
     -------
     kirkland_data : Float[Array, "103 12"]
@@ -187,12 +190,15 @@ def kirkland_potentials() -> Float[Array, "103 12"]:
     The returned object is the module-level array loaded at import; repeated
     calls perform no file I/O or copy.
     """
-    return _KIRKLAND_POTENTIALS
+    kirkland_data: Float[Array, "103 12"] = _KIRKLAND_POTENTIALS
+    return kirkland_data
 
 
 @jaxtyped(typechecker=beartype)
 def lobato_potentials() -> Float[Array, "103 10"]:
     """Return preloaded Lobato--Van Dyck potential parameters.
+
+    :see: :mod:`~.test_form_factor_data`
 
     Returns
     -------
@@ -205,7 +211,8 @@ def lobato_potentials() -> Float[Array, "103 10"]:
     The returned object is the module-level array loaded at import; repeated
     calls perform no file I/O or copy.
     """
-    return _LOBATO_POTENTIALS
+    lobato_data: Float[Array, "103 10"] = _LOBATO_POTENTIALS
+    return lobato_data
 
 
 __all__: list[str] = [

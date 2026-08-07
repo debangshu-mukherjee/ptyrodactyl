@@ -9,17 +9,18 @@ probability-weight validation, and differentiable normalization.
 Routine Listings
 ----------------
 :class:`Distribution`
-    Generic weighted ensemble over latent samples.
+    Store a generic weighted distribution over latent samples.
 :class:`ReductionMode`
-    Static reduction mode for coherent or incoherent ensemble axes.
+    Store static ensemble reduction mode.
 :func:`create_distribution`
-    Factory for generic weighted sample distributions.
+    Create a Distribution with validated probability weights.
 :func:`create_trivial_distribution`
-    Factory for the identity distribution with one zero sample.
-:obj:`TRIVIAL_DISTRIBUTION`
-    Identity one-sample distribution.
+    Create the one-sample identity distribution.
 :obj:`TRIVIAL`
     Short alias for ``TRIVIAL_DISTRIBUTION``.
+:obj:`TRIVIAL_DISTRIBUTION`
+    Identity one-sample distribution.
+
 """
 
 from enum import Enum
@@ -37,7 +38,7 @@ from .custom_types import scalar_int
 class ReductionMode(str, Enum):
     """Store static ensemble reduction mode.
 
-    :see: :class:`~.test_distributions.test_base.TestDistributionFactories`
+    :see: :class:`~.test_distributions.TestDistributionFactories`
 
     Attributes
     ----------
@@ -54,7 +55,7 @@ class ReductionMode(str, Enum):
 class Distribution(eqx.Module):
     """Store a generic weighted distribution over latent samples.
 
-    :see: :class:`~.test_distributions.test_base.TestDistributionFactories`
+    :see: :class:`~.test_distributions.TestDistributionFactories`
 
     Attributes
     ----------
@@ -68,6 +69,11 @@ class Distribution(eqx.Module):
         Static coherent or incoherent reduction mode.
     axis_id : Optional[str]
         Optional static label for diagnostics and composition.
+
+    See Also
+    --------
+    :func:`create_distribution`
+        Create and validate a :class:`Distribution`.
     """
 
     samples: Float[Array, "N D"]
@@ -104,7 +110,7 @@ def create_distribution(
 ) -> Distribution:
     """Create a Distribution with validated probability weights.
 
-    :see: :class:`~.test_distributions.test_base.TestDistributionFactories`
+    :see: :class:`~.test_distributions.TestDistributionFactories`
 
     Parameters
     ----------
@@ -190,7 +196,7 @@ def create_trivial_distribution(
 ) -> Distribution:
     """Create the one-sample identity distribution.
 
-    :see: :class:`~.test_distributions.test_base.TestDistributionFactories`
+    :see: :class:`~.test_distributions.TestDistributionFactories`
 
     Parameters
     ----------
@@ -258,7 +264,16 @@ def _normalize_probability_weights(
 
 
 TRIVIAL_DISTRIBUTION: Final[Distribution] = create_trivial_distribution()
+"""Identity distribution containing one sample with unit weight.
+
+:see: :class:`~.test_distributions.TestDistributionFactories`
+"""
+
 TRIVIAL: Final[Distribution] = TRIVIAL_DISTRIBUTION
+"""Short alias for :data:`TRIVIAL_DISTRIBUTION`.
+
+:see: :class:`~.test_distributions.TestDistributionFactories`
+"""
 
 
 __all__: list[str] = [

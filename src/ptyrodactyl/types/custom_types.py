@@ -11,7 +11,7 @@ remaining traceable under JAX transformations.
 Routine Listings
 ----------------
 :class:`LossType`
-    Static loss-function selection enum.
+    Store static loss-function selection.
 :obj:`float_jax_image`
     Type alias for 2D JAX float array (H, W).
 :obj:`float_np_image`
@@ -23,17 +23,13 @@ Routine Listings
 :obj:`non_jax_number`
     Union type for non-JAX numeric values (int or float).
 :obj:`scalar_bool`
-    Union type for scalar boolean values (bool or JAX scalar
-    array).
+    Union type for scalar boolean values (bool or JAX scalar array).
 :obj:`scalar_float`
-    Union type for scalar float values (float or JAX scalar
-    array).
+    Union type for scalar float values (float or JAX scalar array).
 :obj:`scalar_int`
-    Union type for scalar integer values (int or JAX scalar
-    array).
+    Union type for scalar integer values (int or JAX scalar array).
 :obj:`scalar_num`
-    Union type for scalar numeric values (int, float, or JAX
-    scalar array).
+    Union type for scalar numeric values (int, float, or JAX scalar array).
 
 Notes
 -----
@@ -51,6 +47,8 @@ from numpy.typing import NDArray
 class LossType(str, Enum):
     """Store static loss-function selection.
 
+    :see: :mod:`~.test_custom_types`
+
     Attributes
     ----------
     MAE : str
@@ -67,31 +65,58 @@ class LossType(str, Enum):
 
 
 scalar_float: TypeAlias = Union[float, Float[Array, " "]]
-"""Scalar float accepted as a Python float or 0-dimensional JAX array."""
+"""Scalar float accepted as a Python float or 0-dimensional JAX array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 scalar_int: TypeAlias = Union[int, Int[Array, " "]]
-"""Scalar integer accepted as a Python int or 0-dimensional JAX array."""
+"""Scalar integer accepted as a Python int or 0-dimensional JAX array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 scalar_bool: TypeAlias = Union[bool, Bool[Array, " "]]
-"""Scalar boolean accepted as a Python bool or 0-dimensional JAX array."""
+"""Scalar boolean accepted as a Python bool or 0-dimensional JAX array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 scalar_num: TypeAlias = Union[int, float, Num[Array, " "]]
-"""Scalar numeric value accepted as Python numeric or JAX scalar array."""
+"""Scalar numeric value accepted as Python numeric or JAX scalar array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 non_jax_number: TypeAlias = Union[int, float]
-"""Non-JAX numeric scalar accepted as a Python int or float."""
+"""Non-JAX numeric scalar accepted as a Python int or float.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 float_jax_image: TypeAlias = Float[Array, " H W"]
-"""2-dimensional JAX floating-point image array."""
+"""2-dimensional JAX floating-point image array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 int_jax_image: TypeAlias = Int[Array, " H W"]
-"""2-dimensional JAX integer image array."""
+"""2-dimensional JAX integer image array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 float_np_image: TypeAlias = Float[NDArray, " H W"]
-"""2-dimensional numpy floating-point image array."""
+"""2-dimensional numpy floating-point image array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 int_np_image: TypeAlias = Int[NDArray, " H W"]
-"""2-dimensional numpy integer image array."""
+"""2-dimensional numpy integer image array.
+
+:see: :mod:`~.test_custom_types`
+"""
 
 __all__: list[str] = [
     "LossType",

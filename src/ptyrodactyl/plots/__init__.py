@@ -4,15 +4,20 @@ Extended Summary
 ----------------
 This package owns presentation transforms and visualization colormaps.
 
+The submodules are organized as follows:
+
+- :mod:`figuring`
+    Plotting-oriented transforms and colormap helpers.
+
 Routine Listings
 ----------------
 :func:`clip_cbed`
-    Clip CBED patterns to mrad extent and resize to target
-    shape.
+    Clip CBED pattern to mrad extent and resize.
 :func:`contrast_stretch`
     Rescale image intensity between specified percentiles.
 :func:`create_phosphor_colormap`
-    Create custom colormap simulating phosphor screen appearance.
+    Create a custom colormap that simulates a phosphor screen appearance.
+
 """
 
 from .figuring import (

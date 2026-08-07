@@ -10,25 +10,22 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :func:`bloch_beam_amplitudes`
-    Beam amplitudes psi_g at one thickness from an incident-beam boundary
-    condition.
+    Compute beam amplitudes at one thickness.
 :func:`bloch_thickness_series`
-    Beam amplitudes across a stack of thicknesses via lax.scan on the
-    propagator.
+    Compute amplitudes across uniform thickness steps.
 :func:`excitation_errors`
-    Excitation error s_g for each beam given tilt and beam energy.
+    Compute Ewald-sphere excitation errors.
 :func:`extinction_distance`
-    Two-beam extinction distance xi_g from a single Fourier coefficient.
+    Compute the two-beam extinction distance.
 :func:`fourier_potential_from_grid`
-    Complex Fourier potential coefficients U_g sampled from a real-space
-    potential array.
+    Sample Fourier potential coefficients from a grid.
 :func:`scattering_matrix`
-    Scattering matrix S(t) = expm(i pi lambda A t) for a given thickness.
+    Propagate beam amplitudes with a matrix exponential.
 :func:`structure_matrix`
-    Assemble the dynamical structure matrix A_gh from Fourier potential and
-    excitation errors.
+    Assemble the Bloch dynamical structure matrix.
 :func:`two_beam_pendellosung`
-    Closed-form two-beam Pendellosung amplitudes for analytic validation.
+    Evaluate the two-beam Pendellosung amplitudes.
+
 """
 
 from .bloch_forward import (

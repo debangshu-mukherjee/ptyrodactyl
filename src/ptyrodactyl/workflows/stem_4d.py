@@ -9,18 +9,10 @@ structure data.
 
 Routine Listings
 ----------------
-:func:`_estimate_memory_gb`
-    Estimate memory requirements for 4D-STEM simulation
-    in gigabytes.
-:func:`_get_device_memory_gb`
-    Get available memory on the first JAX device in
-    gigabytes.
 :func:`crystal2stem4d`
-    4D-STEM simulation from :class:`CrystalData` with
-    automatic sharding.
+    4D-STEM simulation from crystal data with automatic sharding.
 :func:`crystal2stem4d_tiled`
-    Tiled 4D-STEM simulation for large samples with fixed
-    memory per tile.
+    Tiled 4D-STEM simulation for arbitrarily large samples.
 
 Notes
 -----
@@ -39,13 +31,13 @@ from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
 from ptyrodactyl.multislice import (
+    cbed_image_from_atoms,
     make_probe,
     probe_modes_to_distribution,
     single_atom_potential,
     stem4d_sharded,
 )
-from ptyrodactyl.multislice.parallelized import cbed_image_from_atoms
-from ptyrodactyl.tools.constants import relativistic_wavelength_ang
+from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
     CrystalData,
@@ -177,10 +169,13 @@ def _get_device_memory_gb() -> float:
             if hasattr(device, "memory_stats"):
                 stats = device.memory_stats()
                 if stats and "bytes_limit" in stats:
-                    return stats["bytes_limit"] / (1024**3)
-        return 16.0
+                    result: float = stats["bytes_limit"] / 1024**3
+                    return result
+        result: float = 16.0
+        return result
     except Exception:  # noqa: BLE001
-        return 16.0
+        result: float = 16.0
+        return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -211,6 +206,8 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     when beneficial. Output CBED patterns are clipped to the
     specified milliradians extent and resized to the target
     shape.
+
+    :see: :mod:`~.test_stem_4d`
 
     Implementation Logic
     --------------------
@@ -431,13 +428,13 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
             (height, width), dtype=jnp.float64
         )
         half_k: int = kernel_size // 2
-        padded_pot = padded_pot.at[:half_k + 1, :half_k + 1].set(
+        padded_pot = padded_pot.at[: half_k + 1, : half_k + 1].set(
             small_pot[half_k:, half_k:]
         )
-        padded_pot = padded_pot.at[:half_k + 1, -half_k:].set(
+        padded_pot = padded_pot.at[: half_k + 1, -half_k:].set(
             small_pot[half_k:, :half_k]
         )
-        padded_pot = padded_pot.at[-half_k:, :half_k + 1].set(
+        padded_pot = padded_pot.at[-half_k:, : half_k + 1].set(
             small_pot[:half_k, half_k:]
         )
         padded_pot = padded_pot.at[-half_k:, -half_k:].set(
@@ -462,7 +459,8 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
 
     if use_parallel:
         mesh = jax.make_mesh(
-            (len(devices),), ("p",),
+            (len(devices),),
+            ("p",),
         )
         raw_stem4d: STEM4D = stem4d_sharded(
             probe_mode_carrier,
@@ -479,9 +477,7 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
             detector,
         )
     fourier_calib_inv_ang: float = float(raw_stem4d.fourier_space_calib)
-    wavelength_ang_clip: float = float(
-        relativistic_wavelength_ang(voltage_kv)
-    )
+    wavelength_ang_clip: float = float(relativistic_wavelength_ang(voltage_kv))
     mrad_per_inv_ang_clip: float = wavelength_ang_clip * 1000.0
     extent_inv_ang: float = float(cbed_extent_mrad) / mrad_per_inv_ang_clip
     extent_pixels: int = int(np.ceil(extent_inv_ang / fourier_calib_inv_ang))
@@ -513,14 +509,15 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
         clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
             cbed, (y_start, x_start), (clip_h, clip_w)
         )
-        return jax.image.resize(clipped, cbed_shape, method="linear")
+        result: Float[Array, "Ho Wo"] = jax.image.resize(
+            clipped, cbed_shape, method="linear"
+        )
+        return result
 
     clipped_cbeds: Float[Array, "P Ho Wo"] = jax.vmap(_clip_single_cbed)(
         raw_stem4d.data
     )
-    wavelength_ang: float = float(
-        relativistic_wavelength_ang(voltage_kv)
-    )
+    wavelength_ang: float = float(relativistic_wavelength_ang(voltage_kv))
     mrad_per_inv_ang: float = wavelength_ang * 1000.0
     output_fourier_calib_mrad: float = (
         2.0 * float(cbed_extent_mrad) / cbed_shape[0]
@@ -581,6 +578,8 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     where :math:`N_{\text{grid}}` is ``grid_pixels``,
     :math:`\delta x` is ``pixel_size_ang``, and
     :math:`L_{\text{tile}}` is ``tile_size_ang``.
+
+    :see: :mod:`~.test_stem_4d`
 
     Implementation Logic
     --------------------
@@ -708,8 +707,8 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         target_mrad_per_pixel: float = (
             2.0 * float(cbed_extent_mrad) / float(cbed_shape[0])
         )
-        target_inv_ang_per_pixel: float = (
-            target_mrad_per_pixel / (wavelength * 1000.0)
+        target_inv_ang_per_pixel: float = target_mrad_per_pixel / (
+            wavelength * 1000.0
         )
         required_grid_size_ang: float = 1.0 / target_inv_ang_per_pixel
         computed_fourier_pixels: int = int(
@@ -768,13 +767,13 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             (fft_pixels, fft_pixels), dtype=jnp.float64
         )
         half_k: int = kernel_size // 2
-        padded_pot = padded_pot.at[:half_k + 1, :half_k + 1].set(
+        padded_pot = padded_pot.at[: half_k + 1, : half_k + 1].set(
             small_pot[half_k:, half_k:]
         )
-        padded_pot = padded_pot.at[:half_k + 1, -half_k:].set(
+        padded_pot = padded_pot.at[: half_k + 1, -half_k:].set(
             small_pot[half_k:, :half_k]
         )
-        padded_pot = padded_pot.at[-half_k:, :half_k + 1].set(
+        padded_pot = padded_pot.at[-half_k:, : half_k + 1].set(
             small_pot[:half_k, half_k:]
         )
         padded_pot = padded_pot.at[-half_k:, -half_k:].set(
@@ -930,7 +929,10 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
             cbeds : Float[Array, "P H W"]
                 Raw CBED patterns for all positions.
             """
-            return jax.vmap(_process_single_position)(positions)
+            result: Float[Array, "P H W"] = jax.vmap(_process_single_position)(
+                positions
+            )
+            return result
 
         sharded_positions = jax.device_put(scan_positions, in_sharding)
         raw_cbeds: Float[Array, "P H W"] = _compute_all_cbeds(
@@ -970,7 +972,10 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
             cbed, (y_start, x_start), (clip_h, clip_w)
         )
-        return jax.image.resize(clipped, cbed_shape, method="linear")
+        result: Float[Array, "Ho Wo"] = jax.image.resize(
+            clipped, cbed_shape, method="linear"
+        )
+        return result
 
     clipped_cbeds: Float[Array, "P Ho Wo"] = jax.vmap(_clip_single_cbed)(
         raw_cbeds

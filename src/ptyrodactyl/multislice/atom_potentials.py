@@ -9,44 +9,12 @@ handling and FFT-based sub-pixel atom positioning.
 
 Routine Listings
 ----------------
-:func:`_bessel_iv_series`
-    Series expansion for modified Bessel function I_v(x).
-:func:`_bessel_k0_series`
-    Series expansion for K_0(x).
-:func:`_bessel_kn_recurrence`
-    Recurrence relation for K_n(x).
-:func:`_bessel_kv_small_non_integer`
-    K_v(x) for small x and non-integer v.
-:func:`_bessel_kv_small_integer`
-    K_v(x) for small x and integer v.
-:func:`_bessel_kv_large`
-    Asymptotic expansion for K_v(x) at large x.
-:func:`_bessel_k_half`
-    Exact formula for K_{1/2}(x).
 :func:`bessel_kv`
-    Modified Bessel function of the second kind K_v(x).
+    Compute the modified Bessel function :math:`K_v(x)`.
 :func:`crystal_potential_slices`
-    Convert :class:`~ptyrodactyl.types.CrystalData` to
-    :class:`~ptyrodactyl.types.PotentialSlices`.
-:func:`_downsample_potential`
-    Downsample supersampled potential to target resolution.
+    Convert :class:`~ptyrodactyl.types.CrystalData` to potential slices.
 :func:`single_atom_potential`
-    Projected potential of a single atom via selectable IAM
-    parameterization.
-:func:`_slice_atoms`
-    Partition atoms into slices along the z-axis.
-:func:`_compute_grid_dimensions`
-    Compute grid dimensions from coordinate ranges.
-:func:`_process_all_slices`
-    Assemble all potential slices from atomic contributions.
-:func:`_build_shift_masks`
-    Build shift indices and masks for periodic repeats.
-:func:`_tile_positions_with_shifts`
-    Tile positions and atomic numbers with shift vectors.
-:func:`_apply_repeats_or_return`
-    Apply periodic repeats or return unchanged positions.
-:func:`_build_potential_lookup`
-    Build lookup table for atomic potentials.
+    Compute projected potential of a single atom.
 
 Notes
 -----
@@ -221,7 +189,11 @@ def _bessel_kn_recurrence(
             two_i_over_x: Float[Array, " ..."] = 2.0 * i / x
             k_curr: Float[Array, " ..."] = two_i_over_x * k_prev1 + k_prev2
             k_curr = jnp.where(mask, k_curr, k_prev1)
-            return (k_prev1, k_curr), k_curr
+            result: Tuple[
+                Tuple[Float[Array, " ..."], Float[Array, " ..."]],
+                Float[Array, " ..."],
+            ] = ((k_prev1, k_curr), k_curr)
+            return result
 
         carry, k_vals = jax.lax.scan(masked_step, init, indices)
         final_k: Float[Array, " ..."] = carry[1]
@@ -445,6 +417,8 @@ def bessel_kv(
     :math:`v \geq 0` and :math:`x > 0`. Supports broadcasting,
     autodiff, JIT, and vmap.
 
+    :see: :class:`~.test_atom_potentials.TestBesselKv`
+
     Implementation Logic
     --------------------
     1. **Classify order** --
@@ -582,6 +556,8 @@ def single_atom_potential(
     ----------------
     Uses the Lobato--Van Dyck parameterization by default, with the
     historical Kirkland model available only by explicit selection.
+
+    :see: :mod:`~.test_atom_potentials`
 
     Implementation Logic
     --------------------
@@ -769,7 +745,13 @@ def _compute_grid_dimensions(
     y_min: Float[Array, ""] = y_coords_min - padding
 
     if grid_height is not None and grid_width is not None:
-        return x_min, y_min, grid_width, grid_height
+        result: Tuple[Float[Array, ""], Float[Array, ""], int, int] = (
+            x_min,
+            y_min,
+            grid_width,
+            grid_height,
+        )
+        return result
 
     x_coords_max: Float[Array, ""] = jnp.max(x_coords)
     y_coords_max: Float[Array, ""] = jnp.max(y_coords)
@@ -785,7 +767,13 @@ def _compute_grid_dimensions(
     padded_minimum: int = 2 * crop_pixels + 1
     width_int: int = max(int(width), padded_minimum)
     height_int: int = max(int(height), padded_minimum)
-    return x_min, y_min, width_int, height_int
+    result: Tuple[Float[Array, ""], Float[Array, ""], int, int] = (
+        x_min,
+        y_min,
+        width_int,
+        height_int,
+    )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -931,7 +919,8 @@ def _process_all_slices(
             updated_pot: Float[Array, " h w"] = (
                 slice_pot + contribution
             ).astype(jnp.float32)
-            return updated_pot, None
+            result: Tuple[Float[Array, " h w"], None] = updated_pot, None
+            return result
 
         slice_potential, _ = jax.lax.scan(
             _add_atom_contribution,
@@ -1003,7 +992,11 @@ def _build_shift_masks(
     )
     mask_flat: Bool[Array, " max_n^3"] = mask_3d.ravel()
 
-    return mask_flat, shift_indices
+    result: Tuple[Bool[Array, " s"], Int[Array, " s 3"]] = (
+        mask_flat,
+        shift_indices,
+    )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -1068,7 +1061,11 @@ def _tile_positions_with_shifts(
         atomic_numbers_tiled * atom_mask_int
     )
 
-    return (repeated_positions_masked, repeated_atomic_numbers_masked)
+    result: Tuple[Float[Array, " sn 3"], Int[Array, " sn"]] = (
+        repeated_positions_masked,
+        repeated_atomic_numbers_masked,
+    )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -1145,9 +1142,12 @@ def _apply_repeats_or_return(
             shift_vectors.shape[0], dtype=jnp.bool_
         )
 
-        return _tile_positions_with_shifts(
-            positions, atomic_numbers, shift_vectors, mask_flat
+        result: Tuple[Float[Array, " M 3"], Int[Array, " M"]] = (
+            _tile_positions_with_shifts(
+                positions, atomic_numbers, shift_vectors, mask_flat
+            )
         )
+        return result
 
     # Repeats alter the number of atoms, hence they must be concrete whenever
     # this function is traced. Iterating the closed-over/default array here
@@ -1155,8 +1155,15 @@ def _apply_repeats_or_return(
     repeat_values: list[int] = repeats.tolist()
     needs_repeats: bool = any(repeat > 1 for repeat in repeat_values)
     if needs_repeats:
-        return _apply_repeats_with_lattice(positions, atomic_numbers, lattice)
-    return positions, atomic_numbers
+        result: Tuple[Float[Array, " M 3"], Int[Array, " M"]] = (
+            _apply_repeats_with_lattice(positions, atomic_numbers, lattice)
+        )
+        return result
+    result: Tuple[Float[Array, " M 3"], Int[Array, " M"]] = (
+        positions,
+        atomic_numbers,
+    )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -1225,7 +1232,10 @@ def _build_potential_lookup(
             supersampling=supersampling,
             parameterization=parameterization,
         )
-        return jnp.where(is_valid, potential, jnp.zeros((height, width)))
+        result: Float[Array, " h w"] = jnp.where(
+            is_valid, potential, jnp.zeros((height, width))
+        )
+        return result
 
     atomic_potentials: Float[Array, " 118 h w"] = jax.vmap(
         _calc_single_potential_fixed_grid
@@ -1261,12 +1271,17 @@ def _build_potential_lookup(
         mapping_array = jnp.where(
             atom >= 0, mapping_array.at[atom].set(idx), mapping_array
         )
-        return mapping_array, None
+        result: Tuple[Int[Array, " 119"], None] = mapping_array, None
+        return result
 
     atom_to_idx_array, _ = jax.lax.scan(
         _update_mapping2, atom_to_idx_array, (indices, atom_indices)
     )
-    return atomic_potentials, atom_to_idx_array
+    result: Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]] = (
+        atomic_potentials,
+        atom_to_idx_array,
+    )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -1288,6 +1303,8 @@ def crystal_potential_slices(
     Calculates atomic potentials and assembles them into slices
     using FFT-based sub-pixel positioning. Supports periodic
     tiling and padding to avoid wraparound artefacts.
+
+    :see: :class:`~.test_atom_potentials.TestCrystalPotentialSlices`
 
     Implementation Logic
     --------------------
@@ -1333,6 +1350,11 @@ def crystal_potential_slices(
     -------
     pot_slices : PotentialSlices
         Sliced potentials with wraparound artefacts removed.
+
+    Raises
+    ------
+    ValueError
+        If ``crystal_data.lattice`` is ``None``.
 
     Notes
     -----

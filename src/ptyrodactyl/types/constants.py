@@ -19,22 +19,23 @@ never be used as JIT static arguments.
 
 Routine Listings
 ----------------
-:obj:`HBAR`
-    Reduced Planck constant in J·s.
-:obj:`H_PLANCK`
-    Planck constant in J·s.
-:obj:`M_E`
-    Electron rest mass in kg.
-:obj:`E_CHARGE`
-    Elementary charge in C.
-:obj:`C_LIGHT`
-    Speed of light in m/s.
 :obj:`A_BOHR`
     Bohr radius in Angstroms.
+:obj:`C_LIGHT`
+    Speed of light in m/s.
+:obj:`E_CHARGE`
+    Elementary charge in C.
+:obj:`H_PLANCK`
+    Planck constant in J·s.
+:obj:`HBAR`
+    Reduced Planck constant in J·s.
 :obj:`M0C2_EV`
     Electron rest energy in eV.
+:obj:`M_E`
+    Electron rest mass in kg.
 :obj:`MOTT_BETHE_VOLT_ANGSTROM_SQ`
     Mott-Bethe constant h²/(2π m₀ e) in V·Å².
+
 """
 
 import jax.numpy as jnp
@@ -43,28 +44,52 @@ from beartype.typing import Final
 from .custom_types import scalar_float
 
 HBAR: Final[scalar_float] = jnp.asarray(1.054571817e-34)
-"""Reduced Planck constant in J·s."""
+"""Reduced Planck constant in J·s.
+
+:see: :class:`~.test_constants.TestConstantsContract`
+"""
 
 H_PLANCK: Final[scalar_float] = jnp.asarray(6.62607015e-34)
-"""Planck constant in J·s."""
+"""Planck constant in J·s.
+
+:see: :mod:`~.test_constants`
+"""
 
 M_E: Final[scalar_float] = jnp.asarray(9.1093837015e-31)
-"""Electron rest mass in kg."""
+"""Electron rest mass in kg.
+
+:see: :mod:`~.test_constants`
+"""
 
 E_CHARGE: Final[scalar_float] = jnp.asarray(1.602176634e-19)
-"""Elementary charge in C."""
+"""Elementary charge in C.
+
+:see: :mod:`~.test_constants`
+"""
 
 C_LIGHT: Final[scalar_float] = jnp.asarray(2.99792458e8)
-"""Speed of light in m/s."""
+"""Speed of light in m/s.
+
+:see: :mod:`~.test_constants`
+"""
 
 A_BOHR: Final[scalar_float] = jnp.asarray(0.529177210903)
-"""Bohr radius in Angstroms."""
+"""Bohr radius in Angstroms.
+
+:see: :class:`~.test_constants.TestConstantsContract`
+"""
 
 M0C2_EV: Final[scalar_float] = jnp.asarray(510998.95)
-"""Electron rest energy in eV."""
+"""Electron rest energy in eV.
+
+:see: :mod:`~.test_constants`
+"""
 
 MOTT_BETHE_VOLT_ANGSTROM_SQ: Final[scalar_float] = jnp.asarray(47.87801)
-"""Mott-Bethe constant h²/(2π m₀ e) in V·Å² (potential Fourier convention)."""
+"""Mott-Bethe constant h²/(2π m₀ e) in V·Å² (potential Fourier convention).
+
+:see: :mod:`~.test_constants`
+"""
 
 if HBAR.dtype != jnp.float64:
     raise ImportError(

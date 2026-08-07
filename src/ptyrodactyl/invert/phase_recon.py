@@ -13,19 +13,17 @@ from :mod:`ptyrodactyl.types`.
 
 Routine Listings
 ----------------
-:data:`OPTIMIZERS`
+:func:`multi_slice_multi_modal`
+    Reconstruct potential, beam, and positions with multi-slice.
+:func:`single_slice_multi_modal`
+    Reconstruct potential, multi-modal beam, and positions.
+:func:`single_slice_poscorrected`
+    Reconstruct potential, beam, and positions from 4D-STEM data.
+:func:`single_slice_ptychography`
+    Reconstruct potential and beam from 4D-STEM data.
+:obj:`OPTIMIZERS`
     Registry mapping optimizer name strings to
     :class:`~ptyrodactyl.tools.Optimizer` instances.
-:func:`single_slice_ptychography`
-    Single-slice ptychography reconstruction of potential and
-    beam.
-:func:`single_slice_poscorrected`
-    Single-slice reconstruction with scan-position correction.
-:func:`single_slice_multi_modal`
-    Single-slice reconstruction with multi-modal probe and
-    position correction.
-:func:`multi_slice_multi_modal`
-    Multi-slice reconstruction with position correction.
 
 Notes
 -----
@@ -44,8 +42,17 @@ from beartype import beartype
 from beartype.typing import Any, Dict, Tuple, Union
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
 
-import ptyrodactyl.tools as ptt
-from ptyrodactyl.multislice.simulations import stem_4d
+from ptyrodactyl.multislice import stem_4d
+from ptyrodactyl.tools import (
+    Optimizer,
+    adagrad_update,
+    adam_update,
+    create_loss_function,
+    init_adagrad,
+    init_adam,
+    init_rmsprop,
+    rmsprop_update,
+)
 from ptyrodactyl.types import (
     STEM4D,
     CalibratedArray,
@@ -59,15 +66,19 @@ from ptyrodactyl.types import (
     scalar_num,
 )
 
-OPTIMIZERS: Dict[str, ptt.Optimizer] = {
-    "adam": ptt.Optimizer(ptt.init_adam, ptt.adam_update),
-    "adagrad": ptt.Optimizer(ptt.init_adagrad, ptt.adagrad_update),
-    "rmsprop": ptt.Optimizer(ptt.init_rmsprop, ptt.rmsprop_update),
+OPTIMIZERS: Dict[str, Optimizer] = {
+    "adam": Optimizer(init_adam, adam_update),
+    "adagrad": Optimizer(init_adagrad, adagrad_update),
+    "rmsprop": Optimizer(init_rmsprop, rmsprop_update),
 }
+"""Registry mapping optimizer names to configured optimizer operations.
+
+:see: :mod:`~.test_phase_recon`
+"""
 
 
 @beartype
-def _get_optimizer(optimizer_name: str) -> ptt.Optimizer:
+def _get_optimizer(optimizer_name: str) -> Optimizer:
     """Look up an optimizer by name from the registry.
 
     Parameters
@@ -87,11 +98,12 @@ def _get_optimizer(optimizer_name: str) -> ptt.Optimizer:
     """
     if optimizer_name not in OPTIMIZERS:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
-    return OPTIMIZERS[optimizer_name]
+    result: Optimizer = OPTIMIZERS[optimizer_name]
+    return result
 
 
 @jaxtyped(typechecker=beartype)
-def single_slice_ptychography(
+def single_slice_ptychography(  # noqa: PLR0915
     experimental_data: STEM4D,
     initial_potential: CalibratedArray,
     initial_beam: CalibratedArray,
@@ -127,6 +139,8 @@ def single_slice_ptychography(
 
     where :math:`V` is the potential slice and :math:`\psi` is the
     probe wavefunction.
+
+    :see: :func:`~.test_single_slice_ptychography_runs_and_regresses`
 
     Implementation Logic
     --------------------
@@ -242,9 +256,10 @@ def single_slice_ptychography(
             microscope,
             detector,
         )
-        return stem4d_result.data
+        result: Float[Array, "P H W"] = stem4d_result.data
+        return result
 
-    loss_func: Any = ptt.create_loss_function(
+    loss_func: Any = create_loss_function(
         _forward_fn, experimental_4dstem, loss_type
     )
 
@@ -272,9 +287,13 @@ def single_slice_ptychography(
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1))(
             pot_slice, beam
         )
-        return loss, {"pot_slice": grads[0], "beam": grads[1]}
+        result: Tuple[Float[Array, " "], Dict[str, Complex[Array, "H W"]]] = (
+            loss,
+            {"pot_slice": grads[0], "beam": grads[1]},
+        )
+        return result
 
-    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
+    optimizer: Optimizer = _get_optimizer(optimizer_name)
     pot_slice_state: Any = optimizer.init(initial_potential.data_array.shape)
     beam_state: Any = optimizer.init(initial_beam.data_array.shape)
 
@@ -336,7 +355,14 @@ def single_slice_ptychography(
         beam, beam_state = optimizer.update(
             beam, grads["beam"], beam_state, learning_rate
         )
-        return pot_slice, beam, pot_slice_state, beam_state, loss
+        result: Tuple[
+            Complex[Array, "H W"],
+            Complex[Array, "H W"],
+            Any,
+            Any,
+            Float[Array, " "],
+        ] = pot_slice, beam, pot_slice_state, beam_state, loss
+        return result
 
     intermediate_potslice: Complex[Array, "H W S"] = jnp.zeros(
         shape=(
@@ -375,7 +401,8 @@ def single_slice_ptychography(
             saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
             pots = pots.at[:, :, saver].set(pot_slice)
             beams = beams.at[:, :, saver].set(beam)
-            return pots, beams
+            result: tuple[Any, ...] = pots, beams
+            return result
 
         intermediate_potslice, intermediate_beam = jax.lax.cond(
             ii % save_every == 0,
@@ -383,14 +410,18 @@ def single_slice_ptychography(
             lambda args: args,
             (intermediate_potslice, intermediate_beam),
         )
-        return (
-            pot_slice,
-            beam,
-            pot_slice_state,
-            beam_state,
-            intermediate_potslice,
-            intermediate_beam,
-        ), loss
+        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+            (
+                pot_slice,
+                beam,
+                pot_slice_state,
+                beam_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            loss,
+        )
+        return result
 
     if num_iterations > 0:
         pot_slice, beam, pot_slice_state, beam_state, _ = _update_step(
@@ -439,12 +470,18 @@ def single_slice_ptychography(
         real_space=True,
     )
 
-    return (
+    reconstruction_result: Tuple[
+        CalibratedArray,
+        CalibratedArray,
+        Complex[Array, "H W S"],
+        Complex[Array, "H W S"],
+    ] = (
         final_potential,
         final_beam,
         intermediate_potslice,
         intermediate_beam,
     )
+    return reconstruction_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -486,6 +523,8 @@ def single_slice_poscorrected(  # noqa: PLR0915
           \bigr\rVert^2
 
     where :math:`\mathbf{r}_p` are the corrected scan positions.
+
+    :see: :func:`~.test_phase_recon.test_single_slice_poscorrected_regresses`
 
     Implementation Logic
     --------------------
@@ -614,9 +653,10 @@ def single_slice_poscorrected(  # noqa: PLR0915
             microscope,
             detector,
         )
-        return stem4d_result.data
+        result: Float[Array, "P H W"] = stem4d_result.data
+        return result
 
-    loss_func: Any = ptt.create_loss_function(
+    loss_func: Any = create_loss_function(
         _forward_fn, experimental_4dstem, loss_type
     )
 
@@ -648,13 +688,17 @@ def single_slice_poscorrected(  # noqa: PLR0915
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
-        return loss, {
-            "pot_slice": grads[0],
-            "beam": grads[1],
-            "pos_list": grads[2],
-        }
+        result: Tuple[Float[Array, " "], Dict[str, Array]] = (
+            loss,
+            {
+                "pot_slice": grads[0],
+                "beam": grads[1],
+                "pos_list": grads[2],
+            },
+        )
+        return result
 
-    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
+    optimizer: Optimizer = _get_optimizer(optimizer_name)
     pot_slice_state: Any = optimizer.init(initial_potential.data_array.shape)
     beam_state: Any = optimizer.init(initial_beam.data_array.shape)
     pos_state: Any = optimizer.init(initial_pos_list.shape)
@@ -737,7 +781,15 @@ def single_slice_poscorrected(  # noqa: PLR0915
             position_learning_rate,
         )
         pos_list = jnp.real(pos_list_complex)
-        return (
+        result: Tuple[
+            Complex[Array, "H W"],
+            Complex[Array, "H W"],
+            Float[Array, "P 2"],
+            Any,
+            Any,
+            Any,
+            Float[Array, " "],
+        ] = (
             pot_slice,
             beam,
             pos_list,
@@ -746,6 +798,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
             pos_state,
             loss,
         )
+        return result
 
     pot_guess: Complex[Array, "H W"] = initial_potential.data_array
     beam_guess: Complex[Array, "H W"] = initial_beam.data_array
@@ -815,7 +868,8 @@ def single_slice_poscorrected(  # noqa: PLR0915
             pots = pots.at[:, :, saver].set(pot_guess)
             beams = beams.at[:, :, saver].set(beam_guess)
             positions = positions.at[:, :, saver].set(pos_guess)
-            return pots, beams, positions
+            result: tuple[Any, ...] = pots, beams, positions
+            return result
 
         (
             intermediate_potslices,
@@ -831,17 +885,21 @@ def single_slice_poscorrected(  # noqa: PLR0915
                 intermediate_positions,
             ),
         )
-        return (
-            pot_guess,
-            beam_guess,
-            pos_guess,
-            pot_slice_state,
-            beam_state,
-            pos_state,
-            intermediate_potslices,
-            intermediate_beams,
-            intermediate_positions,
-        ), loss
+        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+            (
+                pot_guess,
+                beam_guess,
+                pos_guess,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslices,
+                intermediate_beams,
+                intermediate_positions,
+            ),
+            loss,
+        )
+        return result
 
     if num_iterations > 0:
         (
@@ -911,7 +969,14 @@ def single_slice_poscorrected(  # noqa: PLR0915
         calib_x=initial_beam.calib_x,
         real_space=True,
     )
-    return (
+    reconstruction_result: Tuple[
+        CalibratedArray,
+        CalibratedArray,
+        Float[Array, "P 2"],
+        Complex[Array, "H W S"],
+        Complex[Array, "H W S"],
+        Float[Array, "P 2 S"],
+    ] = (
         final_potential,
         final_beam,
         pos_guess,
@@ -919,6 +984,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
         intermediate_beams,
         intermediate_positions,
     )
+    return reconstruction_result
 
 
 @jaxtyped(typechecker=beartype)
@@ -963,6 +1029,8 @@ def single_slice_multi_modal(  # noqa: PLR0915
 
     where :math:`\psi_m` are the probe modes with weights
     :math:`w_m` and :math:`t` is the transmission function.
+
+    :see: :func:`~.test_phase_recon.test_single_slice_multi_modal_regresses`
 
     Implementation Logic
     --------------------
@@ -1086,9 +1154,10 @@ def single_slice_multi_modal(  # noqa: PLR0915
             microscope,
             detector,
         )
-        return stem4d_result.data
+        result: Float[Array, "P H W"] = stem4d_result.data
+        return result
 
-    loss_func: Any = ptt.create_loss_function(
+    loss_func: Any = create_loss_function(
         _forward_fn, experimental_4dstem, loss_type
     )
 
@@ -1120,13 +1189,17 @@ def single_slice_multi_modal(  # noqa: PLR0915
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
-        return loss, {
-            "pot_slice": grads[0],
-            "beam": grads[1],
-            "pos_list": grads[2],
-        }
+        result: Tuple[Float[Array, " "], Dict[str, Any]] = (
+            loss,
+            {
+                "pot_slice": grads[0],
+                "beam": grads[1],
+                "pos_list": grads[2],
+            },
+        )
+        return result
 
-    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
+    optimizer: Optimizer = _get_optimizer(optimizer_name)
     pot_slice_state: Any = optimizer.init(initial_pot_slice.shape)
     beam_state: Any = optimizer.init(initial_beam.modes.shape)
     pos_state: Any = optimizer.init(initial_pos_list.shape)
@@ -1218,7 +1291,15 @@ def single_slice_multi_modal(  # noqa: PLR0915
             position_learning_rate,
         )
         pos_list = jnp.real(pos_list_complex)
-        return (
+        result: Tuple[
+            Complex[Array, "H W"],
+            ProbeModes,
+            Float[Array, "P 2"],
+            Any,
+            Any,
+            Any,
+            Float[Array, " "],
+        ] = (
             pot_slice,
             beam,
             pos_list,
@@ -1227,6 +1308,7 @@ def single_slice_multi_modal(  # noqa: PLR0915
             pos_state,
             loss,
         )
+        return result
 
     pot_slice: Complex[Array, "H W"] = initial_pot_slice
     beam: ProbeModes = initial_beam
@@ -1282,7 +1364,8 @@ def single_slice_multi_modal(  # noqa: PLR0915
             saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
             pots = pots.at[:, :, saver].set(pot_slice)
             beams = beams.at[:, :, :, saver].set(beam.modes)
-            return pots, beams
+            result: tuple[Any, ...] = pots, beams
+            return result
 
         intermediate_potslice, intermediate_beam = jax.lax.cond(
             ii % save_every == 0,
@@ -1290,16 +1373,20 @@ def single_slice_multi_modal(  # noqa: PLR0915
             lambda args: args,
             (intermediate_potslice, intermediate_beam),
         )
-        return (
-            pot_slice,
-            beam,
-            pos_list,
-            pot_slice_state,
-            beam_state,
-            pos_state,
-            intermediate_potslice,
-            intermediate_beam,
-        ), loss
+        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+            (
+                pot_slice,
+                beam,
+                pos_list,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            loss,
+        )
+        return result
 
     if num_iterations > 0:
         (
@@ -1349,11 +1436,24 @@ def single_slice_multi_modal(  # noqa: PLR0915
             unroll=True,
         )
 
-    return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
+    reconstruction_result: Tuple[
+        Complex[Array, "H W"],
+        ProbeModes,
+        Float[Array, "P 2"],
+        Complex[Array, "H W S"],
+        Complex[Array, "H W M S"],
+    ] = (
+        pot_slice,
+        beam,
+        pos_list,
+        intermediate_potslice,
+        intermediate_beam,
+    )
+    return reconstruction_result
 
 
 @jaxtyped(typechecker=beartype)
-def multi_slice_multi_modal(
+def multi_slice_multi_modal(  # noqa: PLR0915
     experimental_data: STEM4D,
     initial_pot_slice: Complex[Array, "H W"],
     initial_beam: Complex[Array, "H W"],
@@ -1393,6 +1493,8 @@ def multi_slice_multi_modal(
 
     where the forward model applies the multislice algorithm
     through repeated transmission and propagation steps.
+
+    :see: :func:`~.test_phase_recon.test_multi_slice_multi_modal_regresses`
 
     Implementation Logic
     --------------------
@@ -1516,9 +1618,10 @@ def multi_slice_multi_modal(
             microscope,
             detector,
         )
-        return stem4d_result.data
+        result: Float[Array, "P H W"] = stem4d_result.data
+        return result
 
-    loss_func: Any = ptt.create_loss_function(
+    loss_func: Any = create_loss_function(
         _forward_fn, experimental_4dstem, loss_type
     )
 
@@ -1550,13 +1653,17 @@ def multi_slice_multi_modal(
         loss, grads = jax.value_and_grad(loss_func, argnums=(0, 1, 2))(
             pot_slice, beam, pos_list
         )
-        return loss, {
-            "pot_slice": grads[0],
-            "beam": grads[1],
-            "pos_list": grads[2],
-        }
+        result: Tuple[Float[Array, " "], Dict[str, Array]] = (
+            loss,
+            {
+                "pot_slice": grads[0],
+                "beam": grads[1],
+                "pos_list": grads[2],
+            },
+        )
+        return result
 
-    optimizer: ptt.Optimizer = _get_optimizer(optimizer_name)
+    optimizer: Optimizer = _get_optimizer(optimizer_name)
     pot_slice_state: Any = optimizer.init(initial_pot_slice.shape)
     beam_state: Any = optimizer.init(initial_beam.shape)
     pos_state: Any = optimizer.init(initial_pos_list.shape)
@@ -1628,7 +1735,15 @@ def multi_slice_multi_modal(
             pos_learning_rate,
         )
         pos_list = jnp.real(pos_list_complex)
-        return (
+        result: Tuple[
+            Complex[Array, "H W"],
+            Complex[Array, "H W"],
+            Float[Array, "P 2"],
+            Any,
+            Any,
+            Any,
+            Float[Array, " "],
+        ] = (
             pot_slice,
             beam,
             pos_list,
@@ -1637,6 +1752,7 @@ def multi_slice_multi_modal(
             pos_state,
             loss,
         )
+        return result
 
     pot_slice: Complex[Array, "H W"] = initial_pot_slice
     beam: Complex[Array, "H W"] = initial_beam
@@ -1691,7 +1807,8 @@ def multi_slice_multi_modal(
             saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
             pots = pots.at[:, :, saver].set(pot_slice)
             beams = beams.at[:, :, saver].set(beam)
-            return pots, beams
+            result: tuple[Any, ...] = pots, beams
+            return result
 
         intermediate_potslice, intermediate_beam = jax.lax.cond(
             ii % save_every == 0,
@@ -1699,16 +1816,20 @@ def multi_slice_multi_modal(
             lambda args: args,
             (intermediate_potslice, intermediate_beam),
         )
-        return (
-            pot_slice,
-            beam,
-            pos_list,
-            pot_slice_state,
-            beam_state,
-            pos_state,
-            intermediate_potslice,
-            intermediate_beam,
-        ), loss
+        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+            (
+                pot_slice,
+                beam,
+                pos_list,
+                pot_slice_state,
+                beam_state,
+                pos_state,
+                intermediate_potslice,
+                intermediate_beam,
+            ),
+            loss,
+        )
+        return result
 
     if num_iterations > 0:
         (
@@ -1756,7 +1877,20 @@ def multi_slice_multi_modal(
             unroll=True,
         )
 
-    return pot_slice, beam, pos_list, intermediate_potslice, intermediate_beam
+    reconstruction_result: Tuple[
+        Complex[Array, "H W"],
+        Complex[Array, "H W"],
+        Float[Array, "P 2"],
+        Complex[Array, "H W S"],
+        Complex[Array, "H W S"],
+    ] = (
+        pot_slice,
+        beam,
+        pos_list,
+        intermediate_potslice,
+        intermediate_beam,
+    )
+    return reconstruction_result
 
 
 __all__: list[str] = [

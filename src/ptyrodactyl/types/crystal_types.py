@@ -9,14 +9,14 @@ JSON-encodable Python data.
 
 Routine Listings
 ----------------
-:class:`CrystalStructure`
-    Crystal structure with fractional and Cartesian coordinates.
 :class:`CrystalData`
-    Crystal data with atomic positions, lattice vectors, and metadata.
-:func:`create_crystal_structure`
-    Create a CrystalStructure with runtime validation.
+    Store parsed crystal data and static metadata.
+:class:`CrystalStructure`
+    Store fractional and Cartesian crystal coordinates.
 :func:`create_crystal_data`
     Create a CrystalData with runtime validation.
+:func:`create_crystal_structure`
+    Create a CrystalStructure with runtime validation.
 
 Notes
 -----
@@ -43,7 +43,7 @@ def _raise_if(condition: bool, message: str) -> None:
 class CrystalStructure(eqx.Module):
     """Store fractional and Cartesian crystal coordinates.
 
-    :see: :class:`~.test_electron_types.TestCrystalStructure`
+    :see: :mod:`~.test_crystal_types`
 
     Attributes
     ----------
@@ -55,6 +55,11 @@ class CrystalStructure(eqx.Module):
         Unit-cell lengths [a, b, c] in Angstroms.
     cell_angles : Num[Array, " 3"]
         Unit-cell angles [alpha, beta, gamma] in degrees.
+
+    See Also
+    --------
+    :func:`create_crystal_structure`
+        Create and validate a :class:`CrystalStructure`.
     """
 
     frac_positions: Float[Array, "* 4"]
@@ -66,7 +71,7 @@ class CrystalStructure(eqx.Module):
 class CrystalData(eqx.Module):
     """Store parsed crystal data and static metadata.
 
-    :see: :class:`~.test_electron_types.TestCrystalData`
+    :see: :func:`~.test_create_crystal_data_jit_compiles_and_runs`
 
     Attributes
     ----------
@@ -84,6 +89,11 @@ class CrystalData(eqx.Module):
         Static JSON-encodable per-atom metadata.
     comment : Optional[str]
         Static source comment string.
+
+    See Also
+    --------
+    :func:`create_crystal_data`
+        Create and validate a :class:`CrystalData`.
     """
 
     positions: Float[Array, " N 3"]
@@ -107,7 +117,7 @@ def create_crystal_structure(
 ) -> CrystalStructure:
     """Create a CrystalStructure with runtime validation.
 
-    :see: :class:`~.test_electron_types.TestCrystalStructure`
+    :see: :mod:`~.test_crystal_types`
 
     Parameters
     ----------
@@ -229,7 +239,7 @@ def create_crystal_data(
 ) -> CrystalData:
     """Create a CrystalData with runtime validation.
 
-    :see: :class:`~.test_electron_types.TestCrystalData`
+    :see: :func:`~.test_create_crystal_data_jit_compiles_and_runs`
 
     Parameters
     ----------

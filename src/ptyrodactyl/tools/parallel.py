@@ -10,8 +10,7 @@ support automatic differentiation.
 Routine Listings
 ----------------
 :func:`shard_array`
-    Shard an array across specified axes and devices for
-    parallel processing.
+    Shard an array across specified axes and devices.
 
 Notes
 -----
@@ -42,6 +41,8 @@ def shard_array(
     Distributes an array across multiple devices for parallel
     processing by creating a device mesh and applying
     appropriate partitioning based on the specified axes.
+
+    :see: :func:`~.test_shard_array_resolves_through_public_package`
 
     Implementation Logic
     --------------------
@@ -91,8 +92,10 @@ def shard_array(
     pspec = PartitionSpec(*pspec)
     sharding = NamedSharding(mesh, pspec)
     with mesh:
-        sharded_array = jax.device_put(input_array, sharding)
-    return sharded_array  # noqa: RET504
+        sharded_array: Num[Array, " ..."] = jax.device_put(
+            input_array, sharding
+        )
+    return sharded_array
 
 
 __all__: list[str] = [

@@ -1,27 +1,26 @@
-"""Read and write the Stage-0 scalar-potential HDF5 archive.
+"""Read and write the schema-v1 scalar-potential HDF5 archive.
 
 Extended Summary
 ----------------
-This module implements the bounded Plan-05 ingest/emit slice. It stores a
-validated :class:`~ptyrodactyl.types.PotentialSlices` carrier in a versioned
-HDF5 schema and reconstructs it through its canonical factory. The internal
-node codec supports nested containers and static JSON metadata so later
-carrier registrations can reuse the same format without unsafe dynamic
-imports.
+This module stores a validated
+:class:`~ptyrodactyl.types.PotentialSlices` carrier in a versioned HDF5 schema
+and reconstructs it through its canonical factory. The internal node codec
+supports nested containers and static JSON metadata so later carrier
+registrations can reuse the same format without unsafe dynamic imports.
 
 Routine Listings
 ----------------
 :class:`HDF5SchemaError`
     Report an incompatible or malformed ptyrodactyl HDF5 archive.
 :func:`load_from_h5`
-    Load one validated scalar-potential carrier from HDF5.
+    Load one validated scalar-potential carrier from an HDF5 archive.
 :func:`save_to_h5`
-    Save one validated scalar-potential carrier to HDF5.
+    Save one scalar-potential carrier to a versioned HDF5 archive.
 
 Notes
 -----
-Only ``PotentialSlices`` is registered in the Stage-0 slice. Other carrier
-types remain unsupported until their owning roadmap stage authorizes them.
+Only ``PotentialSlices`` is registered in schema version 1. Other carrier
+types remain unsupported until the schema explicitly registers them.
 """
 
 import json
@@ -33,6 +32,8 @@ from typing import Any
 import h5py
 import jax.numpy as jnp
 import numpy as np
+from jaxtyping import Shaped
+from numpy.typing import NDArray
 
 from ..types import PotentialSlices, create_potential_slices
 
@@ -58,7 +59,10 @@ _SCHEMA_VERSION: int = 1
 
 
 class HDF5SchemaError(ValueError):
-    """Report an incompatible or malformed ptyrodactyl HDF5 archive."""
+    """Report an incompatible or malformed ptyrodactyl HDF5 archive.
+
+    :see: :mod:`~.test_hdf5`
+    """
 
 
 @dataclass(frozen=True)
@@ -86,40 +90,47 @@ _CARRIER_REGISTRY_BY_CLASS: dict[type[Any], _CarrierMeta] = {
 def _encode_json_value(value: Any) -> Any:  # noqa: PLR0911
     """Convert supported static metadata to an exact JSON representation."""
     if value is None or isinstance(value, bool | int | float | str):
-        return value
+        result: Any = value
+        return result
 
     if isinstance(value, complex):
-        return {
+        result: Any = {
             _JSON_KIND: _JSON_COMPLEX,
             "real": value.real,
             "imag": value.imag,
         }
+        return result
 
     if isinstance(value, np.generic):
-        return _encode_json_value(value.item())
+        result: Any = _encode_json_value(value.item())
+        return result
 
     if hasattr(value, "shape"):
-        scalar_array: np.ndarray[Any, Any] = np.asarray(value)
+        scalar_array: Shaped[NDArray, "..."] = np.asarray(value)
         if scalar_array.ndim == 0:
-            return _encode_json_value(scalar_array.item())
+            result: Any = _encode_json_value(scalar_array.item())
+            return result
 
     if isinstance(value, list):
-        return [_encode_json_value(item) for item in value]
+        result: Any = [_encode_json_value(item) for item in value]
+        return result
 
     if isinstance(value, tuple):
-        return {
+        result: Any = {
             _JSON_KIND: _JSON_TUPLE,
             "items": [_encode_json_value(item) for item in value],
         }
+        return result
 
     if isinstance(value, dict):
-        return {
+        result: Any = {
             _JSON_KIND: _JSON_DICT,
             "items": [
                 [_encode_json_value(key), _encode_json_value(item)]
                 for key, item in value.items()
             ],
         }
+        return result
 
     message: str = f"Unsupported static metadata type: {type(value).__name__}"
     raise TypeError(message)
@@ -128,21 +139,28 @@ def _encode_json_value(value: Any) -> Any:  # noqa: PLR0911
 def _decode_json_value(value: Any) -> Any:
     """Reconstruct a value produced by :func:`_encode_json_value`."""
     if isinstance(value, list):
-        return [_decode_json_value(item) for item in value]
+        result: Any = [_decode_json_value(item) for item in value]
+        return result
 
     if not isinstance(value, dict):
-        return value
+        result: Any = value
+        return result
 
     marker: Any = value.get(_JSON_KIND)
     if marker == _JSON_COMPLEX:
-        return complex(value["real"], value["imag"])
+        result: Any = complex(value["real"], value["imag"])
+        return result
     if marker == _JSON_TUPLE:
-        return tuple(_decode_json_value(item) for item in value["items"])
+        result: Any = tuple(
+            _decode_json_value(item) for item in value["items"]
+        )
+        return result
     if marker == _JSON_DICT:
-        return {
+        result: Any = {
             _decode_json_value(key): _decode_json_value(item)
             for key, item in value["items"]
         }
+        return result
 
     message: str = "Malformed tagged JSON value in HDF5 archive"
     raise HDF5SchemaError(message)
@@ -154,7 +172,8 @@ def _attribute_text(node: Any, name: str) -> str:
         raise HDF5SchemaError(f"Missing required HDF5 attribute: {name}")
     value: Any = node.attrs[name]
     if isinstance(value, bytes):
-        return value.decode("utf-8")
+        result: str = value.decode("utf-8")
+        return result
     if isinstance(value, str):
         return value
     raise HDF5SchemaError(f"HDF5 attribute {name!r} must be text")
@@ -167,7 +186,7 @@ def _write_carrier_node(node: Any, carrier: Any) -> None:
     )
     if metadata is None:
         message: str = (
-            "Unsupported carrier type for the Stage-0 HDF5 schema: "
+            "Unsupported carrier type for HDF5 schema version 1: "
             f"{type(carrier).__name__}"
         )
         raise TypeError(message)
@@ -224,7 +243,7 @@ def _write_value(parent: Any, name: str, value: Any) -> None:
         group.attrs[_ATTR_JSON_VALUE] = json.dumps(_encode_json_value(value))
         return
 
-    array_value: np.ndarray[Any, Any] = np.asarray(value)
+    array_value: Shaped[NDArray, "..."] = np.asarray(value)
     if array_value.dtype.kind in {"O", "S", "U", "V"}:
         message = (
             f"Unsupported array dtype for HDF5 storage: {array_value.dtype}"
@@ -283,7 +302,8 @@ def _read_carrier_node(node: Any) -> Any:
         for field_name in metadata.dynamic_fields
     }
     fields.update(decoded_static)
-    return metadata.factory(**fields)
+    result: Any = metadata.factory(**fields)
+    return result
 
 
 def _read_length(node: Any) -> int:
@@ -306,17 +326,21 @@ def _read_length(node: Any) -> int:
 def _read_value(node: Any) -> Any:  # noqa: PLR0911, PLR0912
     """Read one recursively supported value from an HDF5 node."""
     if isinstance(node, h5py.Dataset):
-        return jnp.asarray(node[()])
+        result: Any = jnp.asarray(node[()])
+        return result
 
     node_kind: str = _attribute_text(node, _ATTR_NODE_KIND)
     if node_kind == _KIND_PYTREE:
-        return _read_carrier_node(node)
+        result: Any = _read_carrier_node(node)
+        return result
     if node_kind == _KIND_NONE:
-        return None
+        result: Any = None
+        return result
     if node_kind == _KIND_JSON:
         encoded_value: str = _attribute_text(node, _ATTR_JSON_VALUE)
         try:
-            return _decode_json_value(json.loads(encoded_value))
+            result: Any = _decode_json_value(json.loads(encoded_value))
+            return result
         except (KeyError, TypeError, json.JSONDecodeError) as error:
             raise HDF5SchemaError(
                 "Malformed JSON value in HDF5 archive"
@@ -331,7 +355,8 @@ def _read_value(node: Any) -> Any:  # noqa: PLR0911, PLR0912
                     f"Missing HDF5 container item: {item_name}"
                 )
             items.append(_read_value(node[item_name]))
-        return items if node_kind == _KIND_LIST else tuple(items)
+        result: Any = items if node_kind == _KIND_LIST else tuple(items)
+        return result
     if node_kind == _KIND_DICT:
         length = _read_length(node)
         encoded_keys: str = _attribute_text(node, _ATTR_DICT_KEYS)
@@ -352,7 +377,8 @@ def _read_value(node: Any) -> Any:  # noqa: PLR0911, PLR0912
                     f"Missing HDF5 container item: {item_name}"
                 )
             values.append(_read_value(node[item_name]))
-        return dict(zip(keys, values, strict=True))
+        result: Any = dict(zip(keys, values, strict=True))
+        return result
 
     raise HDF5SchemaError(f"Unknown HDF5 node kind: {node_kind}")
 
@@ -379,6 +405,8 @@ def _validate_schema_version(handle: Any) -> None:
 def save_to_h5(carrier: PotentialSlices, path: str | Path) -> None:
     """Save one scalar-potential carrier to a versioned HDF5 archive.
 
+    :see: :func:`~.test_large_potential_uses_lossless_gzip_compression`
+
     Parameters
     ----------
     carrier : PotentialSlices
@@ -389,14 +417,14 @@ def save_to_h5(carrier: PotentialSlices, path: str | Path) -> None:
     Raises
     ------
     TypeError
-        If ``carrier`` is not a registered Stage-0 carrier or contains an
+        If ``carrier`` is not registered in schema version 1 or contains an
         unsupported value.
     OSError
         If the destination cannot be created or written.
     """
     if type(carrier) not in _CARRIER_REGISTRY_BY_CLASS:
         message: str = (
-            "Unsupported carrier type for the Stage-0 HDF5 schema: "
+            "Unsupported carrier type for HDF5 schema version 1: "
             f"{type(carrier).__name__}"
         )
         raise TypeError(message)
@@ -409,6 +437,8 @@ def save_to_h5(carrier: PotentialSlices, path: str | Path) -> None:
 
 def load_from_h5(path: str | Path) -> PotentialSlices:
     """Load one validated scalar-potential carrier from an HDF5 archive.
+
+    :see: :mod:`~.test_hdf5`
 
     Parameters
     ----------

@@ -23,41 +23,41 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :class:`LRSchedulerState`
-    Learning rate scheduler state.
+    State maintained by learning rate schedulers.
 :class:`Optimizer`
-    Optimizer configuration.
+    Optimizer configuration pairing init and update callables.
 :class:`OptimizerState`
-    Optimizer state for training.
+    State maintained by optimizers.
 :func:`adagrad_update`
-    Adagrad parameter update step.
+    Update parameters using Adagrad with Wirtinger derivatives.
 :func:`adam_update`
-    Adam parameter update step.
+    Update parameters using Adam with Wirtinger derivatives.
 :func:`complex_adagrad`
-    Adagrad optimizer with Wirtinger derivatives for complex parameters.
+    Perform one step of complex-valued Adagrad.
 :func:`complex_adam`
-    Adam optimizer with Wirtinger derivatives for complex parameters.
+    Perform one step of complex-valued Adam.
 :func:`complex_rmsprop`
-    RMSprop optimizer with Wirtinger derivatives for complex parameters.
+    Perform one step of complex-valued RMSprop.
 :func:`create_cosine_scheduler`
-    Create cosine annealing learning rate scheduler.
+    Create a cosine annealing learning rate scheduler.
 :func:`create_loss_function`
-    Factory that creates a JIT-compiled loss function.
+    Create a JIT-compiled loss function for ptychography.
 :func:`create_step_scheduler`
-    Create step decay learning rate scheduler.
+    Create a step decay learning rate scheduler.
 :func:`create_warmup_cosine_scheduler`
-    Create warmup cosine annealing learning rate scheduler.
+    Create a warmup-then-cosine-decay scheduler.
 :func:`enable_compilation_cache`
-    Point JAX's persistent compilation cache at a directory.
+    Enable JAX's persistent compilation cache.
 :func:`helmholtz_coupling`
     Helmholtz potential coupling sigma_H in 1/(V·Angstrom^2).
 :func:`init_adagrad`
-    Initialize Adagrad optimizer state.
+    Initialise Adagrad optimizer state.
 :func:`init_adam`
-    Initialize Adam optimizer state.
+    Initialise Adam optimizer state.
 :func:`init_rmsprop`
-    Initialize RMSprop optimizer state.
+    Initialise RMSprop optimizer state.
 :func:`init_scheduler_state`
-    Initialize learning rate scheduler state.
+    Initialise scheduler state with a given learning rate.
 :func:`phase_interaction_parameter`
     Phase interaction parameter sigma in rad/(V·Angstrom).
 :func:`relativistic_mass`
@@ -65,11 +65,11 @@ Routine Listings
 :func:`relativistic_wavelength_ang`
     Relativistic electron wavelength in Angstroms.
 :func:`rmsprop_update`
-    RMSprop parameter update step.
+    Update parameters using RMSprop with Wirtinger derivatives.
 :func:`shard_array`
-    Shard arrays across multiple devices for parallel processing.
+    Shard an array across specified axes and devices.
 :func:`wirtinger_grad`
-    Compute Wirtinger gradients for complex-valued optimization.
+    Compute the Wirtinger gradient of a real-valued function.
 
 Notes
 -----

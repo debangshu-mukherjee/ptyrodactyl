@@ -17,15 +17,16 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :func:`multi_slice_multi_modal`
-    Multi-slice reconstruction with position correction.
+    Reconstruct potential, beam, and positions with multi-slice.
 :func:`single_slice_multi_modal`
-    Single-slice reconstruction with multi-modal probe and
-    position correction.
+    Reconstruct potential, multi-modal beam, and positions.
 :func:`single_slice_poscorrected`
-    Single-slice reconstruction with position correction.
+    Reconstruct potential, beam, and positions from 4D-STEM data.
 :func:`single_slice_ptychography`
-    Single-slice ptychography reconstruction of potential and
-    beam.
+    Reconstruct potential and beam from 4D-STEM data.
+:obj:`OPTIMIZERS`
+    Registry mapping optimizer name strings to
+    :class:`~ptyrodactyl.tools.Optimizer` instances.
 
 Notes
 -----
@@ -36,6 +37,7 @@ preprocessed and validated using the factory functions from the
 """
 
 from .phase_recon import (
+    OPTIMIZERS,
     multi_slice_multi_modal,
     single_slice_multi_modal,
     single_slice_poscorrected,
@@ -43,6 +45,7 @@ from .phase_recon import (
 )
 
 __all__: list[str] = [
+    "OPTIMIZERS",
     "multi_slice_multi_modal",
     "single_slice_multi_modal",
     "single_slice_poscorrected",

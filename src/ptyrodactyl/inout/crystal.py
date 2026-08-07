@@ -9,6 +9,7 @@ Routine Listings
 ----------------
 :func:`parse_crystal`
     Parse XYZ or POSCAR file, auto-detecting format, returns CrystalData.
+
 """
 
 from pathlib import Path
@@ -29,6 +30,8 @@ def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
 
     Automatically detects whether the input file is an XYZ or POSCAR/CONTCAR
     file based on file extension and calls the appropriate parser.
+
+    :see: :func:`~.test_parse_crystal_resolves_through_public_package`
 
     Parameters
     ----------
@@ -67,7 +70,7 @@ def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
     :func:`parse_xyz` : Parser for XYZ format files.
     :func:`parse_poscar` : Parser for VASP POSCAR/CONTCAR
         files.
-    
+
     :see: parse_xyz, parse_poscar.
     """
     path: Path = Path(file_path)
@@ -75,21 +78,25 @@ def parse_crystal(file_path: Union[str, Path]) -> CrystalData:
     suffix: str = path.suffix.lower()
 
     if suffix == ".xyz":
-        return parse_xyz(file_path)
+        crystal_data: CrystalData = parse_xyz(file_path)
+        return crystal_data
 
     if "poscar" in filename or "contcar" in filename:
-        return parse_poscar(file_path)
+        crystal_data: CrystalData = parse_poscar(file_path)
+        return crystal_data
 
     with open(path, encoding="utf-8") as f:
         first_line: str = f.readline().strip()
 
     try:
         int(first_line)
-        return parse_xyz(file_path)
+        crystal_data: CrystalData = parse_xyz(file_path)
+        return crystal_data
     except ValueError:
         pass
 
-    return parse_poscar(file_path)
+    crystal_data: CrystalData = parse_poscar(file_path)
+    return crystal_data
 
 
 __all__: list[str] = [

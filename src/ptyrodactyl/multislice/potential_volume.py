@@ -5,15 +5,15 @@ Extended Summary
 This module constructs a true volumetric electrostatic field from analytic
 atomic form factors.  Atoms are translated by reciprocal-space phase ramps,
 so their positions remain continuous differentiable parameters; no rounded
-voxel deposition or projection is used.  The inverse DFT is normalized to the
-continuous Fourier convention used by the SC-1 scalar contract.
+voxel deposition or projection is used. The inverse DFT uses the continuous
+Fourier convention required by the scalar-potential contract.
 
 Routine Listings
 ----------------
 :func:`crystal_potential_volume`
-    Superimpose atomic voltage fields and return a Potential3D carrier.
+    Build a full 3D IAM voltage field from atom positions.
 :func:`single_atom_potential_3d`
-    Build one band-limited atomic voltage field on an orthogonal grid.
+    Build one band-limited three-dimensional atomic potential.
 
 Notes
 -----
@@ -90,7 +90,8 @@ def _grid_shape_tuple(grid_shape: _GridShapeInput) -> tuple[int, int, int]:
     ny: int
     nx: int
     nz, ny, nx = shape_values
-    return (nz, ny, nx)
+    result: tuple[int, int, int] = (nz, ny, nx)
+    return result
 
 
 def _voxel_size_tuple(
@@ -216,7 +217,8 @@ def _checked_atomic_numbers(
         ),
         "atomic_numbers must be in the inclusive range [1, 103]",
     )
-    return checked_numbers.astype(jnp.int32)
+    result: Int[Array, " N"] = checked_numbers.astype(jnp.int32)
+    return result
 
 
 def _checked_positions(
@@ -246,7 +248,8 @@ def _checked_single_atomic_number(atom_no: scalar_int) -> Int[Array, ""]:
     if raw_number.shape != ():
         raise ValueError("atom_no must be a scalar")
     checked: Int[Array, " 1"] = _checked_atomic_numbers(raw_number[None])
-    return checked[0]
+    result: Int[Array, ""] = checked[0]
+    return result
 
 
 def _reciprocal_grid(
@@ -275,7 +278,13 @@ def _reciprocal_grid(
     gx: Float[Array, "nz ny nx"]
     gz, gy, gx = jnp.meshgrid(gz_1d, gy_1d, gx_1d, indexing="ij")
     magnitude: Float[Array, "nz ny nx"] = jnp.sqrt(gx * gx + gy * gy + gz * gz)
-    return gx, gy, gz, magnitude
+    result: tuple[
+        Float[Array, "nz ny nx"],
+        Float[Array, "nz ny nx"],
+        Float[Array, "nz ny nx"],
+        Float[Array, "nz ny nx"],
+    ] = (gx, gy, gz, magnitude)
+    return result
 
 
 def _potential_from_atoms(
@@ -332,7 +341,8 @@ def _potential_from_atoms(
         atom_coefficients: jax.Array = (
             MOTT_BETHE_VOLT_ANGSTROM_SQ * form_factor * spectral_mask * phase
         )
-        return coefficients + atom_coefficients, None
+        result: tuple[jax.Array, None] = coefficients + atom_coefficients, None
+        return result
 
     fourier_amplitudes: jax.Array
     fourier_amplitudes, _ = jax.lax.scan(
@@ -359,6 +369,8 @@ def single_atom_potential_3d(
     parameterization: str = "lobato",
 ) -> Float[Array, "nz ny nx"]:
     """Build one band-limited three-dimensional atomic potential.
+
+    :see: :mod:`~.test_potential_volume`
 
     Parameters
     ----------
@@ -452,7 +464,11 @@ def _crystal_arrays(
 ) -> tuple[Float[Array, "N 3"], Array]:
     """Extract xyz positions and atomic numbers from either carrier."""
     if isinstance(crystal, CrystalData):
-        return crystal.positions, crystal.atomic_numbers
+        result: tuple[Float[Array, "N 3"], Array] = (
+            crystal.positions,
+            crystal.atomic_numbers,
+        )
+        return result
     if isinstance(crystal, CrystalStructure):
         cartesian: Num[Array, "..."] = jnp.asarray(crystal.cart_positions)
         if (
@@ -460,7 +476,11 @@ def _crystal_arrays(
             or cartesian.shape[1] != _POSITION_COLUMNS
         ):
             raise ValueError("crystal.cart_positions must have shape (N, 4)")
-        return cartesian[:, :3].astype(jnp.float64), cartesian[:, 3]
+        result: tuple[Float[Array, "N 3"], Array] = (
+            cartesian[:, :3].astype(jnp.float64),
+            cartesian[:, 3],
+        )
+        return result
     raise TypeError("crystal must be CrystalData or CrystalStructure")
 
 
@@ -508,7 +528,11 @@ def _infer_grid_geometry(
         lengths_xyz[1] / ny,
         lengths_xyz[2] / nz,
     )
-    return (nz, ny, nx), actual_voxel_size
+    result: tuple[tuple[int, int, int], tuple[float, float, float]] = (
+        (nz, ny, nx),
+        actual_voxel_size,
+    )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -522,6 +546,8 @@ def crystal_potential_volume(
     parameterization: str = "lobato",
 ) -> Potential3D:
     """Build a full 3D IAM voltage field from atom positions.
+
+    :see: :mod:`~.test_potential_volume`
 
     Parameters
     ----------

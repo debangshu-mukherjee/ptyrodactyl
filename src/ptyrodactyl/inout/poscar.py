@@ -9,6 +9,7 @@ Routine Listings
 ----------------
 :func:`parse_poscar`
     Parse a VASP POSCAR file and return a validated CrystalData PyTree.
+
 """
 
 from pathlib import Path
@@ -35,6 +36,8 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
     Supports VASP 5+ format with element symbols on line 6, as well as
     older VASP 4 format where element symbols must be inferred from
     the comment line.
+
+    :see: :func:`~.test_parse_poscar_resolves_through_public_package`
 
     Parameters
     ----------
@@ -86,7 +89,7 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
     8. **Build output** -- Construct atomic numbers array
        and return
        :class:`~ptyrodactyl.types.CrystalData` PyTree.
-    
+
     :see: parse_crystal, parse_xyz, atomic_symbol.
     """
     with open(file_path, encoding="utf-8") as f:
@@ -189,12 +192,13 @@ def parse_poscar(  # noqa: PLR0912, PLR0915
         atomic_numbers_list, dtype=jnp.int32
     )
 
-    return create_crystal_data(
+    crystal_data: CrystalData = create_crystal_data(
         positions=positions_arr,
         atomic_numbers=atomic_z_arr,
         lattice=lattice,
         comment=comment,
     )
+    return crystal_data
 
 
 __all__: list[str] = [

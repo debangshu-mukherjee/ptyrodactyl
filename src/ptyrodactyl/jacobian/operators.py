@@ -10,13 +10,14 @@ PyTree parameter structures and are fully JIT-compatible.
 Routine Listings
 ----------------
 :func:`hvp_gauss_newton`
-    Gauss-Newton Hessian-vector product for least-squares.
+    Construct the Gauss-Newton Hessian-vector product operator.
 :func:`jtj_operator`
-    Normal equations operator J^T J @ v.
+    Construct the normal equations operator J^T J.
 :func:`jvp_operator`
-    Jacobian-vector product J @ v.
+    Construct a Jacobian-vector product operator J @ v.
 :func:`vjp_operator`
-    Vector-Jacobian product J^T @ u.
+    Construct a vector-Jacobian product operator J^T @ u.
+
 """
 
 import jax
@@ -40,6 +41,8 @@ def jvp_operator(
     returned operator maps tangent vectors in parameter space to
     tangent vectors in measurement space.
 
+    :see: :mod:`~.test_operators`
+
     Implementation Logic
     --------------------
     1. **Capture linearisation point** --
@@ -58,7 +61,7 @@ def jvp_operator(
 
     Returns
     -------
-    jvp_fn : Callable[[PyTree], Float[Array, "..."]]
+    jvp_function : Callable[[PyTree], Float[Array, "..."]]
         Function that computes J @ v for any tangent vector v.
     """
 
@@ -67,9 +70,11 @@ def jvp_operator(
     ) -> Float[Array, "..."]:
         """Compute J @ tangent_vector via forward-mode AD."""
         _, output_tangent = jax.jvp(forward_fn, (params,), (tangent_vector,))
-        return output_tangent
+        result: Float[Array, "..."] = output_tangent
+        return result
 
-    return jvp_fn
+    jvp_function: Callable[[PyTree], Float[Array, "..."]] = jvp_fn
+    return jvp_function
 
 
 @jaxtyped(typechecker=beartype)
@@ -86,6 +91,8 @@ def vjp_operator(
     evaluated at *params* using reverse-mode autodiff.  The
     returned operator maps cotangent vectors in measurement space
     to cotangent vectors in parameter space.
+
+    :see: :mod:`~.test_operators`
 
     Implementation Logic
     --------------------
@@ -107,7 +114,7 @@ def vjp_operator(
 
     Returns
     -------
-    vjp_fn : Callable[[Float[Array, "..."]], PyTree]
+    vjp_function : Callable[[Float[Array, "..."]], PyTree]
         Function that computes J^T @ u for any cotangent u.
     """
     _, vjp_fn_raw = jax.vjp(forward_fn, params)
@@ -120,7 +127,8 @@ def vjp_operator(
         result: PyTree = result_tuple[0]
         return result
 
-    return vjp_fn
+    vjp_function: Callable[[Float[Array, "..."]], PyTree] = vjp_fn
+    return vjp_function
 
 
 @jaxtyped(typechecker=beartype)
@@ -138,6 +146,8 @@ def jtj_operator(
     symmetric positive semi-definite.  Its nullspace is the gauge
     subspace.  Its eigenvalues are the squared singular values
     of J.
+
+    :see: :mod:`~.test_operators`
 
     Implementation Logic
     --------------------
@@ -157,7 +167,7 @@ def jtj_operator(
 
     Returns
     -------
-    jtj_fn : Callable[[PyTree], PyTree]
+    jtj_function : Callable[[PyTree], PyTree]
         Function that computes J^T J @ v for any vector v.
     """
     _, vjp_fn_raw = jax.vjp(forward_fn, params)
@@ -171,7 +181,8 @@ def jtj_operator(
         result: PyTree = backward_result[0]
         return result
 
-    return jtj_fn
+    jtj_function: Callable[[PyTree], PyTree] = jtj_fn
+    return jtj_function
 
 
 @jaxtyped(typechecker=beartype)
@@ -192,6 +203,8 @@ def hvp_gauss_newton(
 
     The *residual* argument is accepted for API consistency with
     full Newton methods but is unused in the GN approximation.
+
+    :see: :mod:`~.test_operators`
 
     Implementation Logic
     --------------------

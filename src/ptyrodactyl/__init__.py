@@ -2,14 +2,14 @@
 
 Extended Summary
 ----------------
-A comprehensive toolkit for electron ptychography simulations
-and reconstructions using JAX for automatic differentiation and
-GPU acceleration. All functions are fully differentiable and
-JIT-compilable, supporting ``jax.jit``, ``jax.grad``,
-``jax.vmap``, and other JAX transformations. Complex-valued
-optimization is handled via Wirtinger calculus, and distributed
-computing is supported through device mesh parallelism. Type
-safety is enforced with jaxtyping and beartype.
+A comprehensive toolkit for electron ptychography simulations and
+reconstructions using JAX for automatic differentiation and accelerator
+execution. Numerical kernels support the JAX transformations declared by
+their public contracts. Host-side parsing, plotting, and runtime setup remain
+outside traced computation. Complex-valued optimization uses the convention
+documented by each optimizer, and distributed computing is available through
+JAX runtime initialization. Jaxtyping and beartype enforce public array
+contracts.
 
 Import-time bootstrap is deliberately ordered. The package merges its
 CPU XLA defaults into any operator-supplied ``XLA_FLAGS`` without
@@ -70,10 +70,9 @@ Routine Listings
 
 Notes
 -----
-All functions are optimized for JAX transformations and support
-both CPU and GPU execution. For best performance, use JIT
-compilation and consider using the provided factory functions
-for input validation and float64 casting.
+Numerical kernels target CPU execution and may use a supported accelerator.
+Use JIT compilation only on documented transform-compatible boundaries, and
+construct public carriers through their validated factory functions.
 
 Multi-node distributed execution is supported via
 ``jax.distributed.initialize()``. To enable, set the
@@ -136,6 +135,8 @@ def init_distributed(
     ``jax.distributed.initialize`` is a collective operation: every process in
     a multi-host job must reach it.
 
+    :see: :func:`~.test_init_distributed_returns_false_without_env_opt_in`
+
     Parameters
     ----------
     coordinator_address : str | None, optional
@@ -148,18 +149,20 @@ def init_distributed(
 
     Returns
     -------
-    bool
+    initialized : bool
         ``True`` if the runtime is initialized on return, ``False`` otherwise.
     """
+    initialized: bool = False
     if not force:
         if os.environ.get("PTYRODACTYL_DISTRIBUTED", "0") != "1":
-            return False
+            return initialized
         if int(os.environ.get("SLURM_NTASKS") or "1") <= 1:
-            return False
+            return initialized
 
     is_initialized = getattr(jax.distributed, "is_initialized", None)
     if callable(is_initialized) and is_initialized():
-        return True
+        initialized: bool = True
+        return initialized
 
     address: str | None = coordinator_address or os.environ.get(
         "PTYRODACTYL_COORDINATOR_ADDRESS"
@@ -171,8 +174,9 @@ def init_distributed(
             jax.distributed.initialize()
     except (RuntimeError, ValueError) as exc:
         warnings.warn(str(exc), RuntimeWarning, stacklevel=2)
-        return False
-    return True
+        return initialized
+    initialized: bool = True
+    return initialized
 
 
 init_distributed()

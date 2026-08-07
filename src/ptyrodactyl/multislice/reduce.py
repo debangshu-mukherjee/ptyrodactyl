@@ -11,9 +11,10 @@ this module.
 Routine Listings
 ----------------
 :func:`apply_distribution`
-    Reduce one weighted distribution axis to detector intensity.
+    Apply the late detector reduction for one distribution axis.
 :func:`apply_distributions`
-    Reduce multiple weighted distribution axes to detector intensity.
+    Apply the late detector reduction for multiple distribution axes.
+
 """
 
 import jax
@@ -35,6 +36,8 @@ def apply_distribution(
 ) -> Float[Array, "H W"]:
     """Apply the late detector reduction for one distribution axis.
 
+    :see: :mod:`~.test_reduce`
+
     Parameters
     ----------
     distribution : Distribution
@@ -48,13 +51,18 @@ def apply_distribution(
     intensity : Float[Array, "H W"]
         Detector intensity after the single late modulus-squared reduction.
 
+    Raises
+    ------
+    ValueError
+        If the distribution has an unknown reduction mode.
+
     Notes
     -----
     Coherent axes sum weighted amplitudes before taking ``|.|^2``.
     Incoherent axes take ``|.|^2`` per sample before the weighted sum.
     The reducer is intentionally not JIT-decorated; callers choose the
     transformation boundary.
-    
+
     :see: apply_distributions, cbed_image.
     """
     amplitudes: Complex[Array, "N H W"] = jax.vmap(bound_amplitude_fn)(
@@ -95,6 +103,8 @@ def apply_distributions(
     row from each axis, in tuple order** — so for axes with dims (D1, D2, ...)
     the bound fn receives `Float[Array, " D1+D2+..."]`.
 
+    :see: :mod:`~.test_reduce`
+
     Parameters
     ----------
     distributions : tuple[Distribution, ...]
@@ -106,7 +116,7 @@ def apply_distributions(
 
     Returns
     -------
-    intensity : Float[Array, "H W"]
+    reduced_intensity : Float[Array, "H W"]
         Detector intensity after coherent axes have been reduced inside the
         modulus and incoherent axes outside it.
 
@@ -122,7 +132,7 @@ def apply_distributions(
     ------
     ValueError
         If no distribution axes are supplied.
-    
+
     :see: apply_distribution, bind_cbed_axes.
     """
     if len(distributions) == 0:

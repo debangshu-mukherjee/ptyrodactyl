@@ -9,34 +9,34 @@ automatic differentiation.
 
 Routine Listings
 ----------------
-:func:`transmission_func`
-    Calculate transmission function for a potential slice.
-:func:`propagation_func`
-    Compute Fresnel propagation function.
+:func:`aberration`
+    Calculate the aberration phase for the electron probe.
+:func:`annular_detector`
+    Integrate 4D-STEM data with an annular detector.
+:func:`bind_cbed_axes`
+    Return a CBED amplitude closure bound to distribution-axis columns.
+:func:`cbed_amplitude`
+    Return complex CBED detector fields for each probe mode.
+:func:`cbed_image`
+    Simulate a CBED intensity image via explicit mode reduction.
+:func:`decompose_beam_to_modes`
+    Decompose an electron beam into orthogonal modes.
+:func:`fourier_calib`
+    Compute Fourier-space calibration from real-space parameters.
 :func:`fourier_coords`
     Generate Fourier space coordinate arrays.
-:func:`fourier_calib`
-    Calculate Fourier space calibration from real space.
 :func:`make_probe`
-    Create electron probe with specified aberrations.
-:func:`aberration`
-    Calculate aberration phase for the electron probe.
-:func:`cbed_amplitude`
-    Simulate complex CBED detector amplitudes.
+    Create an electron probe with spherical aberrations.
 :func:`probe_modes_to_distribution`
     Return the explicit incoherent distribution for probe modes.
-:func:`cbed_image`
-    Simulate convergent beam electron diffraction intensity patterns.
-:func:`bind_cbed_axes`
-    Bind distribution cursor rows to the single-mode CBED amplitude kernel.
+:func:`propagation_func`
+    Compute the Fresnel propagation function for multislice.
 :func:`shift_beam_fourier`
-    Shift electron beam in Fourier space for scanning.
+    Shift beam to new position(s) via Fourier phase ramp.
 :func:`stem_4d`
-    Generate 4D-STEM data with multiple probe positions.
-:func:`decompose_beam_to_modes`
-    Decompose electron beam into orthogonal modes.
-:func:`annular_detector`
-    Simulate annular detector for STEM imaging.
+    Generate 4D-STEM data at multiple probe positions.
+:func:`transmission_func`
+    Calculate the complex transmission function of a potential slice.
 
 Notes
 -----
@@ -45,7 +45,6 @@ including ``jit``, ``grad``, and ``vmap``. Input arrays should
 be properly typed and validated using the factory functions
 from :mod:`ptyrodactyl.types`.
 """
-
 
 import equinox as eqx
 import jax
@@ -73,7 +72,7 @@ from ptyrodactyl.multislice._ensemble_axes import (
     _POSITION_DIM,
     _PROBE_MODE_DIM,
 )
-from ptyrodactyl.tools.constants import relativistic_wavelength_ang
+from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
@@ -119,6 +118,8 @@ def transmission_func(
 
         T(\mathbf{r}) = \exp\bigl(i\,\sigma\,V(\mathbf{r})\bigr)
 
+    :see: :mod:`~.test_simulations`
+
     Implementation Logic
     --------------------
     1. **Compute interaction constant** --
@@ -138,15 +139,15 @@ def transmission_func(
     -------
     trans : Complex[Array, " a b"]
         Complex transmission function for the slice.
-    
+
     :see: propagation_func, cbed_amplitude.
     """
     voltage: Float[Array, " "] = jnp.multiply(voltage_kv, jnp.asarray(1000.0))
     e_e: Float[Array, " "] = jnp.float64(E_CHARGE)
     c: Float[Array, " "] = jnp.float64(C_LIGHT)
     ev: Float[Array, " "] = jnp.multiply(e_e, voltage)
-    lambda_angstrom: Float[Array, " "] = (
-        relativistic_wavelength_ang(voltage_kv)
+    lambda_angstrom: Float[Array, " "] = relativistic_wavelength_ang(
+        voltage_kv
     )
     einstein_energy: Float[Array, " "] = jnp.multiply(
         jnp.float64(M_E), jnp.square(c)
@@ -178,6 +179,8 @@ def propagation_func(
         P(\mathbf{q}) = \exp\bigl(
         -i\pi\lambda\Delta z\,|\mathbf{q}|^2\bigr)
 
+    :see: :mod:`~.test_simulations`
+
     Implementation Logic
     --------------------
     1. **Build frequency grids** --
@@ -204,7 +207,7 @@ def propagation_func(
     -------
     prop : Complex[Array, " h w"]
         Fresnel propagation function in Fourier space.
-    
+
     :see: transmission_func, cbed_amplitude.
     """
     qy: Num[Array, " h"] = jnp.fft.fftfreq(int(imsize_y), d=calib_ang)
@@ -213,8 +216,8 @@ def propagation_func(
     lxa: Num[Array, " h w"]
     lya, lxa = jnp.meshgrid(qy, qx, indexing="ij")
     l_sq: Num[Array, " h w"] = jnp.square(lxa) + jnp.square(lya)
-    lambda_angstrom: Float[Array, " "] = (
-        relativistic_wavelength_ang(voltage_kv)
+    lambda_angstrom: Float[Array, " "] = relativistic_wavelength_ang(
+        voltage_kv
     )
     prop: Complex[Array, " h w"] = jnp.exp(
         (-1j) * jnp.pi * lambda_angstrom * thickness_ang * l_sq
@@ -235,6 +238,8 @@ def fourier_coords(
     (in inverse Angstroms) suitable for diffraction
     calculations, returned as a
     :class:`~ptyrodactyl.types.CalibratedArray`.
+
+    :see: :mod:`~.test_simulations`
 
     Implementation Logic
     --------------------
@@ -258,7 +263,7 @@ def fourier_coords(
     calibrated_inverse_array : CalibratedArray
         Radial Fourier-space frequencies with calibrations
         in inverse Angstroms. ``real_space`` is ``False``.
-    
+
     :see: fourier_calib, make_probe.
     """
     real_fov: Float[Array, " 2"] = jnp.multiply(image_size, calibration)
@@ -295,6 +300,8 @@ def fourier_calib(
 ) -> Float[Array, " 2"]:
     """Compute Fourier-space calibration from real-space parameters.
 
+    :see: :mod:`~.test_simulations`
+
     Implementation Logic
     --------------------
     1. **Compute field of view** --
@@ -314,7 +321,7 @@ def fourier_calib(
     -------
     inverse_space_calib : Float[Array, " 2"]
         Fourier calibration in inverse Angstroms per pixel.
-    
+
     :see: fourier_coords, make_probe.
     """
     field_of_view: Float[Array, " "] = jnp.multiply(
@@ -336,6 +343,8 @@ def make_probe(
     Builds a probe wavefunction in Fourier space by applying
     an aperture mask and aberration phase, then inverse-FFTs
     to real space.
+
+    :see: :mod:`~.test_simulations`
 
     Implementation Logic
     --------------------
@@ -364,10 +373,15 @@ def make_probe(
     probe_real_space : Complex[Array, " h w"]
         Electron probe wavefunction in real space.
 
+    Raises
+    ------
+    ValueError
+        If ``microscope.probe_shape`` is ``None``.
+
     See Also
     --------
     :func:`aberration` : Compute the aberration phase.
-    
+
     :see: aberration, cbed_image, stem_4d.
     """
     if microscope.probe_shape is None:
@@ -441,6 +455,8 @@ def aberration(
 
     where :math:`\theta = \lambda\,|\mathbf{q}|`.
 
+    :see: :mod:`~.test_simulations`
+
     Implementation Logic
     --------------------
     1. **Compute scattering angle** --
@@ -469,7 +485,7 @@ def aberration(
     -------
     chi_probe : Float[Array, " H W"]
         Aberration phase in radians.
-    
+
     :see: make_probe.
     """
     p_matrix: Float[Array, " H W"] = lambda_angstrom * fourier_coord
@@ -518,11 +534,15 @@ def _cbed_amplitude_from_slice_provider(
             """Apply Fresnel propagation in Fourier space."""
             w_k: Complex[Array, " H W M"] = jnp.fft.fft2(w, axes=(0, 1))
             w_k = w_k * propagator[..., jnp.newaxis]
-            return jnp.fft.ifft2(w_k, axes=(0, 1)).astype(dtype)
+            result: Complex[Array, " H W M"] = jnp.fft.ifft2(
+                w_k, axes=(0, 1)
+            ).astype(dtype)
+            return result
 
         is_last_slice: Bool[Array, ""] = jnp.array(slice_idx == num_slices - 1)
         wave = lax.cond(is_last_slice, lambda w: w, _propagate, wave)
-        return wave, None
+        result: Tuple[Complex[Array, " H W M"], None] = (wave, None)
+        return result
 
     final_wave: Complex[Array, " H W M"]
     final_wave, _ = lax.scan(_scan_fn, init_wave, jnp.arange(num_slices))
@@ -546,6 +566,8 @@ def cbed_amplitude(
     modes together, Fourier-transforms the exit waves, and leaves the final
     mode axis intact.
 
+    :see: :func:`~.test_cbed_amplitude_phase_gradient_survives_intensity_seam`
+
     Parameters
     ----------
     pot_slices : PotentialSlices
@@ -562,7 +584,7 @@ def cbed_amplitude(
     -------
     detector_amplitude : Complex[Array, " H W M"]
         Complex detector-plane amplitudes with the probe-mode axis retained.
-    
+
     :see: transmission_func, propagation_func, cbed_image.
     """
     calib_ang: Float[Array, ""] = jnp.amin(
@@ -597,8 +619,20 @@ def cbed_amplitude(
 @jaxtyped(typechecker=beartype)
 def probe_modes_to_distribution(probe: ProbeModes) -> Distribution:
     """Return the explicit incoherent distribution for probe modes.
-    
+
     :see: decompose_beam_to_modes, cbed_image.
+
+    :see: :func:`~.test_probe_modes_to_distribution_uses_explicit_weights`
+
+    Parameters
+    ----------
+    probe : ProbeModes
+        Probe modes and their normalized incoherent weights.
+
+    Returns
+    -------
+    distribution : Distribution
+        Explicit incoherent sample axis over the probe-mode indices.
     """
     mode_count: int = jnp.atleast_3d(probe.modes).shape[-1]
     samples: Float[Array, " M 1"] = jnp.arange(
@@ -616,11 +650,12 @@ def probe_modes_to_distribution(probe: ProbeModes) -> Distribution:
 
 def _has_extra_ensemble_axes(ensemble: EnsembleAxes) -> bool:
     """Return whether cbed_image should use the generalized axis binder."""
-    return (
+    result: bool = (
         ensemble.probe_modes is not None
         or ensemble.position_jitter is not None
         or ensemble.coherence is not None
     )
+    return result
 
 
 def _ensemble_axes_for_cbed(
@@ -640,7 +675,8 @@ def _ensemble_axes_for_cbed(
         axes.append(ensemble.coherence)
     if len(axes) == 0:
         axes.append(probe_modes_to_distribution(beam))
-    return tuple(axes)
+    result: tuple[Distribution, ...] = tuple(axes)
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -653,6 +689,8 @@ def bind_cbed_axes(
     column_maps: tuple[str, ...] = (),
 ) -> Callable[[Float[Array, " D"]], Complex[Array, " H W"]]:
     """Return a CBED amplitude closure bound to distribution-axis columns.
+
+    :see: :func:`~.test_cbed_image_ensemble_axes_match_explicit_composition`
 
     Parameters
     ----------
@@ -676,7 +714,7 @@ def bind_cbed_axes(
 
     Returns
     -------
-    bound_amplitude_fn : Callable[[Float[Array, " D"]], Complex[Array, " H W"]]
+    bound_amplitude : Callable[[Float[Array, " D"]], Complex[Array, " H W"]]
         Closure that maps one concatenated cursor row to one complex CBED
         detector field.
 
@@ -695,9 +733,10 @@ def bind_cbed_axes(
       ``AxisUpdate.position_delta_ang``.
     - ``"coherence"``: ``[dE_ev, dtheta_x_mrad, dtheta_y_mrad]``; folds to
       ``AxisUpdate.energy_delta_ev`` and ``AxisUpdate.tilt_delta_mrad``.
-    
+
     :see: cbed_amplitude, apply_distributions, coherence_to_distribution.
     """
+    bound_amplitude: Callable[[Float[Array, " D"]], Complex[Array, " H W"]]
     axis_maps: tuple[str, ...] = _resolve_column_maps(axes, column_maps)
     _validate_axis_maps(axes, axis_maps, probe_modes)
     expected_dim: int = sum(axis.samples.shape[1] for axis in axes)
@@ -755,7 +794,10 @@ def bind_cbed_axes(
         amplitude: Complex[Array, " H W"] = amplitudes[..., 0]
         return amplitude
 
-    return bound_amplitude_fn
+    bound_amplitude: Callable[[Float[Array, " D"]], Complex[Array, " H W"]] = (
+        bound_amplitude_fn
+    )
+    return bound_amplitude
 
 
 @jaxtyped(typechecker=beartype)
@@ -824,7 +866,8 @@ def _axis_update_from_sample(
         cursor += axis_dim
 
     update: AxisUpdate = combine_axis_updates(tuple(updates))
-    return update, mode_idx
+    result: tuple[AxisUpdate, Array] = (update, mode_idx)
+    return result
 
 
 def _expected_axis_dim(axis_map: str) -> int:
@@ -902,6 +945,8 @@ def cbed_image(
     ``amps[..., sample[0].astype(int)]`` so the Phase-1 reducer performs the
     only public detector ``|.|^2`` and incoherent mode sum.
 
+    :see: :func:`~.test_cbed_image_ensemble_axes_match_explicit_composition`
+
     Parameters
     ----------
     pot_slices : PotentialSlices
@@ -915,7 +960,7 @@ def cbed_image(
     -------
     cbed_pytree : CalibratedArray
         CBED intensity pattern with Fourier-space calibrations.
-    
+
     :see: cbed_amplitude, apply_distribution, bind_cbed_axes.
     """
     if _has_extra_ensemble_axes(microscope.ensemble):
@@ -988,6 +1033,8 @@ def shift_beam_fourier(
 ) -> Complex128[Array, "#pp hh ww #mm"]:
     """Shift beam to new position(s) via Fourier phase ramp.
 
+    :see: :mod:`~.test_simulations`
+
     Implementation Logic
     --------------------
     1. **FFT the beam** --
@@ -1012,7 +1059,7 @@ def shift_beam_fourier(
     -------
     all_shifted_beams : Complex128[Array, "#P H W #M"]
         Shifted beam(s) for all positions and modes.
-    
+
     :see: stem_4d, bind_cbed_axes.
     """
     our_beam: Complex128[Array, "H W #M"] = jnp.atleast_3d(
@@ -1087,6 +1134,8 @@ def stem_4d(
     :func:`cbed_image` for each, collecting diffraction patterns
     into a :class:`~ptyrodactyl.types.STEM4D` dataset.
 
+    :see: :mod:`~.test_simulations`
+
     Implementation Logic
     --------------------
     1. **Shift beam** --
@@ -1114,11 +1163,16 @@ def stem_4d(
         Complete 4D-STEM dataset with diffraction patterns,
         calibrations, scan positions, and voltage.
 
+    Raises
+    ------
+    ValueError
+        If ``detector.scan_positions_px`` is ``None``.
+
     See Also
     --------
     :func:`cbed_image` : Single-position CBED intensity simulation.
     :func:`shift_beam_fourier` : Fourier-space beam shifting.
-    
+
     :see: cbed_image, shift_beam_fourier, annular_detector.
     """
     if detector.scan_positions_px is None:
@@ -1156,7 +1210,8 @@ def stem_4d(
             beam=current_probe_modes,
             microscope=microscope,
         )
-        return cbed_result.data_array
+        result: Float[Array, " H W"] = cbed_result.data_array
+        return result
 
     cbed_patterns: Float[Array, " P H W"] = jax.vmap(_process_single_position)(
         jnp.arange(positions.shape[0])
@@ -1194,6 +1249,8 @@ def decompose_beam_to_modes(
     together preserve the total intensity of the input beam.
     Useful for modelling partial spatial coherence.
 
+    :see: :mod:`~.test_simulations`
+
     Implementation Logic
     --------------------
     1. **Flatten beam** --
@@ -1227,7 +1284,7 @@ def decompose_beam_to_modes(
         Decomposed probe with ``modes`` shape ``(H, W, M)``,
         ``weights`` shape ``(M,)``, and ``calib`` in
         Angstroms.
-    
+
     :see: probe_modes_to_distribution, make_probe.
     """
     hh: int
@@ -1283,6 +1340,8 @@ def annular_detector(
     collection angles, integrates each diffraction pattern
     within the annulus, and reshapes to a 2D STEM image.
 
+    :see: :func:`~.test_annular_detector_static_scan_shape_and_jit`
+
     Implementation Logic
     --------------------
     1. **Convert angles** --
@@ -1308,7 +1367,12 @@ def annular_detector(
     stem_image : CalibratedArray
         Real-space STEM image with ``real_space = True``
         and calibrations in Angstroms per pixel.
-    
+
+    Raises
+    ------
+    ValueError
+        If ``detector.scan_shape`` is ``None``.
+
     :see: stem_4d, cbed_image.
     """
     if detector.scan_shape is None:
@@ -1358,7 +1422,8 @@ def annular_detector(
         Float[Array, " "]
             Integrated intensity.
         """
-        return jnp.sum(pattern * annular_mask)
+        result: Float[Array, " "] = jnp.sum(pattern * annular_mask)
+        return result
 
     integrated_intensities: Float[Array, " pp"] = jax.vmap(_integrate_pattern)(
         stem4d_data.data

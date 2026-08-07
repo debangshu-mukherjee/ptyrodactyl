@@ -10,42 +10,42 @@ properties.
 
 Routine Listings
 ----------------
-:class:`AxisUpdate`
-    Additive distribution-axis deltas for one kernel evaluation.
 :class:`AtomicSliceData`
-    On-the-fly atomic slice inputs for sharded multislice.
+    Store on-the-fly atomic slice inputs for sharded multislice.
+:class:`AxisUpdate`
+    Store additive distribution-axis deltas for one kernel evaluation.
 :class:`CalibratedArray`
-    Calibrated array data with spatial calibration.
+    Store calibrated array data with spatial calibration.
 :class:`DetectorConfig`
-    Detector, scan-position, and calibration configuration.
+    Store detector, scan, and calibration configuration.
 :class:`EnsembleAxes`
-    Optional ensemble distributions carried inside microscope config.
+    Store optional ensemble distributions for forward simulators.
 :class:`MicroscopeConfig`
-    Microscope voltage and probe-aberration configuration.
-:class:`ProbeModes`
-    Multimodal electron probe state.
+    Store microscope voltage and probe-aberration configuration.
 :class:`PotentialSlices`
-    Potential slices for multi-slice simulations.
+    Store potential slices for multislice simulations.
+:class:`ProbeModes`
+    Store multimodal electron probe data.
 :class:`STEM4D`
-    4D-STEM data with diffraction patterns, calibrations, and parameters.
+    Store 4D-STEM diffraction data.
 :func:`combine_axis_updates`
-    Sum multiple AxisUpdate carriers.
-:func:`create_axis_update`
-    Create an AxisUpdate with runtime validation.
+    Sum a tuple of additive axis-update carriers.
 :func:`create_atomic_slice_data`
-    Create AtomicSliceData with runtime validation.
+    Create AtomicSliceData with structural and runtime validation.
+:func:`create_axis_update`
+    Create an AxisUpdate with structural and runtime validation.
 :func:`create_calibrated_array`
     Create a CalibratedArray with runtime validation.
 :func:`create_detector_config`
-    Create DetectorConfig with runtime validation.
+    Create a DetectorConfig with structural and runtime validation.
 :func:`create_ensemble_axes`
-    Create EnsembleAxes with runtime validation.
+    Create EnsembleAxes with structural validation.
 :func:`create_microscope_config`
-    Create MicroscopeConfig with runtime validation.
-:func:`create_probe_modes`
-    Create a ProbeModes with runtime validation.
+    Create a MicroscopeConfig with structural and runtime validation.
 :func:`create_potential_slices`
     Create a PotentialSlices with runtime validation.
+:func:`create_probe_modes`
+    Create a ProbeModes with runtime validation.
 :func:`create_stem4d`
     Create a STEM4D with runtime validation.
 
@@ -78,6 +78,8 @@ class EnsembleAxes(eqx.Module):
     Their ``None``/present structure is handled by the PyTree definition and
     is deliberately not marked static here.
 
+    :see: :mod:`~.test_electron_types`
+
     Attributes
     ----------
     probe_modes : Optional[Distribution]
@@ -86,6 +88,11 @@ class EnsembleAxes(eqx.Module):
         Optional incoherent position-jitter distribution.
     coherence : Optional[Distribution]
         Optional chromatic/angular coherence distribution.
+
+    See Also
+    --------
+    :func:`create_ensemble_axes`
+        Create and validate :class:`EnsembleAxes`.
     """
 
     probe_modes: Optional[Distribution] = None
@@ -99,6 +106,8 @@ class MicroscopeConfig(eqx.Module):
     Physical scalar fields are dynamic leaves so gradients can flow through
     voltage, aperture, defocus, and aberration coefficients. Probe array
     shape is static because it controls JAX array construction.
+
+    :see: :mod:`~.test_electron_types`
 
     Attributes
     ----------
@@ -116,6 +125,11 @@ class MicroscopeConfig(eqx.Module):
         Optional ensemble distributions applied by public integrators.
     probe_shape : Optional[tuple[int, int]]
         Static probe grid shape ``(H, W)``.
+
+    See Also
+    --------
+    :func:`create_microscope_config`
+        Create and validate a :class:`MicroscopeConfig`.
     """
 
     voltage_kv: Float[Array, " "]
@@ -138,6 +152,8 @@ class DetectorConfig(eqx.Module):
     arrays are optional dynamic leaves: pixel positions feed ``stem_4d`` and
     Angstrom positions feed ``stem4d_sharded``.
 
+    :see: :mod:`~.test_electron_types`
+
     Attributes
     ----------
     real_space_calib_ang : Float[Array, " "]
@@ -154,6 +170,11 @@ class DetectorConfig(eqx.Module):
         Scan positions in Angstroms for ``stem4d_sharded``.
     scan_shape : Optional[tuple[int, int]]
         Static raster shape ``(ny, nx)`` for detector reshaping.
+
+    See Also
+    --------
+    :func:`create_detector_config`
+        Create and validate a :class:`DetectorConfig`.
     """
 
     real_space_calib_ang: Float[Array, " "]
@@ -175,6 +196,8 @@ class AtomicSliceData(eqx.Module):
     the precomputed atomic potential kernels and z bounds are not represented
     by ``CrystalData`` or ``PotentialSlices``.
 
+    :see: :mod:`~.test_electron_types`
+
     Attributes
     ----------
     atom_coords : Float[Array, "N 3"]
@@ -187,6 +210,11 @@ class AtomicSliceData(eqx.Module):
         Precomputed 2D atomic potentials for each atom type.
     atom_mask : Optional[Float[Array, " N"]]
         Optional atom inclusion mask.
+
+    See Also
+    --------
+    :func:`create_atomic_slice_data`
+        Create and validate :class:`AtomicSliceData`.
     """
 
     atom_coords: Float[Array, "N 3"]
@@ -199,11 +227,13 @@ class AtomicSliceData(eqx.Module):
 class AxisUpdate(eqx.Module):
     """Store additive distribution-axis deltas for one kernel evaluation.
 
-    This is the single shared axis-update carrier for the Plan 03 W3 binder
-    idiom. Distribution producers fold sample columns into this record, the
+    This is the single shared axis-update carrier for distribution binders.
+    Distribution producers fold sample columns into this record, the
     binder combines records additively, and kernel-specific code applies the
     resulting perturbation without widening existing kernel signatures.
     Override-style fields should be added only when a consumer demands them.
+
+    :see: :mod:`~.test_electron_types`
 
     Attributes
     ----------
@@ -213,6 +243,11 @@ class AxisUpdate(eqx.Module):
         Scan-position shift in Angstroms as ``(y, x)``.
     tilt_delta_mrad : Float[Array, " 2"]
         Beam-tilt offset in milliradians as ``(x, y)``.
+
+    See Also
+    --------
+    :func:`create_axis_update`
+        Create and validate an :class:`AxisUpdate`.
     """
 
     energy_delta_ev: Float[Array, " "] = eqx.field(
@@ -229,11 +264,11 @@ class AxisUpdate(eqx.Module):
 class CalibratedArray(eqx.Module):
     """Store calibrated array data with spatial calibration.
 
-    :see: :class:`~.test_electron_types.TestCalibratedArray`
+    :see: :func:`~.test_create_calibrated_array_rejects_nonfinite_values`
 
     Attributes
     ----------
-    data_array : Union[Int[Array, "H W"], Float[Array, "H W"], \
+    data_array : Union[Int[Array, "H W"], Float[Array, "H W"],\
 Complex[Array, "H W"]]
         Two-dimensional image, diffraction pattern, or complex field.
     calib_y : scalar_float
@@ -242,6 +277,11 @@ Complex[Array, "H W"]]
         Calibration along the x axis.
     real_space : scalar_bool
         Whether the array is calibrated in real space.
+
+    See Also
+    --------
+    :func:`create_calibrated_array`
+        Create and validate a :class:`CalibratedArray`.
     """
 
     data_array: Union[
@@ -255,7 +295,7 @@ Complex[Array, "H W"]]
 class ProbeModes(eqx.Module):
     """Store multimodal electron probe data.
 
-    :see: :class:`~.test_electron_types.TestProbeModes`
+    :see: :mod:`~.test_electron_types`
 
     Attributes
     ----------
@@ -265,6 +305,11 @@ class ProbeModes(eqx.Module):
         Non-negative mode occupation weights normalized to sum to one.
     calib : scalar_float
         Pixel calibration in Angstroms per pixel.
+
+    See Also
+    --------
+    :func:`create_probe_modes`
+        Create and validate :class:`ProbeModes`.
     """
 
     modes: Complex[Array, "H W M"]
@@ -275,7 +320,7 @@ class ProbeModes(eqx.Module):
 class PotentialSlices(eqx.Module):
     """Store potential slices for multislice simulations.
 
-    :see: :class:`~.test_electron_types.TestPotentialSlices`
+    :see: :mod:`~.test_electron_types`
 
     Attributes
     ----------
@@ -285,6 +330,11 @@ class PotentialSlices(eqx.Module):
         Thickness of each slice in Angstroms.
     calib : scalar_float
         Pixel calibration in Angstroms per pixel.
+
+    See Also
+    --------
+    :func:`create_potential_slices`
+        Create and validate :class:`PotentialSlices`.
     """
 
     slices: Float[Array, "H W S"]
@@ -295,7 +345,7 @@ class PotentialSlices(eqx.Module):
 class STEM4D(eqx.Module):
     """Store 4D-STEM diffraction data.
 
-    :see: :class:`~.test_electron_types.TestSTEM4D`
+    :see: :mod:`~.test_electron_types`
 
     Attributes
     ----------
@@ -309,6 +359,11 @@ class STEM4D(eqx.Module):
         Real-space scan positions as y/x coordinates in Angstroms.
     voltage_kv : scalar_float
         Accelerating voltage in kilovolts.
+
+    See Also
+    --------
+    :func:`create_stem4d`
+        Create and validate :class:`STEM4D`.
     """
 
     data: Float[Array, "P H W"]
@@ -321,6 +376,8 @@ class STEM4D(eqx.Module):
 @jaxtyped(typechecker=beartype)
 def combine_axis_updates(updates: tuple[AxisUpdate, ...]) -> AxisUpdate:
     """Sum a tuple of additive axis-update carriers.
+
+    :see: :func:`~.test_combine_axis_updates_sums_all_deltas`
 
     Parameters
     ----------
@@ -363,6 +420,8 @@ def create_axis_update(
     tilt_delta_mrad: Optional[Float[Array, " 2"]] = None,
 ) -> AxisUpdate:
     """Create an AxisUpdate with structural and runtime validation.
+
+    :see: :mod:`~.test_electron_types`
 
     Parameters
     ----------
@@ -433,6 +492,8 @@ def create_ensemble_axes(
 ) -> EnsembleAxes:
     """Create EnsembleAxes with structural validation.
 
+    :see: :mod:`~.test_electron_types`
+
     Parameters
     ----------
     probe_modes : Optional[Distribution], optional
@@ -478,6 +539,30 @@ def create_microscope_config(
 
     Physical scalars remain dynamic leaves. ``probe_shape`` is stored as a
     static Python tuple because it controls array construction.
+
+    :see: :mod:`~.test_electron_types`
+
+    Parameters
+    ----------
+    voltage_kv : scalar_num
+        Accelerating voltage in kilovolts.
+    aperture_mrad : scalar_num
+        Probe-forming aperture semi-angle in milliradians.
+    defocus_ang : scalar_num, optional
+        Defocus in Angstroms; defaults to zero.
+    c3_ang : scalar_num, optional
+        Third-order spherical aberration in Angstroms; defaults to zero.
+    c5_ang : scalar_num, optional
+        Fifth-order spherical aberration in Angstroms; defaults to zero.
+    ensemble : Optional[EnsembleAxes], optional
+        Optional distribution axes; an empty carrier is created by default.
+    probe_shape : Optional[Tuple[int, int] | Int[Array, " 2"]], optional
+        Static probe grid shape, or ``None`` when unspecified.
+
+    Returns
+    -------
+    microscope : MicroscopeConfig
+        Validated microscope configuration.
     """
     voltage_arr: Float[Array, ""] = _scalar_float_array(
         voltage_kv,
@@ -537,7 +622,33 @@ def create_detector_config(
     scan_positions_ang: Optional[Float[Array, "..."]] = None,
     scan_shape: Optional[Tuple[int, int] | Int[Array, " 2"]] = None,
 ) -> DetectorConfig:
-    """Create a DetectorConfig with structural and runtime validation."""
+    """Create a DetectorConfig with structural and runtime validation.
+
+    :see: :mod:`~.test_electron_types`
+
+    Parameters
+    ----------
+    real_space_calib_ang : scalar_float
+        Real-space pixel calibration in Angstroms.
+    probe_calibration_pm : Optional[scalar_float], optional
+        Probe calibration in picometres; derived from real-space calibration
+        when omitted.
+    collection_inner_mrad : scalar_float, optional
+        Inner detector collection angle in milliradians; defaults to zero.
+    collection_outer_mrad : scalar_float, optional
+        Outer detector collection angle in milliradians; defaults to zero.
+    scan_positions_px : Optional[Float[Array, "..."]], optional
+        Scan positions in pixels.
+    scan_positions_ang : Optional[Float[Array, "..."]], optional
+        Scan positions in Angstroms.
+    scan_shape : Optional[Tuple[int, int] | Int[Array, " 2"]], optional
+        Static two-dimensional scan shape.
+
+    Returns
+    -------
+    detector : DetectorConfig
+        Validated detector configuration.
+    """
     real_calib_arr: Float[Array, ""] = _scalar_float_array(
         real_space_calib_ang,
         "real_space_calib_ang",
@@ -628,7 +739,34 @@ def create_atomic_slice_data(
     atom_potentials: Float[Array, "..."],
     atom_mask: Optional[Float[Array, "..."]] = None,
 ) -> AtomicSliceData:
-    """Create AtomicSliceData with structural and runtime validation."""
+    """Create AtomicSliceData with structural and runtime validation.
+
+    :see: :mod:`~.test_electron_types`
+
+    Parameters
+    ----------
+    atom_coords : Float[Array, "..."]
+        Cartesian atom coordinates with shape ``(N, 3)`` in Angstroms.
+    atom_types : Int[Array, "..."]
+        Atom-type index for each atom, with shape ``(N,)``.
+    slice_z_bounds : Float[Array, "..."]
+        Lower and upper z bounds with shape ``(S, 2)`` in Angstroms.
+    atom_potentials : Float[Array, "..."]
+        Projected potentials with shape ``(T, H, W)``.
+    atom_mask : Optional[Float[Array, "..."]], optional
+        Optional per-atom mask with shape ``(N,)``.
+
+    Returns
+    -------
+    atomic_slice_data : AtomicSliceData
+        Validated atom-backed slice data.
+
+    Raises
+    ------
+    ValueError
+        If coordinates, types, slice bounds, potentials, or the optional mask
+        do not have their required shapes.
+    """
     coords_arr: Float[Array, "N 3"] = jnp.asarray(
         atom_coords,
         dtype=jnp.float64,
@@ -722,11 +860,11 @@ def create_calibrated_array(
 ) -> CalibratedArray:
     """Create a CalibratedArray with runtime validation.
 
-    :see: :class:`~.test_electron_types.TestCalibratedArray`
+    :see: :func:`~.test_create_calibrated_array_rejects_nonfinite_values`
 
     Parameters
     ----------
-    data_array : Union[Int[Array, "..."], Float[Array, "..."], \
+    data_array : Union[Int[Array, "..."], Float[Array, "..."],\
 Complex[Array, "..."]]
         Two-dimensional array data.
     calib_y : scalar_float
@@ -829,11 +967,10 @@ def _checked_finite_scalar(
     name: str,
 ) -> Float[Array, ""]:
     """Return a scalar with a traced finiteness check."""
-    return eqx.error_if(
-        value,
-        ~jnp.isfinite(value),
-        f"{name} must be finite",
+    result: Float[Array, ""] = eqx.error_if(
+        value, ~jnp.isfinite(value), f"{name} must be finite"
     )
+    return result
 
 
 def _checked_positive_scalar(
@@ -842,11 +979,10 @@ def _checked_positive_scalar(
 ) -> Float[Array, ""]:
     """Return a scalar with traced finite and positive checks."""
     checked_value: Float[Array, ""] = _checked_finite_scalar(value, name)
-    return eqx.error_if(
-        checked_value,
-        checked_value <= 0,
-        f"{name} must be positive",
+    result: Float[Array, ""] = eqx.error_if(
+        checked_value, checked_value <= 0, f"{name} must be positive"
     )
+    return result
 
 
 def _checked_nonnegative_scalar(
@@ -855,11 +991,10 @@ def _checked_nonnegative_scalar(
 ) -> Float[Array, ""]:
     """Return a scalar with traced finite and non-negative checks."""
     checked_value: Float[Array, ""] = _checked_finite_scalar(value, name)
-    return eqx.error_if(
-        checked_value,
-        checked_value < 0,
-        f"{name} must be non-negative",
+    result: Float[Array, ""] = eqx.error_if(
+        checked_value, checked_value < 0, f"{name} must be non-negative"
     )
+    return result
 
 
 def _optional_positions(
@@ -868,7 +1003,8 @@ def _optional_positions(
 ) -> Optional[Float[Array, "P 2"]]:
     """Return optional scan positions with static shape validation."""
     if positions is None:
-        return None
+        result: Optional[Float[Array, "P 2"]] = None
+        return result
     positions_arr: Float[Array, "P 2"] = jnp.asarray(
         positions,
         dtype=jnp.float64,
@@ -887,7 +1023,8 @@ def _optional_shape_tuple(
 ) -> Optional[Tuple[int, int]]:
     """Return optional static ``(H, W)`` shape as a Python tuple."""
     if shape is None:
-        return None
+        result: Optional[Tuple[int, int]] = None
+        return result
     if isinstance(shape, tuple | list):
         if len(shape) != _XY_COORDS:
             raise ValueError(f"{name} must have shape (2,)")
@@ -942,7 +1079,7 @@ def create_probe_modes(
 ) -> ProbeModes:
     """Create a ProbeModes with runtime validation.
 
-    :see: :class:`~.test_electron_types.TestProbeModes`
+    :see: :func:`~.test_carrier_factories_reject_nonfinite_positive_scalars`
 
     Parameters
     ----------
@@ -1032,7 +1169,7 @@ def create_potential_slices(
 ) -> PotentialSlices:
     """Create a PotentialSlices with runtime validation.
 
-    :see: :class:`~.test_electron_types.TestPotentialSlices`
+    :see: :func:`~.test_carrier_factories_reject_nonfinite_positive_scalars`
 
     Parameters
     ----------
@@ -1107,7 +1244,7 @@ def create_stem4d(
 ) -> STEM4D:
     """Create a STEM4D with runtime validation.
 
-    :see: :class:`~.test_electron_types.TestSTEM4D`
+    :see: :func:`~.test_carrier_factories_reject_nonfinite_positive_scalars`
 
     Parameters
     ----------

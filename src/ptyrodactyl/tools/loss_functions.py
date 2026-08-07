@@ -10,8 +10,7 @@ optimization.
 Routine Listings
 ----------------
 :func:`create_loss_function`
-    Factory that creates a JIT-compiled loss function
-    supporting MAE, MSE, and RMSE loss types.
+    Create a JIT-compiled loss function for ptychography.
 
 Notes
 -----
@@ -45,6 +44,8 @@ def create_loss_function(
     returned function is JIT-compiled and can be used directly
     with gradient-based optimizers.
 
+    :see: :mod:`~.test_loss_functions`
+
     Implementation Logic
     --------------------
     1. **Define internal loss functions** --
@@ -69,7 +70,7 @@ def create_loss_function(
 
     Returns
     -------
-    loss_fn : Callable[[PyTree, ...], Float[Array, ""]]
+    loss_function : Callable[[PyTree, ...], Float[Array, ""]]
         A JIT-compiled function that computes the scalar loss
         given model parameters and any additional arguments
         required by the forward function.
@@ -99,7 +100,8 @@ def create_loss_function(
             Scalar MAE value.
         """
         loss = jnp.mean(jnp.abs(diff))
-        return loss  # noqa: RET504
+        result: Float[Array, " "] = loss
+        return result
 
     def mse_loss(diff: Num[Array, " ..."]) -> Float[Array, " "]:
         """Compute mean squared error from residuals.
@@ -115,7 +117,8 @@ def create_loss_function(
             Scalar MSE value.
         """
         loss = jnp.mean(jnp.square(diff))
-        return loss  # noqa: RET504
+        result: Float[Array, " "] = loss
+        return result
 
     def rmse_loss(diff: Num[Array, " ..."]) -> Float[Array, " "]:
         """Compute root mean squared error from residuals.
@@ -131,7 +134,8 @@ def create_loss_function(
             Scalar RMSE value.
         """
         loss = jnp.sqrt(jnp.mean(jnp.square(diff)))
-        return loss  # noqa: RET504
+        result: Float[Array, " "] = loss
+        return result
 
     loss_mode: LossType = LossType(loss_type)
     loss_functions = {
@@ -162,9 +166,11 @@ def create_loss_function(
         model_output = forward_function(params, *args)
         diff = model_output - experimental_data
         loss = selected_loss_fn(diff)
-        return loss  # noqa: RET504
+        result: Float[Array, ""] = loss
+        return result
 
-    return loss_fn
+    loss_function: Callable[..., Float[Array, ""]] = loss_fn
+    return loss_function
 
 
 __all__: list[str] = [

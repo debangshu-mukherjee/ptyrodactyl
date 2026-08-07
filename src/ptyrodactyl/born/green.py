@@ -19,16 +19,13 @@ length :math:`\lambda = k_0 / \varepsilon`.
 Routine Listings
 ----------------
 :func:`convergence_parameter`
-    Convergence parameter :math:`\varepsilon \geq \max|U(\mathbf{r})|`
-    guaranteeing :math:`\rho(M) < 1`.
+    Compute the convergence parameter from the scattering potential.
 :func:`green_function_fourier`
-    Green's function
-    :math:`\tilde{g}_0(\mathbf{p})` on the 3-D Fourier grid.
+    Construct the Fourier-space Green's function.
 :func:`reciprocal_coords`
-    Reciprocal-space coordinate arrays for an isotropic 3-D grid.
+    Construct 3-D reciprocal-space coordinate arrays.
 :func:`wavenumber_background`
-    Background wavenumber :math:`k_0^2` centred between min and
-    max of the specimen :math:`k^2`.
+    Compute the optimal background wavenumber squared.
 
 Notes
 -----
@@ -77,6 +74,8 @@ def wavenumber_background(
               \operatorname{Re}\{k^2(\mathbf{r})\}
               + \max_{\mathbf{r}}
               \operatorname{Re}\{k^2(\mathbf{r})\}}{2}
+
+    :see: :func:`~.test_green.test_green_helpers_tiny_grid_smoke`
 
     Implementation Logic
     --------------------
@@ -142,6 +141,8 @@ def convergence_parameter(
     A safety factor slightly above unity is applied to ensure
     strict inequality and numerical stability at voxels where
     :math:`|U| = \varepsilon` exactly.
+
+    :see: :func:`~.test_convergence_parameter_rejects_unit_safety_factor`
 
     Implementation Logic
     --------------------
@@ -225,6 +226,8 @@ def reciprocal_coords(
         p_n(j) = 2\pi \cdot \texttt{fftfreq}(N_n,\;
                  d = \Delta x)
 
+    :see: :func:`~.test_green.test_green_helpers_tiny_grid_smoke`
+
     Implementation Logic
     --------------------
     1. **Compute 1-D frequencies** --
@@ -280,7 +283,12 @@ def reciprocal_coords(
     pz: Float[Array, "Nx Ny Nz"]
     px, py, pz = jnp.meshgrid(px_1d, py_1d, pz_1d, indexing="ij")
 
-    return px, py, pz
+    coordinates: tuple[
+        Float[Array, "Nx Ny Nz"],
+        Float[Array, "Nx Ny Nz"],
+        Float[Array, "Nx Ny Nz"],
+    ] = (px, py, pz)
+    return coordinates
 
 
 @jaxtyped(typechecker=beartype)
@@ -325,6 +333,8 @@ def green_function_fourier(
     No singularity handling is required: the
     :math:`i\varepsilon` term ensures the denominator is never
     zero for real :math:`\mathbf{p}`.
+
+    :see: :func:`~.test_green_function_fourier_rejects_nonfinite_k0_squared`
 
     Implementation Logic
     --------------------

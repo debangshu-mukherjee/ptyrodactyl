@@ -22,19 +22,20 @@ Routine Listings
 :func:`alternating_block_solve`
     Solve via alternating block updates following a schedule.
 :func:`block_gauss_newton_step`
-    Gauss-Newton step updating only specified blocks.
+    Perform a Gauss-Newton step updating only specified blocks.
 :func:`block_jacobian_operator`
-    JVP operator for a single parameter block.
+    Construct a JVP operator for a single parameter block.
 :func:`block_jtj_operator`
-    J^T J operator for a single parameter block.
+    Construct a J^T J operator for a single parameter block.
 :func:`block_vjp_operator`
-    VJP operator for a single parameter block.
+    Construct a VJP operator for a single parameter block.
 :func:`compute_block_gradient`
-    Gradient J^T r for a single parameter block.
+    Compute the gradient J^T r for a single parameter block.
 :func:`cross_block_jtj_operator`
-    Cross-block J^T J operator for Schur complements.
+    Construct a cross-block J^T J operator.
 :func:`split_params`
-    Extract individual blocks from combined params.
+    Extract individual parameter blocks from combined params.
+
 """
 
 import equinox as eqx
@@ -70,6 +71,8 @@ def split_params(
 ]:
     """Extract individual parameter blocks from combined params.
 
+    :see: :mod:`~.test_blocks`
+
     Parameters
     ----------
     params : PtychoParams
@@ -97,13 +100,20 @@ def split_params(
     geometry: GeometryParams = params.geometry
     positions: PositionParams = params.positions
     probe_modes: ProbeModeParams = params.probe_modes
-    return (
+    parameter_blocks: tuple[
+        ExitWaveParams,
+        AberrationParams,
+        GeometryParams,
+        PositionParams,
+        ProbeModeParams,
+    ] = (
         exit_wave,
         aberrations,
         geometry,
         positions,
         probe_modes,
     )
+    return parameter_blocks
 
 
 @jaxtyped(typechecker=beartype)
@@ -119,6 +129,8 @@ def block_jacobian_operator(
     Computes :math:`J_{\text{block}} \, v` where
     :math:`J_{\text{block}} = \partial f / \partial \theta_b`,
     treating all other blocks as fixed.
+
+    :see: :func:`~.test_block_jacobian_operator_rejects_invalid_block_name`
 
     Implementation Logic
     --------------------
@@ -143,7 +155,7 @@ def block_jacobian_operator(
 
     Returns
     -------
-    jvp_fn : Callable[[PyTree], Float[Array, "num_pos det_h det_w"]]
+    block_operator : Callable[[PyTree], Float[Array, "num_pos det_h det_w"]]
         Function computing J_block @ v for tangent vectors
         v in the block subspace.
 
@@ -191,9 +203,13 @@ def block_jacobian_operator(
             )
 
         _, output_tangent = jax.jvp(forward_fn, (params,), (full_tangent,))
-        return output_tangent
+        result: Float[Array, "num_pos det_h det_w"] = output_tangent
+        return result
 
-    return jvp_fn
+    block_operator: Callable[[PyTree], Float[Array, "num_pos det_h det_w"]] = (
+        jvp_fn
+    )
+    return block_operator
 
 
 @jaxtyped(typechecker=beartype)
@@ -211,6 +227,8 @@ def block_vjp_operator(
     For complex blocks, JAX's cotangent-valued pullback is conjugated
     into the primal-space adjoint associated with the real Hermitian
     inner product used by the linear solvers.
+
+    :see: :mod:`~.test_blocks`
 
     Implementation Logic
     --------------------
@@ -232,7 +250,7 @@ def block_vjp_operator(
 
     Returns
     -------
-    vjp_fn : Callable[[Float[Array, "num_pos det_h det_w"]], PyTree]
+    block_operator : Callable[[Float[Array, "num_pos det_h det_w"]], PyTree]
         Function computing J_block^T @ u for cotangent u.
 
     See Also
@@ -265,7 +283,10 @@ def block_vjp_operator(
 
         return block_gradient
 
-    return vjp_fn
+    block_operator: Callable[[Float[Array, "num_pos det_h det_w"]], PyTree] = (
+        vjp_fn
+    )
+    return block_operator
 
 
 @jaxtyped(typechecker=beartype)
@@ -280,6 +301,8 @@ def block_jtj_operator(
     ----------------
     Computes :math:`J_b^\top J_b \, v` for the specified block
     *b* by composing the block JVP and VJP operators.
+
+    :see: :mod:`~.test_blocks`
 
     Implementation Logic
     --------------------
@@ -299,7 +322,7 @@ def block_jtj_operator(
 
     Returns
     -------
-    jtj_fn : Callable[[PyTree], PyTree]
+    block_operator : Callable[[PyTree], PyTree]
         Function computing J_block^T J_block @ v.
 
     See Also
@@ -319,7 +342,8 @@ def block_jtj_operator(
         backward_result: PyTree = vjp_fn(forward_result)
         return backward_result
 
-    return jtj_fn
+    block_operator: Callable[[PyTree], PyTree] = jtj_fn
+    return block_operator
 
 
 @jaxtyped(typechecker=beartype)
@@ -336,6 +360,8 @@ def cross_block_jtj_operator(
     Computes :math:`J_{\text{row}}^\top J_{\text{col}} \, v`,
     the off-diagonal block of the full J^T J.  Needed for Schur
     complement computation.
+
+    :see: :mod:`~.test_blocks`
 
     Implementation Logic
     --------------------
@@ -357,7 +383,7 @@ def cross_block_jtj_operator(
 
     Returns
     -------
-    cross_jtj_fn : Callable[[PyTree], PyTree]
+    cross_block_operator : Callable[[PyTree], PyTree]
         Function computing J_row^T J_col @ v.
 
     See Also
@@ -379,7 +405,8 @@ def cross_block_jtj_operator(
         backward_result: PyTree = vjp_fn(forward_result)
         return backward_result
 
-    return cross_jtj_fn
+    cross_block_operator: Callable[[PyTree], PyTree] = cross_jtj_fn
+    return cross_block_operator
 
 
 @jaxtyped(typechecker=beartype)
@@ -390,6 +417,8 @@ def compute_block_gradient(
     block_name: str | OptimizableBlock,
 ) -> PyTree:
     r"""Compute the gradient J^T r for a single parameter block.
+
+    :see: :mod:`~.test_blocks`
 
     Parameters
     ----------
@@ -432,6 +461,8 @@ def block_gauss_newton_step(
     ----------------
     Solves the normal equations for the selected blocks while
     holding other blocks fixed.
+
+    :see: :func:`~.test_block_gauss_newton_step_updates_complex_exit_wave`
 
     Implementation Logic
     --------------------
@@ -600,6 +631,8 @@ def alternating_block_solve(
     outer loop is executed via :func:`jax.lax.scan` so the
     entire solve is JIT-compatible.
 
+    :see: :func:`~.test_alternating_block_solve_complex_exit_wave_jit`
+
     Implementation Logic
     --------------------
     1. **Outer loop** --
@@ -656,7 +689,8 @@ def alternating_block_solve(
         """Compute L2 residual norm for *params*."""
         prediction: Float[Array, "num_pos det_h det_w"] = forward_fn(params)
         residual: Float[Array, "num_pos det_h det_w"] = prediction - data
-        return jnp.sqrt(jnp.sum(jnp.abs(residual) ** 2))
+        result: Float[Array, ""] = jnp.sqrt(jnp.sum(jnp.abs(residual) ** 2))
+        return result
 
     def outer_iteration(
         params: PtychoParams,
@@ -669,7 +703,7 @@ def alternating_block_solve(
             block_group: list[OptimizableBlock],
         ) -> PtychoParams:
             """Apply block GN step for one group."""
-            return block_gauss_newton_step(
+            result: PtychoParams = block_gauss_newton_step(
                 forward_fn,
                 params_inner,
                 data,
@@ -677,6 +711,7 @@ def alternating_block_solve(
                 cg_max_iterations,
                 cg_tolerance,
             )
+            return result
 
         updated_params: PtychoParams = params
         for block_group in normalized_schedule:
@@ -684,7 +719,11 @@ def alternating_block_solve(
 
         residual_norm: Float[Array, ""] = compute_residual_norm(updated_params)
 
-        return updated_params, residual_norm
+        result: tuple[PtychoParams, Float[Array, ""]] = (
+            updated_params,
+            residual_norm,
+        )
+        return result
 
     final_params: PtychoParams
     residual_history: Float[Array, "num_outer"]
@@ -692,7 +731,11 @@ def alternating_block_solve(
         outer_iteration, params_init, None, length=num_outer_iterations
     )
 
-    return final_params, residual_history
+    solve_result: tuple[PtychoParams, Float[Array, "num_outer"]] = (
+        final_params,
+        residual_history,
+    )
+    return solve_result
 
 
 __all__: list[str] = [

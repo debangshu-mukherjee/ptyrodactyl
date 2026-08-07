@@ -3,7 +3,7 @@
 Extended Summary
 ----------------
 This package owns file-ingest helpers for crystal structures, related lookup
-data, and the versioned Stage-0 scalar-potential HDF5 archive.
+data, and the versioned scalar-potential HDF5 archive.
 
 The submodules are organized as follows:
 
@@ -27,7 +27,7 @@ Routine Listings
 :func:`kirkland_potentials`
     Return preloaded Kirkland potential parameters.
 :func:`load_from_h5`
-    Load one validated scalar-potential carrier from HDF5.
+    Load one validated scalar-potential carrier from an HDF5 archive.
 :func:`lobato_potentials`
     Return preloaded Lobato--Van Dyck potential parameters.
 :func:`parse_crystal`
@@ -37,7 +37,8 @@ Routine Listings
 :func:`parse_xyz`
     Parse an XYZ file and return a validated CrystalData PyTree.
 :func:`save_to_h5`
-    Save one validated scalar-potential carrier to HDF5.
+    Save one scalar-potential carrier to a versioned HDF5 archive.
+
 """
 
 from .crystal import parse_crystal

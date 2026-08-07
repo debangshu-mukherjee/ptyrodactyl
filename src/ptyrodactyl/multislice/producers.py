@@ -9,15 +9,16 @@ construction for the ensemble binder in
 
 Source-size broadening maps onto the same incoherent position-delta axis as
 ``position_jitter_to_distribution``. A separate source-size carrier would
-duplicate the position-update field without changing the kernel contract, and
-Plan 03 W3d authorizes folding that physical average into position jitter.
+duplicate the position-update field without changing the kernel contract, so
+the producer folds that physical average into position jitter.
 
 Routine Listings
 ----------------
 :func:`coherence_to_distribution`
-    Build the incoherent chromatic/angular coherence distribution.
+    Build an incoherent chromatic/angular coherence distribution.
 :func:`position_jitter_to_distribution`
-    Build the incoherent two-dimensional position-jitter distribution.
+    Build an incoherent two-dimensional position-jitter distribution.
+
 """
 
 import equinox as eqx
@@ -25,6 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
 from jaxtyping import Array, Float, jaxtyped
+from numpy.typing import NDArray
 
 from ptyrodactyl.multislice._ensemble_axes import (
     _AXIS_COHERENCE,
@@ -47,6 +49,8 @@ def coherence_to_distribution(
 ) -> Distribution:
     """Build an incoherent chromatic/angular coherence distribution.
 
+    :see: :mod:`~.test_producers`
+
     Parameters
     ----------
     energy_spread_ev : scalar_float
@@ -68,7 +72,7 @@ def coherence_to_distribution(
     Physicists' Gauss-Hermite nodes are scaled by ``sqrt(2)`` so
     ``width * nodes`` samples a normal distribution with standard deviation
     ``width``; weights are normalized by ``sqrt(pi)``.
-    
+
     :see: bind_cbed_axes, position_jitter_to_distribution.
     """
     nodes: Float[Array, " Q"]
@@ -129,6 +133,8 @@ def position_jitter_to_distribution(
 ) -> Distribution:
     """Build an incoherent two-dimensional position-jitter distribution.
 
+    :see: :mod:`~.test_producers`
+
     Parameters
     ----------
     sigma_ang : scalar_float
@@ -149,7 +155,7 @@ def position_jitter_to_distribution(
     Source-size broadening uses this same producer contract. The
     zero-width path collapses all quadrature samples to zero with a finite
     derivative at exactly zero width.
-    
+
     :see: bind_cbed_axes, coherence_to_distribution.
     """
     nodes: Float[Array, " Q"]
@@ -225,8 +231,8 @@ def _normal_gauss_hermite_rule(
     n_quad_int: int = int(n_quad)
     if n_quad_int <= 0:
         raise ValueError("n_quad must be positive")
-    nodes_np: np.ndarray
-    weights_np: np.ndarray
+    nodes_np: Float[NDArray, " Q"]
+    weights_np: Float[NDArray, " Q"]
     nodes_np, weights_np = np.polynomial.hermite.hermgauss(n_quad_int)
     nodes: Float[Array, " Q"] = jnp.asarray(
         np.sqrt(2.0) * nodes_np,
@@ -236,7 +242,8 @@ def _normal_gauss_hermite_rule(
         weights_np / np.sqrt(np.pi),
         dtype=jnp.float64,
     )
-    return nodes, weights
+    result: tuple[Float[Array, " Q"], Float[Array, " Q"]] = nodes, weights
+    return result
 
 
 __all__: list[str] = [

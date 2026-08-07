@@ -11,29 +11,39 @@ Equinox leaf.
 Routine Listings
 ----------------
 :class:`AberrationParams`
-    Zernike coefficients and soft aperture cutoff.
+    Store probe aberration parameters.
 :class:`CGState`
-    State container for conjugate gradient iteration.
+    Store conjugate gradient iteration state.
 :class:`ExitWaveParams`
-    Complex exit wave array.
+    Store complex exit-wave parameters.
 :class:`FisherState`
-    State container for iterative Fisher computation.
-:class:`GNState`
-    State container for Gauss-Newton iteration.
+    Store state for iterative Fisher computation.
 :class:`GeometryParams`
-    Rotation angle, centre offset, ellipticity.
-:class:`LMState`
-    State container for Levenberg-Marquardt iteration.
+    Store geometric calibration parameters.
+:class:`GNState`
+    Store Gauss-Newton iteration state.
 :class:`LanczosState`
-    State container for Lanczos tridiagonalisation.
+    Store Lanczos tridiagonalisation state.
+:class:`LMState`
+    Store Levenberg-Marquardt iteration state.
 :class:`OptimizableBlock`
-    Static ptychography parameter-block selection enum.
+    Store static optimizable ptychography block names.
 :class:`PositionParams`
-    Per-scan-point position corrections.
+    Store scan position error parameters.
 :class:`ProbeModeParams`
-    Probe mode weights and shapes.
+    Store probe mode parameters for partial coherence.
 :class:`PtychoParams`
-    Combined parameter container for all blocks.
+    Store all ptychographic parameter blocks.
+:func:`create_cg_state`
+    Create a validated conjugate gradient iteration state.
+:func:`create_fisher_state`
+    Create a validated Fisher computation state.
+:func:`create_gn_state`
+    Create a validated Gauss-Newton iteration state.
+:func:`create_lanczos_state`
+    Create a validated Lanczos tridiagonalisation state.
+:func:`create_lm_state`
+    Create a validated Levenberg-Marquardt iteration state.
 :func:`create_ptycho_params`
     Construct combined PtychoParams from components.
 
@@ -47,11 +57,12 @@ rank-0 integer arrays so these states can be carried through
 from enum import Enum
 
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 from beartype import beartype
 from jaxtyping import Array, Complex, Float, Int, PyTree, jaxtyped
 
-from .custom_types import scalar_float
+from .custom_types import scalar_float, scalar_int
 
 
 def _raise_if(condition: bool, message: str) -> None:
@@ -60,8 +71,67 @@ def _raise_if(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def _tree_leaf_shapes(tree: PyTree) -> tuple[tuple[int, ...], ...]:
+    """Return the static shape of every dynamic PyTree leaf."""
+    shapes: tuple[tuple[int, ...], ...] = tuple(
+        jnp.shape(leaf) for leaf in jax.tree_util.tree_leaves(tree)
+    )
+    return shapes
+
+
+def _checked_iteration(iteration: scalar_int) -> Int[Array, ""]:
+    """Validate one scalar non-negative iteration index."""
+    _raise_if(isinstance(iteration, bool), "iteration must not be boolean")
+    iteration_array: Int[Array, ""] = jnp.asarray(iteration)
+    scalar_shape: tuple[()] = ()
+    _raise_if(
+        iteration_array.shape != scalar_shape,
+        "iteration must be a scalar",
+    )
+    checked_iteration: Int[Array, ""] = eqx.error_if(
+        iteration_array,
+        iteration_array < 0,
+        "iteration must be non-negative",
+    )
+    return checked_iteration
+
+
+def _checked_nonnegative_scalar(
+    value: scalar_float,
+    name: str,
+) -> Float[Array, ""]:
+    """Validate one finite non-negative floating-point scalar."""
+    value_array: Float[Array, ""] = jnp.asarray(value)
+    scalar_shape: tuple[()] = ()
+    _raise_if(value_array.shape != scalar_shape, f"{name} must be a scalar")
+    checked_value: Float[Array, ""] = eqx.error_if(
+        value_array,
+        (~jnp.isfinite(value_array)) | (value_array < 0),
+        f"{name} must be finite and non-negative",
+    )
+    return checked_value
+
+
+def _checked_positive_scalar(
+    value: scalar_float,
+    name: str,
+) -> Float[Array, ""]:
+    """Validate one finite positive floating-point scalar."""
+    value_array: Float[Array, ""] = jnp.asarray(value)
+    scalar_shape: tuple[()] = ()
+    _raise_if(value_array.shape != scalar_shape, f"{name} must be a scalar")
+    checked_value: Float[Array, ""] = eqx.error_if(
+        value_array,
+        (~jnp.isfinite(value_array)) | (value_array <= 0),
+        f"{name} must be finite and positive",
+    )
+    return checked_value
+
+
 class OptimizableBlock(str, Enum):
     """Store static optimizable ptychography block names.
+
+    :see: :mod:`~.test_jacobian_types`
 
     Attributes
     ----------
@@ -93,6 +163,11 @@ class ExitWaveParams(eqx.Module):
     ----------
     wave : Complex[Array, "h w"]
         Complex-valued exit wave in real space.
+
+    See Also
+    --------
+    :func:`create_ptycho_params`
+        Create and validate an :class:`ExitWaveParams` block.
     """
 
     wave: Complex[Array, "h w"]
@@ -111,6 +186,11 @@ class AberrationParams(eqx.Module):
         Soft aperture cutoff in milliradians.
     aperture_softness : Float[Array, ""]
         Softness parameter for aperture roll-off, dimensionless.
+
+    See Also
+    --------
+    :func:`create_ptycho_params`
+        Create and validate an :class:`AberrationParams` block.
     """
 
     zernike_coeffs: Float[Array, "num_zernike"]
@@ -131,6 +211,11 @@ class GeometryParams(eqx.Module):
         Offset of pattern centre (cx, cy) in pixels.
     ellipticity : Float[Array, "2"]
         Elliptical distortion parameters (e1, e2), dimensionless.
+
+    See Also
+    --------
+    :func:`create_ptycho_params`
+        Create and validate a :class:`GeometryParams` block.
     """
 
     rotation_rad: Float[Array, ""]
@@ -147,6 +232,11 @@ class PositionParams(eqx.Module):
     ----------
     position_offsets : Float[Array, "num_positions 2"]
         Per-scan-point position corrections (dx, dy) in Angstroms.
+
+    See Also
+    --------
+    :func:`create_ptycho_params`
+        Create and validate a :class:`PositionParams` block.
     """
 
     position_offsets: Float[Array, "num_positions 2"]
@@ -164,6 +254,11 @@ class ProbeModeParams(eqx.Module):
     mode_phases : Float[Array, "num_modes h w"]
         Phase perturbations for each mode relative to the base probe,
         in radians.
+
+    See Also
+    --------
+    :func:`create_ptycho_params`
+        Create and validate a :class:`ProbeModeParams` block.
     """
 
     mode_weights: Float[Array, "num_modes"]
@@ -187,6 +282,11 @@ class PtychoParams(eqx.Module):
         Scan position error parameters.
     probe_modes : ProbeModeParams
         Probe mode parameters.
+
+    See Also
+    --------
+    :func:`create_ptycho_params`
+        Create and validate a :class:`PtychoParams`.
     """
 
     exit_wave: ExitWaveParams
@@ -207,6 +307,11 @@ class FisherState(eqx.Module):
         Current Fisher information matrix estimate.
     iteration : Int[Array, ""]
         Current iteration index.
+
+    See Also
+    --------
+    :func:`create_fisher_state`
+        Create and validate a :class:`FisherState`.
     """
 
     fisher_matrix: Float[Array, "n n"]
@@ -230,6 +335,11 @@ class CGState(eqx.Module):
         Squared residual norm <r, r>.
     iteration : Int[Array, ""]
         Current iteration index.
+
+    See Also
+    --------
+    :func:`create_cg_state`
+        Create and validate a :class:`CGState`.
     """
 
     x: PyTree
@@ -252,6 +362,11 @@ class GNState(eqx.Module):
         L2 norm of the current residual.
     iteration : Int[Array, ""]
         Current iteration index.
+
+    See Also
+    --------
+    :func:`create_gn_state`
+        Create and validate a :class:`GNState`.
     """
 
     params: PyTree
@@ -274,6 +389,11 @@ class LMState(eqx.Module):
         Current damping parameter :math:`\lambda`.
     iteration : Int[Array, ""]
         Current iteration index.
+
+    See Also
+    --------
+    :func:`create_lm_state`
+        Create and validate a :class:`LMState`.
     """
 
     params: PyTree
@@ -299,6 +419,11 @@ class LanczosState(eqx.Module):
         Off-diagonal elements accumulated so far.
     iteration : Int[Array, ""]
         Current iteration index.
+
+    See Also
+    --------
+    :func:`create_lanczos_state`
+        Create and validate a :class:`LanczosState`.
     """
 
     v_prev: Float[Array, "n"]
@@ -306,6 +431,331 @@ class LanczosState(eqx.Module):
     alpha: Float[Array, "k"]
     beta: Float[Array, "k"]
     iteration: Int[Array, ""]
+
+
+@jaxtyped(typechecker=beartype)
+def create_fisher_state(
+    fisher_matrix: Float[Array, "..."],
+    iteration: scalar_int,
+) -> FisherState:
+    """Create a validated Fisher computation state.
+
+    :see: :class:`tests.test_ptyrodactyl.test_types.\
+test_jacobian_types.TestCreateSolverStates`
+
+    Parameters
+    ----------
+    fisher_matrix : Float[Array, "..."]
+        Current square Fisher information matrix estimate.
+    iteration : scalar_int
+        Current non-negative iteration index.
+
+    Returns
+    -------
+    state : FisherState
+        Validated Fisher computation state.
+
+    Raises
+    ------
+    ValueError
+        If the matrix is not square or the iteration is not scalar.
+
+    Notes
+    -----
+    Structural checks use ``ValueError``. Finiteness and iteration bounds use
+    traced ``eqx.error_if`` checks.
+    """
+    fisher_matrix_array: Float[Array, "n n"] = jnp.asarray(fisher_matrix)
+    matrix_rank: int = 2
+    _raise_if(
+        fisher_matrix_array.ndim != matrix_rank
+        or fisher_matrix_array.shape[0] != fisher_matrix_array.shape[1],
+        "fisher_matrix must be a square matrix",
+    )
+    checked_fisher_matrix: Float[Array, "n n"] = eqx.error_if(
+        fisher_matrix_array,
+        jnp.any(~jnp.isfinite(fisher_matrix_array)),
+        "fisher_matrix contains non-finite values",
+    )
+    checked_iteration: Int[Array, ""] = _checked_iteration(iteration)
+    state: FisherState = FisherState(
+        fisher_matrix=checked_fisher_matrix,
+        iteration=checked_iteration,
+    )
+    return state
+
+
+@jaxtyped(typechecker=beartype)
+def create_cg_state(
+    x: PyTree,
+    r: PyTree,
+    p: PyTree,
+    r_dot_r: scalar_float,
+    iteration: scalar_int,
+) -> CGState:
+    """Create a validated conjugate gradient iteration state.
+
+    :see: :class:`tests.test_ptyrodactyl.test_types.\
+test_jacobian_types.TestCreateSolverStates`
+
+    Parameters
+    ----------
+    x : PyTree
+        Current solution estimate.
+    r : PyTree
+        Current residual PyTree with the same structure and shapes as ``x``.
+    p : PyTree
+        Search-direction PyTree with the same structure and shapes as ``x``.
+    r_dot_r : scalar_float
+        Finite non-negative squared residual norm.
+    iteration : scalar_int
+        Current non-negative iteration index.
+
+    Returns
+    -------
+    state : CGState
+        Validated conjugate gradient state.
+
+    Raises
+    ------
+    ValueError
+        If tree structures, leaf shapes, or scalar structures are invalid.
+
+    Notes
+    -----
+    The factory preserves the ``x``, ``r``, and ``p`` trees verbatim. Traced
+    finite and bound checks apply only to ``r_dot_r`` and ``iteration``.
+    """
+    x_structure: jax.tree_util.PyTreeDef = jax.tree_util.tree_structure(x)
+    _raise_if(
+        not jax.tree_util.tree_leaves(x),
+        "x, r, and p must contain at least one array leaf",
+    )
+    _raise_if(
+        x_structure != jax.tree_util.tree_structure(r)
+        or x_structure != jax.tree_util.tree_structure(p),
+        "x, r, and p must have matching PyTree structures",
+    )
+    x_shapes: tuple[tuple[int, ...], ...] = _tree_leaf_shapes(x)
+    _raise_if(
+        x_shapes != _tree_leaf_shapes(r) or x_shapes != _tree_leaf_shapes(p),
+        "x, r, and p leaves must have matching shapes",
+    )
+    checked_r_dot_r: Float[Array, ""] = _checked_nonnegative_scalar(
+        r_dot_r,
+        "r_dot_r",
+    )
+    checked_iteration: Int[Array, ""] = _checked_iteration(iteration)
+    state: CGState = CGState(
+        x=x,
+        r=r,
+        p=p,
+        r_dot_r=checked_r_dot_r,
+        iteration=checked_iteration,
+    )
+    return state
+
+
+@jaxtyped(typechecker=beartype)
+def create_gn_state(
+    params: PyTree,
+    residual_norm: scalar_float,
+    iteration: scalar_int,
+) -> GNState:
+    """Create a validated Gauss-Newton iteration state.
+
+    :see: :class:`tests.test_ptyrodactyl.test_types.\
+test_jacobian_types.TestCreateSolverStates`
+
+    Parameters
+    ----------
+    params : PyTree
+        Current parameter estimate, preserved without leaf coercion.
+    residual_norm : scalar_float
+        Finite non-negative residual norm.
+    iteration : scalar_int
+        Current non-negative iteration index.
+
+    Returns
+    -------
+    state : GNState
+        Validated Gauss-Newton state.
+
+    Raises
+    ------
+    ValueError
+        If scalar structures are invalid.
+
+    Notes
+    -----
+    The factory preserves the parameter tree verbatim and attaches traced
+    finite and bound checks to the scalar state fields.
+    """
+    checked_residual_norm: Float[Array, ""] = _checked_nonnegative_scalar(
+        residual_norm,
+        "residual_norm",
+    )
+    checked_iteration: Int[Array, ""] = _checked_iteration(iteration)
+    state: GNState = GNState(
+        params=params,
+        residual_norm=checked_residual_norm,
+        iteration=checked_iteration,
+    )
+    return state
+
+
+@jaxtyped(typechecker=beartype)
+def create_lm_state(
+    params: PyTree,
+    residual_norm: scalar_float,
+    damping: scalar_float,
+    iteration: scalar_int,
+) -> LMState:
+    """Create a validated Levenberg-Marquardt iteration state.
+
+    :see: :class:`tests.test_ptyrodactyl.test_types.\
+test_jacobian_types.TestCreateSolverStates`
+
+    Parameters
+    ----------
+    params : PyTree
+        Current parameter estimate, preserved without leaf coercion.
+    residual_norm : scalar_float
+        Finite non-negative residual norm.
+    damping : scalar_float
+        Finite positive Levenberg-Marquardt damping parameter.
+    iteration : scalar_int
+        Current non-negative iteration index.
+
+    Returns
+    -------
+    state : LMState
+        Validated Levenberg-Marquardt state.
+
+    Raises
+    ------
+    ValueError
+        If scalar structures are invalid.
+
+    Notes
+    -----
+    The factory preserves the parameter tree verbatim and attaches traced
+    finite and bound checks to the scalar state fields.
+    """
+    checked_residual_norm: Float[Array, ""] = _checked_nonnegative_scalar(
+        residual_norm,
+        "residual_norm",
+    )
+    checked_damping: Float[Array, ""] = _checked_positive_scalar(
+        damping,
+        "damping",
+    )
+    checked_iteration: Int[Array, ""] = _checked_iteration(iteration)
+    state: LMState = LMState(
+        params=params,
+        residual_norm=checked_residual_norm,
+        damping=checked_damping,
+        iteration=checked_iteration,
+    )
+    return state
+
+
+@jaxtyped(typechecker=beartype)
+def create_lanczos_state(
+    v_prev: Float[Array, "..."],
+    v_curr: Float[Array, "..."],
+    alpha: Float[Array, "..."],
+    beta: Float[Array, "..."],
+    iteration: scalar_int,
+) -> LanczosState:
+    """Create a validated Lanczos tridiagonalisation state.
+
+    :see: :class:`tests.test_ptyrodactyl.test_types.\
+test_jacobian_types.TestCreateSolverStates`
+
+    Parameters
+    ----------
+    v_prev : Float[Array, "..."]
+        Previous one-dimensional Lanczos vector.
+    v_curr : Float[Array, "..."]
+        Current one-dimensional Lanczos vector with the same shape.
+    alpha : Float[Array, "..."]
+        One-dimensional diagonal coefficient buffer.
+    beta : Float[Array, "..."]
+        Non-negative off-diagonal buffer with the same shape as ``alpha``.
+    iteration : scalar_int
+        Current iteration index in ``[0, len(alpha)]``.
+
+    Returns
+    -------
+    state : LanczosState
+        Validated Lanczos state.
+
+    Raises
+    ------
+    ValueError
+        If vector, coefficient, or scalar structures are invalid.
+
+    Notes
+    -----
+    Finiteness, coefficient sign, and iteration bounds use traced
+    ``eqx.error_if`` checks.
+    """
+    v_prev_array: Float[Array, "n"] = jnp.asarray(v_prev)
+    v_curr_array: Float[Array, "n"] = jnp.asarray(v_curr)
+    alpha_array: Float[Array, "k"] = jnp.asarray(alpha)
+    beta_array: Float[Array, "k"] = jnp.asarray(beta)
+    vector_rank: int = 1
+    _raise_if(
+        v_prev_array.ndim != vector_rank or v_curr_array.ndim != vector_rank,
+        "v_prev and v_curr must be one-dimensional",
+    )
+    _raise_if(
+        v_prev_array.shape != v_curr_array.shape,
+        "v_prev and v_curr must have matching shapes",
+    )
+    _raise_if(
+        alpha_array.ndim != vector_rank or beta_array.ndim != vector_rank,
+        "alpha and beta must be one-dimensional",
+    )
+    _raise_if(
+        alpha_array.shape != beta_array.shape,
+        "alpha and beta must have matching shapes",
+    )
+    checked_v_prev: Float[Array, "n"] = eqx.error_if(
+        v_prev_array,
+        jnp.any(~jnp.isfinite(v_prev_array)),
+        "v_prev contains non-finite values",
+    )
+    checked_v_curr: Float[Array, "n"] = eqx.error_if(
+        v_curr_array,
+        jnp.any(~jnp.isfinite(v_curr_array)),
+        "v_curr contains non-finite values",
+    )
+    checked_alpha: Float[Array, "k"] = eqx.error_if(
+        alpha_array,
+        jnp.any(~jnp.isfinite(alpha_array)),
+        "alpha contains non-finite values",
+    )
+    checked_beta: Float[Array, "k"] = eqx.error_if(
+        beta_array,
+        jnp.any(~jnp.isfinite(beta_array)) | jnp.any(beta_array < 0),
+        "beta must contain finite non-negative values",
+    )
+    checked_iteration: Int[Array, ""] = _checked_iteration(iteration)
+    checked_iteration = eqx.error_if(
+        checked_iteration,
+        checked_iteration > alpha_array.shape[0],
+        "iteration must not exceed the Lanczos coefficient length",
+    )
+    state: LanczosState = LanczosState(
+        v_prev=checked_v_prev,
+        v_curr=checked_v_curr,
+        alpha=checked_alpha,
+        beta=checked_beta,
+        iteration=checked_iteration,
+    )
+    return state
 
 
 @jaxtyped(typechecker=beartype)
@@ -547,5 +997,10 @@ __all__: list[str] = [
     "PositionParams",
     "ProbeModeParams",
     "PtychoParams",
+    "create_cg_state",
+    "create_fisher_state",
+    "create_gn_state",
+    "create_lanczos_state",
+    "create_lm_state",
     "create_ptycho_params",
 ]

@@ -10,13 +10,14 @@ The submodules are organized as follows:
 Routine Listings
 ----------------
 :func:`convergence_parameter`
-    Optimal convergence parameter for Born series.
+    Compute the convergence parameter from the scattering potential.
 :func:`green_function_fourier`
-    Free-space Green's function in Fourier space.
+    Construct the Fourier-space Green's function.
 :func:`reciprocal_coords`
-    Reciprocal-space coordinate grids.
+    Construct 3-D reciprocal-space coordinate arrays.
 :func:`wavenumber_background`
-    Background wavenumber for the Helmholtz equation.
+    Compute the optimal background wavenumber squared.
+
 """
 
 from .green import (

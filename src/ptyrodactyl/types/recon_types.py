@@ -9,22 +9,22 @@ finite-value constraints, but intentionally do not implement solver logic.
 
 Routine Listings
 ----------------
-:class:`ReconProblem`
-    Reconstruction inverse-problem carrier.
-:class:`ReconResult`
-    Reconstruction solver-result carrier.
 :class:`LaplaceUncertainty`
-    Laplace-approximation uncertainty carrier.
+    Store a Laplace-approximation uncertainty summary.
 :class:`PosteriorSamples`
-    Posterior sample diagnostics carrier.
-:func:`create_recon_problem`
-    Create a ReconProblem with runtime validation.
-:func:`create_recon_result`
-    Create a ReconResult with runtime validation.
+    Store posterior samples and diagnostics.
+:class:`ReconProblem`
+    Store a reconstruction inverse-problem contract.
+:class:`ReconResult`
+    Store a reconstruction solver result.
 :func:`create_laplace_uncertainty`
     Create a LaplaceUncertainty with runtime validation.
 :func:`create_posterior_samples`
     Create PosteriorSamples with runtime validation.
+:func:`create_recon_problem`
+    Create a ReconProblem with runtime validation.
+:func:`create_recon_result`
+    Create a ReconResult with runtime validation.
 
 Notes
 -----
@@ -108,6 +108,11 @@ class ReconProblem(eqx.Module):
         Static forward-family label, for example ``"born"``.
     terminal : str
         Static measurement-terminal label, for example ``"diffraction"``.
+
+    See Also
+    --------
+    :func:`create_recon_problem`
+        Create and validate a :class:`ReconProblem`.
     """
 
     forward: Callable[..., Any] = eqx.field(static=True)
@@ -151,6 +156,11 @@ class ReconResult(eqx.Module):
         Dynamic scalar convergence flag.
     solver_status : str
         Static solver-status label.
+
+    See Also
+    --------
+    :func:`create_recon_result`
+        Create and validate a :class:`ReconResult`.
     """
 
     params: PyTree
@@ -178,6 +188,11 @@ class LaplaceUncertainty(eqx.Module):
         Per-parameter standard deviation vector.
     correlation : Float[Array, "n n"]
         Correlation matrix matching the covariance shape.
+
+    See Also
+    --------
+    :func:`create_laplace_uncertainty`
+        Create and validate a :class:`LaplaceUncertainty`.
     """
 
     fisher_information: Float[Array, "n n"]
@@ -205,6 +220,11 @@ class PosteriorSamples(eqx.Module):
         Per-parameter effective sample size.
     converged : Bool[Array, ""]
         Dynamic scalar convergence flag.
+
+    See Also
+    --------
+    :func:`create_posterior_samples`
+        Create and validate :class:`PosteriorSamples`.
     """
 
     samples: Float[Array, "draws n"]

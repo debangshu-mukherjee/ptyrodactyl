@@ -8,12 +8,12 @@ transforms and visualization colormaps.
 Routine Listings
 ----------------
 :func:`clip_cbed`
-    Clip CBED patterns to mrad extent and resize to target
-    shape.
+    Clip CBED pattern to mrad extent and resize.
 :func:`contrast_stretch`
     Rescale image intensity between specified percentiles.
 :func:`create_phosphor_colormap`
-    Create custom colormap simulating phosphor screen appearance.
+    Create a custom colormap that simulates a phosphor screen appearance.
+
 """
 
 import jax
@@ -25,7 +25,7 @@ from jax.image import resize
 from jaxtyping import Array, Float, Int, jaxtyped
 from matplotlib.colors import LinearSegmentedColormap
 
-from ptyrodactyl.tools.constants import relativistic_wavelength_ang
+from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import scalar_float, scalar_num
 
 
@@ -45,6 +45,8 @@ def clip_cbed(
     Extracts the central region of a CBED pattern corresponding
     to a given angular extent in milliradians, then resizes to
     the target output shape using bilinear interpolation.
+
+    :see: :mod:`~.test_figuring`
 
     Implementation Logic
     --------------------
@@ -127,6 +129,8 @@ def contrast_stretch(
     and linearly rescales to ``[0, 1]``. Handles both single
     images and stacks via ``jax.vmap``.
 
+    :see: :class:`~.test_figuring.TestContrastStretch`
+
     Implementation Logic
     --------------------
     1. **Expand dims** -- Promote 2D to 3D if needed.
@@ -208,6 +212,8 @@ def create_phosphor_colormap(
 
     The colormap transitions from black through a bright phosphorescent green,
     with a slight white bloom at maximum intensity.
+
+    :see: :class:`~.test_figuring.TestCreatePhosphorColormap`
 
     Parameters
     ----------

@@ -10,13 +10,14 @@ checks so the resulting carriers remain compatible with JAX transformations.
 Routine Listings
 ----------------
 :class:`KirklandParameters`
-    Kirkland Lorentzian and Gaussian amplitude/scale pairs.
+    Store Kirkland coefficients for one element.
 :class:`LobatoParameters`
-    Lobato--Van Dyck amplitude/scale pairs.
+    Store Lobato--Van Dyck coefficients for one element.
 :func:`create_kirkland_parameters`
     Create validated Kirkland coefficients for one element.
 :func:`create_lobato_parameters`
     Create validated Lobato--Van Dyck coefficients for one element.
+
 """
 
 import equinox as eqx
@@ -31,6 +32,8 @@ _LOBATO_TERM_COUNT: int = 5
 class LobatoParameters(eqx.Module):
     """Store Lobato--Van Dyck coefficients for one element.
 
+    :see: :func:`~.test_factories_create_float64_equinox_pytrees_under_jit`
+
     Attributes
     ----------
     amplitudes : Float[Array, " 5"]
@@ -38,6 +41,11 @@ class LobatoParameters(eqx.Module):
     scales : Float[Array, " 5"]
         Five strictly positive width coefficients :math:`b_i` in square
         Angstroms.
+
+    See Also
+    --------
+    :func:`create_lobato_parameters`
+        Create and validate :class:`LobatoParameters`.
     """
 
     amplitudes: Float[Array, " 5"]
@@ -46,6 +54,8 @@ class LobatoParameters(eqx.Module):
 
 class KirklandParameters(eqx.Module):
     """Store Kirkland coefficients for one element.
+
+    :see: :func:`~.test_factories_create_float64_equinox_pytrees_under_jit`
 
     Attributes
     ----------
@@ -57,6 +67,11 @@ class KirklandParameters(eqx.Module):
         Three Gaussian amplitude coefficients.
     gaussian_scales : Float[Array, " 3"]
         Three strictly positive Gaussian scale coefficients.
+
+    See Also
+    --------
+    :func:`create_kirkland_parameters`
+        Create and validate :class:`KirklandParameters`.
     """
 
     lorentzian_amplitudes: Float[Array, " 3"]
@@ -99,11 +114,10 @@ def _checked_scales(
 ) -> Float[Array, " length"]:
     """Apply traced finite and positive checks to physical scale values."""
     checked: Float[Array, " length"] = _checked_finite(values, name=name)
-    return eqx.error_if(
-        checked,
-        jnp.any(checked <= 0),
-        f"{name} must be strictly positive",
+    result: Float[Array, " length"] = eqx.error_if(
+        checked, jnp.any(checked <= 0), f"{name} must be strictly positive"
     )
+    return result
 
 
 @jaxtyped(typechecker=beartype)
@@ -112,6 +126,8 @@ def create_lobato_parameters(
     scales: Float[Array, "..."],
 ) -> LobatoParameters:
     """Create validated Lobato--Van Dyck coefficients for one element.
+
+    :see: :mod:`~.test_form_factor_types`
 
     Parameters
     ----------
@@ -122,7 +138,7 @@ def create_lobato_parameters(
 
     Returns
     -------
-    lobato_parameters : LobatoParameters
+    parameters : LobatoParameters
         Float64 Lobato coefficient carrier.
 
     Raises
@@ -169,6 +185,8 @@ def create_kirkland_parameters(
 ) -> KirklandParameters:
     """Create validated Kirkland coefficients for one element.
 
+    :see: :mod:`~.test_form_factor_types`
+
     Parameters
     ----------
     lorentzian_amplitudes : Float[Array, "..."]
@@ -182,7 +200,7 @@ def create_kirkland_parameters(
 
     Returns
     -------
-    kirkland_parameters : KirklandParameters
+    parameters : KirklandParameters
         Float64 Kirkland coefficient carrier.
 
     Raises

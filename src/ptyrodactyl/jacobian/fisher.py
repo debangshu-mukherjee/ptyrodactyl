@@ -12,31 +12,32 @@ across experimental conditions.
 Routine Listings
 ----------------
 :func:`a_optimality`
-    A-optimality criterion: trace(F^{-1}).
+    Compute A-optimality criterion: trace(F^{-1}).
 :func:`condition_number`
-    Condition number of Fisher information matrix.
+    Compute condition number of Fisher information matrix.
 :func:`d_optimality`
-    D-optimality criterion: log det(F).
+    Compute D-optimality criterion: log det(F).
 :func:`e_optimality`
-    E-optimality criterion: lambda_min(F).
+    Compute E-optimality criterion: lambda_min(F).
 :func:`effective_fisher`
-    Fisher information after marginalising nuisances.
+    Compute Fisher information after marginalising nuisances.
 :func:`fisher_diagonal`
-    Fast diagonal approximation of Fisher information.
+    Estimate diagonal of Fisher information via Hutchinson.
 :func:`fisher_eigenspectrum`
-    Eigenvalues of Fisher matrix via Lanczos.
+    Estimate eigenspectrum of Fisher information via Lanczos.
 :func:`fisher_information`
-    Compute Fisher information matrix at a parameter point.
+    Compute the Fisher information matrix.
 :func:`fisher_information_operator`
-    Matrix-free Fisher information operator for large problems.
+    Construct a matrix-free Fisher information operator.
 :func:`information_gain`
-    Information gain from adding measurements.
+    Compute information gain from adding measurements.
 :func:`optimal_weights_e_criterion`
-    Optimal weights for stacking under E-optimality.
+    Find optimal weights under E-optimality.
 :func:`schur_complement`
     Marginalise nuisance parameters via Schur complement.
 :func:`stack_fisher`
     Combine Fisher matrices from multiple conditions.
+
 """
 
 import equinox as eqx
@@ -84,6 +85,8 @@ def fisher_information(
     This matrix encodes the information content of measurements
     about parameters.
 
+    :see: :mod:`~.test_fisher`
+
     Implementation Logic
     --------------------
     1. **Flatten parameters** --
@@ -126,7 +129,8 @@ def fisher_information(
         basis_vector: Float[Array, "n"] = jnp.zeros(n).at[index].set(1.0)
         tangent_pytree: PyTree = unflatten_fn(basis_vector)
         _, jvp_result = jax.jvp(forward_fn, (params,), (tangent_pytree,))
-        return jvp_result
+        result: Float[Array, "m"] = jvp_result
+        return result
 
     jacobian_matrix: Float[Array, "m n"] = jax.vmap(jacobian_column)(
         jnp.arange(n)
@@ -155,6 +159,8 @@ def fisher_information_operator(
 
     without materialising :math:`J` or :math:`F`.
 
+    :see: :mod:`~.test_fisher`
+
     Implementation Logic
     --------------------
     1. **Construct J^T J operator** --
@@ -176,7 +182,7 @@ def fisher_information_operator(
 
     Returns
     -------
-    fisher_op : Callable[[PyTree], PyTree]
+    fisher_operator : Callable[[PyTree], PyTree]
         Operator that computes F @ v for any vector v.
     """
     checked_noise_variance: Float[Array, ""] = _validate_noise_variance(
@@ -195,7 +201,8 @@ def fisher_information_operator(
         )
         return result
 
-    return fisher_op
+    fisher_operator: Callable[[PyTree], PyTree] = fisher_op
+    return fisher_operator
 
 
 @jaxtyped(typechecker=beartype)
@@ -219,6 +226,8 @@ def fisher_diagonal(
         \frac{1}{S} \sum_{s=1}^{S} z_s \odot (A z_s)
 
     where :math:`z_s` are Rademacher random vectors.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------
@@ -283,7 +292,8 @@ def fisher_diagonal(
         jtj_z: Float[Array, "n"] = jtj_flat_fn(z)
         sample: Float[Array, "n"] = z * jtj_z
         new_carry: Float[Array, "n"] = carry + sample
-        return new_carry, None
+        result: tuple[Float[Array, "n"], None] = new_carry, None
+        return result
 
     keys: PRNGKeyArray = jax.random.split(key, num_hutchinson_samples)
     diagonal_sum, _ = lax.scan(hutchinson_sample, jnp.zeros(n), keys)
@@ -315,6 +325,8 @@ def schur_complement(
     :math:`A - B D^{-1} C` gives the effective information
     about parameters of interest after marginalising out
     nuisances.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------
@@ -376,6 +388,8 @@ def effective_fisher(
     nuisance parameters (probe errors, position errors,
     drift, etc.).
 
+    :see: :mod:`~.test_fisher`
+
     Implementation Logic
     --------------------
     1. **Flatten and concatenate** --
@@ -433,7 +447,8 @@ def effective_fisher(
         nuisance_part: Float[Array, "q"] = combined_params[p:]
         params_i: PyTree = unflatten_interest(interest_part)
         params_n: PyTree = unflatten_nuisance(nuisance_part)
-        return forward_fn((params_i, params_n))
+        result: Float[Array, "m"] = forward_fn((params_i, params_n))
+        return result
 
     combined_params: Float[Array, "n"] = jnp.concatenate(
         [flat_interest, flat_nuisance]
@@ -447,7 +462,8 @@ def effective_fisher(
         _, jvp_result = jax.jvp(
             combined_forward, (combined_params,), (basis_vector,)
         )
-        return jvp_result
+        result: Float[Array, "m"] = jvp_result
+        return result
 
     jacobian_matrix: Float[Array, "m n"] = jax.vmap(jacobian_column)(
         jnp.arange(n)
@@ -478,6 +494,8 @@ def fisher_eigenspectrum(
     eigenvalues correspond to poorly constrained (near-gauge)
     directions.
 
+    :see: :mod:`~.test_fisher`
+
     Implementation Logic
     --------------------
     1. **Build Fisher operator** --
@@ -507,7 +525,7 @@ def fisher_eigenspectrum(
 
     Returns
     -------
-    eigenvalues : Float[Array, "k"]
+    eigenvalues_out : Float[Array, "k"]
         Estimated eigenvalues in descending order.
 
     See Also
@@ -575,7 +593,13 @@ def fisher_eigenspectrum(
         alphas_new: Float[Array, "k"] = alphas.at[iteration].set(alpha_i)
         betas_new: Float[Array, "k"] = betas.at[iteration].set(beta_i)
 
-        return (v_c, v_next, alphas_new, betas_new)
+        result: tuple[
+            Float[Array, "n"],
+            Float[Array, "n"],
+            Float[Array, "k"],
+            Float[Array, "k"],
+        ] = (v_c, v_next, alphas_new, betas_new)
+        return result
 
     _, _, alpha, beta = lax.fori_loop(
         0, k, lanczos_step, (v_prev, v_curr, alpha, beta)
@@ -603,6 +627,8 @@ def a_optimality(
     ----------------
     A-optimality minimises the average variance of parameter
     estimates.  Lower values indicate better experimental design.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------
@@ -648,6 +674,8 @@ def d_optimality(
     information, minimising the volume of the confidence
     ellipsoid.  Higher values indicate better experimental
     design.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------
@@ -696,6 +724,8 @@ def e_optimality(
     constrained.  Higher values indicate better experimental
     design.
 
+    :see: :mod:`~.test_fisher`
+
     Implementation Logic
     --------------------
     1. **Eigendecompose** --
@@ -730,6 +760,8 @@ def stack_fisher(
     When measurements are independent, Fisher information is
     additive.  Weighted stacking allows optimising the
     allocation of measurement effort across conditions.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------
@@ -779,6 +811,8 @@ def optimal_weights_e_criterion(
     This determines how to allocate measurement effort across
     experimental conditions to maximise the worst-case
     information.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------
@@ -842,7 +876,10 @@ def optimal_weights_e_criterion(
             fisher_i: Float[Array, "n n"],
         ) -> Float[Array, ""]:
             """Compute v^T F_i v for min eigenvector v."""
-            return jnp.dot(min_eigenvector, jnp.dot(fisher_i, min_eigenvector))
+            result: Float[Array, ""] = jnp.dot(
+                min_eigenvector, jnp.dot(fisher_i, min_eigenvector)
+            )
+            return result
 
         gradient: Float[Array, "k"] = jax.vmap(gradient_component)(
             fisher_matrices
@@ -872,6 +909,8 @@ def condition_number(
     how ill-posed the inverse problem is.  Large condition
     numbers mean some directions are much harder to recover
     than others.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------
@@ -919,6 +958,8 @@ def information_gain(
 
     Positive values indicate the new measurements added
     information.
+
+    :see: :mod:`~.test_fisher`
 
     Implementation Logic
     --------------------

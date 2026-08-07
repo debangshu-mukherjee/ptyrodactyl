@@ -23,25 +23,25 @@ Routine Listings
 :class:`LRSchedulerState`
     State maintained by learning rate schedulers.
 :class:`Optimizer`
-    Optimizer configuration with init and update functions.
+    Optimizer configuration pairing init and update callables.
 :class:`OptimizerState`
-    State maintained by optimizers (moments, step count).
+    State maintained by optimizers.
 :func:`adagrad_update`
-    Adagrad parameter update step.
+    Update parameters using Adagrad with Wirtinger derivatives.
 :func:`adam_update`
-    Adam parameter update step.
+    Update parameters using Adam with Wirtinger derivatives.
 :func:`complex_adagrad`
-    One step of complex-valued Adagrad.
+    Perform one step of complex-valued Adagrad.
 :func:`complex_adam`
-    One step of complex-valued Adam.
+    Perform one step of complex-valued Adam.
 :func:`complex_rmsprop`
-    One step of complex-valued RMSprop.
+    Perform one step of complex-valued RMSprop.
 :func:`create_cosine_scheduler`
-    Cosine annealing learning rate scheduler.
+    Create a cosine annealing learning rate scheduler.
 :func:`create_step_scheduler`
-    Step decay learning rate scheduler.
+    Create a step decay learning rate scheduler.
 :func:`create_warmup_cosine_scheduler`
-    Linear warmup followed by cosine decay scheduler.
+    Create a warmup-then-cosine-decay scheduler.
 :func:`init_adagrad`
     Initialise Adagrad optimizer state.
 :func:`init_adam`
@@ -51,9 +51,9 @@ Routine Listings
 :func:`init_scheduler_state`
     Initialise scheduler state with a given learning rate.
 :func:`rmsprop_update`
-    RMSprop parameter update step.
+    Update parameters using RMSprop with Wirtinger derivatives.
 :func:`wirtinger_grad`
-    Compute Wirtinger gradient of a complex-valued function.
+    Compute the Wirtinger gradient of a real-valued function.
 
 Notes
 -----
@@ -80,6 +80,8 @@ from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
 class LRSchedulerState(NamedTuple):
     """State maintained by learning rate schedulers.
+
+    :see: :mod:`~.test_optimizers`
 
     Attributes
     ----------
@@ -125,6 +127,8 @@ def create_cosine_scheduler(
     where :math:`p = \min(t / T,\; 1)` and
     :math:`\alpha` = *final_lr_factor*.
 
+    :see: :mod:`~.test_optimizers`
+
     Implementation Logic
     --------------------
     1. **Compute progress** --
@@ -146,7 +150,7 @@ def create_cosine_scheduler(
 
     Returns
     -------
-    scheduler_fn : SchedulerFn
+    scheduler : SchedulerFn
         A JIT-compiled function mapping
         :class:`LRSchedulerState` to ``(lr, new_state)``.
     """
@@ -177,9 +181,14 @@ def create_cosine_scheduler(
         new_state = LRSchedulerState(
             step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
         )
-        return lr, new_state
+        result: tuple[float | Float[Array, " "], LRSchedulerState] = (
+            lr,
+            new_state,
+        )
+        return result
 
-    return scheduler_fn
+    scheduler: SchedulerFn = scheduler_fn
+    return scheduler
 
 
 @jaxtyped(typechecker=beartype)
@@ -196,6 +205,8 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
         \eta_t = \eta_0 \,\gamma^{\lfloor t / S \rfloor}
 
     where :math:`S` = *step_size*.
+
+    :see: :mod:`~.test_optimizers`
 
     Implementation Logic
     --------------------
@@ -215,7 +226,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
 
     Returns
     -------
-    scheduler_fn : SchedulerFn
+    scheduler : SchedulerFn
         A JIT-compiled function mapping
         :class:`LRSchedulerState` to ``(lr, new_state)``.
     """
@@ -243,9 +254,14 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
         new_state = LRSchedulerState(
             step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
         )
-        return lr, new_state
+        result: tuple[float | Float[Array, " "], LRSchedulerState] = (
+            lr,
+            new_state,
+        )
+        return result
 
-    return scheduler_fn
+    scheduler: SchedulerFn = scheduler_fn
+    return scheduler
 
 
 @jaxtyped(typechecker=beartype)
@@ -276,6 +292,8 @@ def create_warmup_cosine_scheduler(
     :math:`p = (t - W)/(T - W)`, and
     :math:`\alpha` = *final_lr_factor*.
 
+    :see: :mod:`~.test_optimizers`
+
     Implementation Logic
     --------------------
     1. **Linear warmup** --
@@ -299,7 +317,7 @@ def create_warmup_cosine_scheduler(
 
     Returns
     -------
-    scheduler_fn : SchedulerFn
+    scheduler : SchedulerFn
         A JIT-compiled function mapping
         :class:`LRSchedulerState` to ``(lr, new_state)``.
     """
@@ -343,9 +361,14 @@ def create_warmup_cosine_scheduler(
         new_state = LRSchedulerState(
             step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
         )
-        return lr, new_state
+        result: tuple[float | Float[Array, " "], LRSchedulerState] = (
+            lr,
+            new_state,
+        )
+        return result
 
-    return scheduler_fn
+    scheduler: SchedulerFn = scheduler_fn
+    return scheduler
 
 
 @jaxtyped(typechecker=beartype)
@@ -353,6 +376,8 @@ def init_scheduler_state(
     initial_lr: float | Float[Array, " "],
 ) -> LRSchedulerState:
     """Initialise scheduler state with a given learning rate.
+
+    :see: :mod:`~.test_optimizers`
 
     Parameters
     ----------
@@ -365,14 +390,16 @@ def init_scheduler_state(
         Scheduler state with ``step=0`` and
         ``learning_rate=initial_lr``.
     """
-    state = LRSchedulerState(
+    state: LRSchedulerState = LRSchedulerState(
         step=0, learning_rate=initial_lr, initial_lr=initial_lr
     )
-    return state  # noqa: RET504
+    return state
 
 
 class OptimizerState(NamedTuple):
     """State maintained by optimizers.
+
+    :see: :mod:`~.test_optimizers`
 
     Attributes
     ----------
@@ -391,6 +418,8 @@ class OptimizerState(NamedTuple):
 
 class Optimizer(NamedTuple):
     """Optimizer configuration pairing init and update callables.
+
+    :see: :mod:`~.test_optimizers`
 
     Attributes
     ----------
@@ -428,6 +457,8 @@ def wirtinger_grad(
             - i\,\frac{\partial f}{\partial y}
         \right)
 
+    :see: :func:`~.test_wirtinger_grad_matches_known_complex_quadratic`
+
     Implementation Logic
     --------------------
     1. **Split complex arguments** --
@@ -450,7 +481,7 @@ def wirtinger_grad(
 
     Returns
     -------
-    grad_f : Callable
+    gradient_function : Callable
         A function that returns the Wirtinger gradient(s).
 
     See Also
@@ -498,7 +529,8 @@ def wirtinger_grad(
                 jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg)
                 for arg in args
             )
-            return split  # noqa: RET504
+            result: tuple[Any, ...] = split
+            return result
 
         def combine_complex(
             r: tuple[Any, ...], i: tuple[Any, ...]
@@ -521,7 +553,8 @@ def wirtinger_grad(
                 rr + 1j * ii if jnp.iscomplexobj(arg) else rr
                 for rr, ii, arg in zip(r, i, args, strict=False)
             )
-            return combined  # noqa: RET504
+            result: tuple[Any, ...] = combined
+            return result
 
         split_args = split_complex(args)
         n = len(args)
@@ -542,7 +575,8 @@ def wirtinger_grad(
             real_val = jnp.real(
                 func2diff(*combine_complex(split_args[:n], split_args[n:]))
             )
-            return real_val  # noqa: RET504
+            result: Float[Array, " ..."] = real_val
+            return result
 
         def f_imag(*split_args: Num[Array, " ..."]) -> Float[Array, " ..."]:
             """Return the imaginary part of the function output.
@@ -560,20 +594,30 @@ def wirtinger_grad(
             imag_val = jnp.imag(
                 func2diff(*combine_complex(split_args[:n], split_args[n:]))
             )
-            return imag_val  # noqa: RET504
+            result: Float[Array, " ..."] = imag_val
+            return result
 
         gr = jax.grad(f_real, argnums=argnums)(*split_args)
         gi = jax.grad(f_imag, argnums=argnums)(*split_args)
 
         if isinstance(argnums, int):
             wirt_grad = 0.5 * (gr - 1j * gi)
-            return wirt_grad  # noqa: RET504
+            result: Union[
+                Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]
+            ] = wirt_grad
+            return result
         wirt_grad = tuple(
             0.5 * (grr - 1j * gii) for grr, gii in zip(gr, gi, strict=False)
         )
-        return wirt_grad  # noqa: RET504
+        result: Union[
+            Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]
+        ] = wirt_grad
+        return result
 
-    return grad_f
+    gradient_function: Callable[
+        ..., Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]
+    ] = grad_f
+    return gradient_function
 
 
 @jaxtyped(typechecker=beartype)
@@ -602,6 +646,8 @@ def complex_adam(
 
         z_{t+1} = z_t
         - \frac{\eta\,\hat{m}_t}{\sqrt{\hat{v}_t} + \varepsilon}
+
+    :see: :func:`~.test_complex_adam_two_step_matches_historical_oracle`
 
     Implementation Logic
     --------------------
@@ -659,7 +705,11 @@ def complex_adam(
     update = learning_rate * m_hat / (jnp.sqrt(v_hat) + eps)
     new_params = params - update
     new_state = (m, v, t)
-    return new_params, new_state
+    optimizer_step: Tuple[
+        Complex[Array, " ..."],
+        Tuple[Num[Array, " ..."], Num[Array, " ..."], int | Int[Array, " "]],
+    ] = (new_params, new_state)
+    return optimizer_step
 
 
 @jaxtyped(typechecker=beartype)
@@ -683,6 +733,8 @@ def complex_adagrad(
         - \frac{\eta}{\sqrt{G_t} + \varepsilon}\,g_t
 
     where :math:`G_t = G_{t-1} + |g_t|^2`.
+
+    :see: :mod:`~.test_optimizers`
 
     Implementation Logic
     --------------------
@@ -733,7 +785,11 @@ def complex_adagrad(
     new_params = params - adaptive_lr * grads
 
     new_state = new_accumulated_grads
-    return new_params, new_state
+    optimizer_step: Tuple[Complex[Array, " ..."], Num[Array, " ..."]] = (
+        new_params,
+        new_state,
+    )
+    return optimizer_step
 
 
 @jaxtyped(typechecker=beartype)
@@ -758,6 +814,8 @@ def complex_rmsprop(
 
         z_{t+1} = z_t
         - \frac{\eta}{\sqrt{v_t} + \varepsilon}\,g_t
+
+    :see: :mod:`~.test_optimizers`
 
     Implementation Logic
     --------------------
@@ -813,7 +871,11 @@ def complex_rmsprop(
     new_params = params - adaptive_lr * grads
 
     new_state = new_moving_avg
-    return new_params, new_state
+    optimizer_step: Tuple[Complex[Array, " ..."], Num[Array, " ..."]] = (
+        new_params,
+        new_state,
+    )
+    return optimizer_step
 
 
 def _init_optimizer_state(shape: tuple[int, ...]) -> OptimizerState:
@@ -821,12 +883,15 @@ def _init_optimizer_state(shape: tuple[int, ...]) -> OptimizerState:
     state = OptimizerState(
         m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
     )
-    return state  # noqa: RET504
+    result: OptimizerState = state
+    return result
 
 
 @jaxtyped(typechecker=beartype)
 def init_adam(shape: tuple) -> OptimizerState:
     """Initialise Adam optimizer state.
+
+    :see: :mod:`~.test_optimizers`
 
     Parameters
     ----------
@@ -839,13 +904,15 @@ def init_adam(shape: tuple) -> OptimizerState:
         State with zero first and second moments and
         ``step=0``.
     """
-    state = _init_optimizer_state(shape)
-    return state  # noqa: RET504
+    state: OptimizerState = _init_optimizer_state(shape)
+    return state
 
 
 @jaxtyped(typechecker=beartype)
 def init_adagrad(shape: tuple) -> OptimizerState:
     """Initialise Adagrad optimizer state.
+
+    :see: :mod:`~.test_optimizers`
 
     Parameters
     ----------
@@ -857,13 +924,15 @@ def init_adagrad(shape: tuple) -> OptimizerState:
     state : OptimizerState
         State with zero accumulated gradients and ``step=0``.
     """
-    state = _init_optimizer_state(shape)
-    return state  # noqa: RET504
+    state: OptimizerState = _init_optimizer_state(shape)
+    return state
 
 
 @jaxtyped(typechecker=beartype)
 def init_rmsprop(shape: tuple) -> OptimizerState:
     """Initialise RMSprop optimizer state.
+
+    :see: :mod:`~.test_optimizers`
 
     Parameters
     ----------
@@ -875,8 +944,8 @@ def init_rmsprop(shape: tuple) -> OptimizerState:
     state : OptimizerState
         State with zero moving average and ``step=0``.
     """
-    state = _init_optimizer_state(shape)
-    return state  # noqa: RET504
+    state: OptimizerState = _init_optimizer_state(shape)
+    return state
 
 
 @jaxtyped(typechecker=beartype)
@@ -890,6 +959,8 @@ def adam_update(
     eps: float = 1e-8,
 ) -> tuple[Complex[Array, " ..."], OptimizerState]:
     """Update parameters using Adam with Wirtinger derivatives.
+
+    :see: :mod:`~.test_optimizers`
 
     Implementation Logic
     --------------------
@@ -932,7 +1003,11 @@ def adam_update(
         params, grads, (m, v, step), learning_rate, beta1, beta2, eps
     )
     new_state = OptimizerState(m=new_m, v=new_v, step=new_step)
-    return new_params, new_state
+    optimizer_step: tuple[Complex[Array, " ..."], OptimizerState] = (
+        new_params,
+        new_state,
+    )
+    return optimizer_step
 
 
 @jaxtyped(typechecker=beartype)
@@ -944,6 +1019,8 @@ def adagrad_update(
     eps: float = 1e-8,
 ) -> tuple[Complex[Array, " ..."], OptimizerState]:
     """Update parameters using Adagrad with Wirtinger derivatives.
+
+    :see: :mod:`~.test_optimizers`
 
     Implementation Logic
     --------------------
@@ -981,7 +1058,11 @@ def adagrad_update(
     m, v, step = state
     new_params, new_v = complex_adagrad(params, grads, v, learning_rate, eps)
     new_state = OptimizerState(m=m, v=new_v, step=step + 1)
-    return new_params, new_state
+    optimizer_step: tuple[Complex[Array, " ..."], OptimizerState] = (
+        new_params,
+        new_state,
+    )
+    return optimizer_step
 
 
 @jaxtyped(typechecker=beartype)
@@ -994,6 +1075,8 @@ def rmsprop_update(
     eps: float = 1e-8,
 ) -> tuple[Complex[Array, " ..."], OptimizerState]:
     """Update parameters using RMSprop with Wirtinger derivatives.
+
+    :see: :mod:`~.test_optimizers`
 
     Implementation Logic
     --------------------
@@ -1036,7 +1119,11 @@ def rmsprop_update(
         params, grads, v, learning_rate, decay_rate, eps
     )
     new_state = OptimizerState(m=m, v=new_v, step=step + 1)
-    return new_params, new_state
+    optimizer_step: tuple[Complex[Array, " ..."], OptimizerState] = (
+        new_params,
+        new_state,
+    )
+    return optimizer_step
 
 
 __all__: list[str] = [

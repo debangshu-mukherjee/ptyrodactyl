@@ -18,7 +18,9 @@ I/O is separated from JAX kernels.
   producers, projected multislice amplitudes, detector reductions,
   distribution producers, and 4D-STEM simulation. Its volumetric producer
   returns an unsliced `Potential3D`; it does not perform a beam-axis collapse.
-- `ptyrodactyl.born` and `ptyrodactyl.bloch` are sibling forward-model families.
+- `ptyrodactyl.born` owns scalar Galerkin scattering operators, solvers,
+  fixed-support derivatives, and Green-function utilities;
+  `ptyrodactyl.bloch` is the sibling Bloch-wave forward family.
 - `ptyrodactyl.plots` owns presentation-only image and colormap helpers.
 - `ptyrodactyl.invert` and `ptyrodactyl.jacobian` own reconstruction and
   derivative operations.
@@ -35,7 +37,7 @@ src/ptyrodactyl/
 ├── inout/          # parsers, lookup assets, and HDF5 ingest/emit
 ├── ucell/          # unit-cell and rotation geometry
 ├── multislice/     # IAM potentials, multislice amplitudes, and reducers
-├── born/           # convergent-Born utilities
+├── born/           # scalar Galerkin scattering and Green-function utilities
 ├── bloch/          # Bloch-wave utilities
 ├── plots/          # visualization helpers
 ├── invert/         # reconstruction algorithms

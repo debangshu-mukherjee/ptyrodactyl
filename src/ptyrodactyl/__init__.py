@@ -36,7 +36,7 @@ The submodules are organized as follows:
 - :mod:`bloch`
     Bloch wave simulations.
 - :mod:`born`
-    Convergent Born series simulations.
+    Scalar Galerkin scattering and Green-function utilities.
 - :mod:`inout`
     Host-world parsers, lookup data, and versioned HDF5 ingest/emit.
 - :mod:`invert`

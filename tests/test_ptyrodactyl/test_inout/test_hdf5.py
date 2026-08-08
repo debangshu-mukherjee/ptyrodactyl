@@ -14,7 +14,17 @@ import pytest
 from equinox import EquinoxRuntimeError
 
 from ptyrodactyl.inout import HDF5SchemaError, load_from_h5, save_to_h5
-from ptyrodactyl.types import PotentialSlices, create_potential_slices
+from ptyrodactyl.types import (
+    Potential3D,
+    PotentialSlices,
+    create_potential_3d,
+    create_potential_slices,
+)
+
+_NORMALIZATION = "continuous Fourier coefficients; JAX inverse DFT"
+_PROVENANCE = (
+    "8b64708703e53f191a469c5968e29ee67272961e233893297e3b70a2e314ca85"
+)
 
 
 def _sample_potential() -> PotentialSlices:
@@ -29,6 +39,33 @@ def _sample_potential() -> PotentialSlices:
         ),
         slice_thickness=jnp.asarray(1.75, dtype=jnp.float64),
         calib=jnp.asarray(0.125, dtype=jnp.float64),
+    )
+
+
+def _sample_potential_3d(volume: jax.Array | None = None) -> Potential3D:
+    """Return a volume carrier with non-default static physical metadata."""
+    if volume is None:
+        volume = jnp.array(
+            [
+                [[-3.25, 0.0], [1.5, 8.125]],
+                [[7.75, -1.25], [3.0, 4.5]],
+                [[2.0**-40, -(2.0**40)], [-6.0, 9.0]],
+            ],
+            dtype=jnp.float64,
+        )
+    return create_potential_3d(
+        volume=volume,
+        voxel_size=(0.25, 0.5, 0.75),
+        box_size=(0.5, 1.0, 2.25),
+        origin=(-0.125, 1.25, -3.0),
+        units="V",
+        reference_value=-0.375,
+        reference_semantics="measured vacuum zero at the periodic box edge",
+        boundary="periodic supercell with retained zero mode",
+        producer="independent-test-producer 2.1",
+        provenance_hash=_PROVENANCE,
+        coefficient_normalization=_NORMALIZATION,
+        band_limit=0.625,
     )
 
 
@@ -64,6 +101,44 @@ def test_scalar_potential_round_trip_is_bit_exact_and_versioned(
             assert isinstance(handle[field_name], h5py.Dataset)
 
 
+def test_volume_potential_round_trip_preserves_exact_field_and_metadata(
+    tmp_path: Path,
+) -> None:
+    """The 3D voltage field and every static declaration round-trip exactly."""
+    path = tmp_path / "potential-volume.h5"
+    expected = _sample_potential_3d()
+
+    save_to_h5(expected, path)
+    loaded = load_from_h5(path)
+
+    assert isinstance(loaded, Potential3D)
+    expected_volume = np.asarray(expected.volume)
+    loaded_volume = np.asarray(loaded.volume)
+    assert loaded_volume.dtype == expected_volume.dtype == np.float64
+    np.testing.assert_array_equal(loaded_volume, expected_volume)
+    for field_name in (
+        "voxel_size",
+        "box_size",
+        "origin",
+        "units",
+        "reference_value",
+        "reference_semantics",
+        "boundary",
+        "producer",
+        "provenance_hash",
+        "coefficient_normalization",
+        "band_limit",
+    ):
+        assert getattr(loaded, field_name) == getattr(expected, field_name)
+
+    with h5py.File(path, "r") as handle:
+        assert int(handle.attrs["schema_version"]) == 1
+        assert handle.attrs["_node_kind"] == "pytree"
+        assert handle.attrs["_pytree_type"] == "Potential3D"
+        assert set(handle) == {"volume"}
+        assert isinstance(handle["volume"], h5py.Dataset)
+
+
 def test_large_potential_uses_lossless_gzip_compression(
     tmp_path: Path,
 ) -> None:
@@ -88,6 +163,7 @@ def test_large_potential_uses_lossless_gzip_compression(
         assert handle["calib"].compression is None
 
     loaded = load_from_h5(path)
+    assert isinstance(loaded, PotentialSlices)
     np.testing.assert_array_equal(
         np.asarray(loaded.slices), np.asarray(expected.slices)
     )
@@ -145,6 +221,7 @@ def test_loaded_potential_preserves_gradient_behavior(tmp_path: Path) -> None:
     path = tmp_path / "gradient-potential.h5"
     original = _save_sample(path)
     loaded = load_from_h5(path)
+    assert isinstance(loaded, PotentialSlices)
 
     def objective(
         slices: jax.Array,
@@ -170,3 +247,25 @@ def test_loaded_potential_preserves_gradient_behavior(tmp_path: Path) -> None:
         loaded_gradient,
         expected_gradient,
     )
+
+
+def test_loaded_volume_potential_preserves_gradient_behavior(
+    tmp_path: Path,
+) -> None:
+    """The exact HDF5 reload preserves derivatives of the 3D voltage leaf."""
+    path = tmp_path / "gradient-potential-volume.h5"
+    original = _sample_potential_3d()
+    save_to_h5(original, path)
+    loaded = load_from_h5(path)
+    assert isinstance(loaded, Potential3D)
+
+    def objective(volume: jax.Array) -> jax.Array:
+        potential = _sample_potential_3d(volume)
+        return jnp.sum(jnp.sin(potential.volume * 0.375))
+
+    gradient = jax.grad(objective)
+    expected_gradient = gradient(original.volume)
+    loaded_gradient = gradient(loaded.volume)
+
+    np.testing.assert_array_equal(loaded_gradient, expected_gradient)
+    assert bool(jnp.any(loaded_gradient != 0.0))

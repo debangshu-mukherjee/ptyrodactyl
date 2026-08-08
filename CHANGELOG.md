@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Added exact integer Galerkin product supports, the volts-based SC-1
+  interaction builder, endpoint-safe interaction and absorber actions, and
+  an analytic periodic cosine-shell absorber under `ptyrodactyl.born`. The
+  voltage coupling and interaction use a manifest-recorded 50-mantissa-bit
+  rounding boundary so eager and compiled targets have identical bytes. The
+  bounded dense factor is validation and falsification evidence only.
+- Added canonical SC-1 target manifests with factory-derived voltage-coupled
+  interaction and absorber coefficients, a rounded finite matched-source
+  realization, and independent
+  bounded-memory forward and adjoint residuals. The bounded exact-dyadic
+  Route-A invocation binds each retained result to an independently supplied
+  state budget and fails closed; it is not a scalable universal proof, an
+  outward source/action enclosure, or full RM-S3 eligibility.
+- Added fixed-support sparse scalar Galerkin carriers and matrix-free
+  `H_alg`/`H_alg*` actions under `ptyrodactyl.born` without assembling the
+  dense operator.
+- Added separate CGLS and LSQR solvers that stop on a freshly evaluated
+  original-system residual and report recurrence, normal-residual, work-count,
+  and typed noncertificate diagnostics.
+- Added a fixed-chart manifested Galerkin JVP/VJP harness for on-shell carrier,
+  Hermitian interaction, and finite-source directions. Its custom backward
+  solves the actual adjoint system and is tested against independent dense
+  realified Jacobians and centered differences. These algebraic gradients do
+  not claim full RM-I1, RM-I2, or inversion certification.
 - Retained the Gauss-Newton and Levenberg-Marquardt updates that first cross
   their convergence tolerances, then froze parameters, solver scalars, and
   iteration counts on subsequent scan steps.
@@ -40,8 +64,11 @@
 
 ## Plan 05 / Plan 14 — Stage-0 scalar HDF5 slice
 
-- Added the versioned `ptyrodactyl.inout.save_to_h5` / `load_from_h5`
-  boundary for lossless, validated `PotentialSlices` archives.
+- Extended the versioned `ptyrodactyl.inout.save_to_h5` / `load_from_h5`
+  boundary to lossless, validated `PotentialSlices` and `Potential3D`
+  archives. The 3-D schema preserves the exact float64 voltage volume, all
+  static physical/provenance metadata, and gradients through the loaded
+  volume.
 - Added required runtime HDF5 support through `h5py`; broader Plan-05 carrier,
   parser, DFT-interoperability, and electromagnetic schemas remain future work.
 

@@ -2,11 +2,11 @@
 
 Extended Summary
 ----------------
-This module stores a validated
-:class:`~ptyrodactyl.types.PotentialSlices` carrier in a versioned HDF5 schema
-and reconstructs it through its canonical factory. The internal node codec
-supports nested containers and static JSON metadata so later carrier
-registrations can reuse the same format without unsafe dynamic imports.
+This module stores validated scalar-potential carriers in a versioned HDF5
+schema and reconstructs each carrier through its canonical factory. The
+internal node codec supports nested containers and static JSON metadata so
+later carrier registrations can reuse the same format without unsafe dynamic
+imports.
 
 Routine Listings
 ----------------
@@ -19,8 +19,9 @@ Routine Listings
 
 Notes
 -----
-Only ``PotentialSlices`` is registered in schema version 1. Other carrier
-types remain unsupported until the schema explicitly registers them.
+``Potential3D`` and ``PotentialSlices`` are registered in schema version 1.
+Other carrier types remain unsupported until the schema explicitly registers
+them.
 """
 
 import json
@@ -35,7 +36,12 @@ import numpy as np
 from jaxtyping import Shaped
 from numpy.typing import NDArray
 
-from ..types import PotentialSlices, create_potential_slices
+from ptyrodactyl.types import (
+    Potential3D,
+    PotentialSlices,
+    create_potential_3d,
+    create_potential_slices,
+)
 
 _ATTR_DICT_KEYS: str = "_dict_keys_json"
 _ATTR_JSON_VALUE: str = "_json_value"
@@ -76,6 +82,24 @@ class _CarrierMeta:
 
 
 _CARRIER_REGISTRY: dict[str, _CarrierMeta] = {
+    "Potential3D": _CarrierMeta(
+        cls=Potential3D,
+        factory=create_potential_3d,
+        dynamic_fields=("volume",),
+        static_fields=(
+            "voxel_size",
+            "box_size",
+            "origin",
+            "units",
+            "reference_value",
+            "reference_semantics",
+            "boundary",
+            "producer",
+            "provenance_hash",
+            "coefficient_normalization",
+            "band_limit",
+        ),
+    ),
     "PotentialSlices": _CarrierMeta(
         cls=PotentialSlices,
         factory=create_potential_slices,
@@ -402,15 +426,18 @@ def _validate_schema_version(handle: Any) -> None:
         )
 
 
-def save_to_h5(carrier: PotentialSlices, path: str | Path) -> None:
+def save_to_h5(
+    carrier: Potential3D | PotentialSlices,
+    path: str | Path,
+) -> None:
     """Save one scalar-potential carrier to a versioned HDF5 archive.
 
     :see: :func:`~.test_large_potential_uses_lossless_gzip_compression`
 
     Parameters
     ----------
-    carrier : PotentialSlices
-        Canonical scalar-potential slice carrier to archive.
+    carrier : Potential3D | PotentialSlices
+        Canonical scalar-potential carrier to archive.
     path : str | Path
         Destination HDF5 file. An existing file is replaced.
 
@@ -435,7 +462,7 @@ def save_to_h5(carrier: PotentialSlices, path: str | Path) -> None:
         _write_carrier_node(handle, carrier)
 
 
-def load_from_h5(path: str | Path) -> PotentialSlices:
+def load_from_h5(path: str | Path) -> Potential3D | PotentialSlices:
     """Load one validated scalar-potential carrier from an HDF5 archive.
 
     :see: :mod:`~.test_hdf5`
@@ -447,9 +474,8 @@ def load_from_h5(path: str | Path) -> PotentialSlices:
 
     Returns
     -------
-    carrier : PotentialSlices
-        Scalar-potential carrier reconstructed through
-        :func:`~ptyrodactyl.types.create_potential_slices`.
+    result : Potential3D | PotentialSlices
+        Scalar-potential carrier reconstructed through its canonical factory.
 
     Raises
     ------
@@ -476,9 +502,12 @@ def load_from_h5(path: str | Path) -> PotentialSlices:
             f"Failed to open HDF5 archive {file_path}: {error}"
         ) from error
 
-    if not isinstance(carrier, PotentialSlices):
-        raise HDF5SchemaError("Archive did not contain PotentialSlices")
-    return carrier
+    if not isinstance(carrier, Potential3D | PotentialSlices):
+        raise HDF5SchemaError(
+            "Archive did not contain a registered scalar-potential carrier"
+        )
+    result: Potential3D | PotentialSlices = carrier
+    return result
 
 
 __all__: list[str] = [

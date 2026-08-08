@@ -7,6 +7,10 @@ from pathlib import Path
 
 _TYPES_SOURCE = Path(__file__).parents[3] / "src" / "ptyrodactyl" / "types"
 _FACTORY_BY_MODULE: dict[str, dict[str, str]] = {
+    "born_types": {
+        "GalerkinOperator": "create_galerkin_operator",
+        "GalerkinSolveResult": "create_galerkin_solve_result",
+    },
     "crystal_types": {
         "CrystalData": "create_crystal_data",
         "CrystalStructure": "create_crystal_structure",
@@ -28,6 +32,13 @@ _FACTORY_BY_MODULE: dict[str, dict[str, str]] = {
     "form_factor_types": {
         "KirklandParameters": "create_kirkland_parameters",
         "LobatoParameters": "create_lobato_parameters",
+    },
+    "galerkin_types": {
+        "GalerkinPhysicalResidual": "create_galerkin_physical_residual",
+        "GalerkinSource": "create_galerkin_source",
+        "GalerkinStabilityProof": "create_galerkin_stability_proof",
+        "GalerkinStabilityResult": "create_galerkin_stability_result",
+        "GalerkinTargetManifest": "create_galerkin_target_manifest",
     },
     "jacobian_types": {
         "AberrationParams": "create_ptycho_params",

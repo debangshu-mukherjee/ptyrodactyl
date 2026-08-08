@@ -7,6 +7,10 @@ aliases and physical constants used throughout ptyrodactyl.
 
 The submodules are organized as follows:
 
+- :mod:`born_potential_types`
+    Fixed Fourier supports for scalar Galerkin products.
+- :mod:`born_types`
+    Scalar Galerkin operator and solve-result carriers.
 - :mod:`constants`
     Physical constants for electron microscopy.
 - :mod:`crystal_types`
@@ -19,6 +23,8 @@ The submodules are organized as follows:
     Electron microscopy carriers and factories.
 - :mod:`form_factor_types`
     Atomic form-factor coefficient carriers and factories.
+- :mod:`galerkin_types`
+    Production scalar Galerkin manifests and evidence carriers.
 - :mod:`jacobian_types`
     Jacobian parameter and solver-state carriers.
 - :mod:`potential_types`
@@ -52,6 +58,36 @@ Routine Listings
     Store complex exit-wave parameters.
 :class:`FisherState`
     Store state for iterative Fisher computation.
+:class:`GalerkinCertificateReason`
+    Store the reason that a Galerkin result lacks certification.
+:class:`GalerkinOperator`
+    Store one fixed complex-linear scalar Galerkin operator.
+:class:`GalerkinPhysicalResidual`
+    Store one independently recomputed physical residual.
+:class:`GalerkinProductSupport`
+    Store independent supports for fixed scalar Galerkin products.
+:class:`GalerkinSolveMethod`
+    Store the selected Galerkin iterative-solve method.
+:class:`GalerkinSolveResult`
+    Store one algebraic scalar Galerkin solve result.
+:class:`GalerkinSolveStatus`
+    Store the termination status of a Galerkin solve.
+:class:`GalerkinSource`
+    Store one finite matched-source realization.
+:class:`GalerkinSourceBranch`
+    Store the admitted finite source-construction branch.
+:class:`GalerkinStabilityDisposition`
+    Store one per-result stability invocation disposition.
+:class:`GalerkinStabilityFailure`
+    Store one fail-closed stability invocation reason.
+:class:`GalerkinStabilityProof`
+    Store one checker-produced exact Route-A proof payload.
+:class:`GalerkinStabilityResult`
+    Store one per-result operational stability invocation.
+:class:`GalerkinStabilityRoute`
+    Store the checked singular-value certificate route.
+:class:`GalerkinTargetManifest`
+    Store one canonical SC-1 finite target manifest.
 :class:`GeometryParams`
     Store geometric calibration parameters.
 :class:`GNState`
@@ -116,6 +152,22 @@ Routine Listings
     Create EnsembleAxes with structural validation.
 :func:`create_fisher_state`
     Create a validated Fisher computation state.
+:func:`create_galerkin_operator`
+    Create a validated scalar Galerkin operator carrier.
+:func:`create_galerkin_physical_residual`
+    Create a validated physical-residual carrier.
+:func:`create_galerkin_product_support`
+    Create validated supports for fixed scalar Galerkin products.
+:func:`create_galerkin_solve_result`
+    Create a validated algebraic Galerkin solve result.
+:func:`create_galerkin_source`
+    Create a validated finite matched-source carrier.
+:func:`create_galerkin_stability_proof`
+    Create a structurally validated exact stability proof payload.
+:func:`create_galerkin_stability_result`
+    Create a validated per-result stability invocation.
+:func:`create_galerkin_target_manifest`
+    Create a canonical SC-1 target from physical coefficient data.
 :func:`create_gn_state`
     Create a validated Gauss-Newton iteration state.
 :func:`create_kirkland_parameters`
@@ -189,6 +241,19 @@ Routine Listings
 
 """
 
+from .born_potential_types import (
+    GalerkinProductSupport,
+    create_galerkin_product_support,
+)
+from .born_types import (
+    GalerkinCertificateReason,
+    GalerkinOperator,
+    GalerkinSolveMethod,
+    GalerkinSolveResult,
+    GalerkinSolveStatus,
+    create_galerkin_operator,
+    create_galerkin_solve_result,
+)
 from .constants import (
     A_BOHR,
     C_LIGHT,
@@ -252,6 +317,22 @@ from .form_factor_types import (
     create_kirkland_parameters,
     create_lobato_parameters,
 )
+from .galerkin_types import (
+    GalerkinPhysicalResidual,
+    GalerkinSource,
+    GalerkinSourceBranch,
+    GalerkinStabilityDisposition,
+    GalerkinStabilityFailure,
+    GalerkinStabilityProof,
+    GalerkinStabilityResult,
+    GalerkinStabilityRoute,
+    GalerkinTargetManifest,
+    create_galerkin_physical_residual,
+    create_galerkin_source,
+    create_galerkin_stability_proof,
+    create_galerkin_stability_result,
+    create_galerkin_target_manifest,
+)
 from .jacobian_types import (
     AberrationParams,
     CGState,
@@ -300,6 +381,21 @@ __all__: list[str] = [
     "EnsembleAxes",
     "ExitWaveParams",
     "FisherState",
+    "GalerkinCertificateReason",
+    "GalerkinOperator",
+    "GalerkinPhysicalResidual",
+    "GalerkinProductSupport",
+    "GalerkinSolveMethod",
+    "GalerkinSolveResult",
+    "GalerkinSolveStatus",
+    "GalerkinSource",
+    "GalerkinSourceBranch",
+    "GalerkinStabilityDisposition",
+    "GalerkinStabilityFailure",
+    "GalerkinStabilityProof",
+    "GalerkinStabilityResult",
+    "GalerkinStabilityRoute",
+    "GalerkinTargetManifest",
     "GNState",
     "GeometryParams",
     "HBAR",
@@ -339,6 +435,14 @@ __all__: list[str] = [
     "create_detector_config",
     "create_ensemble_axes",
     "create_fisher_state",
+    "create_galerkin_operator",
+    "create_galerkin_physical_residual",
+    "create_galerkin_product_support",
+    "create_galerkin_solve_result",
+    "create_galerkin_source",
+    "create_galerkin_stability_proof",
+    "create_galerkin_stability_result",
+    "create_galerkin_target_manifest",
     "create_gn_state",
     "create_kirkland_parameters",
     "create_lanczos_state",

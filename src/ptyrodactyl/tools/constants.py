@@ -32,6 +32,7 @@ from beartype import beartype
 from jax import Array
 from jaxtyping import Float, jaxtyped
 
+from ptyrodactyl._physics import helmholtz_coupling_value
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
@@ -180,7 +181,6 @@ def phase_interaction_parameter(
     return sigma
 
 
-@jax.jit
 @jaxtyped(typechecker=beartype)
 def helmholtz_coupling(
     voltage_kv: scalar_num,
@@ -243,15 +243,13 @@ def helmholtz_coupling(
     :func:`relativistic_mass` :
         Relativistic mass used in computation.
     """
-    m_rel: Float[Array, " "] = relativistic_mass(voltage_kv)
-    h: Float[Array, " "] = jnp.float64(H_PLANCK)
-    e: Float[Array, " "] = jnp.float64(E_CHARGE)
-
-    sigma_h_si: Float[Array, " "] = (
-        8.0 * jnp.square(jnp.pi) * m_rel * e / jnp.square(h)
+    sigma_h: Float[Array, " "] = helmholtz_coupling_value(
+        voltage_kv,
+        M_E,
+        E_CHARGE,
+        C_LIGHT,
+        H_PLANCK,
     )
-    # Convert from 1/(V·m^2) to 1/(V·Å^2): multiply by 1e-20
-    sigma_h: Float[Array, " "] = sigma_h_si * jnp.float64(1e-20)
     return sigma_h
 
 

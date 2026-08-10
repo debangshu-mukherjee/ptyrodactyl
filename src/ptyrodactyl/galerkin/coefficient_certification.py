@@ -39,47 +39,20 @@ from jax.core import Tracer
 from jaxtyping import Float64, Int64, jaxtyped
 from numpy.typing import NDArray
 
-# Retain the complete legacy private surface as identity aliases.
-from ptyrodactyl._host_interval import (  # noqa: F401
-    _BINARY64_MAX_EXPONENT,
-    _BINARY64_MIN_EXPONENT,
-    _BINARY64_RADIX,
-    _BINARY64_SIGNIFICAND_BITS,
-    _HALF_TURN_QUADRANT,
-    _MINIMUM_NORMAL,
-    _PI_TARGET_BITS,
-    _QUADRANT_COUNT,
-    _TAYLOR_LOWER_LAST_INDEX,
-    _TAYLOR_UPPER_LAST_INDEX,
-    _THREE_QUARTER_TURN_QUADRANT,
-    _atan_inverse_bounds,
-    _coefficient_error_fraction,
-    _complex_rectangle_add,
-    _complex_rectangle_multiply,
-    _ComplexRectangle,
-    _conjugate_rectangle,
-    _cosine_partial,
-    _first_quadrant_sine_cosine,
-    _floor_log2_fraction,
-    _fraction_from_float,
-    _fraction_lower_float,
-    _fraction_upper_float,
-    _host_binary64_supported,
-    _negate_interval,
-    _normal_floor_lower,
-    _normal_floor_upper,
-    _pairwise_rectangle_sum,
-    _pi_bounds,
-    _power_of_two_fraction,
-    _rational_turn_exponential,
-    _real_interval_add,
-    _real_interval_product,
-    _real_interval_subtract,
-    _RealInterval,
-    _RootEnclosureError,
-    _scale_complex_rectangle,
-    _sine_partial,
-    _sqrt_fraction_upper,
+from ptyrodactyl._tools import (
+    ComplexRectangle,
+    RootEnclosureError,
+    coefficient_error_fraction,
+    complex_rectangle_multiply,
+    conjugate_rectangle,
+    fraction_from_float,
+    fraction_lower_float,
+    fraction_upper_float,
+    host_binary64_supported,
+    pairwise_rectangle_sum,
+    rational_turn_exponential,
+    scale_complex_rectangle,
+    sqrt_fraction_upper,
 )
 from ptyrodactyl.types import (
     GalerkinAcquisitionSupportResult,
@@ -106,8 +79,8 @@ _MAXIMUM_DIRECT_TERMS: int = np.iinfo(np.int64).max
 def _axis_phase_rectangles(
     mode: int,
     size: int,
-    cache: Dict[Fraction, _ComplexRectangle],
-) -> Tuple[_ComplexRectangle, ...]:
+    cache: Dict[Fraction, ComplexRectangle],
+) -> Tuple[ComplexRectangle, ...]:
     """PRIVATE: Enclose all roots for one signed mode and array axis.
 
     Parameters
@@ -116,21 +89,21 @@ def _axis_phase_rectangles(
         Signed integer Fourier mode on this axis.
     size : int
         Positive integer grid extent on this axis.
-    cache : Dict[Fraction, _ComplexRectangle]
+    cache : Dict[Fraction, ComplexRectangle]
         Mutable exact-turn phase cache shared across coefficients.
 
     Returns
     -------
-    result : Tuple[_ComplexRectangle, ...]
+    result : Tuple[ComplexRectangle, ...]
         Ordered phase-factor rectangles for every axis position.
     """
-    values: list[_ComplexRectangle] = []
+    values: list[ComplexRectangle] = []
     for position in range(size):
         turn = Fraction(mode * position, size) % 1
         if turn not in cache:
-            cache[turn] = _rational_turn_exponential(turn)
+            cache[turn] = rational_turn_exponential(turn)
         values.append(cache[turn])
-    result: Tuple[_ComplexRectangle, ...] = tuple(values)
+    result: Tuple[ComplexRectangle, ...] = tuple(values)
     return result
 
 
@@ -139,8 +112,8 @@ def _exact_coefficient_rectangle(
     mode_xyz: Tuple[int, int, int],
     origin_xyz: Tuple[float, float, float],
     box_xyz: Tuple[float, float, float],
-    phase_cache: Dict[Fraction, _ComplexRectangle],
-) -> _ComplexRectangle:
+    phase_cache: Dict[Fraction, ComplexRectangle],
+) -> ComplexRectangle:
     """PRIVATE: Enclose one exact VC.8 coefficient by direct summation.
 
     Parameters
@@ -153,12 +126,12 @@ def _exact_coefficient_rectangle(
         Exact stored binary64 origin in physical axis order.
     box_xyz : Tuple[float, float, float]
         Exact stored binary64 box lengths in physical axis order.
-    phase_cache : Dict[Fraction, _ComplexRectangle]
+    phase_cache : Dict[Fraction, ComplexRectangle]
         Mutable rational-turn phase cache shared across coefficients.
 
     Returns
     -------
-    result : _ComplexRectangle
+    result : ComplexRectangle
         Exact-rational rectangle enclosing the requested coefficient.
     """
     nz, ny, nx = volume.shape
@@ -168,7 +141,7 @@ def _exact_coefficient_rectangle(
     z_phases = _axis_phase_rectangles(mode_z, nz, phase_cache)
     origin_turn = sum(
         (
-            mode * _fraction_from_float(origin) / _fraction_from_float(length)
+            mode * fraction_from_float(origin) / fraction_from_float(length)
             for mode, origin, length in zip(
                 mode_xyz,
                 origin_xyz,
@@ -180,46 +153,46 @@ def _exact_coefficient_rectangle(
     )
     reduced_origin_turn = origin_turn % 1
     if reduced_origin_turn not in phase_cache:
-        phase_cache[reduced_origin_turn] = _rational_turn_exponential(
+        phase_cache[reduced_origin_turn] = rational_turn_exponential(
             reduced_origin_turn
         )
     origin_phase = phase_cache[reduced_origin_turn]
 
-    def direct_terms() -> Iterator[_ComplexRectangle]:
+    def direct_terms() -> Iterator[ComplexRectangle]:
         """PRIVATE: Yield one exact-rational interval term at a time.
 
         Yields
         ------
-        term : _ComplexRectangle
+        term : ComplexRectangle
             Next voxel-weighted phase rectangle in storage order.
         """
         for z_position in range(nz):
             z_phase = z_phases[z_position]
             for y_position in range(ny):
-                yz_phase = _complex_rectangle_multiply(
+                yz_phase = complex_rectangle_multiply(
                     z_phase,
                     y_phases[y_position],
                 )
                 for x_position in range(nx):
-                    grid_phase = _complex_rectangle_multiply(
+                    grid_phase = complex_rectangle_multiply(
                         yz_phase,
                         x_phases[x_position],
                     )
-                    voxel = _fraction_from_float(
+                    voxel = fraction_from_float(
                         float(volume[z_position, y_position, x_position])
                     )
-                    term: _ComplexRectangle = _scale_complex_rectangle(
+                    term: ComplexRectangle = scale_complex_rectangle(
                         grid_phase,
                         voxel,
                     )
                     yield term
 
-    accumulated = _pairwise_rectangle_sum(direct_terms())
-    normalized = _scale_complex_rectangle(
+    accumulated = pairwise_rectangle_sum(direct_terms())
+    normalized = scale_complex_rectangle(
         accumulated,
         Fraction(1, volume.size),
     )
-    result: _ComplexRectangle = _complex_rectangle_multiply(
+    result: ComplexRectangle = complex_rectangle_multiply(
         origin_phase,
         normalized,
     )
@@ -275,7 +248,7 @@ def _exact_coefficient_rectangles(
     indices: Int64[NDArray, "p 3"],
     origin_xyz: Tuple[float, float, float],
     box_xyz: Tuple[float, float, float],
-) -> list[_ComplexRectangle]:
+) -> list[ComplexRectangle]:
     """PRIVATE: Enclose ordered support coefficients using signed symmetry.
 
     Parameters
@@ -291,7 +264,7 @@ def _exact_coefficient_rectangles(
 
     Returns
     -------
-    result : list[_ComplexRectangle]
+    result : list[ComplexRectangle]
         Coefficient rectangles in the submitted support order.
 
     Raises
@@ -303,8 +276,8 @@ def _exact_coefficient_rectangles(
     position_by_mode = {
         mode: position for position, mode in enumerate(ordered_modes)
     }
-    rectangles: list[_ComplexRectangle | None] = [None] * len(ordered_modes)
-    phase_cache: Dict[Fraction, _ComplexRectangle] = {}
+    rectangles: list[ComplexRectangle | None] = [None] * len(ordered_modes)
+    phase_cache: Dict[Fraction, ComplexRectangle] = {}
     for position, mode in enumerate(ordered_modes):
         if not _is_canonical_mode(mode):
             continue
@@ -320,10 +293,10 @@ def _exact_coefficient_rectangles(
         opposite_position = position_by_mode.get(opposite)
         if opposite_position is None:
             raise ValueError("interaction support must be sign symmetric")
-        rectangles[opposite_position] = _conjugate_rectangle(rectangle)
+        rectangles[opposite_position] = conjugate_rectangle(rectangle)
     if any(rectangle is None for rectangle in rectangles):
         raise ValueError("interaction support has an unpaired signed mode")
-    result: list[_ComplexRectangle] = [
+    result: list[ComplexRectangle] = [
         rectangle for rectangle in rectangles if rectangle is not None
     ]
     return result
@@ -383,8 +356,8 @@ def _voltage_operator_error_fraction(
     maximum_row = max(row_sums, default=Fraction(0))
     maximum_column = max(column_sums, default=Fraction(0))
     schur_squared = maximum_row * maximum_column
-    frobenius_upper = _sqrt_fraction_upper(frobenius_squared)
-    schur_upper = _sqrt_fraction_upper(schur_squared)
+    frobenius_upper = sqrt_fraction_upper(frobenius_squared)
+    schur_upper = sqrt_fraction_upper(schur_squared)
     result: Fraction = min(frobenius_upper, schur_upper)
     return result
 
@@ -512,9 +485,9 @@ def _independently_recheck_vc1_domain(
             "interaction support leaves the signed VC-1 grid endpoints"
         )
     box_fractions = tuple(
-        _fraction_from_float(value) for value in potential.box_size
+        fraction_from_float(value) for value in potential.box_size
     )
-    band_squared = _fraction_from_float(potential.band_limit) ** 2
+    band_squared = fraction_from_float(potential.band_limit) ** 2
     for mode in indices:
         frequency_squared = sum(
             (
@@ -658,7 +631,7 @@ TestDirectCoefficientCertification`
         canonical_count * realization.potential.volume.size
         + state_count * state_count
     )
-    if not _host_binary64_supported():
+    if not host_binary64_supported():
         refined: GalerkinPotentialRealization = _failure_certificate(
             realization,
             term_count,
@@ -692,7 +665,7 @@ TestDirectCoefficientCertification`
             realization.potential.origin,
             realization.potential.box_size,
         )
-    except _RootEnclosureError:
+    except RootEnclosureError:
         refined = _failure_certificate(
             realization,
             term_count,
@@ -702,7 +675,7 @@ TestDirectCoefficientCertification`
         return refined  # noqa: RET504
 
     error_fractions = [
-        _coefficient_error_fraction(coefficient, rectangle)
+        coefficient_error_fraction(coefficient, rectangle)
         for coefficient, rectangle in zip(
             coefficients,
             rectangles,
@@ -710,23 +683,23 @@ TestDirectCoefficientCertification`
         )
     ]
     real_lower = np.asarray(
-        [_fraction_lower_float(value[0]) for value in rectangles],
+        [fraction_lower_float(value[0]) for value in rectangles],
         dtype=np.float64,
     )
     real_upper = np.asarray(
-        [_fraction_upper_float(value[1]) for value in rectangles],
+        [fraction_upper_float(value[1]) for value in rectangles],
         dtype=np.float64,
     )
     imag_lower = np.asarray(
-        [_fraction_lower_float(value[2]) for value in rectangles],
+        [fraction_lower_float(value[2]) for value in rectangles],
         dtype=np.float64,
     )
     imag_upper = np.asarray(
-        [_fraction_upper_float(value[3]) for value in rectangles],
+        [fraction_upper_float(value[3]) for value in rectangles],
         dtype=np.float64,
     )
     coefficient_errors = np.asarray(
-        [_fraction_upper_float(value) for value in error_fractions],
+        [fraction_upper_float(value) for value in error_fractions],
         dtype=np.float64,
     )
     endpoint_arrays = (real_lower, real_upper, imag_lower, imag_upper)
@@ -752,7 +725,7 @@ TestDirectCoefficientCertification`
         indices,
         error_fractions,
     )
-    operator_error = _fraction_upper_float(operator_error_fraction)
+    operator_error = fraction_upper_float(operator_error_fraction)
     if not math.isfinite(operator_error):
         refined = _failure_certificate(
             realization,

@@ -22,10 +22,10 @@ from beartype.typing import Tuple
 from numpy.testing import assert_allclose, assert_array_equal
 
 import ptyrodactyl.galerkin.local_cell_interaction as interaction_module
-from ptyrodactyl._host_interval import (
-    _fraction_from_float,
-    _fraction_upper_float,
-    _sqrt_fraction_upper,
+from ptyrodactyl._tools import (
+    fraction_from_float,
+    fraction_upper_float,
+    sqrt_fraction_upper,
 )
 from ptyrodactyl.galerkin.local_cell import (
     realize_local_cell_galerkin_potential,
@@ -259,8 +259,8 @@ def test_lvt18_is_exact_fraction_sum_of_stored_component_errors() -> None:
     radicand = sum(
         (
             int(multiplicity)
-            * _fraction_from_float(float(error))
-            * _fraction_from_float(float(error))
+            * fraction_from_float(float(error))
+            * fraction_from_float(float(error))
             for multiplicity, error in zip(
                 np.asarray(compression.difference_multiplicities),
                 np.asarray(compression.interaction_coefficient_error_bounds),
@@ -269,7 +269,7 @@ def test_lvt18_is_exact_fraction_sum_of_stored_component_errors() -> None:
         ),
         start=Fraction(0),
     )
-    expected = _fraction_upper_float(_sqrt_fraction_upper(radicand))
+    expected = fraction_upper_float(sqrt_fraction_upper(radicand))
     assert float(compression.fixed_interaction_error_bound) == expected
     assert np.all(
         np.isfinite(compression.interaction_coefficient_error_bounds)

@@ -40,23 +40,24 @@ from jax.core import Tracer
 from jaxtyping import Bool, Complex128, Float64, Int64, jaxtyped
 from numpy.typing import NDArray
 
-from ptyrodactyl._canonical_digest import _sha256, _stored_value_payload
-from ptyrodactyl._host_interval import (
-    _complex_rectangle_multiply,
-    _ComplexRectangle,
-    _conjugate_rectangle,
-    _fraction_from_float,
-    _fraction_lower_float,
-    _fraction_upper_float,
-    _host_binary64_supported,
-    _normalized_sinc_integer_ratio,
-    _pairwise_rectangle_sum,
-    _rational_turn_exponential,
-    _real_interval_product,
-    _RealInterval,
-    _RootEnclosureError,
-    _scale_complex_rectangle,
-    _sqrt_fraction_upper,
+from ptyrodactyl._tools import (
+    ComplexRectangle,
+    RationalInterval,
+    RootEnclosureError,
+    complex_rectangle_multiply,
+    conjugate_rectangle,
+    fraction_from_float,
+    fraction_lower_float,
+    fraction_upper_float,
+    host_binary64_supported,
+    normalized_sinc_integer_ratio,
+    pairwise_rectangle_sum,
+    rational_turn_exponential,
+    real_interval_product,
+    scale_complex_rectangle,
+    sha256,
+    sqrt_fraction_upper,
+    stored_value_payload,
 )
 from ptyrodactyl.types import (
     GalerkinAcquisitionSupportResult,
@@ -108,7 +109,7 @@ _SUPPORT_DIGEST_DOMAIN: str = (
 _SUPPORT_RANK: int = 2
 _TERM_COUNT_ROUTE: str = "lvt13-canonical-nonsymbolic-sinc-cell-products-v1"
 _VOXEL_METRIC: str = "box-volume-over-cell-count weighted real L2"
-_ZERO_RECTANGLE: _ComplexRectangle = (
+_ZERO_RECTANGLE: ComplexRectangle = (
     Fraction(0),
     Fraction(0),
     Fraction(0),
@@ -482,8 +483,8 @@ def _direct_term_count(
 def _axis_phase_rectangles(
     mode: int,
     size: int,
-    cache: Dict[Fraction, _ComplexRectangle],
-) -> Tuple[_ComplexRectangle, ...]:
+    cache: Dict[Fraction, ComplexRectangle],
+) -> Tuple[ComplexRectangle, ...]:
     """PRIVATE: Enclose every direct DFT phase on one cell axis.
 
     Parameters
@@ -492,28 +493,28 @@ def _axis_phase_rectangles(
         Signed unwrapped integer mode.
     size : int
         Positive cell count on the axis.
-    cache : Dict[Fraction, _ComplexRectangle]
+    cache : Dict[Fraction, ComplexRectangle]
         Mutable exact-turn phase cache shared across coefficients.
 
     Returns
     -------
-    result : Tuple[_ComplexRectangle, ...]
+    result : Tuple[ComplexRectangle, ...]
         Ordered exact-rational phase rectangles.
     """
-    values: list[_ComplexRectangle] = []
+    values: list[ComplexRectangle] = []
     for position in range(size):
         turn = Fraction(mode * position, size) % 1
         if turn not in cache:
-            cache[turn] = _rational_turn_exponential(turn)
+            cache[turn] = rational_turn_exponential(turn)
         values.append(cache[turn])
-    result: Tuple[_ComplexRectangle, ...] = tuple(values)
+    result: Tuple[ComplexRectangle, ...] = tuple(values)
     return result
 
 
 def _shape_factor_rectangle(
     mode: Tuple[int, int, int],
     shape_xyz: Tuple[int, int, int],
-) -> _RealInterval:
+) -> RationalInterval:
     """PRIVATE: Enclose the unwrapped separable centered-cell sinc.
 
     Parameters
@@ -525,13 +526,13 @@ def _shape_factor_rectangle(
 
     Returns
     -------
-    factor : _RealInterval
+    factor : RationalInterval
         Exact-rational real interval containing the LVT.5a shape factor.
     """
-    factor: _RealInterval = (Fraction(1), Fraction(1))
+    factor: RationalInterval = (Fraction(1), Fraction(1))
     for component, count in zip(mode, shape_xyz, strict=True):
-        axis_factor = _normalized_sinc_integer_ratio(component, count)
-        factor = _real_interval_product(factor, axis_factor)
+        axis_factor = normalized_sinc_integer_ratio(component, count)
+        factor = real_interval_product(factor, axis_factor)
     return factor
 
 
@@ -540,8 +541,8 @@ def _exact_coefficient_rectangle(
     mode: Tuple[int, int, int],
     origin_xyz: Tuple[float, float, float],
     box_xyz: Tuple[float, float, float],
-    phase_cache: Dict[Fraction, _ComplexRectangle],
-) -> _ComplexRectangle:
+    phase_cache: Dict[Fraction, ComplexRectangle],
+) -> ComplexRectangle:
     """PRIVATE: Enclose one exact pre-projection LVT.7 coefficient.
 
     Parameters
@@ -554,12 +555,12 @@ def _exact_coefficient_rectangle(
         Exact stored binary64 cell-center origin.
     box_xyz : Tuple[float, float, float]
         Exact stored binary64 periodic box lengths.
-    phase_cache : Dict[Fraction, _ComplexRectangle]
+    phase_cache : Dict[Fraction, ComplexRectangle]
         Mutable exact-turn phase cache shared across coefficients.
 
     Returns
     -------
-    result : _ComplexRectangle
+    result : ComplexRectangle
         Exact-rational rectangle enclosing mean DFT times sinc times phase.
 
     Notes
@@ -571,7 +572,7 @@ def _exact_coefficient_rectangle(
     nz, ny, nx = cell_values.shape
     shape_xyz: Tuple[int, int, int] = (nx, ny, nz)
     if _symbolic_shape_zero(mode, shape_xyz):
-        result: _ComplexRectangle = _ZERO_RECTANGLE
+        result: ComplexRectangle = _ZERO_RECTANGLE
         return result
     shape_factor = _shape_factor_rectangle(mode, shape_xyz)
     mode_x, mode_y, mode_z = mode
@@ -579,27 +580,27 @@ def _exact_coefficient_rectangle(
     y_phases = _axis_phase_rectangles(mode_y, ny, phase_cache)
     z_phases = _axis_phase_rectangles(mode_z, nz, phase_cache)
 
-    def direct_terms() -> Iterator[_ComplexRectangle]:
+    def direct_terms() -> Iterator[ComplexRectangle]:
         """PRIVATE: Yield exact cell-weighted DFT phase rectangles.
 
         Yields
         ------
-        term : _ComplexRectangle
+        term : ComplexRectangle
             Next exact-rational interval term in storage order.
         """
         for z_position in range(nz):
             z_phase = z_phases[z_position]
             for y_position in range(ny):
-                yz_phase = _complex_rectangle_multiply(
+                yz_phase = complex_rectangle_multiply(
                     z_phase,
                     y_phases[y_position],
                 )
                 for x_position in range(nx):
-                    grid_phase = _complex_rectangle_multiply(
+                    grid_phase = complex_rectangle_multiply(
                         yz_phase,
                         x_phases[x_position],
                     )
-                    cell_value = _fraction_from_float(
+                    cell_value = fraction_from_float(
                         float(
                             cell_values[
                                 z_position,
@@ -608,17 +609,17 @@ def _exact_coefficient_rectangle(
                             ]
                         )
                     )
-                    term: _ComplexRectangle = _scale_complex_rectangle(
+                    term: ComplexRectangle = scale_complex_rectangle(
                         grid_phase,
                         cell_value,
                     )
                     yield term
 
-    mean_dft = _scale_complex_rectangle(
-        _pairwise_rectangle_sum(direct_terms()),
+    mean_dft = scale_complex_rectangle(
+        pairwise_rectangle_sum(direct_terms()),
         Fraction(1, cell_values.size),
     )
-    shaped = _complex_rectangle_multiply(
+    shaped = complex_rectangle_multiply(
         mean_dft,
         (
             shape_factor[0],
@@ -630,8 +631,8 @@ def _exact_coefficient_rectangle(
     origin_turn = sum(
         (
             component
-            * _fraction_from_float(origin)
-            / _fraction_from_float(length)
+            * fraction_from_float(origin)
+            / fraction_from_float(length)
             for component, origin, length in zip(
                 mode,
                 origin_xyz,
@@ -643,10 +644,10 @@ def _exact_coefficient_rectangle(
     )
     reduced_origin_turn = origin_turn % 1
     if reduced_origin_turn not in phase_cache:
-        phase_cache[reduced_origin_turn] = _rational_turn_exponential(
+        phase_cache[reduced_origin_turn] = rational_turn_exponential(
             reduced_origin_turn
         )
-    result: _ComplexRectangle = _complex_rectangle_multiply(
+    result: ComplexRectangle = complex_rectangle_multiply(
         shaped,
         phase_cache[reduced_origin_turn],
     )
@@ -659,7 +660,7 @@ def _exact_coefficient_rectangles(
     position_by_mode: Dict[Tuple[int, int, int], int],
     origin_xyz: Tuple[float, float, float],
     box_xyz: Tuple[float, float, float],
-) -> list[_ComplexRectangle]:
+) -> list[ComplexRectangle]:
     """PRIVATE: Enclose requested coefficients through ordinary conjugacy.
 
     Parameters
@@ -677,7 +678,7 @@ def _exact_coefficient_rectangles(
 
     Returns
     -------
-    result : list[_ComplexRectangle]
+    result : list[ComplexRectangle]
         Exact-target rectangles in requested support order.
 
     Raises
@@ -685,8 +686,8 @@ def _exact_coefficient_rectangles(
     ValueError
         If any requested mode remains unpaired.
     """
-    rectangles: list[_ComplexRectangle | None] = [None] * len(modes)
-    phase_cache: Dict[Fraction, _ComplexRectangle] = {}
+    rectangles: list[ComplexRectangle | None] = [None] * len(modes)
+    phase_cache: Dict[Fraction, ComplexRectangle] = {}
     for position, mode in enumerate(modes):
         if not _is_canonical_mode(mode):
             continue
@@ -699,12 +700,10 @@ def _exact_coefficient_rectangles(
         )
         rectangles[position] = rectangle
         opposite = (-mode[0], -mode[1], -mode[2])
-        rectangles[position_by_mode[opposite]] = _conjugate_rectangle(
-            rectangle
-        )
+        rectangles[position_by_mode[opposite]] = conjugate_rectangle(rectangle)
     if any(rectangle is None for rectangle in rectangles):
         raise ValueError("requested support has an unpaired signed mode")
-    result: list[_ComplexRectangle] = [
+    result: list[ComplexRectangle] = [
         rectangle for rectangle in rectangles if rectangle is not None
     ]
     return result
@@ -712,7 +711,7 @@ def _exact_coefficient_rectangles(
 
 def _coefficient_euclidean_error_fraction(
     coefficient: np.complex128,
-    rectangle: _ComplexRectangle,
+    rectangle: ComplexRectangle,
 ) -> Fraction:
     """PRIVATE: Bound point-to-rectangle distance by a rational root above.
 
@@ -720,7 +719,7 @@ def _coefficient_euclidean_error_fraction(
     ----------
     coefficient : np.complex128
         Actual stored complex binary64 approximant.
-    rectangle : _ComplexRectangle
+    rectangle : ComplexRectangle
         Exact-rational target rectangle.
 
     Returns
@@ -734,15 +733,15 @@ def _coefficient_euclidean_error_fraction(
     still soundly enclosing ``abs(stored - exact_target)`` for every point in
     the rectangle.
     """
-    real = _fraction_from_float(float(np.real(coefficient)))
-    imaginary = _fraction_from_float(float(np.imag(coefficient)))
+    real = fraction_from_float(float(np.real(coefficient)))
+    imaginary = fraction_from_float(float(np.imag(coefficient)))
     real_gap = max(abs(real - rectangle[0]), abs(real - rectangle[1]))
     imaginary_gap = max(
         abs(imaginary - rectangle[2]),
         abs(imaginary - rectangle[3]),
     )
     squared_radius = real_gap * real_gap + imaginary_gap * imaginary_gap
-    result: Fraction = _sqrt_fraction_upper(squared_radius)
+    result: Fraction = sqrt_fraction_upper(squared_radius)
     return result
 
 
@@ -759,10 +758,10 @@ def _local_potential_digest(local_potential: LocalCellPotential3D) -> str:
     digest : str
         Lowercase SHA-256 source identity.
     """
-    digest: str = _sha256(
+    digest: str = sha256(
         {
             "domain": _SOURCE_DIGEST_DOMAIN,
-            "local_potential": _stored_value_payload(local_potential),
+            "local_potential": stored_value_payload(local_potential),
         }
     )
     return digest
@@ -788,10 +787,10 @@ def _requested_support_digest(
     This binds exact ordered I-chi and its acquisition/box carrier. It is not
     an L3 claim of full product/no-alias or state-difference coverage.
     """
-    digest: str = _sha256(
+    digest: str = sha256(
         {
             "domain": _SUPPORT_DIGEST_DOMAIN,
-            "requested_bound_support": _stored_value_payload(support_result),
+            "requested_bound_support": stored_value_payload(support_result),
         }
     )
     return digest
@@ -818,14 +817,14 @@ def _stored_coefficients_digest(
     digest : str
         Lowercase SHA-256 stored-approximant identity.
     """
-    digest: str = _sha256(
+    digest: str = sha256(
         {
             "domain": _COEFFICIENT_DIGEST_DOMAIN,
             "target_route": GalerkinVoxelTargetRoute.LOCAL_CELL_LVT1.value,
             "coefficient_formula": coefficient_formula,
             "coefficient_index_convention": _INDEX_CONVENTION,
-            "ordered_interaction_indices": _stored_value_payload(indices),
-            "stored_coefficients": _stored_value_payload(coefficients),
+            "ordered_interaction_indices": stored_value_payload(indices),
+            "stored_coefficients": stored_value_payload(coefficients),
         }
     )
     return digest
@@ -860,7 +859,7 @@ def _realization_digest(
     This identity deliberately excludes fallback error leaves and any claim
     that eager numerical replay reproduces the submitted bytes.
     """
-    digest: str = _sha256(
+    digest: str = sha256(
         {
             "domain": _REALIZATION_DIGEST_DOMAIN,
             "target_route": GalerkinVoxelTargetRoute.LOCAL_CELL_LVT1.value,
@@ -929,7 +928,7 @@ def _certificate_digest(  # noqa: PLR0913
     digest : str
         Lowercase SHA-256 direct-certificate identity.
     """
-    digest: str = _sha256(
+    digest: str = sha256(
         {
             "domain": _CERTIFICATE_DOMAIN,
             "realization_digest": realization_digest,
@@ -943,17 +942,15 @@ def _certificate_digest(  # noqa: PLR0913
             "error_route": (
                 GalerkinLocalCellErrorRoute.DIRECT_PAIRWISE_HOST_INTERVAL.value
             ),
-            "finite_certificate": _stored_value_payload(finite_certificate),
+            "finite_certificate": stored_value_payload(finite_certificate),
             "failure": failure.value,
-            "direct_term_count": _stored_value_payload(direct_term_count),
-            "maximum_direct_terms": _stored_value_payload(
-                maximum_direct_terms
-            ),
-            "real_lower": _stored_value_payload(real_lower),
-            "real_upper": _stored_value_payload(real_upper),
-            "imag_lower": _stored_value_payload(imag_lower),
-            "imag_upper": _stored_value_payload(imag_upper),
-            "coefficient_errors": _stored_value_payload(coefficient_errors),
+            "direct_term_count": stored_value_payload(direct_term_count),
+            "maximum_direct_terms": stored_value_payload(maximum_direct_terms),
+            "real_lower": stored_value_payload(real_lower),
+            "real_upper": stored_value_payload(real_upper),
+            "imag_lower": stored_value_payload(imag_lower),
+            "imag_upper": stored_value_payload(imag_upper),
+            "coefficient_errors": stored_value_payload(coefficient_errors),
         }
     )
     return digest
@@ -1417,7 +1414,7 @@ def _certify_local_cell_galerkin_potential_impl(
         raise ValueError(
             "exact direct_term_count must fit in signed 64-bit storage"
         )
-    if not _host_binary64_supported():
+    if not host_binary64_supported():
         refined: GalerkinLocalCellPotentialRealization = _failure_refinement(
             base,
             indices,
@@ -1449,7 +1446,7 @@ def _certify_local_cell_galerkin_potential_impl(
             local_potential.cell_center_origin,
             local_potential.box_size,
         )
-    except _RootEnclosureError:
+    except RootEnclosureError:
         refined: GalerkinLocalCellPotentialRealization = _failure_refinement(
             base,
             indices,
@@ -1469,23 +1466,23 @@ def _certify_local_cell_galerkin_potential_impl(
         )
     ]
     real_lower: Float64[NDArray, " p"] = np.asarray(
-        [_fraction_lower_float(value[0]) for value in rectangles],
+        [fraction_lower_float(value[0]) for value in rectangles],
         dtype=np.float64,
     )
     real_upper: Float64[NDArray, " p"] = np.asarray(
-        [_fraction_upper_float(value[1]) for value in rectangles],
+        [fraction_upper_float(value[1]) for value in rectangles],
         dtype=np.float64,
     )
     imag_lower: Float64[NDArray, " p"] = np.asarray(
-        [_fraction_lower_float(value[2]) for value in rectangles],
+        [fraction_lower_float(value[2]) for value in rectangles],
         dtype=np.float64,
     )
     imag_upper: Float64[NDArray, " p"] = np.asarray(
-        [_fraction_upper_float(value[3]) for value in rectangles],
+        [fraction_upper_float(value[3]) for value in rectangles],
         dtype=np.float64,
     )
     coefficient_errors: Float64[NDArray, " p"] = np.asarray(
-        [_fraction_upper_float(value) for value in error_fractions],
+        [fraction_upper_float(value) for value in error_fractions],
         dtype=np.float64,
     )
     endpoint_arrays = (real_lower, real_upper, imag_lower, imag_upper)
@@ -1571,8 +1568,8 @@ def _authenticate_local_cell_certificate(
         )
     )
     _validate_local_cell_certificate_binding(canonical)
-    submitted_payload = _stored_value_payload(realization)
-    canonical_payload = _stored_value_payload(canonical)
+    submitted_payload = stored_value_payload(realization)
+    canonical_payload = stored_value_payload(canonical)
     if submitted_payload != canonical_payload:
         raise ValueError(
             "local-cell direct certificate does not exactly match host replay"

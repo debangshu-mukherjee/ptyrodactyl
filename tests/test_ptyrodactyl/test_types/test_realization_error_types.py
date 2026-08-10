@@ -3,7 +3,7 @@
 import jax
 import jax.numpy as jnp
 
-from ptyrodactyl._physics import coupled_interaction_value
+from ptyrodactyl._tools import coupled_interaction_value
 from ptyrodactyl.galerkin.enclosures import (
     build_galerkin_fixed_linear_error_ledger,
 )

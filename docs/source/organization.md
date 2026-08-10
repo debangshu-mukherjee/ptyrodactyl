@@ -31,6 +31,16 @@ I/O is separated from JAX kernels.
 - `ptyrodactyl.workflows` composes the lower-level packages into end-to-end
   tasks.
 
+## Private infrastructure
+
+`ptyrodactyl._tools` is the sole private cross-subpackage dependency layer.
+Its dependency-neutral leaves own canonical digests, host and traced interval
+arithmetic, numeric predicates, and electron-physics formulas. The package is
+not exported or included in the public API reference. Names consumed outside
+their leaf are unprefixed internal seams, exported by the owning leaf and
+re-exported by `_tools.__init__`; consumers import only from that aggregate.
+Leaf-local helpers remain `_`-prefixed.
+
 ## Source layout
 
 ```text
@@ -44,6 +54,7 @@ src/ptyrodactyl/
 ├── bloch/          # Bloch-wave utilities
 ├── plots/          # visualization helpers
 ├── jacobian/       # Jacobian, Fisher, gauge, and solver operations
+├── _tools/         # private cross-family implementation seams
 └── workflows/      # high-level orchestration
 ```
 
@@ -58,8 +69,15 @@ src/ptyrodactyl/
 4. Carriers are constructed through `ptyrodactyl.types.create_*` functions.
 5. Coherent/incoherent averaging is represented by an explicit `Distribution`
    and reduced after the complex amplitude kernel.
-6. Symbols are exported from one owning subpackage; removed
-   `ptyrodactyl.simul`, `ptyrodactyl.tools`, and `ptyrodactyl.invert` paths
-   have no compatibility aliases.
-7. Filesystem and third-party file-format access belongs in
+6. `ptyrodactyl._tools` contains exactly five internal leaves:
+   `canonical_digest`, `host_interval`, `interval`, `numeric`, and `physics`.
+   It is dependency-neutral; each leaf lists its seams and the package
+   re-exports their union for internal consumers.
+7. The `src/ptyrodactyl` root contains no Python leaf modules. Shared private
+   infrastructure belongs in `ptyrodactyl._tools`; `py.typed` remains the
+   package's PEP 561 marker.
+8. Symbols are exported from one owning subpackage; removed
+   `ptyrodactyl.simul` and `ptyrodactyl.invert` paths have no compatibility
+   aliases.
+9. Filesystem and third-party file-format access belongs in
    `ptyrodactyl.inout`, outside differentiable JAX kernels.

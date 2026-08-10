@@ -181,3 +181,9 @@ def test_init_distributed_is_public() -> None:
     Inspect membership in the package's literal ``__all__`` list.
     """
     assert "init_distributed" in ptyrodactyl.__all__
+
+
+def test_private_tools_is_not_a_public_export() -> None:
+    """Keep the internal dependency package outside the root API."""
+    assert "tools" not in ptyrodactyl.__all__
+    assert "_tools" not in ptyrodactyl.__all__

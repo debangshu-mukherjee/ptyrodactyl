@@ -20,7 +20,7 @@ from beartype.typing import Tuple
 from numpy.testing import assert_allclose
 
 import ptyrodactyl.galerkin.local_cell_certification as certification_module
-from ptyrodactyl._host_interval import _RootEnclosureError
+from ptyrodactyl._tools import RootEnclosureError
 from ptyrodactyl.galerkin.local_cell import (
     realize_local_cell_galerkin_potential,
 )
@@ -844,14 +844,14 @@ certify_local_cell_galerkin_potential`
         if patch_name == "host":
             monkeypatch.setattr(
                 certification_module,
-                "_host_binary64_supported",
+                "host_binary64_supported",
                 lambda: False,
             )
         elif patch_name == "root":
 
             def fail_root(*args: object, **kwargs: object) -> object:
                 """Raise the typed private root-enclosure failure."""
-                raise _RootEnclosureError("injected root failure")
+                raise RootEnclosureError("injected root failure")
 
             monkeypatch.setattr(
                 certification_module,
@@ -861,7 +861,7 @@ certify_local_cell_galerkin_potential`
         else:
             monkeypatch.setattr(
                 certification_module,
-                "_fraction_upper_float",
+                "fraction_upper_float",
                 lambda value: np.inf,
             )
 

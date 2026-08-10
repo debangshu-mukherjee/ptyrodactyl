@@ -9,6 +9,41 @@ rational-turn complex exponentials without trusting library trigonometry,
 combines exact rational rectangles deterministically, and converts exact
 endpoints back to outward binary64 values.
 
+Routine Listings
+----------------
+:class:`RootEnclosureError`
+    Identify an internal failure to enclose one rational-turn phase.
+:func:`coefficient_error_fraction`
+    Bound one stored coefficient against an exact rectangle.
+:func:`complex_rectangle_multiply`
+    Multiply two exact rational complex rectangles.
+:func:`conjugate_rectangle`
+    Conjugate one exact complex rectangle.
+:func:`fraction_from_float`
+    Return the exact rational value of one finite binary64.
+:func:`fraction_lower_float`
+    Convert one rational endpoint toward minus infinity.
+:func:`fraction_upper_float`
+    Convert one rational endpoint toward plus infinity.
+:func:`host_binary64_supported`
+    Probe every host-float property used by certificates.
+:func:`normalized_sinc_integer_ratio`
+    Enclose ``sin(pi mode/count)/(pi mode/count)``.
+:func:`pairwise_rectangle_sum`
+    Sum rectangles through a deterministic binary reduction.
+:func:`rational_turn_exponential`
+    Enclose ``exp(-2 pi i turn)`` without library trig.
+:func:`real_interval_product`
+    Multiply two exact rational real intervals.
+:func:`scale_complex_rectangle`
+    Multiply one complex rectangle by an exact real scalar.
+:func:`sqrt_fraction_upper`
+    Enclose one non-negative rational square root above.
+:obj:`ComplexRectangle`
+    Represent exact rational bounds for both complex components.
+:obj:`RationalInterval`
+    Represent one exact rational interval by its lower and upper bounds.
+
 Notes
 -----
 All arithmetic before the final outward conversion uses
@@ -28,8 +63,8 @@ from fractions import Fraction
 import numpy as np
 from beartype.typing import Tuple
 
-type _RealInterval = Tuple[Fraction, Fraction]
-type _ComplexRectangle = Tuple[Fraction, Fraction, Fraction, Fraction]
+type RationalInterval = Tuple[Fraction, Fraction]
+type ComplexRectangle = Tuple[Fraction, Fraction, Fraction, Fraction]
 
 _PI_TARGET_BITS: int = 224
 _TAYLOR_UPPER_LAST_INDEX: int = 20
@@ -44,12 +79,12 @@ _HALF_TURN_QUADRANT: int = 2
 _THREE_QUARTER_TURN_QUADRANT: int = 3
 
 
-class _RootEnclosureError(ArithmeticError):
+class RootEnclosureError(ArithmeticError):
     """Identify an internal failure to enclose one rational-turn phase."""
 
 
-def _host_binary64_supported() -> bool:
-    """PRIVATE: Probe every host-float property used by certificates.
+def host_binary64_supported() -> bool:
+    """Probe every host-float property used by certificates.
 
     Returns
     -------
@@ -107,8 +142,8 @@ def _host_binary64_supported() -> bool:
     return supported  # noqa: RET504
 
 
-def _fraction_from_float(value: float) -> Fraction:
-    """PRIVATE: Return the exact rational value of one finite binary64.
+def fraction_from_float(value: float) -> Fraction:
+    """Return the exact rational value of one finite binary64.
 
     Parameters
     ----------
@@ -134,7 +169,7 @@ def _fraction_from_float(value: float) -> Fraction:
 def _atan_inverse_bounds(
     denominator: int,
     target_width: Fraction,
-) -> _RealInterval:
+) -> RationalInterval:
     """PRIVATE: Enclose ``atan(1 / denominator)`` by alternating sums.
 
     Parameters
@@ -146,7 +181,7 @@ def _atan_inverse_bounds(
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact lower and upper rational arctangent bounds.
     """
     total = Fraction(0)
@@ -161,23 +196,23 @@ def _atan_inverse_bounds(
         if index % 2 == 0:
             upper = total
         elif upper is not None and upper - total <= target_width:
-            result: _RealInterval = (total, upper)
+            result: RationalInterval = (total, upper)
             return result
         index += 1
 
 
 @functools.lru_cache(maxsize=1)
-def _pi_bounds() -> _RealInterval:
+def _pi_bounds() -> RationalInterval:
     """PRIVATE: Enclose mathematical pi using exact Machin series bounds.
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact rational lower and upper bounds for mathematical pi.
 
     Raises
     ------
-    _RootEnclosureError
+    RootEnclosureError
         If the constructed bounds cross or exceed the required width.
     """
     target_width = Fraction(1, 1 << _PI_TARGET_BITS)
@@ -196,8 +231,8 @@ def _pi_bounds() -> _RealInterval:
     lower = 16 * atan_five_lower - 4 * atan_239_upper
     upper = 16 * atan_five_upper - 4 * atan_239_lower
     if not lower < upper or upper - lower > target_width:
-        raise _RootEnclosureError("Machin pi interval failed its width check")
-    result: _RealInterval = (lower, upper)
+        raise RootEnclosureError("Machin pi interval failed its width check")
+    result: RationalInterval = (lower, upper)
     return result
 
 
@@ -251,7 +286,7 @@ def _cosine_partial(value: Fraction, last_index: int) -> Fraction:
 
 def _first_quadrant_sine_cosine(
     local_turn: Fraction,
-) -> Tuple[_RealInterval, _RealInterval]:
+) -> Tuple[RationalInterval, RationalInterval]:
     """PRIVATE: Enclose sine and cosine for a turn in ``[0, 1/4)``.
 
     Parameters
@@ -261,22 +296,22 @@ def _first_quadrant_sine_cosine(
 
     Returns
     -------
-    sine : _RealInterval
+    sine : RationalInterval
         Exact-rational sine enclosure.
-    cosine : _RealInterval
+    cosine : RationalInterval
         Exact-rational cosine enclosure.
 
     Raises
     ------
-    _RootEnclosureError
+    RootEnclosureError
         If the turn leaves the first quadrant or bounds cross.
     """
     if not Fraction(0) <= local_turn < Fraction(1, 4):
-        raise _RootEnclosureError("quadrant reduction left its exact domain")
+        raise RootEnclosureError("quadrant reduction left its exact domain")
     if local_turn == 0:
-        sine: _RealInterval = (Fraction(0), Fraction(0))
-        cosine: _RealInterval = (Fraction(1), Fraction(1))
-        result: Tuple[_RealInterval, _RealInterval] = (sine, cosine)
+        sine: RationalInterval = (Fraction(0), Fraction(0))
+        cosine: RationalInterval = (Fraction(1), Fraction(1))
+        result: Tuple[RationalInterval, RationalInterval] = (sine, cosine)
         return result
 
     pi_lower: Fraction
@@ -305,33 +340,33 @@ def _first_quadrant_sine_cosine(
         sine_upper = Fraction(1)
         cosine_lower = Fraction(0)
     if sine_lower > sine_upper or cosine_lower > cosine_upper:
-        raise _RootEnclosureError("alternating trigonometric bounds crossed")
+        raise RootEnclosureError("alternating trigonometric bounds crossed")
     sine = (sine_lower, sine_upper)
     cosine = (cosine_lower, cosine_upper)
     result = (sine, cosine)
     return result  # noqa: RET504
 
 
-def _negate_interval(interval: _RealInterval) -> _RealInterval:
+def _negate_interval(interval: RationalInterval) -> RationalInterval:
     """PRIVATE: Negate one exact real interval.
 
     Parameters
     ----------
-    interval : _RealInterval
+    interval : RationalInterval
         Exact rational interval to negate.
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Negated interval with endpoint order preserved.
     """
     lower, upper = interval
-    result: _RealInterval = (-upper, -lower)
+    result: RationalInterval = (-upper, -lower)
     return result
 
 
-def _rational_turn_exponential(turn: Fraction) -> _ComplexRectangle:
-    """PRIVATE: Enclose ``exp(-2 pi i turn)`` without library trig.
+def rational_turn_exponential(turn: Fraction) -> ComplexRectangle:
+    """Enclose ``exp(-2 pi i turn)`` without library trig.
 
     Parameters
     ----------
@@ -340,20 +375,20 @@ def _rational_turn_exponential(turn: Fraction) -> _ComplexRectangle:
 
     Returns
     -------
-    result : _ComplexRectangle
+    result : ComplexRectangle
         Exact-rational complex rectangle enclosing the phase factor.
 
     Raises
     ------
-    _RootEnclosureError
+    RootEnclosureError
         If exact quadrant reduction or trigonometric enclosure fails.
     """
     reduced = turn % 1
     scaled = _QUADRANT_COUNT * reduced
     quadrant = scaled.numerator // scaled.denominator
     local_turn = reduced - Fraction(quadrant, _QUADRANT_COUNT)
-    sine: _RealInterval
-    cosine: _RealInterval
+    sine: RationalInterval
+    cosine: RationalInterval
     sine, cosine = _first_quadrant_sine_cosine(local_turn)
 
     if quadrant == 0:
@@ -368,10 +403,10 @@ def _rational_turn_exponential(turn: Fraction) -> _ComplexRectangle:
         real_interval = sine
         positive_imaginary = _negate_interval(cosine)
     else:
-        raise _RootEnclosureError("exact quadrant was outside 0 through 3")
+        raise RootEnclosureError("exact quadrant was outside 0 through 3")
 
     imaginary_interval = _negate_interval(positive_imaginary)
-    result: _ComplexRectangle = (
+    result: ComplexRectangle = (
         real_interval[0],
         real_interval[1],
         imaginary_interval[0],
@@ -380,22 +415,22 @@ def _rational_turn_exponential(turn: Fraction) -> _ComplexRectangle:
     return result
 
 
-def _real_interval_product(
-    left: _RealInterval,
-    right: _RealInterval,
-) -> _RealInterval:
-    """PRIVATE: Multiply two exact rational real intervals.
+def real_interval_product(
+    left: RationalInterval,
+    right: RationalInterval,
+) -> RationalInterval:
+    """Multiply two exact rational real intervals.
 
     Parameters
     ----------
-    left : _RealInterval
+    left : RationalInterval
         Left exact rational interval.
-    right : _RealInterval
+    right : RationalInterval
         Right exact rational interval.
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact interval product hull.
     """
     products = (
@@ -404,28 +439,28 @@ def _real_interval_product(
         left[1] * right[0],
         left[1] * right[1],
     )
-    result: _RealInterval = (min(products), max(products))
+    result: RationalInterval = (min(products), max(products))
     return result
 
 
-def _real_interval_square(interval: _RealInterval) -> _RealInterval:
+def _real_interval_square(interval: RationalInterval) -> RationalInterval:
     """PRIVATE: Square one exact rational real interval.
 
     Parameters
     ----------
-    interval : _RealInterval
+    interval : RationalInterval
         Exact rational interval to square.
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact square-image interval, including zero when signs cross.
     """
     lower, upper = interval
     lower_square = lower * lower
     upper_square = upper * upper
     if lower <= 0 <= upper:
-        result: _RealInterval = (
+        result: RationalInterval = (
             Fraction(0),
             max(lower_square, upper_square),
         )
@@ -438,54 +473,54 @@ def _real_interval_square(interval: _RealInterval) -> _RealInterval:
 
 
 def _real_interval_add(
-    left: _RealInterval,
-    right: _RealInterval,
-) -> _RealInterval:
+    left: RationalInterval,
+    right: RationalInterval,
+) -> RationalInterval:
     """PRIVATE: Add two exact rational real intervals.
 
     Parameters
     ----------
-    left : _RealInterval
+    left : RationalInterval
         Left exact rational interval.
-    right : _RealInterval
+    right : RationalInterval
         Right exact rational interval.
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact interval sum.
     """
-    result: _RealInterval = (left[0] + right[0], left[1] + right[1])
+    result: RationalInterval = (left[0] + right[0], left[1] + right[1])
     return result
 
 
 def _real_interval_subtract(
-    left: _RealInterval,
-    right: _RealInterval,
-) -> _RealInterval:
+    left: RationalInterval,
+    right: RationalInterval,
+) -> RationalInterval:
     """PRIVATE: Subtract two exact rational real intervals.
 
     Parameters
     ----------
-    left : _RealInterval
+    left : RationalInterval
         Left exact rational interval.
-    right : _RealInterval
+    right : RationalInterval
         Right exact rational interval.
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact interval difference.
     """
-    result: _RealInterval = (left[0] - right[1], left[1] - right[0])
+    result: RationalInterval = (left[0] - right[1], left[1] - right[0])
     return result
 
 
-def _normalized_sinc_integer_ratio(
+def normalized_sinc_integer_ratio(
     mode: int,
     count: int,
-) -> _RealInterval:
-    r"""PRIVATE: Enclose ``sin(pi mode/count)/(pi mode/count)``.
+) -> RationalInterval:
+    r"""Enclose ``sin(pi mode/count)/(pi mode/count)``.
 
     Parameters
     ----------
@@ -496,14 +531,14 @@ def _normalized_sinc_integer_ratio(
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact-rational normalized-sinc enclosure.
 
     Raises
     ------
     ValueError
         If ``count`` is not positive.
-    _RootEnclosureError
+    RootEnclosureError
         If the rational-turn sine enclosure fails internally.
 
     Notes
@@ -516,7 +551,7 @@ def _normalized_sinc_integer_ratio(
     if count <= 0:
         raise ValueError("normalized-sinc count must be positive")
     if mode == 0:
-        result: _RealInterval = (Fraction(1), Fraction(1))
+        result: RationalInterval = (Fraction(1), Fraction(1))
         return result
 
     magnitude = abs(mode)
@@ -524,75 +559,75 @@ def _normalized_sinc_integer_ratio(
         result = (Fraction(0), Fraction(0))
         return result  # noqa: RET504
 
-    root = _rational_turn_exponential(Fraction(magnitude, 2 * count))
-    sine: _RealInterval = (-root[3], -root[2])
+    root = rational_turn_exponential(Fraction(magnitude, 2 * count))
+    sine: RationalInterval = (-root[3], -root[2])
     pi_lower, pi_upper = _pi_bounds()
     ratio = Fraction(magnitude, count)
-    denominator: _RealInterval = (
+    denominator: RationalInterval = (
         ratio * pi_lower,
         ratio * pi_upper,
     )
-    reciprocal_denominator: _RealInterval = (
+    reciprocal_denominator: RationalInterval = (
         Fraction(1, 1) / denominator[1],
         Fraction(1, 1) / denominator[0],
     )
-    result = _real_interval_product(sine, reciprocal_denominator)
+    result = real_interval_product(sine, reciprocal_denominator)
     return result  # noqa: RET504
 
 
-def _complex_rectangle_multiply(
-    left: _ComplexRectangle,
-    right: _ComplexRectangle,
-) -> _ComplexRectangle:
-    """PRIVATE: Multiply two exact rational complex rectangles.
+def complex_rectangle_multiply(
+    left: ComplexRectangle,
+    right: ComplexRectangle,
+) -> ComplexRectangle:
+    """Multiply two exact rational complex rectangles.
 
     Parameters
     ----------
-    left : _ComplexRectangle
+    left : ComplexRectangle
         Left exact rational complex rectangle.
-    right : _ComplexRectangle
+    right : ComplexRectangle
         Right exact rational complex rectangle.
 
     Returns
     -------
-    result : _ComplexRectangle
+    result : ComplexRectangle
         Exact interval-arithmetic product rectangle.
     """
-    left_real: _RealInterval = (left[0], left[1])
-    left_imag: _RealInterval = (left[2], left[3])
-    right_real: _RealInterval = (right[0], right[1])
-    right_imag: _RealInterval = (right[2], right[3])
+    left_real: RationalInterval = (left[0], left[1])
+    left_imag: RationalInterval = (left[2], left[3])
+    right_real: RationalInterval = (right[0], right[1])
+    right_imag: RationalInterval = (right[2], right[3])
     real = _real_interval_subtract(
-        _real_interval_product(left_real, right_real),
-        _real_interval_product(left_imag, right_imag),
+        real_interval_product(left_real, right_real),
+        real_interval_product(left_imag, right_imag),
     )
     imag = _real_interval_add(
-        _real_interval_product(left_real, right_imag),
-        _real_interval_product(left_imag, right_real),
+        real_interval_product(left_real, right_imag),
+        real_interval_product(left_imag, right_real),
     )
-    result: _ComplexRectangle = (real[0], real[1], imag[0], imag[1])
+    result: ComplexRectangle = (real[0], real[1], imag[0], imag[1])
     return result
 
 
 def _complex_rectangle_add(
-    left: _ComplexRectangle,
-    right: _ComplexRectangle,
-) -> _ComplexRectangle:
+    left: ComplexRectangle,
+    right: ComplexRectangle,
+) -> ComplexRectangle:
     """PRIVATE: Add two exact rational complex rectangles.
 
     Parameters
     ----------
-    left : _ComplexRectangle
+    left : ComplexRectangle
         Left exact rational complex rectangle.
-    right : _ComplexRectangle
+    right : ComplexRectangle
         Right exact rational complex rectangle.
 
     Returns
     -------
-    result : _ComplexRectangle
+    result : ComplexRectangle
         Exact componentwise sum rectangle.
     """
-    result: _ComplexRectangle = (
+    result: ComplexRectangle = (
         left[0] + right[0],
         left[1] + right[1],
         left[2] + right[2],
@@ -601,52 +636,52 @@ def _complex_rectangle_add(
     return result
 
 
-def _scale_complex_rectangle(
-    rectangle: _ComplexRectangle,
+def scale_complex_rectangle(
+    rectangle: ComplexRectangle,
     scalar: Fraction,
-) -> _ComplexRectangle:
-    """PRIVATE: Multiply one complex rectangle by an exact real scalar.
+) -> ComplexRectangle:
+    """Multiply one complex rectangle by an exact real scalar.
 
     Parameters
     ----------
-    rectangle : _ComplexRectangle
+    rectangle : ComplexRectangle
         Exact rational complex rectangle.
     scalar : Fraction
         Exact rational real scale.
 
     Returns
     -------
-    result : _ComplexRectangle
+    result : ComplexRectangle
         Exact scaled complex rectangle.
     """
-    real = _real_interval_product(
+    real = real_interval_product(
         (rectangle[0], rectangle[1]),
         (scalar, scalar),
     )
-    imag = _real_interval_product(
+    imag = real_interval_product(
         (rectangle[2], rectangle[3]),
         (scalar, scalar),
     )
-    result: _ComplexRectangle = (real[0], real[1], imag[0], imag[1])
+    result: ComplexRectangle = (real[0], real[1], imag[0], imag[1])
     return result
 
 
-def _conjugate_rectangle(
-    rectangle: _ComplexRectangle,
-) -> _ComplexRectangle:
-    """PRIVATE: Conjugate one exact complex rectangle.
+def conjugate_rectangle(
+    rectangle: ComplexRectangle,
+) -> ComplexRectangle:
+    """Conjugate one exact complex rectangle.
 
     Parameters
     ----------
-    rectangle : _ComplexRectangle
+    rectangle : ComplexRectangle
         Exact rational complex rectangle.
 
     Returns
     -------
-    result : _ComplexRectangle
+    result : ComplexRectangle
         Exact conjugate rectangle.
     """
-    result: _ComplexRectangle = (
+    result: ComplexRectangle = (
         rectangle[0],
         rectangle[1],
         -rectangle[3],
@@ -655,19 +690,19 @@ def _conjugate_rectangle(
     return result
 
 
-def _pairwise_rectangle_sum(
-    terms: Iterable[_ComplexRectangle],
-) -> _ComplexRectangle:
-    """PRIVATE: Sum rectangles through a deterministic binary reduction.
+def pairwise_rectangle_sum(
+    terms: Iterable[ComplexRectangle],
+) -> ComplexRectangle:
+    """Sum rectangles through a deterministic binary reduction.
 
     Parameters
     ----------
-    terms : Iterable[_ComplexRectangle]
+    terms : Iterable[ComplexRectangle]
         Stream of exact rational complex rectangles.
 
     Returns
     -------
-    total : _ComplexRectangle
+    total : ComplexRectangle
         Exact componentwise sum of all submitted rectangles.
 
     Raises
@@ -675,13 +710,13 @@ def _pairwise_rectangle_sum(
     AssertionError
         If an occupied binary-reduction slot becomes inconsistent.
     """
-    zero: _ComplexRectangle = (
+    zero: ComplexRectangle = (
         Fraction(0),
         Fraction(0),
         Fraction(0),
         Fraction(0),
     )
-    slots: list[_ComplexRectangle | None] = []
+    slots: list[ComplexRectangle | None] = []
     for submitted in terms:
         value = submitted
         level = 0
@@ -696,7 +731,7 @@ def _pairwise_rectangle_sum(
             slots.append(value)
         else:
             slots[level] = value
-    total: _ComplexRectangle = zero
+    total: ComplexRectangle = zero
     for value in slots:
         if value is not None:
             total = _complex_rectangle_add(total, value)
@@ -743,8 +778,8 @@ def _normal_floor_upper(value: float) -> float:
     return result  # noqa: RET504
 
 
-def _fraction_lower_float(value: Fraction) -> float:
-    """PRIVATE: Convert one rational endpoint toward minus infinity.
+def fraction_lower_float(value: Fraction) -> float:
+    """Convert one rational endpoint toward minus infinity.
 
     Parameters
     ----------
@@ -767,8 +802,8 @@ def _fraction_lower_float(value: Fraction) -> float:
     return result
 
 
-def _fraction_upper_float(value: Fraction) -> float:
-    """PRIVATE: Convert one rational endpoint toward plus infinity.
+def fraction_upper_float(value: Fraction) -> float:
+    """Convert one rational endpoint toward plus infinity.
 
     Parameters
     ----------
@@ -791,17 +826,17 @@ def _fraction_upper_float(value: Fraction) -> float:
     return result
 
 
-def _coefficient_error_fraction(
+def coefficient_error_fraction(
     coefficient: np.complex128,
-    rectangle: _ComplexRectangle,
+    rectangle: ComplexRectangle,
 ) -> Fraction:
-    """PRIVATE: Bound one stored coefficient against an exact rectangle.
+    """Bound one stored coefficient against an exact rectangle.
 
     Parameters
     ----------
     coefficient : np.complex128
         Final stored binary64 complex coefficient.
-    rectangle : _ComplexRectangle
+    rectangle : ComplexRectangle
         Exact-rational target rectangle.
 
     Returns
@@ -809,8 +844,8 @@ def _coefficient_error_fraction(
     result : Fraction
         Exact complex L1 point-to-rectangle error bound.
     """
-    real = _fraction_from_float(float(np.real(coefficient)))
-    imag = _fraction_from_float(float(np.imag(coefficient)))
+    real = fraction_from_float(float(np.real(coefficient)))
+    imag = fraction_from_float(float(np.imag(coefficient)))
     real_gap = max(abs(real - rectangle[0]), abs(real - rectangle[1]))
     imag_gap = max(abs(imag - rectangle[2]), abs(imag - rectangle[3]))
     result: Fraction = real_gap + imag_gap
@@ -869,7 +904,7 @@ def _power_of_two_fraction(exponent: int) -> Fraction:
     return result  # noqa: RET504
 
 
-def _sqrt_fraction_bounds(value: Fraction) -> _RealInterval:
+def _sqrt_fraction_bounds(value: Fraction) -> RationalInterval:
     """PRIVATE: Enclose one non-negative rational square root on both sides.
 
     Parameters
@@ -879,7 +914,7 @@ def _sqrt_fraction_bounds(value: Fraction) -> _RealInterval:
 
     Returns
     -------
-    result : _RealInterval
+    result : RationalInterval
         Exact dyadic lower and upper square-root bounds.
 
     Raises
@@ -890,7 +925,7 @@ def _sqrt_fraction_bounds(value: Fraction) -> _RealInterval:
     if value < 0:
         raise ValueError("square-root radicand must be non-negative")
     if value == 0:
-        result: _RealInterval = (Fraction(0), Fraction(0))
+        result: RationalInterval = (Fraction(0), Fraction(0))
         return result
     exponent = _floor_log2_fraction(value)
     scale_exponent = exponent // 2
@@ -914,8 +949,8 @@ def _sqrt_fraction_bounds(value: Fraction) -> _RealInterval:
     return result  # noqa: RET504
 
 
-def _sqrt_fraction_upper(value: Fraction) -> Fraction:
-    """PRIVATE: Enclose one non-negative rational square root above.
+def sqrt_fraction_upper(value: Fraction) -> Fraction:
+    """Enclose one non-negative rational square root above.
 
     Parameters
     ----------
@@ -934,3 +969,23 @@ def _sqrt_fraction_upper(value: Fraction) -> Fraction:
     """
     result: Fraction = _sqrt_fraction_bounds(value)[1]
     return result
+
+
+__all__: list[str] = [
+    "coefficient_error_fraction",
+    "complex_rectangle_multiply",
+    "ComplexRectangle",
+    "conjugate_rectangle",
+    "fraction_from_float",
+    "fraction_lower_float",
+    "fraction_upper_float",
+    "host_binary64_supported",
+    "normalized_sinc_integer_ratio",
+    "pairwise_rectangle_sum",
+    "rational_turn_exponential",
+    "RationalInterval",
+    "real_interval_product",
+    "RootEnclosureError",
+    "scale_complex_rectangle",
+    "sqrt_fraction_upper",
+]

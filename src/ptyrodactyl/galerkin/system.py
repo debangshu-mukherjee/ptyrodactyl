@@ -49,12 +49,12 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._numeric import (
+from ptyrodactyl._tools import (
+    coupled_interaction_value,
     has_lost_subtraction,
     has_nonzero_components,
     has_subnormal_components,
 )
-from ptyrodactyl._physics import coupled_interaction_value
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,

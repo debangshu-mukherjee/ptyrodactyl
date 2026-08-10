@@ -9,6 +9,17 @@ order without evaluating convenience properties; and static binary floats
 use hexadecimal notation. Canonical JSON encoding then fixes the SHA-256
 digest independently of mapping insertion order.
 
+Routine Listings
+----------------
+:func:`array_payload`
+    Build a canonical dtype-, shape-, and byte-bound payload.
+:func:`host_array`
+    Transfer one JAX array to a read-only host NumPy value.
+:func:`sha256`
+    Hash one canonical JSON payload as a provenance checksum.
+:func:`stored_value_payload`
+    Serialize one declared carrier value without properties.
+
 Notes
 -----
 These checksums establish stored-value identity only. Scientific checker
@@ -31,8 +42,8 @@ from jaxtyping import Shaped
 from numpy.typing import NDArray
 
 
-def _host_array(value: jax.Array) -> Shaped[NDArray, "..."]:
-    """PRIVATE: Transfer one JAX array to a read-only host NumPy value.
+def host_array(value: jax.Array) -> Shaped[NDArray, "..."]:
+    """Transfer one JAX array to a read-only host NumPy value.
 
     Parameters
     ----------
@@ -52,8 +63,8 @@ def _host_array(value: jax.Array) -> Shaped[NDArray, "..."]:
     return array
 
 
-def _array_payload(value: jax.Array) -> Dict[str, object]:
-    """PRIVATE: Build a canonical dtype-, shape-, and byte-bound payload.
+def array_payload(value: jax.Array) -> Dict[str, object]:
+    """Build a canonical dtype-, shape-, and byte-bound payload.
 
     Parameters
     ----------
@@ -69,7 +80,7 @@ def _array_payload(value: jax.Array) -> Dict[str, object]:
     -----
     Contiguous C-order bytes make layout-independent array provenance stable.
     """
-    array: Shaped[NDArray, "..."] = _host_array(value)
+    array: Shaped[NDArray, "..."] = host_array(value)
     contiguous: Shaped[NDArray, "..."] = np.ascontiguousarray(array)
     payload: Dict[str, object] = {
         "dtype": contiguous.dtype.str,
@@ -79,8 +90,8 @@ def _array_payload(value: jax.Array) -> Dict[str, object]:
     return payload
 
 
-def _stored_value_payload(value: object) -> object:  # noqa: PLR0911
-    """PRIVATE: Serialize one declared carrier value without properties.
+def stored_value_payload(value: object) -> object:  # noqa: PLR0911
+    """Serialize one declared carrier value without properties.
 
     Parameters
     ----------
@@ -106,14 +117,14 @@ def _stored_value_payload(value: object) -> object:  # noqa: PLR0911
     distinct.
     """
     if isinstance(value, jax.Array | np.ndarray | np.generic):
-        payload: object = {"array": _array_payload(jnp.asarray(value))}
+        payload: object = {"array": array_payload(jnp.asarray(value))}
         return payload
     if isinstance(value, Enum):
         payload: object = {
             "enum_type": (
                 f"{type(value).__module__}.{type(value).__qualname__}"
             ),
-            "value": _stored_value_payload(value.value),
+            "value": stored_value_payload(value.value),
         }
         return payload
     if is_dataclass(value) and not isinstance(value, type):
@@ -122,14 +133,14 @@ def _stored_value_payload(value: object) -> object:  # noqa: PLR0911
                 f"{type(value).__module__}.{type(value).__qualname__}"
             ),
             "fields": {
-                field.name: _stored_value_payload(getattr(value, field.name))
+                field.name: stored_value_payload(getattr(value, field.name))
                 for field in fields(value)
             },
         }
         return payload
     if isinstance(value, tuple):
         payload: object = {
-            "tuple": [_stored_value_payload(entry) for entry in value]
+            "tuple": [stored_value_payload(entry) for entry in value]
         }
         return payload
     if isinstance(value, bool):
@@ -153,8 +164,8 @@ def _stored_value_payload(value: object) -> object:  # noqa: PLR0911
     )
 
 
-def _sha256(payload: Dict[str, object]) -> str:
-    """PRIVATE: Hash one canonical JSON payload as a provenance checksum.
+def sha256(payload: Dict[str, object]) -> str:
+    """Hash one canonical JSON payload as a provenance checksum.
 
     Parameters
     ----------
@@ -178,3 +189,11 @@ def _sha256(payload: Dict[str, object]) -> str:
     ).encode("ascii")
     digest: str = hashlib.sha256(encoded).hexdigest()
     return digest
+
+
+__all__: list[str] = [
+    "array_payload",
+    "host_array",
+    "sha256",
+    "stored_value_payload",
+]

@@ -64,17 +64,15 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import (
-    _interval_add,
-    _interval_divide_positive,
-    _interval_multiply,
-    _point_interval,
-)
-from ptyrodactyl._numeric import (
+from ptyrodactyl._tools import (
+    coupled_interaction_value,
     has_lost_nonzero_components,
     has_subnormal_components,
+    interval_add,
+    interval_divide_positive,
+    interval_multiply,
+    point_interval,
 )
-from ptyrodactyl._physics import coupled_interaction_value
 
 from .acquisition_types import (
     GalerkinAcquisitionManifest,
@@ -216,7 +214,8 @@ def _derive_interaction_coefficients(
     Notes
     -----
     The conversion uses the fixed physical constants and rounding contract
-    implemented by :func:`ptyrodactyl._physics.coupled_interaction_value`.
+    implemented by
+    :func:`ptyrodactyl._tools.coupled_interaction_value`.
     """
     raw_coupling, raw_interaction = coupled_interaction_value(
         voltage_coefficients,
@@ -311,9 +310,9 @@ def _outward_nonnegative_add(
     nonidentity underflow to a normal endpoint, and fails closed when the
     required normal binary64 arithmetic probes do not pass.
     """
-    result: Float64[Array, "..."] = _interval_add(
-        _point_interval(left),
-        _point_interval(right),
+    result: Float64[Array, "..."] = interval_add(
+        point_interval(left),
+        point_interval(right),
     )[1]
     return result
 
@@ -343,9 +342,9 @@ def _outward_nonnegative_multiply(
     nonidentity underflow to a normal endpoint, and fails closed when the
     required normal binary64 arithmetic probes do not pass.
     """
-    result: Float64[Array, "..."] = _interval_multiply(
-        _point_interval(left),
-        _point_interval(right),
+    result: Float64[Array, "..."] = interval_multiply(
+        point_interval(left),
+        point_interval(right),
     )[1]
     return result
 
@@ -417,9 +416,9 @@ def _exact_target_full_offset_max(
     )
     correction_lower: Float64[Array, ""]
     correction: Float64[Array, ""]
-    correction_lower, correction = _interval_divide_positive(
-        _point_interval(carrier_l1),
-        _point_interval(
+    correction_lower, correction = interval_divide_positive(
+        point_interval(carrier_l1),
+        point_interval(
             jnp.asarray(_TWO_PI_LOWER, dtype=jnp.float64),
         ),
     )

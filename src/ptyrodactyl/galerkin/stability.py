@@ -58,11 +58,11 @@ from beartype.typing import Dict, Tuple
 from jaxtyping import Complex128, Float64, Int64, Num
 from numpy.typing import NDArray
 
-from ptyrodactyl._canonical_digest import (
-    _array_payload,
-    _host_array,
-    _sha256,
-    _stored_value_payload,
+from ptyrodactyl._tools import (
+    array_payload,
+    host_array,
+    sha256,
+    stored_value_payload,
 )
 from ptyrodactyl.types import (
     GalerkinAcquisitionManifest,
@@ -314,7 +314,7 @@ def _target_payload(manifest: GalerkinTargetManifest) -> Dict[str, object]:
     intentionally absent because their owning stored values already appear
     exactly once in the nested tree.
     """
-    stored = _stored_value_payload(manifest)
+    stored = stored_value_payload(manifest)
     if not isinstance(stored, dict):
         raise TypeError("target payload must be a canonical mapping")
     payload: Dict[str, object] = cast(Dict[str, object], stored)
@@ -335,7 +335,7 @@ def _target_digest(manifest: GalerkinTargetManifest) -> str:
         SHA-256 checksum of the canonical target payload.
     """
     payload: Dict[str, object] = _target_payload(manifest)
-    digest: str = _sha256(payload)
+    digest: str = sha256(payload)
     return digest
 
 
@@ -365,7 +365,7 @@ def _source_payload(source: _BoundSource) -> Dict[str, object]:
     checked independently and the redundancy prevents a source proof from
     being replayed under a different nested manifest.
     """
-    stored = _stored_value_payload(source)
+    stored = stored_value_payload(source)
     if not isinstance(stored, dict):
         raise TypeError("source payload must be a canonical mapping")
     payload: Dict[str, object] = cast(Dict[str, object], stored)
@@ -388,21 +388,21 @@ def _solve_result_payload(
         Exact arrays and enumerated provenance for the submitted result.
     """
     payload: Dict[str, object] = {
-        "field": _array_payload(solve_result.field),
-        "residual": _array_payload(solve_result.residual),
-        "residual_norm": _array_payload(solve_result.residual_norm),
-        "normal_residual_norm": _array_payload(
+        "field": array_payload(solve_result.field),
+        "residual": array_payload(solve_result.residual),
+        "residual_norm": array_payload(solve_result.residual_norm),
+        "normal_residual_norm": array_payload(
             solve_result.normal_residual_norm
         ),
-        "recurrence_residual_norm": _array_payload(
+        "recurrence_residual_norm": array_payload(
             solve_result.recurrence_residual_norm
         ),
-        "iterations": _array_payload(solve_result.iterations),
-        "operator_applications": _array_payload(
+        "iterations": array_payload(solve_result.iterations),
+        "operator_applications": array_payload(
             solve_result.operator_applications
         ),
-        "status": _array_payload(solve_result.status),
-        "converged": _array_payload(solve_result.converged),
+        "status": array_payload(solve_result.status),
+        "converged": array_payload(solve_result.converged),
         "method": solve_result.method.value,
         "certificate_reason": solve_result.certificate_reason.value,
     }
@@ -435,7 +435,7 @@ def _result_digest(
         "source": _source_payload(source),
         "solve_result": _solve_result_payload(solve_result),
     }
-    digest: str = _sha256(payload)
+    digest: str = sha256(payload)
     return digest
 
 
@@ -583,13 +583,11 @@ def _manifest_is_canonical(manifest: GalerkinTargetManifest) -> bool:
         )
         jax.block_until_ready(checked_acquisition)
         candidate_eligibility = manifest.realization.support_eligibility
-        eligibility_matches: bool = _stored_value_payload(
+        eligibility_matches: bool = stored_value_payload(
             checked_acquisition
-        ) == _stored_value_payload(candidate_eligibility)
-        status: int = int(_host_array(checked_acquisition.status))
-        eligible: bool = bool(
-            _host_array(checked_acquisition.support_eligible)
-        )
+        ) == stored_value_payload(candidate_eligibility)
+        status: int = int(host_array(checked_acquisition.status))
+        eligible: bool = bool(host_array(checked_acquisition.support_eligible))
         if (
             not eligibility_matches
             or status != int(GalerkinAcquisitionSupportStatus.SUPPORT_ELIGIBLE)
@@ -606,7 +604,7 @@ def _manifest_is_canonical(manifest: GalerkinTargetManifest) -> bool:
                 canonical_match = False
                 return canonical_match  # noqa: RET504
             maximum_direct_terms: int = int(
-                _host_array(certificate.maximum_direct_terms)
+                host_array(certificate.maximum_direct_terms)
             )
             canonical = create_host_checked_galerkin_target(
                 potential,
@@ -717,7 +715,7 @@ def _represented_source_is_canonical(
         if _target_payload(source.manifest) != _target_payload(manifest):
             canonical_match: bool = False
             return canonical_match
-        aperture: Complex128[NDArray, " n"] = _host_array(
+        aperture: Complex128[NDArray, " n"] = host_array(
             source.modes.aperture_weights
         )
         active_positions = np.flatnonzero(
@@ -859,8 +857,8 @@ def _coefficient_map(
     -----
     Each binary64 component becomes its exact dyadic rational value.
     """
-    index_array: Int64[NDArray, "... 3"] = _host_array(indices)
-    coefficient_array: Complex128[NDArray, "..."] = _host_array(coefficients)
+    index_array: Int64[NDArray, "... 3"] = host_array(indices)
+    coefficient_array: Complex128[NDArray, "..."] = host_array(coefficients)
     mapping: Dict[Tuple[int, int, int], _ComplexFraction] = {}
     for index, coefficient in zip(index_array, coefficient_array, strict=True):
         key = (int(index[0]), int(index[1]), int(index[2]))
@@ -1058,7 +1056,7 @@ def _target_matrices(
     Every stored binary64 component is interpreted as its exact dyadic value.
     The reconstruction performs no floating arithmetic.
     """
-    state_indices: Int64[NDArray, "n 3"] = _host_array(
+    state_indices: Int64[NDArray, "n 3"] = host_array(
         manifest.support.state_indices
     )
     interaction = _matrix_from_coefficients(
@@ -1075,12 +1073,8 @@ def _target_matrices(
             manifest.absorber_coefficients,
         ),
     )
-    diagonal_array: Float64[NDArray, " n"] = _host_array(
-        manifest.free_diagonal
-    )
-    cap: Fraction = _fraction_from_float(
-        float(_host_array(manifest.cap_scale))
-    )
+    diagonal_array: Float64[NDArray, " n"] = host_array(manifest.free_diagonal)
+    cap: Fraction = _fraction_from_float(float(host_array(manifest.cap_scale)))
     target: list[list[_ComplexFraction]] = []
     for row in range(len(interaction)):
         target_row: list[_ComplexFraction] = []
@@ -1123,7 +1117,7 @@ def _exact_vector(
     vector : list[_ComplexFraction]
         Exact dyadic components in the original coefficient order.
     """
-    array: Complex128[NDArray, " n"] = _host_array(value)
+    array: Complex128[NDArray, " n"] = host_array(value)
     vector: list[_ComplexFraction] = [
         _complex_fraction(complex(entry)) for entry in array
     ]
@@ -1399,7 +1393,7 @@ def _check_galerkin_absorber_floor(  # noqa: PLR0911, PLR0912, PLR0915
     exact-target total-source error once. Per-call residual-formation errors
     remain separate.
     """
-    budget_array: Num[NDArray, ""] = _host_array(jnp.asarray(state_budget))
+    budget_array: Num[NDArray, ""] = host_array(jnp.asarray(state_budget))
     if budget_array.shape != ():
         raise ValueError("state_budget must be a scalar")
     budget_float: float = float(budget_array)
@@ -1511,7 +1505,7 @@ def _check_galerkin_absorber_floor(  # noqa: PLR0911, PLR0912, PLR0915
             )
             return proof  # noqa: RET504
         represented = cast(GalerkinRepresentedSource, source)
-        if not bool(_host_array(represented.rm_s3_eligible)):
+        if not bool(host_array(represented.rm_s3_eligible)):
             proof = _proof(
                 target_digest,
                 result_digest,
@@ -1524,7 +1518,7 @@ def _check_galerkin_absorber_floor(  # noqa: PLR0911, PLR0912, PLR0915
             return proof  # noqa: RET504
 
     try:
-        state_indices: Int64[NDArray, "n 3"] = _host_array(
+        state_indices: Int64[NDArray, "n 3"] = host_array(
             manifest.support.state_indices
         )
         box_floor: Fraction = _rational_cosine_shell_box_floor(state_indices)
@@ -1539,7 +1533,7 @@ def _check_galerkin_absorber_floor(  # noqa: PLR0911, PLR0912, PLR0915
         )
         field_norm_squared: Fraction = _vector_norm_squared(solve_result.field)
         delta_h_float: float = float(
-            _host_array(
+            host_array(
                 manifest.fixed_linear_error_ledger.fixed_linear_operator_error_bound
             )
         )
@@ -1590,9 +1584,7 @@ def _check_galerkin_absorber_floor(  # noqa: PLR0911, PLR0912, PLR0915
     else:
         absorber_floor = box_floor
         route = GalerkinStabilityRoute.ABSORBER_FLOOR_COSINE_BOX
-    cap: Fraction = _fraction_from_float(
-        float(_host_array(manifest.cap_scale))
-    )
+    cap: Fraction = _fraction_from_float(float(host_array(manifest.cap_scale)))
     algebraic_floor: Fraction = cap * absorber_floor
     exact_floor: Fraction = algebraic_floor
     transferred_floor_finite: bool = math.isfinite(delta_h_float)
@@ -1726,7 +1718,7 @@ def check_represented_galerkin_absorber_floor(
     """
     try:
         source_error_float: float = float(
-            _host_array(
+            host_array(
                 source.error_enclosure.exact_target_total_source_error_upper_bound
             )
         )
@@ -2104,7 +2096,7 @@ def _invoke_galerkin_stability(  # noqa: PLR0911
     result are outward reporting bounds. The invocation applies only to this
     retained result and is not reusable.
     """
-    budget_array: Num[NDArray, ""] = _host_array(jnp.asarray(state_budget))
+    budget_array: Num[NDArray, ""] = host_array(jnp.asarray(state_budget))
     if budget_array.shape != ():
         raise ValueError("state_budget must be a scalar")
     budget_float: float = float(budget_array)

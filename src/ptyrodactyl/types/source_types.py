@@ -72,8 +72,11 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import _interval_subtract, _point_interval
-from ptyrodactyl._numeric import has_subnormal_components
+from ptyrodactyl._tools import (
+    has_subnormal_components,
+    interval_subtract,
+    point_interval,
+)
 
 from .acquisition_types import (
     GalerkinAcquisitionSupportStatus,
@@ -1126,8 +1129,8 @@ def create_galerkin_source_modes(  # noqa: PLR0913
     _raise_if(exact_flux_lower.shape != (), "exact flux lower must be scalar")
     _raise_if(exact_flux_upper.shape != (), "exact flux upper must be scalar")
     _raise_if(coordinate.shape != (), "source_plane_coordinate must be scalar")
-    target_flux_difference = _interval_subtract(
-        _point_interval(target_flux),
+    target_flux_difference = interval_subtract(
+        point_interval(target_flux),
         (exact_flux_lower, exact_flux_upper),
     )
     required_flux_discrepancy: Float64[Array, ""] = jnp.maximum(

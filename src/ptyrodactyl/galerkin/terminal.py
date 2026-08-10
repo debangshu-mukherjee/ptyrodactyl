@@ -58,16 +58,16 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import (
-    _all_normal_arithmetic_supported,
-    _arithmetic_environment_probes,
-    _interval_add,
-    _interval_divide_positive,
-    _interval_multiply,
-    _interval_subtract,
-    _mathematical_pi_interval,
-    _point_interval,
-    _RealInterval,
+from ptyrodactyl._tools import (
+    RealInterval,
+    all_normal_arithmetic_supported,
+    arithmetic_environment_probes,
+    interval_add,
+    interval_divide_positive,
+    interval_multiply,
+    interval_subtract,
+    mathematical_pi_interval,
+    point_interval,
 )
 from ptyrodactyl.types import (
     GalerkinAcquisitionSupportStatus,
@@ -534,7 +534,7 @@ def _checked_action(
 
 def _exact_oriented_normal_wavevector_interval(
     target: GalerkinTargetManifest,
-) -> _RealInterval:
+) -> RealInterval:
     """PRIVATE: Enclose exact-target oriented normal wavevectors.
 
     Implementation Logic
@@ -550,24 +550,24 @@ def _exact_oriented_normal_wavevector_interval(
 
     Returns
     -------
-    interval : _RealInterval
+    interval : RealInterval
         Inclusive ``s(k_i,n+2 pi g_n/L_n)`` endpoints.
     """
     axis: int = target.acquisition.terminal_axis
     indices: Float64[Array, " n"] = target.support.state_indices[
         :, axis
     ].astype(jnp.float64)
-    reciprocal: _RealInterval = _interval_divide_positive(
-        _point_interval(indices),
-        _point_interval(target.box_lengths[axis]),
+    reciprocal: RealInterval = interval_divide_positive(
+        point_interval(indices),
+        point_interval(target.box_lengths[axis]),
     )
-    two_pi: _RealInterval = _interval_multiply(
-        _point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
-        _mathematical_pi_interval(),
+    two_pi: RealInterval = interval_multiply(
+        point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
+        mathematical_pi_interval(),
     )
-    offsets: _RealInterval = _interval_multiply(reciprocal, two_pi)
+    offsets: RealInterval = interval_multiply(reciprocal, two_pi)
     ledger = target.fixed_linear_error_ledger
-    carrier: _RealInterval = (
+    carrier: RealInterval = (
         jnp.broadcast_to(
             ledger.exact_carrier_lower_bounds[axis], indices.shape
         ),
@@ -575,9 +575,9 @@ def _exact_oriented_normal_wavevector_interval(
             ledger.exact_carrier_upper_bounds[axis], indices.shape
         ),
     )
-    unoriented: _RealInterval = _interval_add(carrier, offsets)
+    unoriented: RealInterval = interval_add(carrier, offsets)
     if target.acquisition.terminal_side is GalerkinTerminalSide.POSITIVE:
-        interval: _RealInterval = unoriented
+        interval: RealInterval = unoriented
     else:
         interval = (-unoriented[1], -unoriented[0])
     return interval
@@ -586,7 +586,7 @@ def _exact_oriented_normal_wavevector_interval(
 def _exact_current_interval(
     target: GalerkinTargetManifest,
     field: Complex128[Array, " n"],
-) -> _RealInterval:
+) -> RealInterval:
     """PRIVATE: Enclose the exact normalized-carrier coordinate current.
 
     Implementation Logic
@@ -606,7 +606,7 @@ def _exact_current_interval(
 
     Returns
     -------
-    interval : _RealInterval
+    interval : RealInterval
         Inclusive exact oriented reduced-current endpoints.
 
     Notes
@@ -617,7 +617,7 @@ def _exact_current_interval(
     """
     rows, selected = _terminal_row_map(target)
     terminal_size: int = target.acquisition.transverse_indices.shape[0]
-    wavevectors: _RealInterval = _exact_oriented_normal_wavevector_interval(
+    wavevectors: RealInterval = _exact_oriented_normal_wavevector_interval(
         target
     )
     zeros: Float64[Array, " t"] = jnp.zeros(
@@ -702,33 +702,33 @@ def _exact_current_interval(
 
     def add_fiber(
         index: scalar_int,
-        accumulator: _RealInterval,
-    ) -> _RealInterval:
+        accumulator: RealInterval,
+    ) -> RealInterval:
         """Accumulate one outward real fiber-current interval."""
-        contribution: _RealInterval = (
+        contribution: RealInterval = (
             fiber_products[0][index],
             fiber_products[1][index],
         )
-        updated: _RealInterval = _interval_add(accumulator, contribution)
+        updated: RealInterval = interval_add(accumulator, contribution)
         return updated
 
-    summed: _RealInterval = lax.fori_loop(
+    summed: RealInterval = lax.fori_loop(
         0,
         terminal_size,
         add_fiber,
         (zero, zero),
     )
     axis: int = target.acquisition.terminal_axis
-    interval: _RealInterval = _interval_divide_positive(
+    interval: RealInterval = interval_divide_positive(
         summed,
-        _point_interval(target.box_lengths[axis]),
+        point_interval(target.box_lengths[axis]),
     )
     return interval
 
 
 def _current_error_upper_bound(
     rounded_current: Float64[Array, ""],
-    exact_interval: _RealInterval,
+    exact_interval: RealInterval,
 ) -> Float64[Array, ""]:
     """PRIVATE: Bound rounded-current distance from the exact interval.
 
@@ -736,7 +736,7 @@ def _current_error_upper_bound(
     ----------
     rounded_current : Float64[Array, ""]
         Rounded current quadratic in inverse Angstroms.
-    exact_interval : _RealInterval
+    exact_interval : RealInterval
         Inclusive exact current interval in inverse Angstroms.
 
     Returns
@@ -744,8 +744,8 @@ def _current_error_upper_bound(
     upper : Float64[Array, ""]
         Outward maximum absolute endpoint discrepancy.
     """
-    difference: _RealInterval = _interval_subtract(
-        _point_interval(rounded_current), exact_interval
+    difference: RealInterval = interval_subtract(
+        point_interval(rounded_current), exact_interval
     )
     upper: Float64[Array, ""] = jnp.maximum(
         jnp.abs(difference[0]), jnp.abs(difference[1])
@@ -1047,14 +1047,14 @@ def enclose_galerkin_terminal_current(
     rounded_current: Float64[Array, ""] = jnp.real(
         jnp.vdot(checked_field, action)
     )
-    exact_interval: _RealInterval = _exact_current_interval(
+    exact_interval: RealInterval = _exact_current_interval(
         target, checked_field
     )
     error_upper: Float64[Array, ""] = _current_error_upper_bound(
         rounded_current, exact_interval
     )
-    probes = _arithmetic_environment_probes()
-    arithmetic_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    probes = arithmetic_environment_probes()
+    arithmetic_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     gradual_supported: Bool[Array, ""] = probes[-1]
     support_eligible: Bool[Array, ""] = (
         target.support_eligibility.status

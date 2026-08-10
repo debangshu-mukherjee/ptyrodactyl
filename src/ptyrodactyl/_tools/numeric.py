@@ -1,4 +1,21 @@
-"""Dependency-neutral internal floating-point range predicates."""
+"""Provide dependency-neutral floating-point range predicates.
+
+Extended Summary
+----------------
+This private leaf detects stored IEEE nonzero and subnormal components and
+fail-closed range loss in real or complex JAX arithmetic.
+
+Routine Listings
+----------------
+:func:`has_lost_nonzero_components`
+    Detect a nonzero component mapped to zero or subnormal magnitude.
+:func:`has_lost_subtraction`
+    Detect a real or complex subtraction flushed from nonzero to zero.
+:func:`has_nonzero_components`
+    Detect any nonzero real or imaginary IEEE component bitwise.
+:func:`has_subnormal_components`
+    Return whether a real or complex array has a nonzero subnormal part.
+"""
 
 import jax.numpy as jnp
 from beartype.typing import Tuple
@@ -78,7 +95,18 @@ def _real_has_subnormal(values: Array) -> Bool[Array, ""]:
 
 
 def has_subnormal_components(values: Array) -> Bool[Array, ""]:
-    """Return whether a real or complex array has a nonzero subnormal part."""
+    """Return whether a real or complex array has a nonzero subnormal part.
+
+    Parameters
+    ----------
+    values : Array
+        Real or complex values whose IEEE components are inspected.
+
+    Returns
+    -------
+    result : Bool[Array, ""]
+        Whether any component is nonzero and subnormal.
+    """
     real_subnormal: Bool[Array, ""] = _real_has_subnormal(jnp.real(values))
     imaginary_subnormal: Bool[Array, ""] = _real_has_subnormal(
         jnp.imag(values)
@@ -88,7 +116,18 @@ def has_subnormal_components(values: Array) -> Bool[Array, ""]:
 
 
 def has_nonzero_components(values: Array) -> Bool[Array, ""]:
-    """Detect any nonzero real or imaginary IEEE component bitwise."""
+    """Detect any nonzero real or imaginary IEEE component bitwise.
+
+    Parameters
+    ----------
+    values : Array
+        Real or complex values whose IEEE components are inspected.
+
+    Returns
+    -------
+    result : Bool[Array, ""]
+        Whether any real or imaginary component is nonzero.
+    """
     real_nonzero, _ = _real_masks(jnp.real(values))
     imaginary_nonzero, _ = _real_masks(jnp.imag(values))
     result: Bool[Array, ""] = jnp.any(real_nonzero | imaginary_nonzero)
@@ -148,7 +187,22 @@ def has_lost_subtraction(
     right: Array,
     difference: Array,
 ) -> Bool[Array, ""]:
-    """Detect a real or complex subtraction flushed from nonzero to zero."""
+    """Detect a real or complex subtraction flushed from nonzero to zero.
+
+    Parameters
+    ----------
+    left : Array
+        Left operands of the subtraction.
+    right : Array
+        Right operands of the subtraction.
+    difference : Array
+        Rounded values produced by ``left - right``.
+
+    Returns
+    -------
+    result : Bool[Array, ""]
+        Whether any unequal component pair produced an exact zero difference.
+    """
     checked_left, checked_right, checked_difference = lax.optimization_barrier(
         (left, right, difference)
     )
@@ -172,7 +226,20 @@ def has_lost_nonzero_components(
     source: Array,
     mapped: Array,
 ) -> Bool[Array, ""]:
-    """Detect a nonzero component mapped to zero or subnormal magnitude."""
+    """Detect a nonzero component mapped to zero or subnormal magnitude.
+
+    Parameters
+    ----------
+    source : Array
+        Source values whose nonzero IEEE components are tracked.
+    mapped : Array
+        Corresponding mapped values inspected for range loss.
+
+    Returns
+    -------
+    result : Bool[Array, ""]
+        Whether any nonzero source component became zero or subnormal.
+    """
     source_real_nonzero, _ = _real_masks(jnp.real(source))
     source_imaginary_nonzero, _ = _real_masks(jnp.imag(source))
     mapped_real_nonzero, mapped_real_subnormal = _real_masks(jnp.real(mapped))
@@ -187,3 +254,11 @@ def has_lost_nonzero_components(
     )
     result: Bool[Array, ""] = jnp.any(lost_real | lost_imaginary)
     return result
+
+
+__all__: list[str] = [
+    "has_lost_nonzero_components",
+    "has_lost_subtraction",
+    "has_nonzero_components",
+    "has_subnormal_components",
+]

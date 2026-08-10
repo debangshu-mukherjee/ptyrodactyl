@@ -55,7 +55,7 @@ from beartype.typing import Final
 from jax import Array
 from jaxtyping import Float64, jaxtyped
 
-from ptyrodactyl._physics import helmholtz_coupling_value
+from ptyrodactyl._tools import helmholtz_coupling_value
 
 from .custom_types import scalar_float, scalar_num
 

@@ -41,16 +41,16 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import (
-    _all_normal_arithmetic_supported,
-    _arithmetic_environment_probes,
-    _interval_subtract,
-    _point_interval,
-    _RealInterval,
-    _upward_add,
-    _upward_divide,
+from ptyrodactyl._tools import (
+    RealInterval,
+    all_normal_arithmetic_supported,
+    arithmetic_environment_probes,
+    has_subnormal_components,
+    interval_subtract,
+    point_interval,
+    upward_add,
+    upward_divide,
 )
-from ptyrodactyl._numeric import has_subnormal_components
 from ptyrodactyl.types import (
     GalerkinActionDirection,
     GalerkinActionErrorRoute,
@@ -127,9 +127,9 @@ def _action_arithmetic_environment_probes() -> Tuple[
         Bool[Array, ""],
         Bool[Array, ""],
         Bool[Array, ""],
-    ] = _arithmetic_environment_probes()
+    ] = arithmetic_environment_probes()
     gradual_underflow_supported: Bool[Array, ""] = probes[-1]
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     result: Tuple[Bool[Array, ""], Bool[Array, ""]] = (
         normal_supported,
         gradual_underflow_supported,
@@ -268,7 +268,7 @@ def _scale_safe_complex_norm(
 
 def _scalar_point_to_interval_upper(
     point: Float64[Array, ""],
-    interval: _RealInterval,
+    interval: RealInterval,
 ) -> Float64[Array, ""]:
     """PRIVATE: Bound one exact point's distance from an interval value.
 
@@ -276,7 +276,7 @@ def _scalar_point_to_interval_upper(
     ----------
     point : Float64[Array, ""]
         Exact stored binary64 point in a caller-defined unit.
-    interval : _RealInterval
+    interval : RealInterval
         Inclusive comparison interval in the same unit as ``point``.
 
     Returns
@@ -289,8 +289,8 @@ def _scalar_point_to_interval_upper(
     The result is the larger absolute endpoint of ``point - interval``. The
     maximum boundary makes this evidence helper unsuitable for model gradients.
     """
-    difference: _RealInterval = _interval_subtract(
-        _point_interval(point),
+    difference: RealInterval = interval_subtract(
+        point_interval(point),
         interval,
     )
     upper: Float64[Array, ""] = jnp.maximum(
@@ -455,11 +455,11 @@ def enclose_galerkin_target_action(
     direct_algebraic_bound: Float64[Array, ""] = (
         _nonnegative_vector_norm_upper(direct_algebraic_components)
     )
-    action_error_bound: Float64[Array, ""] = _upward_add(
+    action_error_bound: Float64[Array, ""] = upward_add(
         production_direct_bound,
         direct_algebraic_bound,
     )
-    field_norm: _RealInterval = _exact_complex_norm_interval(evidence_field)
+    field_norm: RealInterval = _exact_complex_norm_interval(evidence_field)
     environment_supported: Bool[Array, ""]
     gradual_underflow_supported: Bool[Array, ""]
     environment_supported, gradual_underflow_supported = (
@@ -500,7 +500,7 @@ def enclose_galerkin_target_action(
         jnp.where(environment_supported, field_norm[0], 0.0),
         jnp.where(environment_supported, field_norm[1], jnp.inf),
     )
-    relative_finite: Float64[Array, ""] = _upward_divide(
+    relative_finite: Float64[Array, ""] = upward_divide(
         action_error_bound,
         jnp.where(field_norm[0] > 0.0, field_norm[0], 1.0),
     )
@@ -656,24 +656,24 @@ def enclose_galerkin_residual(
     subtraction_bound: Float64[Array, ""] = _nonnegative_vector_norm_upper(
         subtraction_components
     )
-    evaluator_bound: Float64[Array, ""] = _upward_add(
+    evaluator_bound: Float64[Array, ""] = upward_add(
         direct_algebraic_bound,
         subtraction_bound,
     )
 
     formed_norm: Float64[Array, ""] = _scale_safe_complex_norm(formed_residual)
-    exact_formed_norm: _RealInterval = _exact_complex_norm_interval(
+    exact_formed_norm: RealInterval = _exact_complex_norm_interval(
         formed_residual
     )
     norm_error: Float64[Array, ""] = _scalar_point_to_interval_upper(
         formed_norm,
         exact_formed_norm,
     )
-    algebraic_residual_upper: Float64[Array, ""] = _upward_add(
+    algebraic_residual_upper: Float64[Array, ""] = upward_add(
         exact_formed_norm[1],
         evaluator_bound,
     )
-    field_norm: _RealInterval = _exact_complex_norm_interval(evidence_field)
+    field_norm: RealInterval = _exact_complex_norm_interval(evidence_field)
     environment_supported: Bool[Array, ""]
     gradual_underflow_supported: Bool[Array, ""]
     environment_supported, gradual_underflow_supported = (

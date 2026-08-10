@@ -48,23 +48,21 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import (
-    _all_normal_arithmetic_supported,
-    _arithmetic_environment_probes,
-    _interval_add,
-    _interval_divide_positive,
-    _interval_multiply,
-    _interval_square,
-    _interval_subtract,
-    _mathematical_pi_interval,
-    _point_interval,
-    _RealInterval,
-    _upward_add,
-    _upward_multiply,
-)
-from ptyrodactyl._numeric import (
+from ptyrodactyl._tools import (
+    RealInterval,
+    all_normal_arithmetic_supported,
+    arithmetic_environment_probes,
     has_lost_nonzero_components,
     has_subnormal_components,
+    interval_add,
+    interval_divide_positive,
+    interval_multiply,
+    interval_square,
+    interval_subtract,
+    mathematical_pi_interval,
+    point_interval,
+    upward_add,
+    upward_multiply,
 )
 from ptyrodactyl.types import (
     GalerkinRepresentedSource,
@@ -599,7 +597,7 @@ def _check_unique_active_fibers(
 def _exact_normal_wavevector_interval(
     manifest: GalerkinTargetManifest,
     normal_axis: GalerkinSourceAxis,
-) -> _RealInterval:
+) -> RealInterval:
     """PRIVATE: Enclose exact-target normal wavevectors on every state row.
 
     Parameters
@@ -611,24 +609,24 @@ def _exact_normal_wavevector_interval(
 
     Returns
     -------
-    interval : _RealInterval
+    interval : RealInterval
         Inclusive exact-target normal angular-wavevector endpoints.
     """
     normal: int = int(normal_axis)
     indices: Float64[Array, " n"] = manifest.support.state_indices[
         :, normal
     ].astype(jnp.float64)
-    reciprocal: _RealInterval = _interval_divide_positive(
-        _point_interval(indices),
-        _point_interval(manifest.box_lengths[normal]),
+    reciprocal: RealInterval = interval_divide_positive(
+        point_interval(indices),
+        point_interval(manifest.box_lengths[normal]),
     )
-    two_pi: _RealInterval = _interval_multiply(
-        _point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
-        _mathematical_pi_interval(),
+    two_pi: RealInterval = interval_multiply(
+        point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
+        mathematical_pi_interval(),
     )
-    offset: _RealInterval = _interval_multiply(reciprocal, two_pi)
+    offset: RealInterval = interval_multiply(reciprocal, two_pi)
     ledger = manifest.fixed_linear_error_ledger
-    carrier: _RealInterval = (
+    carrier: RealInterval = (
         jnp.broadcast_to(
             ledger.exact_carrier_lower_bounds[normal], indices.shape
         ),
@@ -636,23 +634,23 @@ def _exact_normal_wavevector_interval(
             ledger.exact_carrier_upper_bounds[normal], indices.shape
         ),
     )
-    interval: _RealInterval = _interval_add(carrier, offset)
+    interval: RealInterval = interval_add(carrier, offset)
     return interval
 
 
 def _exact_reduced_flux_interval(
     incident_field: Complex128[Array, " n"],
-    exact_normal_wavevectors: _RealInterval,
+    exact_normal_wavevectors: RealInterval,
     normal_box_length: Float64[Array, ""],
     target_reduced_flux: Float64[Array, ""],
-) -> Tuple[_RealInterval, Float64[Array, ""]]:
+) -> Tuple[RealInterval, Float64[Array, ""]]:
     """PRIVATE: Enclose exact-carrier reduced flux and target discrepancy.
 
     Parameters
     ----------
     incident_field : Complex128[Array, " n"]
         Exact stored finite incident coefficients.
-    exact_normal_wavevectors : _RealInterval
+    exact_normal_wavevectors : RealInterval
         Exact-target normal angular-wavevector intervals.
     normal_box_length : Float64[Array, ""]
         Exact stored positive box length along the source normal.
@@ -661,50 +659,50 @@ def _exact_reduced_flux_interval(
 
     Returns
     -------
-    flux_interval : _RealInterval
+    flux_interval : RealInterval
         Inclusive exact-carrier reduced-flux endpoints.
     discrepancy_upper : Float64[Array, ""]
         Outward target-to-exact-flux absolute discrepancy upper bound.
     """
-    real_points: _RealInterval = _point_interval(jnp.real(incident_field))
-    imag_points: _RealInterval = _point_interval(jnp.imag(incident_field))
-    squared_moduli: _RealInterval = _interval_add(
-        _interval_square(real_points),
-        _interval_square(imag_points),
+    real_points: RealInterval = point_interval(jnp.real(incident_field))
+    imag_points: RealInterval = point_interval(jnp.imag(incident_field))
+    squared_moduli: RealInterval = interval_add(
+        interval_square(real_points),
+        interval_square(imag_points),
     )
-    contributions: _RealInterval = _interval_multiply(
+    contributions: RealInterval = interval_multiply(
         exact_normal_wavevectors, squared_moduli
     )
     zero: Float64[Array, ""] = jnp.asarray(0.0, dtype=jnp.float64)
 
     def add_contribution(
         index: scalar_int,
-        accumulator: _RealInterval,
-    ) -> _RealInterval:
+        accumulator: RealInterval,
+    ) -> RealInterval:
         """PRIVATE: Accumulate one exact modal-flux interval."""
-        contribution: _RealInterval = (
+        contribution: RealInterval = (
             contributions[0][index],
             contributions[1][index],
         )
-        updated: _RealInterval = _interval_add(accumulator, contribution)
+        updated: RealInterval = interval_add(accumulator, contribution)
         return updated
 
-    summed: _RealInterval = lax.fori_loop(
+    summed: RealInterval = lax.fori_loop(
         0,
         incident_field.shape[0],
         add_contribution,
         (zero, zero),
     )
-    flux_interval: _RealInterval = _interval_divide_positive(
-        summed, _point_interval(normal_box_length)
+    flux_interval: RealInterval = interval_divide_positive(
+        summed, point_interval(normal_box_length)
     )
-    discrepancy: _RealInterval = _interval_subtract(
-        _point_interval(target_reduced_flux), flux_interval
+    discrepancy: RealInterval = interval_subtract(
+        point_interval(target_reduced_flux), flux_interval
     )
     discrepancy_upper: Float64[Array, ""] = jnp.maximum(
         jnp.abs(discrepancy[0]), jnp.abs(discrepancy[1])
     )
-    result: Tuple[_RealInterval, Float64[Array, ""]] = (
+    result: Tuple[RealInterval, Float64[Array, ""]] = (
         flux_interval,
         discrepancy_upper,
     )
@@ -804,7 +802,7 @@ def _enclose_source_actions(
     scattered_error: Float64[Array, ""] = action_error(
         actions.scattered_source, scattered_interval
     )
-    field_norm: _RealInterval = _exact_complex_norm_interval(incident_field)
+    field_norm: RealInterval = _exact_complex_norm_interval(incident_field)
     zeros: Float64[Array, " n"] = jnp.zeros(
         incident_field.shape, dtype=jnp.float64
     )
@@ -815,29 +813,29 @@ def _enclose_source_actions(
         )
     )
     ledger = manifest.fixed_linear_error_ledger
-    free_transfer_components: Float64[Array, " n"] = _upward_multiply(
+    free_transfer_components: Float64[Array, " n"] = upward_multiply(
         ledger.free_diagonal_error_bounds, field_magnitude_upper
     )
     free_transfer: Float64[Array, ""] = _nonnegative_vector_norm_upper(
         free_transfer_components
     )
-    cap_transfer: Float64[Array, ""] = _upward_multiply(
+    cap_transfer: Float64[Array, ""] = upward_multiply(
         ledger.cap_operator_error_bound, field_norm[1]
     )
-    interaction_transfer: Float64[Array, ""] = _upward_multiply(
+    interaction_transfer: Float64[Array, ""] = upward_multiply(
         ledger.interaction_operator_error_bound, field_norm[1]
     )
-    exact_matched_error: Float64[Array, ""] = _upward_add(
-        matched_error, _upward_add(free_transfer, cap_transfer)
+    exact_matched_error: Float64[Array, ""] = upward_add(
+        matched_error, upward_add(free_transfer, cap_transfer)
     )
-    exact_total_error: Float64[Array, ""] = _upward_add(
-        total_error, _upward_add(free_transfer, cap_transfer)
+    exact_total_error: Float64[Array, ""] = upward_add(
+        total_error, upward_add(free_transfer, cap_transfer)
     )
-    exact_scattered_error: Float64[Array, ""] = _upward_add(
+    exact_scattered_error: Float64[Array, ""] = upward_add(
         scattered_error, interaction_transfer
     )
-    *_, gradual_underflow_supported = _arithmetic_environment_probes()
-    environment_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    *_, gradual_underflow_supported = arithmetic_environment_probes()
+    environment_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     certified_bounds = tuple(
         jnp.where(environment_supported, value, jnp.inf)
         for value in (
@@ -1037,10 +1035,10 @@ def _build_represented_galerkin_source(  # noqa: PLR0913
         "common pre-window reduced-flux normalization must be finite, "
         "positive, phase invariant, and preserve every active coefficient",
     )
-    exact_normal_wavevectors: _RealInterval = (
-        _exact_normal_wavevector_interval(manifest, normal_axis)
+    exact_normal_wavevectors: RealInterval = _exact_normal_wavevector_interval(
+        manifest, normal_axis
     )
-    exact_flux: _RealInterval
+    exact_flux: RealInterval
     exact_flux_discrepancy: Float64[Array, ""]
     exact_flux, exact_flux_discrepancy = _exact_reduced_flux_interval(
         lax.stop_gradient(checked_incident),

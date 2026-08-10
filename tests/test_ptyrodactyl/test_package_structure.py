@@ -26,6 +26,13 @@ _PUBLIC_PACKAGES = (
     "ptyrodactyl.workflows",
 )
 _ROUTINE_KIND_ORDER = {"class": 0, "func": 1, "obj": 2}
+_INTERNAL_TOOL_LEAVES: Tuple[str, ...] = (
+    "canonical_digest",
+    "host_interval",
+    "interval",
+    "numeric",
+    "physics",
+)
 _PRIVATE_FUNCTION_SECTION_ORDER = {
     "Extended Summary": 0,
     "Implementation Logic": 1,
@@ -1029,9 +1036,93 @@ def test_removed_convergent_born_namespace_is_absent() -> None:
     assert find_spec("ptyrodactyl.convergent_born") is None
 
 
-def test_removed_tools_namespace_is_absent() -> None:
-    """Require the redundant tools package to remain removed."""
+def test_private_tools_owns_exact_internal_infrastructure_leaves() -> None:
+    """Require _tools to own only its five internal leaves and type marker."""
+    assert find_spec("ptyrodactyl._tools") is not None
+    tools_path = _module_path("ptyrodactyl._tools").parent
+    expected_files = {"__init__.py", "py.typed"}
+    expected_files.update(f"{name}.py" for name in _INTERNAL_TOOL_LEAVES)
+    actual_files = {
+        path.name for path in tools_path.iterdir() if path.is_file()
+    }
+    assert actual_files == expected_files
+    tools_module = importlib.import_module("ptyrodactyl._tools")
+    assert tools_module.__all__
+
+
+def test_private_tools_exports_have_synchronized_routine_listings() -> None:
+    """Synchronize every internal seam with its leaf and aggregate docs."""
+    package = "ptyrodactyl._tools"
+    package_module = importlib.import_module(package)
+    init_path = _module_path(package)
+    init_tree = _parse(init_path)
+    init_all = _literal_all(init_tree, init_path)
+    init_entries = _routine_listing_entries(init_tree, init_path)
+    init_listings = {symbol: summary for _, symbol, summary in init_entries}
+    expected_init_entries = sorted(
+        init_entries,
+        key=lambda entry: (
+            _ROUTINE_KIND_ORDER[entry[0]],
+            entry[1].casefold(),
+        ),
+    )
+    assert init_entries == expected_init_entries
+    assert init_all == sorted(init_all, key=str.casefold)
+    assert set(init_all) == set(init_listings)
+
+    owners: Dict[str, Path] = {}
+    for leaf_path in _leaf_modules(package):
+        leaf_tree = _parse(leaf_path)
+        leaf_all = _literal_all(leaf_tree, leaf_path)
+        leaf_entries = _routine_listing_entries(leaf_tree, leaf_path)
+        leaf_listings = {
+            symbol: summary for _, symbol, summary in leaf_entries
+        }
+        expected_leaf_entries = sorted(
+            leaf_entries,
+            key=lambda entry: (
+                _ROUTINE_KIND_ORDER[entry[0]],
+                entry[1].casefold(),
+            ),
+        )
+        assert leaf_entries == expected_leaf_entries
+        assert leaf_all == sorted(leaf_all, key=str.casefold)
+        assert set(leaf_all) == set(leaf_listings)
+        definitions = _definition_summaries(leaf_tree)
+        leaf_module = importlib.import_module(f"{package}.{leaf_path.stem}")
+        for symbol in leaf_all:
+            assert not symbol.startswith("_")
+            assert symbol not in owners, (
+                f"{symbol!r} is owned by both {owners[symbol]} and {leaf_path}"
+            )
+            owners[symbol] = leaf_path
+            if symbol in definitions:
+                assert leaf_listings[symbol] == definitions[symbol]
+            assert init_listings[symbol] == leaf_listings[symbol]
+            assert getattr(package_module, symbol) is getattr(
+                leaf_module, symbol
+            )
+    assert set(init_all) == set(owners)
+
+
+def test_package_root_contains_only_its_python_initializer() -> None:
+    """Forbid Python leaf modules at the ptyrodactyl package root."""
+    source_root = Path(ptyrodactyl.__file__).parent
+    root_python_files = {
+        path.name for path in source_root.glob("*.py") if path.is_file()
+    }
+    assert root_python_files == {"__init__.py"}
+    assert (source_root / "py.typed").is_file()
+
+
+def test_private_infrastructure_has_no_root_compatibility_aliases() -> None:
+    """Keep every former root private-module path undiscoverable."""
     assert find_spec("ptyrodactyl.tools") is None
+    assert "tools" not in ptyrodactyl.__all__
+    for module_name in _INTERNAL_TOOL_LEAVES:
+        former_name = f"_{module_name}"
+        assert find_spec(f"ptyrodactyl.{former_name}") is None
+        assert not hasattr(ptyrodactyl, former_name)
 
 
 def test_removed_invert_namespace_is_absent() -> None:
@@ -1698,7 +1789,7 @@ def test_exported_returns_document_bound_local_names() -> None:
 
 
 def test_source_uses_canonical_cross_subpackage_imports() -> None:
-    """Reject renamed project imports and cross-package leaf reaches."""
+    """Reject renamed imports and reaches below an owning aggregate."""
     source_root = Path(ptyrodactyl.__file__).parent
     offenders: list[str] = []
     for path in sorted(source_root.rglob("*.py")):
@@ -1719,13 +1810,26 @@ def test_source_uses_canonical_cross_subpackage_imports() -> None:
             ):
                 parts = node.module.split(".")
                 imported_owner = parts[1]
-                if (
+                is_internal_tools_aggregate = (
+                    imported_owner == "_tools" and len(parts) == 2
+                )
+                if imported_owner == "_tools" and len(parts) > 2:
+                    offenders.append(
+                        f"{path}:{node.lineno} deep _tools leaf import"
+                    )
+                elif (
                     owner is not None
                     and imported_owner != owner
                     and len(parts) > 2
                 ):
                     offenders.append(
                         f"{path}:{node.lineno} deep import {node.module}"
+                    )
+                if is_internal_tools_aggregate and any(
+                    alias.name.startswith("_") for alias in node.names
+                ):
+                    offenders.append(
+                        f"{path}:{node.lineno} private _tools seam import"
                     )
                 if any(alias.asname for alias in node.names):
                     offenders.append(f"{path}:{node.lineno} renamed import")

@@ -40,21 +40,21 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import (
-    _interval_add,
-    _interval_divide_positive,
-    _interval_multiply,
-    _interval_sqrt,
-    _interval_square,
-    _interval_subtract,
-    _mathematical_pi_interval,
-    _point_interval,
-    _round_up,
-    _upward_add,
-    _upward_multiply,
-    _upward_sqrt,
+from ptyrodactyl._tools import (
+    coupled_interaction_value,
+    interval_add,
+    interval_divide_positive,
+    interval_multiply,
+    interval_sqrt,
+    interval_square,
+    interval_subtract,
+    mathematical_pi_interval,
+    point_interval,
+    round_up,
+    upward_add,
+    upward_multiply,
+    upward_sqrt,
 )
-from ptyrodactyl._physics import coupled_interaction_value
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
@@ -174,7 +174,7 @@ def _point_interval_distance_upper(
     -----
     The result bounds every exact interval value, not only the nearest point.
     """
-    difference = _interval_subtract(_point_interval(point), interval)
+    difference = interval_subtract(point_interval(point), interval)
     result: Float64[Array, "..."] = _absolute_interval_upper(difference)
     return result
 
@@ -202,10 +202,10 @@ def _interval_sum(
     """
     first: Float64[Array, "..."] = jnp.zeros_like(values[0][0])
     result: Tuple[Float64[Array, "..."], Float64[Array, "..."]] = (
-        _point_interval(first)
+        point_interval(first)
     )
     for value in values:
-        result = _interval_add(result, value)
+        result = interval_add(result, value)
     lower: Float64[Array, "..."] = result[0]
     upper: Float64[Array, "..."] = result[1]
     summed: Tuple[Float64[Array, "..."], Float64[Array, "..."]] = (
@@ -254,78 +254,78 @@ def _exact_kinematic_intervals(
     Stored physical constants are interpreted as exact real numbers. The
     ``1.0e-20`` factor converts square metres to square Angstroms.
     """
-    one = _point_interval(jnp.asarray(1.0, dtype=jnp.float64))
-    two = _point_interval(jnp.asarray(2.0, dtype=jnp.float64))
-    thousand = _point_interval(jnp.asarray(1000.0, dtype=jnp.float64))
+    one = point_interval(jnp.asarray(1.0, dtype=jnp.float64))
+    two = point_interval(jnp.asarray(2.0, dtype=jnp.float64))
+    thousand = point_interval(jnp.asarray(1000.0, dtype=jnp.float64))
     angstrom_squared_lower: Float64[Array, ""] = jnp.asarray(
         _ANGSTROM_SQUARED_LOWER,
         dtype=jnp.float64,
     )
     angstrom_squared = (
         angstrom_squared_lower,
-        _round_up(angstrom_squared_lower),
+        round_up(angstrom_squared_lower),
     )
-    mass = _point_interval(jnp.asarray(M_E, dtype=jnp.float64))
-    charge = _point_interval(jnp.asarray(E_CHARGE, dtype=jnp.float64))
-    speed = _point_interval(jnp.asarray(C_LIGHT, dtype=jnp.float64))
-    hbar = _point_interval(jnp.asarray(HBAR, dtype=jnp.float64))
-    voltage = _point_interval(accelerating_voltage_kv)
-    voltage_volts = _interval_multiply(voltage, thousand)
+    mass = point_interval(jnp.asarray(M_E, dtype=jnp.float64))
+    charge = point_interval(jnp.asarray(E_CHARGE, dtype=jnp.float64))
+    speed = point_interval(jnp.asarray(C_LIGHT, dtype=jnp.float64))
+    hbar = point_interval(jnp.asarray(HBAR, dtype=jnp.float64))
+    voltage = point_interval(accelerating_voltage_kv)
+    voltage_volts = interval_multiply(voltage, thousand)
 
-    numerator = _interval_multiply(
-        _interval_multiply(two, mass),
+    numerator = interval_multiply(
+        interval_multiply(two, mass),
         charge,
     )
-    hbar_squared = _interval_square(hbar)
-    prefactor = _interval_divide_positive(numerator, hbar_squared)
-    speed_squared = _interval_square(speed)
-    rest_energy = _interval_multiply(mass, speed_squared)
-    charge_voltage = _interval_multiply(charge, voltage_volts)
+    hbar_squared = interval_square(hbar)
+    prefactor = interval_divide_positive(numerator, hbar_squared)
+    speed_squared = interval_square(speed)
+    rest_energy = interval_multiply(mass, speed_squared)
+    charge_voltage = interval_multiply(charge, voltage_volts)
 
-    twice_rest_energy = _interval_multiply(two, rest_energy)
-    kinematic_ratio = _interval_divide_positive(
+    twice_rest_energy = interval_multiply(two, rest_energy)
+    kinematic_ratio = interval_divide_positive(
         charge_voltage,
         twice_rest_energy,
     )
-    kinematic_correction = _interval_add(one, kinematic_ratio)
-    wavenumber_squared = _interval_multiply(
-        _interval_multiply(
-            _interval_multiply(prefactor, voltage_volts),
+    kinematic_correction = interval_add(one, kinematic_ratio)
+    wavenumber_squared = interval_multiply(
+        interval_multiply(
+            interval_multiply(prefactor, voltage_volts),
             kinematic_correction,
         ),
         angstrom_squared,
     )
-    wavenumber: Tuple[Float64[Array, ""], Float64[Array, ""]] = _interval_sqrt(
+    wavenumber: Tuple[Float64[Array, ""], Float64[Array, ""]] = interval_sqrt(
         wavenumber_squared
     )
 
-    interaction_ratio = _interval_divide_positive(
+    interaction_ratio = interval_divide_positive(
         charge_voltage,
         rest_energy,
     )
-    interaction_correction = _interval_add(one, interaction_ratio)
+    interaction_correction = interval_add(one, interaction_ratio)
     interaction_coupling: Tuple[Float64[Array, ""], Float64[Array, ""]] = (
-        _interval_multiply(
-            _interval_multiply(prefactor, interaction_correction),
+        interval_multiply(
+            interval_multiply(prefactor, interaction_correction),
             angstrom_squared,
         )
     )
 
     scale: Float64[Array, ""] = jnp.max(jnp.abs(direction_seed))
-    scaled_seed = _interval_divide_positive(
-        _point_interval(direction_seed),
-        _point_interval(scale),
+    scaled_seed = interval_divide_positive(
+        point_interval(direction_seed),
+        point_interval(scale),
     )
     seed_norm_squared = _interval_sum(
         tuple(
-            _interval_square((scaled_seed[0][axis], scaled_seed[1][axis]))
+            interval_square((scaled_seed[0][axis], scaled_seed[1][axis]))
             for axis in range(_SPACE_DIMENSIONS)
         )
     )
-    seed_norm = _interval_sqrt(seed_norm_squared)
-    unit_direction = _interval_divide_positive(scaled_seed, seed_norm)
+    seed_norm = interval_sqrt(seed_norm_squared)
+    unit_direction = interval_divide_positive(scaled_seed, seed_norm)
     exact_carrier: Tuple[Float64[Array, " 3"], Float64[Array, " 3"]] = (
-        _interval_multiply(
+        interval_multiply(
             (
                 jnp.broadcast_to(wavenumber[0], (_SPACE_DIMENSIONS,)),
                 jnp.broadcast_to(wavenumber[1], (_SPACE_DIMENSIONS,)),
@@ -378,16 +378,16 @@ def _exact_free_diagonal_interval(
     subtracting a separately evaluated squared wavenumber.
     """
     state_float: Float64[Array, "n 3"] = state_indices.astype(jnp.float64)
-    reciprocal = _interval_divide_positive(
-        _point_interval(state_float),
-        _point_interval(box_lengths[None, :]),
+    reciprocal = interval_divide_positive(
+        point_interval(state_float),
+        point_interval(box_lengths[None, :]),
     )
-    pi_interval = _mathematical_pi_interval()
-    two_pi = _interval_multiply(
-        _point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
+    pi_interval = mathematical_pi_interval()
+    two_pi = interval_multiply(
+        point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
         pi_interval,
     )
-    wavevector_offset = _interval_multiply(
+    wavevector_offset = interval_multiply(
         reciprocal,
         (
             jnp.broadcast_to(two_pi[0], reciprocal[0].shape),
@@ -396,7 +396,7 @@ def _exact_free_diagonal_interval(
     )
     carrier_dot_offset = _interval_sum(
         tuple(
-            _interval_multiply(
+            interval_multiply(
                 (
                     exact_carrier[0][axis],
                     exact_carrier[1][axis],
@@ -411,7 +411,7 @@ def _exact_free_diagonal_interval(
     )
     offset_norm_squared = _interval_sum(
         tuple(
-            _interval_square(
+            interval_square(
                 (
                     wavevector_offset[0][:, axis],
                     wavevector_offset[1][:, axis],
@@ -420,12 +420,12 @@ def _exact_free_diagonal_interval(
             for axis in range(_SPACE_DIMENSIONS)
         )
     )
-    twice_dot = _interval_multiply(
-        _point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
+    twice_dot = interval_multiply(
+        point_interval(jnp.asarray(2.0, dtype=jnp.float64)),
         carrier_dot_offset,
     )
-    interval: Tuple[Float64[Array, " n"], Float64[Array, " n"]] = (
-        _interval_add(twice_dot, offset_norm_squared)
+    interval: Tuple[Float64[Array, " n"], Float64[Array, " n"]] = interval_add(
+        twice_dot, offset_norm_squared
     )
     lower: Float64[Array, " n"] = interval[0]
     upper: Float64[Array, " n"] = interval[1]
@@ -522,24 +522,24 @@ def _complex_product_discrepancy_upper(
     The real-plus-imaginary bound is conservative for the complex Euclidean
     magnitude and avoids an additional square-root rounding path.
     """
-    coupling = _point_interval(interaction_coupling)
-    product_real = _interval_multiply(
+    coupling = point_interval(interaction_coupling)
+    product_real = interval_multiply(
         coupling,
-        _point_interval(jnp.real(voltage_coefficients)),
+        point_interval(jnp.real(voltage_coefficients)),
     )
-    product_imaginary = _interval_multiply(
+    product_imaginary = interval_multiply(
         coupling,
-        _point_interval(jnp.imag(voltage_coefficients)),
+        point_interval(jnp.imag(voltage_coefficients)),
     )
-    real_difference = _interval_subtract(
-        _point_interval(jnp.real(interaction_coefficients)),
+    real_difference = interval_subtract(
+        point_interval(jnp.real(interaction_coefficients)),
         product_real,
     )
-    imaginary_difference = _interval_subtract(
-        _point_interval(jnp.imag(interaction_coefficients)),
+    imaginary_difference = interval_subtract(
+        point_interval(jnp.imag(interaction_coefficients)),
         product_imaginary,
     )
-    result: Float64[Array, " p"] = _upward_add(
+    result: Float64[Array, " p"] = upward_add(
         _absolute_interval_upper(real_difference),
         _absolute_interval_upper(imaginary_difference),
     )
@@ -565,7 +565,7 @@ def _complex_l1_upper(
     -----
     The complex L1 norm bounds the complex Euclidean magnitude from above.
     """
-    result: Float64[Array, " p"] = _upward_add(
+    result: Float64[Array, " p"] = upward_add(
         jnp.abs(jnp.real(values)),
         jnp.abs(jnp.imag(values)),
     )
@@ -669,8 +669,8 @@ def _interaction_matrix_error_bounds(
             Float64[Array, " n"],
         ] = (
             counts.at[position].set(multiplicity),
-            _upward_add(rows, row_increment),
-            _upward_add(columns, column_increment),
+            upward_add(rows, row_increment),
+            upward_add(columns, column_increment),
         )
         return updated
 
@@ -733,17 +733,17 @@ def _frobenius_error_upper(
         multiplicity_upper: Float64[Array, ""] = jnp.where(
             multiplicities[position] == 0,
             0.0,
-            _round_up(raw_multiplicity),
+            round_up(raw_multiplicity),
         )
-        squared_error: Float64[Array, ""] = _upward_multiply(
+        squared_error: Float64[Array, ""] = upward_multiply(
             coefficient_errors[position],
             coefficient_errors[position],
         )
-        term: Float64[Array, ""] = _upward_multiply(
+        term: Float64[Array, ""] = upward_multiply(
             multiplicity_upper,
             squared_error,
         )
-        updated: Float64[Array, ""] = _upward_add(total, term)
+        updated: Float64[Array, ""] = upward_add(total, term)
         return updated
 
     radicand = jax.lax.fori_loop(
@@ -752,7 +752,7 @@ def _frobenius_error_upper(
         add_term,
         radicand,
     )
-    result: Float64[Array, ""] = _upward_sqrt(radicand)
+    result: Float64[Array, ""] = upward_sqrt(radicand)
     return result
 
 
@@ -1086,7 +1086,7 @@ def build_galerkin_fixed_linear_error_ledger(  # noqa: PLR0913, PLR0915
     voltage_magnitudes: Float64[Array, " p"] = _complex_l1_upper(
         evidence_voltage
     )
-    coupling_transfer_errors: Float64[Array, " p"] = _upward_multiply(
+    coupling_transfer_errors: Float64[Array, " p"] = upward_multiply(
         coupling_error,
         voltage_magnitudes,
     )
@@ -1094,12 +1094,12 @@ def build_galerkin_fixed_linear_error_ledger(  # noqa: PLR0913, PLR0915
         jnp.abs(exact_coupling[0]),
         jnp.abs(exact_coupling[1]),
     )
-    voltage_transfer_errors: Float64[Array, " p"] = _upward_multiply(
+    voltage_transfer_errors: Float64[Array, " p"] = upward_multiply(
         exact_coupling_magnitude_upper,
         evidence_voltage_errors,
     )
-    interaction_errors: Float64[Array, " p"] = _upward_add(
-        _upward_add(
+    interaction_errors: Float64[Array, " p"] = upward_add(
+        upward_add(
             interaction_rounding_errors,
             coupling_transfer_errors,
         ),
@@ -1118,8 +1118,8 @@ def build_galerkin_fixed_linear_error_ledger(  # noqa: PLR0913, PLR0915
     )
     maximum_row: Float64[Array, ""] = jnp.max(row_error_bounds)
     maximum_column: Float64[Array, ""] = jnp.max(column_error_bounds)
-    schur_bound: Float64[Array, ""] = _upward_sqrt(
-        _upward_multiply(maximum_row, maximum_column)
+    schur_bound: Float64[Array, ""] = upward_sqrt(
+        upward_multiply(maximum_row, maximum_column)
     )
     frobenius_bound: Float64[Array, ""] = _frobenius_error_upper(
         multiplicities,
@@ -1134,8 +1134,8 @@ def build_galerkin_fixed_linear_error_ledger(  # noqa: PLR0913, PLR0915
     delta_a: Float64[Array, ""] = zero
     delta_epsilon: Float64[Array, ""] = zero
     delta_b: Float64[Array, ""] = zero
-    delta_h: Float64[Array, ""] = _upward_add(
-        _upward_add(delta_d, delta_r),
+    delta_h: Float64[Array, ""] = upward_add(
+        upward_add(delta_d, delta_r),
         delta_b,
     )
     finite_certificate: Bool[Array, ""] = (

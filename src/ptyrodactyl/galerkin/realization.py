@@ -39,14 +39,14 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import (
-    _interval_add,
-    _interval_divide_positive,
-    _interval_multiply,
-    _interval_sqrt,
-    _interval_square,
-    _point_interval,
-    _RealInterval,
+from ptyrodactyl._tools import (
+    RealInterval,
+    interval_add,
+    interval_divide_positive,
+    interval_multiply,
+    interval_sqrt,
+    interval_square,
+    point_interval,
 )
 from ptyrodactyl.types import (
     GalerkinAcquisitionSupportResult,
@@ -171,9 +171,9 @@ def _outward_add(
     Exact points first pass through the shared FTZ.2 embedding.  Certificate
     arithmetic is stopped before evaluation and has no evidence tangent.
     """
-    result: Float64[Array, "..."] = _interval_add(
-        _point_interval(left),
-        _point_interval(right),
+    result: Float64[Array, "..."] = interval_add(
+        point_interval(left),
+        point_interval(right),
     )[1]
     return result
 
@@ -201,9 +201,9 @@ def _outward_multiply(
     Exact points first pass through the shared FTZ.2 embedding.  Certificate
     arithmetic is stopped before evaluation and has no evidence tangent.
     """
-    result: Float64[Array, "..."] = _interval_multiply(
-        _point_interval(left),
-        _point_interval(right),
+    result: Float64[Array, "..."] = interval_multiply(
+        point_interval(left),
+        point_interval(right),
     )[1]
     return result
 
@@ -229,7 +229,7 @@ def _outward_sqrt(
     Certificate arithmetic is stopped before evaluation and has no evidence
     tangent.
     """
-    result: Float64[Array, "..."] = _interval_sqrt(_point_interval(value))[1]
+    result: Float64[Array, "..."] = interval_sqrt(point_interval(value))[1]
     return result
 
 
@@ -281,15 +281,15 @@ def _checked_interaction_indices(
     absolute_indices: Float64[Array, "p 3"] = jnp.abs(checked_grid).astype(
         jnp.float64
     )
-    frequency_intervals: _RealInterval = _interval_divide_positive(
-        _point_interval(absolute_indices),
-        _point_interval(box_size[None, :]),
+    frequency_intervals: RealInterval = interval_divide_positive(
+        point_interval(absolute_indices),
+        point_interval(box_size[None, :]),
     )
-    squared_frequency_intervals: _RealInterval = _interval_square(
+    squared_frequency_intervals: RealInterval = interval_square(
         frequency_intervals
     )
-    squared_frequency_sum: _RealInterval = _interval_add(
-        _interval_add(
+    squared_frequency_sum: RealInterval = interval_add(
+        interval_add(
             (
                 squared_frequency_intervals[0][:, 0],
                 squared_frequency_intervals[1][:, 0],
@@ -304,8 +304,8 @@ def _checked_interaction_indices(
             squared_frequency_intervals[1][:, 2],
         ),
     )
-    band_interval: _RealInterval = _interval_square(
-        _point_interval(jnp.asarray(potential.band_limit, dtype=jnp.float64))
+    band_interval: RealInterval = interval_square(
+        point_interval(jnp.asarray(potential.band_limit, dtype=jnp.float64))
     )
     certified_strictly_inside: Bool[Array, " p"] = (
         squared_frequency_sum[1] < band_interval[0]
@@ -471,7 +471,7 @@ def _coefficient_error_bounds(
     magnitude with the maximum voxel voltage, preserving a conservative
     componentwise bound.
     """
-    voltage_interval: _RealInterval = _point_interval(potential.volume)
+    voltage_interval: RealInterval = point_interval(potential.volume)
     voltage_magnitude_upper: Float64[Array, "nz ny nx"] = jnp.maximum(
         jnp.abs(voltage_interval[0]),
         jnp.abs(voltage_interval[1]),
@@ -572,7 +572,7 @@ def _omitted_band_evidence(
         length_z,
     )
     root_volume_upper: Float64[Array, ""] = _outward_sqrt(volume_upper)
-    voltage_interval: _RealInterval = _point_interval(potential.volume)
+    voltage_interval: RealInterval = point_interval(potential.volume)
     voltage_magnitude_upper: Float64[Array, "nz ny nx"] = jnp.maximum(
         jnp.abs(voltage_interval[0]),
         jnp.abs(voltage_interval[1]),

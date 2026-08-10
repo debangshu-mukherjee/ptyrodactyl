@@ -50,7 +50,7 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._numeric import has_subnormal_components
+from ptyrodactyl._tools import has_subnormal_components
 
 from .custom_types import scalar_bool, scalar_float, scalar_int
 

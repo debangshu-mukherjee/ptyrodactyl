@@ -1,4 +1,17 @@
-"""Dependency-neutral internal scalar physics primitives."""
+"""Provide dependency-neutral scalar physics primitives.
+
+Extended Summary
+----------------
+This private leaf evaluates the canonical relativistic Helmholtz coupling
+and applies its declared precision reduction to voltage coefficients.
+
+Routine Listings
+----------------
+:func:`coupled_interaction_value`
+    Evaluate and canonically round the coupling and coupled coefficients.
+:func:`helmholtz_coupling_value`
+    Evaluate the 50-mantissa-bit canonical Helmholtz coupling.
+"""
 
 import jax.numpy as jnp
 from beartype.typing import Tuple
@@ -13,7 +26,27 @@ def helmholtz_coupling_value(
     light_speed: Float[Array, ""] | float,
     planck_constant: Float[Array, ""] | float,
 ) -> Float64[Array, ""]:
-    """Evaluate the 50-mantissa-bit canonical Helmholtz coupling."""
+    """Evaluate the 50-mantissa-bit canonical Helmholtz coupling.
+
+    Parameters
+    ----------
+    voltage_kv : Float[Array, ""] | float
+        Accelerating voltage in kilovolts.
+    electron_mass : Float[Array, ""] | float
+        Electron rest mass in kilograms.
+    elementary_charge : Float[Array, ""] | float
+        Positive elementary charge in coulombs.
+    light_speed : Float[Array, ""] | float
+        Speed of light in metres per second.
+    planck_constant : Float[Array, ""] | float
+        Planck constant in joule seconds.
+
+    Returns
+    -------
+    coupling : Float64[Array, ""]
+        Canonically rounded Helmholtz coupling in inverse square angstroms
+        per volt.
+    """
     mass: Float64[Array, ""] = jnp.float64(electron_mass)
     charge: Float64[Array, ""] = jnp.float64(elementary_charge)
     speed: Float64[Array, ""] = jnp.float64(light_speed)
@@ -48,7 +81,31 @@ def coupled_interaction_value(
     light_speed: Float[Array, ""] | float,
     planck_constant: Float[Array, ""] | float,
 ) -> Tuple[Float64[Array, ""], Complex128[Array, " p"]]:
-    """Evaluate and canonically round the coupling and coupled coefficients."""
+    """Evaluate and canonically round the coupling and coupled coefficients.
+
+    Parameters
+    ----------
+    voltage_coefficients : Complex[Array, " p"]
+        Voltage coefficients in volts.
+    voltage_kv : Float[Array, ""] | float
+        Accelerating voltage in kilovolts.
+    electron_mass : Float[Array, ""] | float
+        Electron rest mass in kilograms.
+    elementary_charge : Float[Array, ""] | float
+        Positive elementary charge in coulombs.
+    light_speed : Float[Array, ""] | float
+        Speed of light in metres per second.
+    planck_constant : Float[Array, ""] | float
+        Planck constant in joule seconds.
+
+    Returns
+    -------
+    coupling : Float64[Array, ""]
+        Canonically rounded Helmholtz coupling in inverse square angstroms
+        per volt.
+    interaction : Complex128[Array, " p"]
+        Canonically rounded coupled coefficients in inverse square angstroms.
+    """
     coupling: Float64[Array, ""] = helmholtz_coupling_value(
         voltage_kv,
         electron_mass,
@@ -80,3 +137,9 @@ def coupled_interaction_value(
         interaction,
     )
     return result
+
+
+__all__: list[str] = [
+    "coupled_interaction_value",
+    "helmholtz_coupling_value",
+]

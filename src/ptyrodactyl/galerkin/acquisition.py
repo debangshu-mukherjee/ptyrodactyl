@@ -29,14 +29,14 @@ from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import Array, Bool, Float64, Int32, Int64, jaxtyped
 
-from ptyrodactyl._interval import (
-    _downward_sqrt,
-    _interval_add,
-    _interval_divide_positive,
-    _interval_multiply,
-    _mathematical_pi_interval,
-    _point_interval,
-    _upward_sqrt,
+from ptyrodactyl._tools import (
+    downward_sqrt,
+    interval_add,
+    interval_divide_positive,
+    interval_multiply,
+    mathematical_pi_interval,
+    point_interval,
+    upward_sqrt,
 )
 from ptyrodactyl.types import (
     GalerkinAcquisitionManifest,
@@ -342,11 +342,11 @@ def _two_pi_interval() -> Tuple[Float64[Array, ""], Float64[Array, ""]]:
     The shared primitive supplies a proved binary64 bracket for mathematical
     pi and fails closed when its required normal-operation probes fail.
     """
-    pi_interval = _mathematical_pi_interval()
+    pi_interval = mathematical_pi_interval()
     two: Float64[Array, ""] = jnp.asarray(2.0, dtype=jnp.float64)
-    computed_lower, computed_upper = _interval_multiply(
+    computed_lower, computed_upper = interval_multiply(
         pi_interval,
-        _point_interval(two),
+        point_interval(two),
     )
     lower: Float64[Array, ""] = computed_lower
     upper: Float64[Array, ""] = computed_upper
@@ -384,17 +384,17 @@ def _coefficient_wavevector_interval(
     """
     index_values: Float64[Array, "n 3"] = indices.astype(jnp.float64)
     box: Float64[Array, " 3"] = manifest.box_lengths
-    ratio_lower, ratio_upper = _interval_divide_positive(
-        _point_interval(index_values),
-        _point_interval(box[None, :]),
+    ratio_lower, ratio_upper = interval_divide_positive(
+        point_interval(index_values),
+        point_interval(box[None, :]),
     )
     two_pi_lower, two_pi_upper = _two_pi_interval()
-    offset_lower, offset_upper = _interval_multiply(
+    offset_lower, offset_upper = interval_multiply(
         (ratio_lower, ratio_upper),
         (two_pi_lower, two_pi_upper),
     )
-    computed_lower, computed_upper = _interval_add(
-        _point_interval(manifest.carrier[None, :]),
+    computed_lower, computed_upper = interval_add(
+        point_interval(manifest.carrier[None, :]),
         (offset_lower, offset_upper),
     )
     lower: Float64[Array, "n 3"] = computed_lower
@@ -435,20 +435,20 @@ def _norm_upper_from_interval(
     component_upper: Float64[Array, "... d"] = jnp.maximum(
         jnp.abs(lower), jnp.abs(upper)
     )
-    squared_lower, squared_upper = _interval_multiply(
-        _point_interval(component_upper),
-        _point_interval(component_upper),
+    squared_lower, squared_upper = interval_multiply(
+        point_interval(component_upper),
+        point_interval(component_upper),
     )
     del squared_lower
     total: Float64[Array, "..."] = jnp.zeros(
         component_upper.shape[:-1], dtype=jnp.float64
     )
     for axis in range(component_upper.shape[-1]):
-        _, total = _interval_add(
-            _point_interval(total),
-            _point_interval(squared_upper[..., axis]),
+        _, total = interval_add(
+            point_interval(total),
+            point_interval(squared_upper[..., axis]),
         )
-    upper_root: Float64[Array, "..."] = _upward_sqrt(total)
+    upper_root: Float64[Array, "..."] = upward_sqrt(total)
     return upper_root
 
 
@@ -481,22 +481,22 @@ def _transverse_norm_upper_from_interval(
     and the cross-product quotient.
     """
     scale: Float64[Array, ""] = jnp.max(jnp.abs(carrier))
-    scaled_lower, scaled_upper = _interval_divide_positive(
-        _point_interval(carrier),
-        _point_interval(scale),
+    scaled_lower, scaled_upper = interval_divide_positive(
+        point_interval(carrier),
+        point_interval(scale),
     )
     cross_lowers: list[Float64[Array, " n"]] = []
     cross_uppers: list[Float64[Array, " n"]] = []
     for left_axis, right_axis in ((1, 2), (2, 0), (0, 1)):
-        first_lower, first_upper = _interval_multiply(
+        first_lower, first_upper = interval_multiply(
             (lower[:, left_axis], upper[:, left_axis]),
             (scaled_lower[right_axis], scaled_upper[right_axis]),
         )
-        second_lower, second_upper = _interval_multiply(
+        second_lower, second_upper = interval_multiply(
             (lower[:, right_axis], upper[:, right_axis]),
             (scaled_lower[left_axis], scaled_upper[left_axis]),
         )
-        component_lower, component_upper = _interval_add(
+        component_lower, component_upper = interval_add(
             (first_lower, first_upper),
             (-second_upper, -second_lower),
         )
@@ -513,25 +513,25 @@ def _transverse_norm_upper_from_interval(
         0.0,
         jnp.minimum(jnp.abs(scaled_lower), jnp.abs(scaled_upper)),
     )
-    seed_square_lower, seed_square_upper = _interval_multiply(
-        _point_interval(component_minimum),
-        _point_interval(component_minimum),
+    seed_square_lower, seed_square_upper = interval_multiply(
+        point_interval(component_minimum),
+        point_interval(component_minimum),
     )
     del seed_square_upper
     seed_norm_squared_lower: Float64[Array, ""] = jnp.asarray(
         0.0, dtype=jnp.float64
     )
     for axis in range(_SPACE_DIMENSIONS):
-        seed_norm_squared_lower, _ = _interval_add(
-            _point_interval(seed_norm_squared_lower),
-            _point_interval(seed_square_lower[axis]),
+        seed_norm_squared_lower, _ = interval_add(
+            point_interval(seed_norm_squared_lower),
+            point_interval(seed_square_lower[axis]),
         )
-    seed_norm_lower: Float64[Array, ""] = _downward_sqrt(
+    seed_norm_lower: Float64[Array, ""] = downward_sqrt(
         jnp.maximum(seed_norm_squared_lower, 0.0)
     )
-    _, computed_bounds = _interval_divide_positive(
+    _, computed_bounds = interval_divide_positive(
         (jnp.zeros_like(cross_norm_upper), cross_norm_upper),
-        _point_interval(seed_norm_lower),
+        point_interval(seed_norm_lower),
     )
     bounds: Float64[Array, " n"] = computed_bounds
     return bounds
@@ -569,19 +569,19 @@ def _shell_defect_upper_bounds(
     )
     vector_upper: Float64[Array, " n"] = vector_lower
     for axis in range(_SPACE_DIMENSIONS):
-        square_lower, square_upper = _interval_multiply(
-            _point_interval(wavevectors[:, axis]),
-            _point_interval(wavevectors[:, axis]),
+        square_lower, square_upper = interval_multiply(
+            point_interval(wavevectors[:, axis]),
+            point_interval(wavevectors[:, axis]),
         )
-        vector_lower, vector_upper = _interval_add(
+        vector_lower, vector_upper = interval_add(
             (vector_lower, vector_upper),
             (square_lower, square_upper),
         )
-    shell_lower, shell_upper = _interval_multiply(
-        _point_interval(wavenumber),
-        _point_interval(wavenumber),
+    shell_lower, shell_upper = interval_multiply(
+        point_interval(wavenumber),
+        point_interval(wavenumber),
     )
-    defect_lower, defect_upper = _interval_add(
+    defect_lower, defect_upper = interval_add(
         (vector_lower, vector_upper),
         (-shell_upper, -shell_lower),
     )
@@ -623,8 +623,8 @@ def _projection_error_upper_bounds(
     coefficient_lower, coefficient_upper = _coefficient_wavevector_interval(
         manifest, indices
     )
-    difference_lower, difference_upper = _interval_add(
-        _point_interval(physical_wavevectors),
+    difference_lower, difference_upper = interval_add(
+        point_interval(physical_wavevectors),
         (-coefficient_upper, -coefficient_lower),
     )
     bounds: Float64[Array, " n"] = _norm_upper_from_interval(
@@ -772,12 +772,12 @@ def _cyclic_offset_norm_maxima(
     arithmetic encloses the subtraction, normalization, and each norm before
     the maximum selects the largest per-mode upper bound.
     """
-    angular_lower, angular_upper = _interval_add(
-        _point_interval(wavevectors),
-        _point_interval(-manifest.carrier[None, :]),
+    angular_lower, angular_upper = interval_add(
+        point_interval(wavevectors),
+        point_interval(-manifest.carrier[None, :]),
     )
     two_pi_lower, two_pi_upper = _two_pi_interval()
-    cyclic_lower, cyclic_upper = _interval_divide_positive(
+    cyclic_lower, cyclic_upper = interval_divide_positive(
         (angular_lower, angular_upper),
         (two_pi_lower, two_pi_upper),
     )
@@ -851,11 +851,11 @@ def _transfer_norm_maxima(
         """Accumulate transverse and full physical transfer maxima."""
         outgoing_position: scalar_int = position // incident_count
         incident_position: scalar_int = position % incident_count
-        difference_lower, difference_upper = _interval_add(
-            _point_interval(outgoing[outgoing_position]),
-            _point_interval(-incident[incident_position]),
+        difference_lower, difference_upper = interval_add(
+            point_interval(outgoing[outgoing_position]),
+            point_interval(-incident[incident_position]),
         )
-        cyclic_lower, cyclic_upper = _interval_divide_positive(
+        cyclic_lower, cyclic_upper = interval_divide_positive(
             (difference_lower, difference_upper),
             (two_pi_lower, two_pi_upper),
         )

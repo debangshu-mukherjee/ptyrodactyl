@@ -1554,7 +1554,7 @@ class TestRepresentedSourceStabilityInvocation:
         """Fail closed when the rebuilt source has no finite ``delta_S``."""
         monkeypatch.setattr(
             sources_module,
-            "_all_normal_arithmetic_supported",
+            "all_normal_arithmetic_supported",
             lambda: jnp.asarray(False, dtype=jnp.bool_),
         )
         manifest = _represented_manifest()

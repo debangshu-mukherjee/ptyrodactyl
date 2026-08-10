@@ -47,18 +47,19 @@ from jaxtyping import (
 )
 from numpy.typing import NDArray
 
-from ptyrodactyl._canonical_digest import _sha256, _stored_value_payload
-from ptyrodactyl._host_interval import (
-    _fraction_from_float,
-    _fraction_lower_float,
-    _fraction_upper_float,
-    _host_binary64_supported,
-    _real_interval_product,
-    _RootEnclosureError,
-    _sqrt_fraction_upper,
+from ptyrodactyl._tools import (
+    RootEnclosureError,
+    coupled_interaction_value,
+    fraction_from_float,
+    fraction_lower_float,
+    fraction_upper_float,
+    has_subnormal_components,
+    host_binary64_supported,
+    real_interval_product,
+    sha256,
+    sqrt_fraction_upper,
+    stored_value_payload,
 )
-from ptyrodactyl._numeric import has_subnormal_components
-from ptyrodactyl._physics import coupled_interaction_value
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
@@ -339,7 +340,7 @@ def _rebuild_product_support(
         work_shape=work_shape,
     )
     jax.block_until_ready(rebuilt)
-    if _stored_value_payload(rebuilt) != _stored_value_payload(submitted):
+    if stored_value_payload(rebuilt) != stored_value_payload(submitted):
         raise ValueError("product support does not match full factory replay")
     return rebuilt
 
@@ -586,11 +587,11 @@ def _exact_sigma_fraction(voltage_kv: float) -> Fraction:
     square-Angstrom conversion uses mathematical ``10^-20`` exactly, not the
     rounded binary64 literal with that decimal spelling.
     """
-    voltage = _fraction_from_float(voltage_kv)
-    mass = _fraction_from_float(float(np.asarray(jax.device_get(M_E))))
-    charge = _fraction_from_float(float(np.asarray(jax.device_get(E_CHARGE))))
-    speed = _fraction_from_float(float(np.asarray(jax.device_get(C_LIGHT))))
-    hbar = _fraction_from_float(float(np.asarray(jax.device_get(HBAR))))
+    voltage = fraction_from_float(voltage_kv)
+    mass = fraction_from_float(float(np.asarray(jax.device_get(M_E))))
+    charge = fraction_from_float(float(np.asarray(jax.device_get(E_CHARGE))))
+    speed = fraction_from_float(float(np.asarray(jax.device_get(C_LIGHT))))
+    hbar = fraction_from_float(float(np.asarray(jax.device_get(HBAR))))
     voltage_volts = 1000 * voltage
     prefactor = 2 * mass * charge / (hbar * hbar)
     correction = 1 + charge * voltage_volts / (mass * speed * speed)
@@ -618,14 +619,14 @@ def _point_rectangle_error(
     error : Fraction
         Verified rational Euclidean farthest-corner radius.
     """
-    real = _fraction_from_float(float(np.real(point)))
-    imaginary = _fraction_from_float(float(np.imag(point)))
+    real = fraction_from_float(float(np.real(point)))
+    imaginary = fraction_from_float(float(np.imag(point)))
     real_gap = max(abs(real - rectangle[0]), abs(real - rectangle[1]))
     imag_gap = max(
         abs(imaginary - rectangle[2]),
         abs(imaginary - rectangle[3]),
     )
-    error: Fraction = _sqrt_fraction_upper(
+    error: Fraction = sqrt_fraction_upper(
         real_gap * real_gap + imag_gap * imag_gap
     )
     return error
@@ -685,28 +686,28 @@ def _operator_digest(
     certificate = realization.coefficient_certificate
     if certificate is None:
         raise ValueError("operator digest requires direct L2 evidence")
-    digest: str = _sha256(
+    digest: str = sha256(
         {
             "domain": _OPERATOR_DIGEST_DOMAIN,
             "l2_realization_digest": certificate.realization_digest,
             "local_potential_digest": certificate.local_potential_digest,
             "coefficient_formula": realization.coefficient_formula,
             "interaction_realization_route": _INTERACTION_REALIZATION_ROUTE,
-            "state_indices": _stored_value_payload(support.state_indices),
-            "interaction_indices": _stored_value_payload(
+            "state_indices": stored_value_payload(support.state_indices),
+            "interaction_indices": stored_value_payload(
                 support.interaction_indices
             ),
-            "difference_indices": _stored_value_payload(differences),
-            "difference_interaction_positions": _stored_value_payload(
+            "difference_indices": stored_value_payload(differences),
+            "difference_interaction_positions": stored_value_payload(
                 positions
             ),
-            "difference_multiplicities": _stored_value_payload(multiplicities),
-            "state_pair_interaction_positions": _stored_value_payload(
+            "difference_multiplicities": stored_value_payload(multiplicities),
+            "state_pair_interaction_positions": stored_value_payload(
                 state_pair_positions
             ),
-            "accelerating_voltage_kv": _stored_value_payload(voltage),
-            "interaction_coupling": _stored_value_payload(coupling),
-            "interaction_coefficients": _stored_value_payload(coefficients),
+            "accelerating_voltage_kv": stored_value_payload(voltage),
+            "interaction_coupling": stored_value_payload(coupling),
+            "interaction_coefficients": stored_value_payload(coefficients),
         }
     )
     return digest
@@ -725,9 +726,7 @@ def _certificate_digest(evidence: Dict[str, object]) -> str:
     digest : str
         Complete LVT.14--LVT.18 certificate identity.
     """
-    digest: str = _sha256(
-        {"domain": _CERTIFICATE_DOMAIN, "evidence": evidence}
-    )
+    digest: str = sha256({"domain": _CERTIFICATE_DOMAIN, "evidence": evidence})
     return digest
 
 
@@ -827,37 +826,37 @@ def _evidence_payload(  # noqa: PLR0913
         "operator_error_scope": _OPERATOR_ERROR_SCOPE,
         "per_call_arithmetic_exclusion": _PER_CALL_ARITHMETIC_EXCLUSION,
         "host_transient_scalar_scope": _HOST_TRANSIENT_SCALAR_SCOPE,
-        "product_support": _stored_value_payload(support),
-        "difference_indices": _stored_value_payload(differences),
-        "difference_interaction_positions": _stored_value_payload(positions),
-        "difference_multiplicities": _stored_value_payload(multiplicities),
-        "state_pair_interaction_positions": _stored_value_payload(
+        "product_support": stored_value_payload(support),
+        "difference_indices": stored_value_payload(differences),
+        "difference_interaction_positions": stored_value_payload(positions),
+        "difference_multiplicities": stored_value_payload(multiplicities),
+        "state_pair_interaction_positions": stored_value_payload(
             state_pair_positions
         ),
-        "accelerating_voltage_kv": _stored_value_payload(voltage),
-        "interaction_coupling": _stored_value_payload(coupling),
-        "interaction_coefficients": _stored_value_payload(coefficients),
-        "exact_coupling_lower_bound": _stored_value_payload(sigma_bounds[0]),
-        "exact_coupling_upper_bound": _stored_value_payload(sigma_bounds[1]),
-        "coupling_error_bound": _stored_value_payload(sigma_error),
-        "exact_interaction_real_lower_bounds": _stored_value_payload(
+        "accelerating_voltage_kv": stored_value_payload(voltage),
+        "interaction_coupling": stored_value_payload(coupling),
+        "interaction_coefficients": stored_value_payload(coefficients),
+        "exact_coupling_lower_bound": stored_value_payload(sigma_bounds[0]),
+        "exact_coupling_upper_bound": stored_value_payload(sigma_bounds[1]),
+        "coupling_error_bound": stored_value_payload(sigma_error),
+        "exact_interaction_real_lower_bounds": stored_value_payload(
             real_bounds[0]
         ),
-        "exact_interaction_real_upper_bounds": _stored_value_payload(
+        "exact_interaction_real_upper_bounds": stored_value_payload(
             real_bounds[1]
         ),
-        "exact_interaction_imag_lower_bounds": _stored_value_payload(
+        "exact_interaction_imag_lower_bounds": stored_value_payload(
             imag_bounds[0]
         ),
-        "exact_interaction_imag_upper_bounds": _stored_value_payload(
+        "exact_interaction_imag_upper_bounds": stored_value_payload(
             imag_bounds[1]
         ),
-        "interaction_coefficient_error_bounds": _stored_value_payload(
+        "interaction_coefficient_error_bounds": stored_value_payload(
             coefficient_errors
         ),
-        "fixed_interaction_error_bound": _stored_value_payload(operator_error),
-        "counts": _stored_value_payload(count_arrays),
-        "budgets": _stored_value_payload(budget_arrays),
+        "fixed_interaction_error_bound": stored_value_payload(operator_error),
+        "counts": stored_value_payload(count_arrays),
+        "budgets": stored_value_payload(budget_arrays),
     }
     return evidence
 
@@ -1283,7 +1282,7 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
             )
         )
         return compression
-    if not _host_binary64_supported():
+    if not host_binary64_supported():
         compression: GalerkinLocalCellExactCompression
         compression = _make_failure_compression(
             canonical,
@@ -1328,8 +1327,8 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
 
     try:
         exact_sigma = _exact_sigma_fraction(float(voltage))
-        sigma_lower_float = _fraction_lower_float(exact_sigma)
-        sigma_upper_float = _fraction_upper_float(exact_sigma)
+        sigma_lower_float = fraction_lower_float(exact_sigma)
+        sigma_upper_float = fraction_upper_float(exact_sigma)
     except (ValueError, OverflowError):
         compression: GalerkinLocalCellExactCompression = (
             _make_failure_compression(
@@ -1434,9 +1433,9 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
         )
         return compression
 
-    sigma_hat_fraction = _fraction_from_float(float(coupling))
+    sigma_hat_fraction = fraction_from_float(float(coupling))
     sigma_error_fraction = abs(sigma_hat_fraction - exact_sigma)
-    sigma_error_float = _fraction_upper_float(sigma_error_fraction)
+    sigma_error_float = fraction_upper_float(sigma_error_fraction)
     sigma_error = np.asarray(sigma_error_float, dtype=np.float64)
     if not np.isfinite(sigma_error):
         compression: GalerkinLocalCellExactCompression = (
@@ -1475,8 +1474,8 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
         "L2 imag upper bounds",
     )
     sigma_interval = (
-        _fraction_from_float(float(sigma_bounds[0])),
-        _fraction_from_float(float(sigma_bounds[1])),
+        fraction_from_float(float(sigma_bounds[0])),
+        fraction_from_float(float(sigma_bounds[1])),
     )
     difference_count = positions.shape[0]
     real_lower = np.empty((difference_count,), dtype=np.float64)
@@ -1489,26 +1488,18 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
     try:
         for difference_position, position in enumerate(positions):
             support_position = int(position)
-            real_interval = _real_interval_product(
+            real_interval = real_interval_product(
                 sigma_interval,
                 (
-                    _fraction_from_float(
-                        float(real_lower_c[support_position])
-                    ),
-                    _fraction_from_float(
-                        float(real_upper_c[support_position])
-                    ),
+                    fraction_from_float(float(real_lower_c[support_position])),
+                    fraction_from_float(float(real_upper_c[support_position])),
                 ),
             )
-            imag_interval = _real_interval_product(
+            imag_interval = real_interval_product(
                 sigma_interval,
                 (
-                    _fraction_from_float(
-                        float(imag_lower_c[support_position])
-                    ),
-                    _fraction_from_float(
-                        float(imag_upper_c[support_position])
-                    ),
+                    fraction_from_float(float(imag_lower_c[support_position])),
+                    fraction_from_float(float(imag_upper_c[support_position])),
                 ),
             )
             rectangle = (
@@ -1521,11 +1512,11 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
                 interaction_coefficients[support_position], rectangle
             )
             stored_values = (
-                _fraction_lower_float(rectangle[0]),
-                _fraction_upper_float(rectangle[1]),
-                _fraction_lower_float(rectangle[2]),
-                _fraction_upper_float(rectangle[3]),
-                _fraction_upper_float(error_fraction),
+                fraction_lower_float(rectangle[0]),
+                fraction_upper_float(rectangle[1]),
+                fraction_lower_float(rectangle[2]),
+                fraction_upper_float(rectangle[3]),
+                fraction_upper_float(error_fraction),
             )
             if not all(math.isfinite(value) for value in stored_values):
                 interaction_range_failure = True
@@ -1535,13 +1526,13 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
             imag_lower[difference_position] = stored_values[2]
             imag_upper[difference_position] = stored_values[3]
             coefficient_errors[difference_position] = stored_values[4]
-            stored_error = _fraction_from_float(stored_values[4])
+            stored_error = fraction_from_float(stored_values[4])
             radicand += (
                 int(multiplicities[difference_position])
                 * stored_error
                 * stored_error
             )
-    except _RootEnclosureError:
+    except RootEnclosureError:
         compression: GalerkinLocalCellExactCompression = (
             _make_failure_compression(
                 canonical,
@@ -1574,8 +1565,8 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
         return compression
 
     try:
-        operator_error_fraction = _sqrt_fraction_upper(radicand)
-    except (ValueError, _RootEnclosureError):
+        operator_error_fraction = sqrt_fraction_upper(radicand)
+    except (ValueError, RootEnclosureError):
         compression: GalerkinLocalCellExactCompression = (
             _make_failure_compression(
                 canonical,
@@ -1591,7 +1582,7 @@ def _certify_local_cell_exact_compression_impl(  # noqa: PLR0911,PLR0912,PLR0913
         )
         return compression
     operator_error = np.asarray(
-        _fraction_upper_float(operator_error_fraction), dtype=np.float64
+        fraction_upper_float(operator_error_fraction), dtype=np.float64
     )
     if not np.isfinite(operator_error):
         compression: GalerkinLocalCellExactCompression = (
@@ -1765,7 +1756,7 @@ def _authenticate_local_cell_exact_compression(
             maximum_host_array_working_set_bytes=byte_budget,
         )
     )
-    if _stored_value_payload(canonical) != _stored_value_payload(compression):
+    if stored_value_payload(canonical) != stored_value_payload(compression):
         raise ValueError(
             "local-cell exact compression does not match full host replay"
         )
@@ -1914,7 +1905,7 @@ def _authenticate_local_cell_interaction_core(
     canonical: GalerkinLocalCellInteractionCore = (
         create_local_cell_interaction_core(core.compression)
     )
-    if _stored_value_payload(canonical) != _stored_value_payload(core):
+    if stored_value_payload(canonical) != stored_value_payload(core):
         raise ValueError("local-cell interaction core does not match replay")
     return canonical
 

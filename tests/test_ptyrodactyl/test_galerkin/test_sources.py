@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from beartype.typing import Dict, Tuple
 
-from ptyrodactyl._interval import _upward_add
+from ptyrodactyl._tools import upward_add
 from ptyrodactyl.galerkin.potential import (
     apply_absorber_action,
     apply_interaction_product,
@@ -513,9 +513,9 @@ build_represented_focused_galerkin_source`
         enclosure = source.error_enclosure
         np.testing.assert_array_equal(
             enclosure.exact_target_matched_source_error_upper_bound,
-            _upward_add(
+            upward_add(
                 enclosure.matched_source_error_upper_bound,
-                _upward_add(
+                upward_add(
                     enclosure.free_target_transfer_error_upper_bound,
                     enclosure.cap_target_transfer_error_upper_bound,
                 ),
@@ -523,7 +523,7 @@ build_represented_focused_galerkin_source`
         )
         np.testing.assert_array_equal(
             enclosure.exact_target_scattered_source_error_upper_bound,
-            _upward_add(
+            upward_add(
                 enclosure.scattered_source_error_upper_bound,
                 enclosure.interaction_target_transfer_error_upper_bound,
             ),
@@ -739,9 +739,9 @@ build_represented_focused_galerkin_source`
         enclosure = source.error_enclosure
         np.testing.assert_array_equal(
             enclosure.exact_target_total_source_error_upper_bound,
-            _upward_add(
+            upward_add(
                 enclosure.total_source_error_upper_bound,
-                _upward_add(
+                upward_add(
                     enclosure.free_target_transfer_error_upper_bound,
                     enclosure.cap_target_transfer_error_upper_bound,
                 ),

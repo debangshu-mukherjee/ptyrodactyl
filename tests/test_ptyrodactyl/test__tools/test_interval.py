@@ -1,6 +1,5 @@
 """Adversarial tests for the private FTZ-safe interval core."""
 
-import importlib
 from fractions import Fraction
 
 import jax
@@ -8,19 +7,40 @@ import jax.numpy as jnp
 import numpy as np
 from beartype.typing import Tuple
 
-from ptyrodactyl._interval import (
-    _all_normal_arithmetic_supported,
-    _arithmetic_environment_probes,
-    _interval_add,
-    _interval_divide_positive,
-    _interval_multiply,
-    _interval_sqrt,
-    _interval_square,
-    _interval_subtract,
-    _mathematical_pi_interval,
-    _minimum_normal,
-    _point_interval,
+import ptyrodactyl._tools as internal_tools
+import ptyrodactyl._tools.interval as interval_core
+from ptyrodactyl._tools import (
+    all_normal_arithmetic_supported,
+    arithmetic_environment_probes,
+    interval_add,
+    interval_divide_positive,
+    interval_multiply,
+    interval_sqrt,
+    interval_square,
+    interval_subtract,
+    mathematical_pi_interval,
+    point_interval,
 )
+
+_SHARED_SEAM_NAMES: Tuple[str, ...] = (
+    "RealInterval",
+    "all_normal_arithmetic_supported",
+    "arithmetic_environment_probes",
+    "interval_add",
+    "interval_divide_positive",
+    "interval_multiply",
+    "interval_sqrt",
+    "interval_square",
+    "interval_subtract",
+    "mathematical_pi_interval",
+    "point_interval",
+)
+
+
+def test_shared_interval_seams_have_one_owner() -> None:
+    """Keep aggregate interval seams identical to their private owner."""
+    for name in _SHARED_SEAM_NAMES:
+        assert getattr(internal_tools, name) is getattr(interval_core, name)
 
 
 def _fraction(value: float | np.float64) -> Fraction:
@@ -31,7 +51,7 @@ def _fraction(value: float | np.float64) -> Fraction:
 def _point(value: float) -> Tuple[jax.Array, jax.Array]:
     """Embed one host binary64 value in the production point interval."""
     stored = jnp.asarray(value, dtype=jnp.float64)
-    return _point_interval(stored)
+    return point_interval(stored)
 
 
 def _assert_contains(
@@ -66,23 +86,23 @@ def test_exact_zero_identities_and_computed_cancellation_are_distinct() -> (
     zero = _point(0.0)
     one = _point(1.0)
     minus_one = _point(-1.0)
-    tiny = float(np.asarray(_minimum_normal()))
+    tiny = float(np.asarray(interval_core._minimum_normal()))
 
-    assert tuple(float(x) for x in _interval_add(one, zero)) == (1.0, 1.0)
-    assert tuple(float(x) for x in _interval_multiply(one, zero)) == (
+    assert tuple(float(x) for x in interval_add(one, zero)) == (1.0, 1.0)
+    assert tuple(float(x) for x in interval_multiply(one, zero)) == (
         0.0,
         0.0,
     )
-    assert tuple(float(x) for x in _interval_divide_positive(zero, one)) == (
+    assert tuple(float(x) for x in interval_divide_positive(zero, one)) == (
         0.0,
         0.0,
     )
-    assert tuple(float(x) for x in _interval_sqrt(zero)) == (0.0, 0.0)
-    assert tuple(float(x) for x in _interval_add(one, minus_one)) == (
+    assert tuple(float(x) for x in interval_sqrt(zero)) == (0.0, 0.0)
+    assert tuple(float(x) for x in interval_add(one, minus_one)) == (
         -tiny,
         tiny,
     )
-    assert tuple(float(x) for x in _interval_subtract(one, one)) == (
+    assert tuple(float(x) for x in interval_subtract(one, one)) == (
         -tiny,
         tiny,
     )
@@ -90,19 +110,19 @@ def test_exact_zero_identities_and_computed_cancellation_are_distinct() -> (
 
 def test_compiled_probes_admit_ftz_but_require_normal_arithmetic() -> None:
     """Compile required probes while separating gradual underflow."""
-    eager_probes = _arithmetic_environment_probes()
-    probes = jax.jit(_arithmetic_environment_probes)()
+    eager_probes = arithmetic_environment_probes()
+    probes = jax.jit(arithmetic_environment_probes)()
     required = tuple(bool(np.asarray(value)) for value in probes[:6])
     gradual = bool(np.asarray(probes[6]))
 
     assert required == (True, True, True, True, True, True)
-    assert bool(np.asarray(jax.jit(_all_normal_arithmetic_supported)()))
+    assert bool(np.asarray(jax.jit(all_normal_arithmetic_supported)()))
     if jax.default_backend() == "cpu":
         assert not bool(np.asarray(eager_probes[6]))
 
     tiny = _point(float.fromhex("0x1.0000000000000p-1022"))
     half = _point(0.5)
-    lower, upper = jax.jit(_interval_multiply)(tiny, half)
+    lower, upper = jax.jit(interval_multiply)(tiny, half)
     assert np.isfinite(float(np.asarray(lower)))
     assert np.isfinite(float(np.asarray(upper)))
 
@@ -115,39 +135,39 @@ def test_fraction_containment_adversarial_binary64_cases() -> None:
     next_one = float.fromhex("0x1.0000000000001p+0")
 
     binary_cases = (
-        (_interval_add, 1.0, -1.0, _fraction(1.0) + _fraction(-1.0)),
+        (interval_add, 1.0, -1.0, _fraction(1.0) + _fraction(-1.0)),
         (
-            _interval_subtract,
+            interval_subtract,
             next_one,
             1.0,
             _fraction(next_one) - _fraction(1.0),
         ),
         (
-            _interval_multiply,
+            interval_multiply,
             tiny,
             0.5,
             _fraction(tiny) * _fraction(0.5),
         ),
         (
-            _interval_multiply,
+            interval_multiply,
             minimum_subnormal,
             maximum,
             _fraction(minimum_subnormal) * _fraction(maximum),
         ),
         (
-            _interval_multiply,
+            interval_multiply,
             maximum,
             2.0,
             _fraction(maximum) * _fraction(2.0),
         ),
         (
-            _interval_divide_positive,
+            interval_divide_positive,
             tiny,
             maximum,
             _fraction(tiny) / _fraction(maximum),
         ),
         (
-            _interval_divide_positive,
+            interval_divide_positive,
             maximum,
             minimum_subnormal,
             _fraction(maximum) / _fraction(minimum_subnormal),
@@ -156,7 +176,7 @@ def test_fraction_containment_adversarial_binary64_cases() -> None:
     for operation, left, right, exact in binary_cases:
         _assert_contains(operation(_point(left), _point(right)), exact)
 
-    squared = _interval_square(_point(-minimum_subnormal))
+    squared = interval_square(_point(-minimum_subnormal))
     _assert_contains(
         squared,
         _fraction(minimum_subnormal) * _fraction(minimum_subnormal),
@@ -174,7 +194,7 @@ def test_square_root_and_composed_expression_contain_exact_host_targets() -> (
         float.fromhex("0x1.fffffffffffffp+1023"),
     )
     for value in values:
-        lower, upper = _interval_sqrt(_point(value))
+        lower, upper = interval_sqrt(_point(value))
         lower_fraction = _fraction(float(np.asarray(lower)))
         upper_fraction = _fraction(float(np.asarray(upper)))
         exact = _fraction(value)
@@ -183,10 +203,10 @@ def test_square_root_and_composed_expression_contain_exact_host_targets() -> (
         assert exact <= upper_fraction * upper_fraction
 
     tiny = float.fromhex("0x1.0000000000000p-1022")
-    difference = _interval_subtract(_point(1.0), _point(1.0))
-    shifted = _interval_add(difference, _point(tiny))
-    product = _interval_multiply(shifted, _point(0.5))
-    quotient = _interval_divide_positive(product, _point(3.0))
+    difference = interval_subtract(_point(1.0), _point(1.0))
+    shifted = interval_add(difference, _point(tiny))
+    product = interval_multiply(shifted, _point(0.5))
+    quotient = interval_divide_positive(product, _point(3.0))
     exact_expression = _fraction(tiny) * _fraction(1.0 / 2.0) / 3
     _assert_contains(quotient, exact_expression)
 
@@ -195,25 +215,25 @@ def test_pi_invalid_forms_and_unsupported_environment_fail_closed(
     monkeypatch,
 ) -> None:
     """Turn invalid or unsupported arithmetic into infinities."""
-    pi_lower, pi_upper = _mathematical_pi_interval()
+    pi_lower, pi_upper = mathematical_pi_interval()
     decimal_pi = Fraction(
         314159265358979323846264338327950288419716939937510,
         10**50,
     )
     _assert_contains((pi_lower, pi_upper), decimal_pi)
 
-    assert tuple(float(x) for x in _point_interval(jnp.asarray(jnp.nan))) == (
+    assert tuple(float(x) for x in point_interval(jnp.asarray(jnp.nan))) == (
         -jnp.inf,
         jnp.inf,
     )
     zero = jnp.asarray(0.0, dtype=jnp.float64)
     one = jnp.asarray(1.0, dtype=jnp.float64)
     minus_one = jnp.asarray(-1.0, dtype=jnp.float64)
-    invalid_division = _interval_divide_positive(_point(1.0), (zero, one))
-    invalid_root = _interval_sqrt((minus_one, one))
-    unresolved_product = _interval_multiply(
+    invalid_division = interval_divide_positive(_point(1.0), (zero, one))
+    invalid_root = interval_sqrt((minus_one, one))
+    unresolved_product = interval_multiply(
         _point(0.0),
-        _point_interval(jnp.asarray(jnp.inf)),
+        point_interval(jnp.asarray(jnp.inf)),
     )
     assert np.isneginf(float(np.asarray(invalid_division[0])))
     assert np.isposinf(float(np.asarray(invalid_division[1])))
@@ -222,20 +242,16 @@ def test_pi_invalid_forms_and_unsupported_environment_fail_closed(
     assert np.isneginf(float(np.asarray(unresolved_product[0])))
     assert np.isposinf(float(np.asarray(unresolved_product[1])))
 
-    interval_core = importlib.import_module("ptyrodactyl._interval")
-
     def unsupported_normal_arithmetic():
         return jnp.asarray(False)
 
     monkeypatch.setattr(
         interval_core,
-        "_all_normal_arithmetic_supported",
+        "all_normal_arithmetic_supported",
         unsupported_normal_arithmetic,
     )
-    unsupported_point = interval_core._point_interval(
-        jnp.asarray(1.0, dtype=jnp.float64)
-    )
-    unsupported = interval_core._interval_add(_point(1.0), _point(2.0))
+    unsupported_point = point_interval(jnp.asarray(1.0, dtype=jnp.float64))
+    unsupported = interval_add(_point(1.0), _point(2.0))
     assert np.isneginf(float(np.asarray(unsupported_point[0])))
     assert np.isposinf(float(np.asarray(unsupported_point[1])))
     assert np.isneginf(float(np.asarray(unsupported[0])))
@@ -247,9 +263,9 @@ def test_compiled_interval_evidence_has_zero_jvp() -> None:
     one = jnp.asarray(1.0, dtype=jnp.float64)
 
     def upper(value):
-        return _interval_multiply(
-            _point_interval(value),
-            _point_interval(one),
+        return interval_multiply(
+            point_interval(value),
+            point_interval(one),
         )[1]
 
     eager = upper(one)

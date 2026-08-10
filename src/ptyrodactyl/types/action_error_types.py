@@ -45,7 +45,7 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._numeric import has_subnormal_components
+from ptyrodactyl._tools import has_subnormal_components
 
 from .galerkin_types import GalerkinTargetManifest
 

@@ -11,10 +11,10 @@ from beartype.typing import Tuple
 
 from ptyrodactyl.galerkin import coefficient_certification
 from ptyrodactyl.galerkin.coefficient_certification import (
-    _host_binary64_supported,
-    _rational_turn_exponential,
     _voltage_operator_error_fraction,
     certify_galerkin_potential_realization,
+    host_binary64_supported,
+    rational_turn_exponential,
 )
 from ptyrodactyl.galerkin.realization import realize_galerkin_potential
 from ptyrodactyl.types.born_potential_types import (
@@ -252,14 +252,14 @@ certify_galerkin_potential_realization`
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Recognize this host and fail closed when its probe is absent."""
-        assert _host_binary64_supported()
+        assert host_binary64_supported()
         base = _realization(
             jnp.ones((2, 3, 5), dtype=jnp.float64),
             ((0, 0, 0),),
         )
         monkeypatch.setattr(
             coefficient_certification,
-            "_host_binary64_supported",
+            "host_binary64_supported",
             lambda: False,
         )
 
@@ -327,7 +327,7 @@ certify_galerkin_potential_realization`
     def test_pi_interval_crossing_quadrant_uses_analytic_extrema(self) -> None:
         """Remain sound closer to one quarter turn than the pi interval."""
         turn = Fraction(1, 4) - Fraction(1, 1 << 300)
-        rectangle = _rational_turn_exponential(turn)
+        rectangle = rational_turn_exponential(turn)
 
         assert rectangle[0] == 0
         assert rectangle[1] > 0

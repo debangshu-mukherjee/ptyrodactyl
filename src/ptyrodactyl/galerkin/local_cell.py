@@ -40,7 +40,11 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._interval import _interval_add, _point_interval, _RealInterval
+from ptyrodactyl._tools import (
+    RealInterval,
+    interval_add,
+    point_interval,
+)
 from ptyrodactyl.types import (
     GalerkinAcquisitionSupportResult,
     GalerkinAcquisitionSupportStatus,
@@ -121,9 +125,9 @@ def _outward_add(
     result : Float64[Array, "..."]
         FTZ-safe upper endpoint of the exact-real sum.
     """
-    result: Float64[Array, "..."] = _interval_add(
-        _point_interval(left),
-        _point_interval(right),
+    result: Float64[Array, "..."] = interval_add(
+        point_interval(left),
+        point_interval(right),
     )[1]
     return result
 
@@ -705,16 +709,14 @@ def _coefficient_error_bounds(
     cell voltage because the normalized DFT average and centered-cell sinc
     both have operator norm at most one.
     """
-    value_interval: _RealInterval = _point_interval(
-        local_potential.cell_values
-    )
+    value_interval: RealInterval = point_interval(local_potential.cell_values)
     value_magnitude_upper: Float64[Array, "nz ny nx"] = jnp.maximum(
         jnp.abs(value_interval[0]),
         jnp.abs(value_interval[1]),
     )
     maximum_value: Float64[Array, ""] = jnp.max(value_magnitude_upper)
-    real_interval: _RealInterval = _point_interval(jnp.real(coefficients))
-    imag_interval: _RealInterval = _point_interval(jnp.imag(coefficients))
+    real_interval: RealInterval = point_interval(jnp.real(coefficients))
+    imag_interval: RealInterval = point_interval(jnp.imag(coefficients))
     real_magnitude_upper: Float64[Array, " p"] = jnp.maximum(
         jnp.abs(real_interval[0]),
         jnp.abs(real_interval[1]),

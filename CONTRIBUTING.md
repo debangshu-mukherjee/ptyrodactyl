@@ -118,6 +118,7 @@ ptyrodactyl/
 │   ├── bloch/          # Bloch-wave operators
 │   ├── jacobian/       # Jacobian, Fisher, gauge, and solver operations
 │   ├── plots/          # presentation-only helpers
+│   ├── _tools/         # private cross-family implementation seams
 │   └── workflows/      # end-to-end compositions
 ├── tests/
 │   ├── test_ptyrodactyl/  # mirrors the source package
@@ -135,8 +136,18 @@ The package boundaries have specific roles:
   families. Family-specific reconstruction belongs with its forward model;
   `multislice` therefore owns multislice reconstruction.
 - `jacobian` owns derivative operations shared across forward families.
+- `_tools` is the sole private cross-subpackage infrastructure boundary. Its
+  owned leaves are `canonical_digest`, `host_interval`, `interval`, `numeric`,
+  and `physics`. It is not a public package. Each leaf exports its unprefixed
+  internal seams, and `_tools.__init__` re-exports their union for consumers;
+  helpers local to one leaf remain `_`-prefixed. `_tools` stays
+  dependency-neutral and does not import domain packages.
 - `workflows` composes lower-level APIs. It does not become a second owner for
   their symbols.
+
+Keep Python leaf modules out of `src/ptyrodactyl`. The root contains only
+`__init__.py`; `py.typed` is the package-level PEP 561 marker. Put a shared
+private seam in `_tools` only when multiple owning packages consume it.
 
 Read `docs/source/organization.md` before changing a package boundary.
 
@@ -353,11 +364,16 @@ leaves its scalar type variable unbound.
 New and touched cross-subpackage imports use the public owning subpackage. For
 example, use `from ptyrodactyl.types import Potential3D`. Do not add a reach
 into `ptyrodactyl.types.potential_types` from another subpackage. Some legacy
-deep imports remain; migrate them only in an authorized owning change.
+deep imports remain; migrate them only in an authorized owning change. The
+only exception is an import from the private `ptyrodactyl._tools` aggregate.
 
-A cross-subpackage name is public. Its leaf module, package `__init__.py`,
-`__all__`, and Routine Listings must expose it. Deep relative imports are for
-private communication inside one subpackage.
+A cross-subpackage name outside `ptyrodactyl._tools` is public. Its leaf
+module, package `__init__.py`, `__all__`, and Routine Listings must expose it.
+Imports from `_tools` form an unsupported internal seam: use an unprefixed
+name for a seam consumed outside its leaf, re-export it through `_tools`, and
+reserve `_` prefixes for helpers local to that leaf. Consumers import from
+`ptyrodactyl._tools`, never from one of its leaves. Deep relative imports are
+for private communication inside one subpackage.
 
 Do not add renamed ptyrodactyl imports in new or touched code. Standard
 ecosystem aliases such as `jnp`, `np`, `eqx`, and `plt` remain valid. Migrate

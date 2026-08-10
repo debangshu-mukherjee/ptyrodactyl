@@ -10,7 +10,8 @@ primitives.
 
 Notes
 -----
-All real interval arithmetic is delegated to :mod:`ptyrodactyl._interval`.
+All real interval arithmetic is delegated to
+:mod:`ptyrodactyl._tools`.
 The lookup first matches an endpoint-safe quotient key and then checks exact
 integer equality, so a modular residue collision cannot become a physical
 coefficient match.
@@ -24,19 +25,19 @@ import jax.numpy as jnp
 from beartype.typing import Tuple
 from jaxtyping import Array, Bool, Complex128, Float64, Int64
 
-from ptyrodactyl._interval import (
-    _downward_divide,
-    _downward_sqrt,
-    _interval_add,
-    _interval_multiply,
-    _interval_square,
-    _interval_subtract,
-    _point_interval,
-    _RealInterval,
-    _upward_add,
-    _upward_divide,
-    _upward_multiply,
-    _upward_sqrt,
+from ptyrodactyl._tools import (
+    RealInterval,
+    downward_divide,
+    downward_sqrt,
+    interval_add,
+    interval_multiply,
+    interval_square,
+    interval_subtract,
+    point_interval,
+    upward_add,
+    upward_divide,
+    upward_multiply,
+    upward_sqrt,
 )
 from ptyrodactyl.types import scalar_int
 
@@ -71,8 +72,8 @@ def _complex_point_interval(
         Inclusive real-lower, real-upper, imaginary-lower, and
         imaginary-upper arrays in the input unit.
     """
-    real_interval: _RealInterval = _point_interval(jnp.real(value))
-    imag_interval: _RealInterval = _point_interval(jnp.imag(value))
+    real_interval: RealInterval = point_interval(jnp.real(value))
+    imag_interval: RealInterval = point_interval(jnp.imag(value))
     interval: _ComplexInterval = (
         real_interval[0],
         real_interval[1],
@@ -100,12 +101,8 @@ def _complex_interval_add(
     result : _ComplexInterval
         Inclusive outward sum rectangle.
     """
-    real: _RealInterval = _interval_add(
-        (left[0], left[1]), (right[0], right[1])
-    )
-    imag: _RealInterval = _interval_add(
-        (left[2], left[3]), (right[2], right[3])
-    )
+    real: RealInterval = interval_add((left[0], left[1]), (right[0], right[1]))
+    imag: RealInterval = interval_add((left[2], left[3]), (right[2], right[3]))
     result: _ComplexInterval = (real[0], real[1], imag[0], imag[1])
     return result
 
@@ -128,10 +125,10 @@ def _complex_interval_subtract(
     result : _ComplexInterval
         Inclusive outward difference rectangle.
     """
-    real: _RealInterval = _interval_subtract(
+    real: RealInterval = interval_subtract(
         (left[0], left[1]), (right[0], right[1])
     )
-    imag: _RealInterval = _interval_subtract(
+    imag: RealInterval = interval_subtract(
         (left[2], left[3]), (right[2], right[3])
     )
     result: _ComplexInterval = (real[0], real[1], imag[0], imag[1])
@@ -156,17 +153,17 @@ def _complex_interval_multiply(
     result : _ComplexInterval
         Inclusive product rectangle in the product unit.
     """
-    left_real: _RealInterval = (left[0], left[1])
-    left_imag: _RealInterval = (left[2], left[3])
-    right_real: _RealInterval = (right[0], right[1])
-    right_imag: _RealInterval = (right[2], right[3])
-    real: _RealInterval = _interval_subtract(
-        _interval_multiply(left_real, right_real),
-        _interval_multiply(left_imag, right_imag),
+    left_real: RealInterval = (left[0], left[1])
+    left_imag: RealInterval = (left[2], left[3])
+    right_real: RealInterval = (right[0], right[1])
+    right_imag: RealInterval = (right[2], right[3])
+    real: RealInterval = interval_subtract(
+        interval_multiply(left_real, right_real),
+        interval_multiply(left_imag, right_imag),
     )
-    imag: _RealInterval = _interval_add(
-        _interval_multiply(left_real, right_imag),
-        _interval_multiply(left_imag, right_real),
+    imag: RealInterval = interval_add(
+        interval_multiply(left_real, right_imag),
+        interval_multiply(left_imag, right_real),
     )
     result: _ComplexInterval = (real[0], real[1], imag[0], imag[1])
     return result
@@ -387,12 +384,12 @@ def _point_to_interval_component_upper(
     bounds : Float64[Array, " n"]
         Componentwise Euclidean upper bounds.
     """
-    real_difference: _RealInterval = _interval_subtract(
-        _point_interval(jnp.real(point)),
+    real_difference: RealInterval = interval_subtract(
+        point_interval(jnp.real(point)),
         (interval[0], interval[1]),
     )
-    imag_difference: _RealInterval = _interval_subtract(
-        _point_interval(jnp.imag(point)),
+    imag_difference: RealInterval = interval_subtract(
+        point_interval(jnp.imag(point)),
         (interval[2], interval[3]),
     )
     real_radius: Float64[Array, " n"] = jnp.maximum(
@@ -401,11 +398,11 @@ def _point_to_interval_component_upper(
     imag_radius: Float64[Array, " n"] = jnp.maximum(
         jnp.abs(imag_difference[0]), jnp.abs(imag_difference[1])
     )
-    squared_radius: Float64[Array, " n"] = _upward_add(
-        _upward_multiply(real_radius, real_radius),
-        _upward_multiply(imag_radius, imag_radius),
+    squared_radius: Float64[Array, " n"] = upward_add(
+        upward_multiply(real_radius, real_radius),
+        upward_multiply(imag_radius, imag_radius),
     )
-    bounds: Float64[Array, " n"] = _upward_sqrt(squared_radius)
+    bounds: Float64[Array, " n"] = upward_sqrt(squared_radius)
     return bounds
 
 
@@ -426,17 +423,17 @@ def _nonnegative_vector_norm_upper(
     """
     scale: Float64[Array, ""] = jnp.max(values)
     safe_scale: Float64[Array, ""] = jnp.where(scale > 0.0, scale, 1.0)
-    ratios: Float64[Array, " n"] = _upward_divide(values, safe_scale)
+    ratios: Float64[Array, " n"] = upward_divide(values, safe_scale)
 
     def add_square(
         index: scalar_int,
         accumulator: Float64[Array, ""],
     ) -> Float64[Array, ""]:
         """Accumulate one outward-rounded squared normalized bound."""
-        square: Float64[Array, ""] = _upward_multiply(
+        square: Float64[Array, ""] = upward_multiply(
             ratios[index], ratios[index]
         )
-        updated: Float64[Array, ""] = _upward_add(accumulator, square)
+        updated: Float64[Array, ""] = upward_add(accumulator, square)
         return updated
 
     scaled_square_sum: Float64[Array, ""] = jax.lax.fori_loop(
@@ -445,15 +442,15 @@ def _nonnegative_vector_norm_upper(
         add_square,
         jnp.asarray(0.0, dtype=jnp.float64),
     )
-    scaled_norm: Float64[Array, ""] = _upward_sqrt(scaled_square_sum)
-    finite_upper: Float64[Array, ""] = _upward_multiply(scale, scaled_norm)
+    scaled_norm: Float64[Array, ""] = upward_sqrt(scaled_square_sum)
+    finite_upper: Float64[Array, ""] = upward_multiply(scale, scaled_norm)
     upper: Float64[Array, ""] = jnp.where(scale == 0.0, 0.0, finite_upper)
     return upper
 
 
 def _exact_complex_norm_interval(
     vector: Complex128[Array, " n"],
-) -> _RealInterval:
+) -> RealInterval:
     """PRIVATE: Scale-safely enclose the exact norm of a stored complex vector.
 
     Parameters
@@ -463,13 +460,13 @@ def _exact_complex_norm_interval(
 
     Returns
     -------
-    interval : _RealInterval
+    interval : RealInterval
         Inclusive exact-real Euclidean norm interval.
     """
     real: Float64[Array, " n"] = jnp.real(vector)
     imag: Float64[Array, " n"] = jnp.imag(vector)
-    real_points: _RealInterval = _point_interval(real)
-    imag_points: _RealInterval = _point_interval(imag)
+    real_points: RealInterval = point_interval(real)
+    imag_points: RealInterval = point_interval(imag)
     scale: Float64[Array, ""] = jnp.maximum(
         jnp.max(jnp.maximum(jnp.abs(real_points[0]), jnp.abs(real_points[1]))),
         jnp.max(jnp.maximum(jnp.abs(imag_points[0]), jnp.abs(imag_points[1]))),
@@ -479,39 +476,39 @@ def _exact_complex_norm_interval(
 
     def add_component_squares(
         index: scalar_int,
-        accumulator: _RealInterval,
-    ) -> _RealInterval:
+        accumulator: RealInterval,
+    ) -> RealInterval:
         """Accumulate normalized real and imaginary component squares."""
-        real_ratio: _RealInterval = (
-            _downward_divide(real_points[0][index], safe_scale),
-            _upward_divide(real_points[1][index], safe_scale),
+        real_ratio: RealInterval = (
+            downward_divide(real_points[0][index], safe_scale),
+            upward_divide(real_points[1][index], safe_scale),
         )
-        imag_ratio: _RealInterval = (
-            _downward_divide(imag_points[0][index], safe_scale),
-            _upward_divide(imag_points[1][index], safe_scale),
+        imag_ratio: RealInterval = (
+            downward_divide(imag_points[0][index], safe_scale),
+            upward_divide(imag_points[1][index], safe_scale),
         )
-        component_square: _RealInterval = _interval_add(
-            _interval_square(real_ratio),
-            _interval_square(imag_ratio),
+        component_square: RealInterval = interval_add(
+            interval_square(real_ratio),
+            interval_square(imag_ratio),
         )
-        updated: _RealInterval = _interval_add(accumulator, component_square)
+        updated: RealInterval = interval_add(accumulator, component_square)
         return updated
 
-    scaled_squares: _RealInterval = jax.lax.fori_loop(
+    scaled_squares: RealInterval = jax.lax.fori_loop(
         0,
         vector.shape[0],
         add_component_squares,
         (zero, zero),
     )
-    scaled_norm: _RealInterval = (
-        _downward_sqrt(jnp.maximum(scaled_squares[0], 0.0)),
-        _upward_sqrt(jnp.maximum(scaled_squares[1], 0.0)),
+    scaled_norm: RealInterval = (
+        downward_sqrt(jnp.maximum(scaled_squares[0], 0.0)),
+        upward_sqrt(jnp.maximum(scaled_squares[1], 0.0)),
     )
-    norm_interval: _RealInterval = _interval_multiply(
-        _point_interval(scale), scaled_norm
+    norm_interval: RealInterval = interval_multiply(
+        point_interval(scale), scaled_norm
     )
     exact_zero: Bool[Array, ""] = scale == 0.0
-    interval: _RealInterval = (
+    interval: RealInterval = (
         jnp.where(exact_zero, 0.0, jnp.maximum(norm_interval[0], 0.0)),
         jnp.where(exact_zero, 0.0, norm_interval[1]),
     )

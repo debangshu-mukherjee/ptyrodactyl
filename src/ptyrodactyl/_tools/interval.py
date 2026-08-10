@@ -9,6 +9,45 @@ division, square root, and ``nextafter`` behavior.  Unsupported normal
 arithmetic, invalid operation preconditions, and unresolved infinite forms
 fail closed to directed infinities.
 
+Routine Listings
+----------------
+:func:`all_normal_arithmetic_supported`
+    Combine every required normal-range arithmetic probe.
+:func:`arithmetic_environment_probes`
+    Probe normal primitives and gradual underflow separately.
+:func:`downward_divide`
+    Enclose one positive-denominator quotient from below.
+:func:`downward_sqrt`
+    Enclose one nonnegative square root from below.
+:func:`interval_add`
+    Outward-add two reusable real intervals.
+:func:`interval_divide_positive`
+    Outward-divide by one strictly positive real interval.
+:func:`interval_multiply`
+    Outward-multiply two reusable real intervals.
+:func:`interval_sqrt`
+    Outward-square-root one nonnegative real interval.
+:func:`interval_square`
+    Outward-square one reusable real interval.
+:func:`interval_subtract`
+    Outward-subtract two reusable real intervals.
+:func:`mathematical_pi_interval`
+    Enclose mathematical pi with guarded binary64 endpoints.
+:func:`point_interval`
+    Embed exact stored binary64 points through FTZ.2.
+:func:`round_up`
+    Widen a nearest binary64 point toward positive infinity.
+:func:`upward_add`
+    Enclose one exact-real endpoint addition from above.
+:func:`upward_divide`
+    Enclose one positive-denominator quotient from above.
+:func:`upward_multiply`
+    Enclose one exact-real endpoint product from above.
+:func:`upward_sqrt`
+    Enclose one nonnegative square root from above.
+:obj:`RealInterval`
+    Represent one traced binary64 interval by its lower and upper arrays.
+
 Notes
 -----
 Every finite nonzero endpoint returned by this module is normal.  Stored
@@ -26,7 +65,7 @@ from beartype.typing import Tuple
 from jax import Array, lax
 from jaxtyping import Bool, Float64
 
-type _RealInterval = Tuple[
+type RealInterval = Tuple[
     Float64[Array, "..."],
     Float64[Array, "..."],
 ]
@@ -150,8 +189,8 @@ def _is_nonzero_subnormal(
     return subnormal
 
 
-def _point_interval(value: Float64[Array, "..."]) -> _RealInterval:
-    """PRIVATE: Embed exact stored binary64 points through FTZ.2.
+def point_interval(value: Float64[Array, "..."]) -> RealInterval:
+    """Embed exact stored binary64 points through FTZ.2.
 
     Parameters
     ----------
@@ -160,7 +199,7 @@ def _point_interval(value: Float64[Array, "..."]) -> _RealInterval:
 
     Returns
     -------
-    interval : _RealInterval
+    interval : RealInterval
         Exact points for finite normal values and zeros, ``[0, tiny]`` for
         positive subnormals, ``[-tiny, 0]`` for negative subnormals, and an
         unbounded interval for nonfinite inputs or an unsupported required
@@ -189,7 +228,7 @@ def _point_interval(value: Float64[Array, "..."]) -> _RealInterval:
         jnp.where(subnormal, subnormal_upper, checked_value),
         jnp.inf,
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     lower: Float64[Array, "..."] = jnp.where(
         normal_supported,
         embedded_lower,
@@ -200,14 +239,14 @@ def _point_interval(value: Float64[Array, "..."]) -> _RealInterval:
         embedded_upper,
         jnp.inf,
     )
-    interval: _RealInterval = (
+    interval: RealInterval = (
         lax.stop_gradient(lower),
         lax.stop_gradient(upper),
     )
     return interval
 
 
-def _arithmetic_environment_probes() -> Tuple[
+def arithmetic_environment_probes() -> Tuple[
     Bool[Array, ""],
     Bool[Array, ""],
     Bool[Array, ""],
@@ -216,25 +255,13 @@ def _arithmetic_environment_probes() -> Tuple[
     Bool[Array, ""],
     Bool[Array, ""],
 ]:
-    """PRIVATE: Probe normal primitives and gradual underflow separately.
+    """Probe normal primitives and gradual underflow separately.
 
     Returns
     -------
-    add_supported : Bool[Array, ""]
-        Whether normal binary64 addition and ties-to-even were observed.
-    multiply_supported : Bool[Array, ""]
-        Whether one load-bearing normal multiplication rounded as expected.
-    divide_supported : Bool[Array, ""]
-        Whether one load-bearing normal division rounded as expected.
-    sqrt_supported : Bool[Array, ""]
-        Whether one load-bearing normal square root rounded as expected.
-    nextafter_supported : Bool[Array, ""]
-        Whether normal neighbors and the finite-to-infinite boundary worked.
-    bit_pattern_supported : Bool[Array, ""]
-        Whether normal, minimum-normal, and signed subnormal bit patterns
-        survived storage and bitwise classification.
-    gradual_underflow_supported : Bool[Array, ""]
-        Whether multiplication and ``nextafter`` preserved subnormal bits.
+    probes : Tuple[Bool[Array, ""], ...]
+        Addition, multiplication, division, square root, ``nextafter``, bit
+        pattern, and gradual-underflow support flags in that order.
 
     Notes
     -----
@@ -432,8 +459,8 @@ def _arithmetic_environment_probes() -> Tuple[
 
 
 @jax.jit
-def _all_normal_arithmetic_supported() -> Bool[Array, ""]:
-    """PRIVATE: Combine every required normal-range arithmetic probe.
+def all_normal_arithmetic_supported() -> Bool[Array, ""]:
+    """Combine every required normal-range arithmetic probe.
 
     Returns
     -------
@@ -453,7 +480,7 @@ def _all_normal_arithmetic_supported() -> Bool[Array, ""]:
     nextafter: Bool[Array, ""]
     bit_pattern: Bool[Array, ""]
     add, multiply, divide, sqrt, nextafter, bit_pattern, _ = (
-        _arithmetic_environment_probes()
+        arithmetic_environment_probes()
     )
     supported: Bool[Array, ""] = lax.stop_gradient(
         add & multiply & divide & sqrt & nextafter & bit_pattern
@@ -478,7 +505,7 @@ def _round_down(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
     -----
     Zero, a subnormal input, or a subnormal neighbor widens to ``-tiny``.
     This helper is for bracketing a rounded target, not embedding an exact
-    stored point; exact points use :func:`_point_interval`.
+    stored point; exact points use :func:`point_interval`.
     """
     rounded_value: Float64[Array, "..."] = lax.optimization_barrier(
         lax.stop_gradient(value)
@@ -491,7 +518,7 @@ def _round_down(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
     )
     zero, subnormal, _, finite = _binary64_masks(rounded_value)
     neighbor_subnormal: Bool[Array, "..."] = _is_nonzero_subnormal(neighbor)
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     candidate: Float64[Array, "..."] = jnp.where(
         finite,
         jnp.where(
@@ -507,8 +534,8 @@ def _round_down(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
     return lower
 
 
-def _round_up(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
-    """PRIVATE: Widen a nearest binary64 point toward positive infinity.
+def round_up(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
+    """Widen a nearest binary64 point toward positive infinity.
 
     Parameters
     ----------
@@ -524,7 +551,7 @@ def _round_up(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
     -----
     Zero, a subnormal input, or a subnormal neighbor widens to ``tiny``.
     This helper is for bracketing a rounded target, not embedding an exact
-    stored point; exact points use :func:`_point_interval`.
+    stored point; exact points use :func:`point_interval`.
     """
     rounded_value: Float64[Array, "..."] = lax.optimization_barrier(
         lax.stop_gradient(value)
@@ -537,7 +564,7 @@ def _round_up(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
     )
     zero, subnormal, _, finite = _binary64_masks(rounded_value)
     neighbor_subnormal: Bool[Array, "..."] = _is_nonzero_subnormal(neighbor)
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     candidate: Float64[Array, "..."] = jnp.where(
         finite,
         jnp.where(
@@ -553,15 +580,17 @@ def _round_up(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
     return upper
 
 
-def _mathematical_pi_interval() -> _RealInterval:
-    """PRIVATE: Enclose mathematical pi with guarded binary64 endpoints.
+def mathematical_pi_interval() -> RealInterval:
+    """Enclose mathematical pi with guarded binary64 endpoints.
 
     Returns
     -------
-    interval : _RealInterval
-        The known binary64 value below mathematical pi and its next upward
-        neighbor, or an unbounded interval when normal ``nextafter`` is not
-        supported.
+    lower : Float64[Array, ""]
+        Known binary64 value below mathematical pi, or negative infinity
+        when normal arithmetic is unsupported.
+    upper : Float64[Array, ""]
+        Immediate upward binary64 neighbor of ``lower``, or positive infinity
+        when normal arithmetic is unsupported.
 
     Notes
     -----
@@ -572,12 +601,12 @@ def _mathematical_pi_interval() -> _RealInterval:
         float.fromhex(_PI_LOWER_HEX),
         dtype=jnp.float64,
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     lower: Float64[Array, ""] = lax.stop_gradient(
         jnp.where(normal_supported, pi_lower, -jnp.inf)
     )
-    upper: Float64[Array, ""] = _round_up(pi_lower)
-    interval: _RealInterval = (lower, upper)
+    upper: Float64[Array, ""] = round_up(pi_lower)
+    interval: RealInterval = (lower, upper)
     return interval
 
 
@@ -625,7 +654,7 @@ def _downward_add(
         right,
         left,
     )
-    identity_lower: Float64[Array, "..."] = _point_interval(identity_value)[0]
+    identity_lower: Float64[Array, "..."] = point_interval(identity_value)[0]
     underflow_risk: Bool[Array, "..."] = (
         raw_zero | raw_subnormal | neighbor_subnormal
     )
@@ -642,18 +671,18 @@ def _downward_add(
             ),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     lower: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(normal_supported, candidate, -jnp.inf)
     )
     return lower
 
 
-def _upward_add(
+def upward_add(
     left: Float64[Array, "..."],
     right: Float64[Array, "..."],
 ) -> Float64[Array, "..."]:
-    """PRIVATE: Enclose one exact-real endpoint addition from above.
+    """Enclose one exact-real endpoint addition from above.
 
     Parameters
     ----------
@@ -693,7 +722,7 @@ def _upward_add(
         right,
         left,
     )
-    identity_upper: Float64[Array, "..."] = _point_interval(identity_value)[1]
+    identity_upper: Float64[Array, "..."] = point_interval(identity_value)[1]
     underflow_risk: Bool[Array, "..."] = (
         raw_zero | raw_subnormal | neighbor_subnormal
     )
@@ -710,7 +739,7 @@ def _upward_add(
             ),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     upper: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(normal_supported, candidate, jnp.inf)
     )
@@ -773,7 +802,7 @@ def _downward_multiply(
             ),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     lower: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(
             normal_supported,
@@ -784,11 +813,11 @@ def _downward_multiply(
     return lower
 
 
-def _upward_multiply(
+def upward_multiply(
     left: Float64[Array, "..."],
     right: Float64[Array, "..."],
 ) -> Float64[Array, "..."]:
-    """PRIVATE: Enclose one exact-real endpoint product from above.
+    """Enclose one exact-real endpoint product from above.
 
     Parameters
     ----------
@@ -840,7 +869,7 @@ def _upward_multiply(
             ),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     upper: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(
             normal_supported,
@@ -851,11 +880,11 @@ def _upward_multiply(
     return upper
 
 
-def _downward_divide(
+def downward_divide(
     numerator: Float64[Array, "..."],
     denominator: Float64[Array, "..."],
 ) -> Float64[Array, "..."]:
-    """PRIVATE: Enclose one positive-denominator quotient from below.
+    """Enclose one positive-denominator quotient from below.
 
     Parameters
     ----------
@@ -907,18 +936,18 @@ def _downward_divide(
             jnp.where(underflow_risk, -_minimum_normal(), neighbor),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     lower: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(normal_supported, candidate, -jnp.inf)
     )
     return lower
 
 
-def _upward_divide(
+def upward_divide(
     numerator: Float64[Array, "..."],
     denominator: Float64[Array, "..."],
 ) -> Float64[Array, "..."]:
-    """PRIVATE: Enclose one positive-denominator quotient from above.
+    """Enclose one positive-denominator quotient from above.
 
     Parameters
     ----------
@@ -970,15 +999,15 @@ def _upward_divide(
             jnp.where(underflow_risk, _minimum_normal(), neighbor),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     upper: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(normal_supported, candidate, jnp.inf)
     )
     return upper
 
 
-def _downward_sqrt(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
-    """PRIVATE: Enclose one nonnegative square root from below.
+def downward_sqrt(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
+    """Enclose one nonnegative square root from below.
 
     Parameters
     ----------
@@ -1022,15 +1051,15 @@ def _downward_sqrt(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
             jnp.where(underflow_risk, 0.0, neighbor),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     lower: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(normal_supported, candidate, -jnp.inf)
     )
     return lower
 
 
-def _upward_sqrt(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
-    """PRIVATE: Enclose one nonnegative square root from above.
+def upward_sqrt(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
+    """Enclose one nonnegative square root from above.
 
     Parameters
     ----------
@@ -1074,77 +1103,79 @@ def _upward_sqrt(value: Float64[Array, "..."]) -> Float64[Array, "..."]:
             jnp.where(underflow_risk, _minimum_normal(), neighbor),
         ),
     )
-    normal_supported: Bool[Array, ""] = _all_normal_arithmetic_supported()
+    normal_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
     upper: Float64[Array, "..."] = lax.stop_gradient(
         jnp.where(normal_supported, candidate, jnp.inf)
     )
     return upper
 
 
-def _interval_add(left: _RealInterval, right: _RealInterval) -> _RealInterval:
-    """PRIVATE: Outward-add two reusable real intervals.
+def interval_add(left: RealInterval, right: RealInterval) -> RealInterval:
+    """Outward-add two reusable real intervals.
 
     Parameters
     ----------
-    left : _RealInterval
+    left : RealInterval
         Left inclusive interval in a caller-defined unit.
-    right : _RealInterval
+    right : RealInterval
         Right inclusive interval in the same unit as ``left``.
 
     Returns
     -------
-    result : _RealInterval
+    result : RealInterval
         Inclusive outward interval sum.
     """
-    result: _RealInterval = (
+    result: RealInterval = (
         _downward_add(left[0], right[0]),
-        _upward_add(left[1], right[1]),
+        upward_add(left[1], right[1]),
     )
     return result
 
 
-def _interval_subtract(
-    left: _RealInterval,
-    right: _RealInterval,
-) -> _RealInterval:
-    """PRIVATE: Outward-subtract two reusable real intervals.
+def interval_subtract(
+    left: RealInterval,
+    right: RealInterval,
+) -> RealInterval:
+    """Outward-subtract two reusable real intervals.
 
     Parameters
     ----------
-    left : _RealInterval
+    left : RealInterval
         Inclusive minuend interval in a caller-defined unit.
-    right : _RealInterval
+    right : RealInterval
         Inclusive subtrahend interval in the same unit as ``left``.
 
     Returns
     -------
-    result : _RealInterval
+    result : RealInterval
         Inclusive outward interval difference.
     """
-    result: _RealInterval = (
+    result: RealInterval = (
         _downward_add(left[0], -right[1]),
-        _upward_add(left[1], -right[0]),
+        upward_add(left[1], -right[0]),
     )
     return result
 
 
-def _interval_multiply(
-    left: _RealInterval,
-    right: _RealInterval,
-) -> _RealInterval:
-    """PRIVATE: Outward-multiply two reusable real intervals.
+def interval_multiply(
+    left: RealInterval,
+    right: RealInterval,
+) -> RealInterval:
+    """Outward-multiply two reusable real intervals.
 
     Parameters
     ----------
-    left : _RealInterval
+    left : RealInterval
         Left inclusive interval in a caller-defined unit.
-    right : _RealInterval
+    right : RealInterval
         Right inclusive interval in a caller-defined unit.
 
     Returns
     -------
-    result : _RealInterval
-        Inclusive outward product hull.
+    lower : Float64[Array, "..."]
+        Lower endpoint of the inclusive outward product hull.
+    upper : Float64[Array, "..."]
+        Upper endpoint of the inclusive outward product hull.
     """
     lower_candidates: Float64[Array, "4 ..."] = jnp.stack(
         (
@@ -1156,52 +1187,52 @@ def _interval_multiply(
     )
     upper_candidates: Float64[Array, "4 ..."] = jnp.stack(
         (
-            _upward_multiply(left[0], right[0]),
-            _upward_multiply(left[0], right[1]),
-            _upward_multiply(left[1], right[0]),
-            _upward_multiply(left[1], right[1]),
+            upward_multiply(left[0], right[0]),
+            upward_multiply(left[0], right[1]),
+            upward_multiply(left[1], right[0]),
+            upward_multiply(left[1], right[1]),
         )
     )
     lower: Float64[Array, "..."] = jnp.min(lower_candidates, axis=0)
     upper: Float64[Array, "..."] = jnp.max(upper_candidates, axis=0)
-    result: _RealInterval = (lower, upper)
+    result: RealInterval = (lower, upper)
     return result
 
 
-def _interval_divide_positive(
-    numerator: _RealInterval,
-    denominator: _RealInterval,
-) -> _RealInterval:
-    """PRIVATE: Outward-divide by one strictly positive real interval.
+def interval_divide_positive(
+    numerator: RealInterval,
+    denominator: RealInterval,
+) -> RealInterval:
+    """Outward-divide by one strictly positive real interval.
 
     Parameters
     ----------
-    numerator : _RealInterval
+    numerator : RealInterval
         Inclusive numerator interval in a caller-defined unit.
-    denominator : _RealInterval
+    denominator : RealInterval
         Inclusive denominator interval required to have a positive lower
         endpoint.
 
     Returns
     -------
-    result : _RealInterval
+    result : RealInterval
         Inclusive quotient hull, or an unbounded interval on precondition
         failure.
     """
     lower_candidates: Float64[Array, "4 ..."] = jnp.stack(
         (
-            _downward_divide(numerator[0], denominator[0]),
-            _downward_divide(numerator[0], denominator[1]),
-            _downward_divide(numerator[1], denominator[0]),
-            _downward_divide(numerator[1], denominator[1]),
+            downward_divide(numerator[0], denominator[0]),
+            downward_divide(numerator[0], denominator[1]),
+            downward_divide(numerator[1], denominator[0]),
+            downward_divide(numerator[1], denominator[1]),
         )
     )
     upper_candidates: Float64[Array, "4 ..."] = jnp.stack(
         (
-            _upward_divide(numerator[0], denominator[0]),
-            _upward_divide(numerator[0], denominator[1]),
-            _upward_divide(numerator[1], denominator[0]),
-            _upward_divide(numerator[1], denominator[1]),
+            upward_divide(numerator[0], denominator[0]),
+            upward_divide(numerator[0], denominator[1]),
+            upward_divide(numerator[1], denominator[0]),
+            upward_divide(numerator[1], denominator[1]),
         )
     )
     denominator_valid: Bool[Array, "..."] = (
@@ -1220,30 +1251,32 @@ def _interval_divide_positive(
         jnp.max(upper_candidates, axis=0),
         jnp.inf,
     )
-    result: _RealInterval = (
+    result: RealInterval = (
         lax.stop_gradient(lower),
         lax.stop_gradient(upper),
     )
     return result
 
 
-def _interval_square(value: _RealInterval) -> _RealInterval:
-    """PRIVATE: Outward-square one reusable real interval.
+def interval_square(value: RealInterval) -> RealInterval:
+    """Outward-square one reusable real interval.
 
     Parameters
     ----------
-    value : _RealInterval
+    value : RealInterval
         Inclusive input interval in a caller-defined unit.
 
     Returns
     -------
-    result : _RealInterval
-        Inclusive squared interval.
+    lower : Float64[Array, "..."]
+        Lower endpoint of the inclusive squared interval.
+    upper : Float64[Array, "..."]
+        Upper endpoint of the inclusive squared interval.
     """
     lower_left: Float64[Array, "..."] = _downward_multiply(value[0], value[0])
     lower_right: Float64[Array, "..."] = _downward_multiply(value[1], value[1])
-    upper_left: Float64[Array, "..."] = _upward_multiply(value[0], value[0])
-    upper_right: Float64[Array, "..."] = _upward_multiply(value[1], value[1])
+    upper_left: Float64[Array, "..."] = upward_multiply(value[0], value[0])
+    upper_right: Float64[Array, "..."] = upward_multiply(value[1], value[1])
     crosses_zero: Bool[Array, "..."] = (value[0] <= 0.0) & (value[1] >= 0.0)
     lower: Float64[Array, "..."] = jnp.where(
         crosses_zero,
@@ -1251,21 +1284,21 @@ def _interval_square(value: _RealInterval) -> _RealInterval:
         jnp.minimum(lower_left, lower_right),
     )
     upper: Float64[Array, "..."] = jnp.maximum(upper_left, upper_right)
-    result: _RealInterval = (lower, upper)
+    result: RealInterval = (lower, upper)
     return result
 
 
-def _interval_sqrt(value: _RealInterval) -> _RealInterval:
-    """PRIVATE: Outward-square-root one nonnegative real interval.
+def interval_sqrt(value: RealInterval) -> RealInterval:
+    """Outward-square-root one nonnegative real interval.
 
     Parameters
     ----------
-    value : _RealInterval
+    value : RealInterval
         Inclusive interval required to have a nonnegative lower endpoint.
 
     Returns
     -------
-    result : _RealInterval
+    result : RealInterval
         Inclusive square-root interval, or an unbounded interval on
         precondition failure.
     """
@@ -1277,16 +1310,38 @@ def _interval_sqrt(value: _RealInterval) -> _RealInterval:
     )
     lower: Float64[Array, "..."] = jnp.where(
         valid,
-        _downward_sqrt(value[0]),
+        downward_sqrt(value[0]),
         -jnp.inf,
     )
     upper: Float64[Array, "..."] = jnp.where(
         valid,
-        _upward_sqrt(value[1]),
+        upward_sqrt(value[1]),
         jnp.inf,
     )
-    result: _RealInterval = (
+    result: RealInterval = (
         lax.stop_gradient(lower),
         lax.stop_gradient(upper),
     )
     return result
+
+
+__all__: list[str] = [
+    "all_normal_arithmetic_supported",
+    "arithmetic_environment_probes",
+    "downward_divide",
+    "downward_sqrt",
+    "interval_add",
+    "interval_divide_positive",
+    "interval_multiply",
+    "interval_sqrt",
+    "interval_square",
+    "interval_subtract",
+    "mathematical_pi_interval",
+    "point_interval",
+    "RealInterval",
+    "round_up",
+    "upward_add",
+    "upward_divide",
+    "upward_multiply",
+    "upward_sqrt",
+]

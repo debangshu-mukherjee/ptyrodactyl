@@ -8,11 +8,16 @@
   `ptyrodactyl.invert` package without a compatibility alias. Multislice
   forward and inverse operations now share one owning package; future
   Galerkin reconstructors remain reserved for `ptyrodactyl.galerkin`.
-- Removed the redundant `ptyrodactyl.tools` namespace without compatibility
-  aliases. Derived electron-optics quantities now live with the canonical
-  physical constants in `ptyrodactyl.types`; reconstruction losses and
-  optimizer updates use Optax directly. The unused sharding helper and the
-  opt-in compilation-cache bootstrap were deleted, so
+- Removed the redundant public helpers and `ptyrodactyl.tools` namespace
+  without compatibility aliases. Shared dependency-neutral implementation
+  seams now live in the private `ptyrodactyl._tools` package, whose ordinary
+  leaf and seam names sit behind that single private boundary. Each leaf and
+  the aggregate package publish synchronized internal Routine Listings;
+  consumers import the aggregate rather than reaching into a leaf. Derived
+  electron-optics quantities now live with the canonical physical constants
+  in `ptyrodactyl.types`; reconstruction losses and optimizer updates use
+  Optax directly. The unused sharding helper and the opt-in compilation-cache
+  bootstrap were deleted, so
   `PTYRODACTYL_CACHE_DIR` and `PTYRODACTYL_COMPILATION_CACHE` are no longer
   package configuration inputs. The migration corrects the legacy
   unconjugated JAX complex-cotangent update before it reaches Optax, so the

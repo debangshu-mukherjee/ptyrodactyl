@@ -18,12 +18,10 @@ import pytest
 from beartype.typing import Tuple
 
 import ptyrodactyl.galerkin.action_enclosures as action_enclosures
-from ptyrodactyl._interval import (
-    _interval_add,
-    _interval_multiply,
-    _is_nonzero_subnormal,
-    _minimum_normal,
-    _point_interval,
+from ptyrodactyl._tools import (
+    interval_add,
+    interval_multiply,
+    point_interval,
 )
 from ptyrodactyl.galerkin.action_enclosures import (
     _action_arithmetic_environment_probes,
@@ -221,8 +219,10 @@ def _assert_fraction_contained(
     """Require one exact rational to lie in a finite outward interval."""
     assert _fraction_bound(interval[0]) <= exact
     assert exact <= _fraction_bound(interval[1])
-    assert not bool(_is_nonzero_subnormal(interval[0]))
-    assert not bool(_is_nonzero_subnormal(interval[1]))
+    minimum_normal = float.fromhex("0x1.0000000000000p-1022")
+    for endpoint in interval:
+        stored = float(np.asarray(endpoint))
+        assert stored == 0.0 or abs(stored) >= minimum_normal
 
 
 @pytest.fixture(scope="module")
@@ -233,7 +233,10 @@ def target() -> GalerkinTargetManifest:
 
 def test_ftz_safe_primitives_contain_exact_fraction_oracles() -> None:
     """Contain subnormal points, products, and cancellation under FTZ."""
-    tiny = _minimum_normal()
+    tiny = jnp.asarray(
+        float.fromhex("0x1.0000000000000p-1022"),
+        dtype=jnp.float64,
+    )
     minimum_subnormal = jnp.asarray(
         float.fromhex("0x0.0000000000001p-1022"), dtype=jnp.float64
     )
@@ -243,13 +246,13 @@ def test_ftz_safe_primitives_contain_exact_fraction_oracles() -> None:
         float.fromhex("0x1.0000000000001p-1022"), dtype=jnp.float64
     )
 
-    positive_point = _point_interval(minimum_subnormal)
-    negative_point = _point_interval(negative_minimum_subnormal)
-    underflow_product = _interval_multiply(
-        _point_interval(tiny), _point_interval(half)
+    positive_point = point_interval(minimum_subnormal)
+    negative_point = point_interval(negative_minimum_subnormal)
+    underflow_product = interval_multiply(
+        point_interval(tiny), point_interval(half)
     )
-    cancellation = _interval_add(
-        _point_interval(tiny), _point_interval(-next_tiny)
+    cancellation = interval_add(
+        point_interval(tiny), point_interval(-next_tiny)
     )
 
     _assert_fraction_contained(

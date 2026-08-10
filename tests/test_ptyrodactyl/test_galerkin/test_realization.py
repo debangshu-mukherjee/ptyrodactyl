@@ -609,14 +609,14 @@ class TestGalerkinPotentialRealization:
             potential.box_size,
             terminal_axis=2,
         )
-        interval_core = importlib.import_module("ptyrodactyl._interval")
 
         def unsupported_normal_arithmetic() -> jax.Array:
             return jnp.asarray(False)
 
+        interval_owner = importlib.import_module("ptyrodactyl._tools.interval")
         monkeypatch.setattr(
-            interval_core,
-            "_all_normal_arithmetic_supported",
+            interval_owner,
+            "all_normal_arithmetic_supported",
             unsupported_normal_arithmetic,
         )
 

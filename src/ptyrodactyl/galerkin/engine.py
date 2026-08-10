@@ -62,7 +62,7 @@ from jaxtyping import (
     jaxtyped,
 )
 
-from ptyrodactyl._numeric import (
+from ptyrodactyl._tools import (
     has_lost_subtraction,
     has_subnormal_components,
 )

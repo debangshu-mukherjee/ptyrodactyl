@@ -17,7 +17,7 @@ import pytest
 from beartype.typing import Dict, Tuple
 from numpy.testing import assert_allclose, assert_array_equal
 
-from ptyrodactyl._physics import coupled_interaction_value
+from ptyrodactyl._tools import coupled_interaction_value
 from ptyrodactyl.galerkin.enclosures import (
     _ANGSTROM_SQUARED_LOWER,
     _exact_kinematic_intervals,
@@ -430,14 +430,14 @@ class TestGalerkinFixedLinearEnclosure:
         monkeypatch,
     ) -> None:
         """Expose required-probe failure as an infinite typed bound."""
-        interval_core = importlib.import_module("ptyrodactyl._interval")
 
         def unsupported_normal_arithmetic() -> jax.Array:
             return jnp.asarray(False)
 
+        interval_owner = importlib.import_module("ptyrodactyl._tools.interval")
         monkeypatch.setattr(
-            interval_core,
-            "_all_normal_arithmetic_supported",
+            interval_owner,
+            "all_normal_arithmetic_supported",
             unsupported_normal_arithmetic,
         )
         ledger = build_galerkin_fixed_linear_error_ledger(**_factory_inputs())

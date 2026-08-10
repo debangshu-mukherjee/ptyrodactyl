@@ -15,7 +15,7 @@ from ptyrodactyl._canonical_digest import (
     _sha256,
     _stored_value_payload,
 )
-from ptyrodactyl.born import stability as stability_module
+from ptyrodactyl.galerkin import stability as stability_module
 
 
 @dataclass(frozen=True)

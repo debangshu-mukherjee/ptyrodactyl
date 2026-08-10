@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.action_enclosures`.
+"""Tests for :mod:`ptyrodactyl.galerkin.action_enclosures`.
 
 Extended Summary
 ----------------
@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 from beartype.typing import Tuple
 
-import ptyrodactyl.born.action_enclosures as action_enclosures
+import ptyrodactyl.galerkin.action_enclosures as action_enclosures
 from ptyrodactyl._interval import (
     _interval_add,
     _interval_multiply,
@@ -25,7 +25,7 @@ from ptyrodactyl._interval import (
     _minimum_normal,
     _point_interval,
 )
-from ptyrodactyl.born.action_enclosures import (
+from ptyrodactyl.galerkin.action_enclosures import (
     _action_arithmetic_environment_probes,
     enclose_galerkin_residual,
     enclose_galerkin_target_action,
@@ -45,8 +45,8 @@ type _RationalComplex = Tuple[Fraction, Fraction]
 class TestActionEnclosures:
     """Bind public action and residual evaluators to this test module.
 
-    :see: :func:`ptyrodactyl.born.enclose_galerkin_residual`
-    :see: :func:`ptyrodactyl.born.enclose_galerkin_target_action`
+    :see: :func:`ptyrodactyl.galerkin.enclose_galerkin_residual`
+    :see: :func:`ptyrodactyl.galerkin.enclose_galerkin_target_action`
     """
 
     def test_public_evaluators_are_distinct_callables(self) -> None:

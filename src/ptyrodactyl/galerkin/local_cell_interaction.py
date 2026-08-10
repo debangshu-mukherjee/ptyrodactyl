@@ -59,28 +59,22 @@ from ptyrodactyl._host_interval import (
 )
 from ptyrodactyl._numeric import has_subnormal_components
 from ptyrodactyl._physics import coupled_interaction_value
-from ptyrodactyl.types.born_potential_types import (
-    GalerkinProductSupport,
-    create_galerkin_product_support,
-)
-from ptyrodactyl.types.constants import (
+from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
     H_PLANCK,
     HBAR,
     M_E,
-)
-from ptyrodactyl.types.local_cell_interaction_types import (
+    GalerkinLocalCellCertificateFailure,
     GalerkinLocalCellCompressionFailure,
+    GalerkinLocalCellErrorRoute,
     GalerkinLocalCellExactCompression,
     GalerkinLocalCellInteractionCore,
+    GalerkinLocalCellPotentialRealization,
+    GalerkinProductSupport,
     _make_local_cell_exact_compression,
     _make_local_cell_interaction_core,
-)
-from ptyrodactyl.types.local_cell_types import (
-    GalerkinLocalCellCertificateFailure,
-    GalerkinLocalCellErrorRoute,
-    GalerkinLocalCellPotentialRealization,
+    create_galerkin_product_support,
 )
 
 from .local_cell_certification import _authenticate_local_cell_certificate
@@ -139,8 +133,10 @@ _SUPPORT_RANK: int = 2
 _ZERO_DIGEST: str = "0" * 64
 
 type _HostComplex = Complex128[NDArray, " p"]
-type _HostFloat = Float64[NDArray, " p"]
+type _HostDifferenceFloat = Float64[NDArray, " d"]
 type _HostIndices = Int64[NDArray, "n 3"]
+type _HostInteractionIndices = Int64[NDArray, "p 3"]
+type _HostStateIndices = Int64[NDArray, "n 3"]
 type _DifferenceEvidence = Tuple[
     Int64[NDArray, "d 3"],
     Int64[NDArray, " d"],
@@ -181,7 +177,7 @@ def _checked_budget(value: int, name: str) -> int:
 
     Returns
     -------
-    value : int
+    checked : int
         Validated positive Python integer.
 
     Raises
@@ -424,7 +420,7 @@ def _first_resource_failure(
 
     Returns
     -------
-    failure : GalerkinLocalCellCompressionFailure
+    result : GalerkinLocalCellCompressionFailure
         First exceeded resource or ``NONE``.
     """
     failures = (
@@ -444,17 +440,17 @@ def _first_resource_failure(
 
 
 def _stream_difference_evidence(
-    state_indices: _HostIndices,
-    interaction_indices: _HostIndices,
+    state_indices: _HostStateIndices,
+    interaction_indices: _HostInteractionIndices,
     work_shape: Tuple[int, int, int],
 ) -> _DifferenceEvidence:
     """PRIVATE: Stream exact state differences and ordered support lookups.
 
     Parameters
     ----------
-    state_indices : _HostIndices
+    state_indices : _HostStateIndices
         Exact ordered state support.
-    interaction_indices : _HostIndices
+    interaction_indices : _HostInteractionIndices
         Exact ordered interaction support.
     work_shape : Tuple[int, int, int]
         Product quotient used only for collision-checked lookup keys.
@@ -747,9 +743,9 @@ def _evidence_payload(  # noqa: PLR0913
     coefficients: _HostComplex,
     sigma_bounds: Tuple[Float64[NDArray, ""], Float64[NDArray, ""]],
     sigma_error: Float64[NDArray, ""],
-    real_bounds: Tuple[_HostFloat, _HostFloat],
-    imag_bounds: Tuple[_HostFloat, _HostFloat],
-    coefficient_errors: _HostFloat,
+    real_bounds: Tuple[_HostDifferenceFloat, _HostDifferenceFloat],
+    imag_bounds: Tuple[_HostDifferenceFloat, _HostDifferenceFloat],
+    coefficient_errors: _HostDifferenceFloat,
     operator_error: Float64[NDArray, ""],
     counts: Tuple[int, int, int, int],
     budgets: Tuple[int, int, int, int],
@@ -782,11 +778,11 @@ def _evidence_payload(  # noqa: PLR0913
         Outward binary64 exact-coupling enclosure.
     sigma_error : Float64[NDArray, ""]
         Stored-coupling audit error.
-    real_bounds : Tuple[_HostFloat, _HostFloat]
+    real_bounds : Tuple[_HostDifferenceFloat, _HostDifferenceFloat]
         Outward real interaction rectangle endpoints.
-    imag_bounds : Tuple[_HostFloat, _HostFloat]
+    imag_bounds : Tuple[_HostDifferenceFloat, _HostDifferenceFloat]
         Outward imaginary interaction rectangle endpoints.
-    coefficient_errors : _HostFloat
+    coefficient_errors : _HostDifferenceFloat
         Direct interaction point-to-rectangle errors.
     operator_error : Float64[NDArray, ""]
         Fixed LVT.18 interaction error.
@@ -1014,9 +1010,9 @@ def _successful_compression(  # noqa: PLR0913
     coefficients: _HostComplex,
     sigma_bounds: Tuple[Float64[NDArray, ""], Float64[NDArray, ""]],
     sigma_error: Float64[NDArray, ""],
-    real_bounds: Tuple[_HostFloat, _HostFloat],
-    imag_bounds: Tuple[_HostFloat, _HostFloat],
-    coefficient_errors: _HostFloat,
+    real_bounds: Tuple[_HostDifferenceFloat, _HostDifferenceFloat],
+    imag_bounds: Tuple[_HostDifferenceFloat, _HostDifferenceFloat],
+    coefficient_errors: _HostDifferenceFloat,
     operator_error: Float64[NDArray, ""],
     counts: Tuple[int, int, int, int],
     budgets: Tuple[int, int, int, int],
@@ -1047,11 +1043,11 @@ def _successful_compression(  # noqa: PLR0913
         Outward binary64 exact-coupling enclosure.
     sigma_error : Float64[NDArray, ""]
         Stored-coupling audit error.
-    real_bounds : Tuple[_HostFloat, _HostFloat]
+    real_bounds : Tuple[_HostDifferenceFloat, _HostDifferenceFloat]
         Outward real interaction rectangle endpoints.
-    imag_bounds : Tuple[_HostFloat, _HostFloat]
+    imag_bounds : Tuple[_HostDifferenceFloat, _HostDifferenceFloat]
         Outward imaginary interaction rectangle endpoints.
-    coefficient_errors : _HostFloat
+    coefficient_errors : _HostDifferenceFloat
         Direct interaction point-to-rectangle errors.
     operator_error : Float64[NDArray, ""]
         Fixed LVT.18 interaction error.
@@ -1790,6 +1786,9 @@ def certify_local_cell_exact_compression(
 ) -> GalerkinLocalCellExactCompression:
     """Certify exact local-cell compression and its fixed interaction error.
 
+    :see: :func:`~.test_local_cell_interaction.\
+test_complete_compression_has_exact_du_mapping_and_multiplicity`
+
     Parameters
     ----------
     realization : GalerkinLocalCellPotentialRealization
@@ -1858,6 +1857,9 @@ def create_local_cell_interaction_core(
 ) -> GalerkinLocalCellInteractionCore:
     """Create a non-solver-ready core from finite replayed LVT evidence.
 
+    :see: :func:`~.test_local_cell_interaction.\
+test_actions_match_dense_matrix_and_formal_adjoint`
+
     Parameters
     ----------
     compression : GalerkinLocalCellExactCompression
@@ -1921,6 +1923,9 @@ def prepare_local_cell_interaction_core(
     core: GalerkinLocalCellInteractionCore,
 ) -> GalerkinLocalCellInteractionCore:
     """Replay-authenticate stored core data before transform-compatible use.
+
+    :see: :func:`~.test_local_cell_interaction.\
+test_prepare_rejects_self_rehashed_coefficient_forgery`
 
     Parameters
     ----------
@@ -2063,6 +2068,9 @@ def apply_local_cell_interaction(
 ) -> Complex128[Array, " n"]:
     """Apply the frozen rounded LVT.16 interaction action.
 
+    :see: :func:`~.test_local_cell_interaction.\
+test_actions_match_dense_matrix_and_formal_adjoint`
+
     Parameters
     ----------
     core : GalerkinLocalCellInteractionCore
@@ -2097,6 +2105,9 @@ def apply_local_cell_interaction_adjoint(
     field: Complex[Array, "..."],
 ) -> Complex128[Array, " n"]:
     """Apply the formal matrix adjoint of the frozen rounded interaction.
+
+    :see: :func:`~.test_local_cell_interaction.\
+test_actions_match_dense_matrix_and_formal_adjoint`
 
     Parameters
     ----------

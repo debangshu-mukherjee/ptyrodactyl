@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.coefficient_certification`."""
+"""Tests for :mod:`ptyrodactyl.galerkin.coefficient_certification`."""
 
 import dataclasses
 from fractions import Fraction
@@ -9,14 +9,14 @@ import numpy as np
 import pytest
 from beartype.typing import Tuple
 
-import ptyrodactyl.born.coefficient_certification as coefficient_certification
-from ptyrodactyl.born.coefficient_certification import (
+from ptyrodactyl.galerkin import coefficient_certification
+from ptyrodactyl.galerkin.coefficient_certification import (
     _host_binary64_supported,
     _rational_turn_exponential,
     _voltage_operator_error_fraction,
     certify_galerkin_potential_realization,
 )
-from ptyrodactyl.born.realization import realize_galerkin_potential
+from ptyrodactyl.galerkin.realization import realize_galerkin_potential
 from ptyrodactyl.types.born_potential_types import (
     GalerkinProductSupport,
     create_galerkin_product_support,
@@ -129,7 +129,7 @@ def _dense_coefficient(
 class TestDirectCoefficientCertification:
     """Verify the bounded direct VC.17 host checker.
 
-    :see: :func:`ptyrodactyl.born.\
+    :see: :func:`ptyrodactyl.galerkin.\
 certify_galerkin_potential_realization`
     """
 

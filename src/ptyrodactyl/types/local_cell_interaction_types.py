@@ -95,7 +95,11 @@ def _valid_digest(value: str) -> bool:
 
 
 class GalerkinLocalCellCompressionFailure(str, Enum):
-    """Enumerate typed LVT exact-compression noncertificate outcomes."""
+    """Enumerate typed LVT exact-compression noncertificate outcomes.
+
+    :see: :func:`~.test_local_cell_interaction_types.\
+test_compression_failures_are_unique_and_fail_closed`
+    """
 
     NONE = "none"
     L2_CERTIFICATE_NOT_FINITE = "l2_certificate_not_finite"
@@ -116,6 +120,9 @@ class GalerkinLocalCellCompressionFailure(str, Enum):
 
 class GalerkinLocalCellExactCompression(eqx.Module):
     """Store authenticated LVT.14--LVT.18 exact-compression evidence.
+
+    :see: :func:`~.test_local_cell_interaction_types.\
+test_exact_compression_owns_only_lvt14_through_lvt18_fields`
 
     Notes
     -----
@@ -167,7 +174,11 @@ class GalerkinLocalCellExactCompression(eqx.Module):
 
 
 class GalerkinLocalCellInteractionCore(eqx.Module):
-    """Store one non-solver-ready fixed LVT interaction action core."""
+    """Store one non-solver-ready fixed LVT interaction action core.
+
+    :see: :func:`~.test_local_cell_interaction_types.\
+test_interaction_core_is_disjoint_and_non_solver_ready`
+    """
 
     compression: GalerkinLocalCellExactCompression
     action_route: str = eqx.field(static=True)

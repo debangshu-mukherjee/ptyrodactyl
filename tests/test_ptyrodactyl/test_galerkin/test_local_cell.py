@@ -1,4 +1,4 @@
-r"""Tests for :mod:`ptyrodactyl.born.local_cell`.
+r"""Tests for :mod:`ptyrodactyl.galerkin.local_cell`.
 
 Extended Summary
 ----------------
@@ -18,7 +18,7 @@ import pytest
 from beartype.typing import Tuple
 from numpy.testing import assert_allclose
 
-from ptyrodactyl.born.local_cell import (
+from ptyrodactyl.galerkin.local_cell import (
     _coefficient_error_bounds,
     _local_cell_coefficients_from_full_grid,
     _origin_cycle_fractions,
@@ -211,9 +211,9 @@ def _direct_metric_adjoint(
 class TestLocalCellRealization:
     """Verify rounded LVT.7 and its formal physical-metric adjoint.
 
-    :see: :func:`ptyrodactyl.born.\
+    :see: :func:`ptyrodactyl.galerkin.\
 apply_local_cell_potential_metric_adjoint`
-    :see: :func:`ptyrodactyl.born.realize_local_cell_galerkin_potential`
+    :see: :func:`ptyrodactyl.galerkin.realize_local_cell_galerkin_potential`
     """
 
     def test_constant_field_and_symbolic_qn_modes_are_exact(self) -> None:

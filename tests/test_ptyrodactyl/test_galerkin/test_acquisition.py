@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.acquisition`.
+"""Tests for :mod:`ptyrodactyl.galerkin.acquisition`.
 
 Extended Summary
 ----------------
@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 from beartype.typing import Dict, Tuple
 
-from ptyrodactyl.born.acquisition import (
+from ptyrodactyl.galerkin.acquisition import (
     check_galerkin_acquisition_support,
 )
 from ptyrodactyl.types import acquisition_types
@@ -331,7 +331,7 @@ class TestGalerkinAcquisitionSupport:
     (
         """Verify the production RM-S1 finite-support eligibility seam.
 
-    :see: :func:`ptyrodactyl.born.check_galerkin_acquisition_support`
+    :see: :func:`ptyrodactyl.galerkin.check_galerkin_acquisition_support`
     :see: :class:`ptyrodactyl.types."""
         """GalerkinAcquisitionSupportFailure`
     :see: :class:`ptyrodactyl.types."""

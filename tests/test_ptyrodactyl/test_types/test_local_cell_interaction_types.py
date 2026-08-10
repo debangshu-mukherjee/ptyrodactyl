@@ -10,7 +10,10 @@ from ptyrodactyl.types.local_cell_interaction_types import (
 
 
 def test_compression_failures_are_unique_and_fail_closed() -> None:
-    """Keep every typed noncertificate distinct from successful evidence."""
+    """Keep every typed noncertificate distinct from successful evidence.
+
+    :see: :class:`ptyrodactyl.types.GalerkinLocalCellCompressionFailure`
+    """
     values = [failure.value for failure in GalerkinLocalCellCompressionFailure]
     assert len(values) == len(set(values))
     assert GalerkinLocalCellCompressionFailure.NONE.value == "none"
@@ -18,7 +21,10 @@ def test_compression_failures_are_unique_and_fail_closed() -> None:
 
 
 def test_exact_compression_owns_only_lvt14_through_lvt18_fields() -> None:
-    """Exclude CAP, source, terminal, free-diagonal, and solver-ready seams."""
+    """Exclude CAP, source, terminal, free-diagonal, and solver-ready seams.
+
+    :see: :class:`ptyrodactyl.types.GalerkinLocalCellExactCompression`
+    """
     names = {
         field.name
         for field in dataclasses.fields(GalerkinLocalCellExactCompression)
@@ -56,7 +62,10 @@ def test_exact_compression_owns_only_lvt14_through_lvt18_fields() -> None:
 
 
 def test_interaction_core_is_disjoint_and_non_solver_ready() -> None:
-    """Keep the L3 action core distinct from a completed target manifest."""
+    """Keep the L3 action core distinct from a completed target manifest.
+
+    :see: :class:`ptyrodactyl.types.GalerkinLocalCellInteractionCore`
+    """
     names = {
         field.name
         for field in dataclasses.fields(GalerkinLocalCellInteractionCore)

@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.system`."""
+"""Tests for :mod:`ptyrodactyl.galerkin.system`."""
 
 import inspect
 from collections.abc import Callable
@@ -10,7 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from ptyrodactyl.born import (
+from ptyrodactyl.galerkin import (
     apply_galerkin_adjoint,
     apply_galerkin_operator,
     apply_galerkin_target,
@@ -24,11 +24,10 @@ from ptyrodactyl.born import (
     evaluate_physical_galerkin_residual,
     lsqr_solve,
 )
-from ptyrodactyl.born.acquisition import (
+from ptyrodactyl.galerkin.acquisition import (
     check_galerkin_acquisition_support,
 )
-from ptyrodactyl.born.system import create_galerkin_target
-from ptyrodactyl.tools import helmholtz_coupling, relativistic_wavelength_ang
+from ptyrodactyl.galerkin.system import create_galerkin_target
 from ptyrodactyl.types import (
     GalerkinAcquisitionSupportStatus,
     GalerkinPotentialCertificateFailure,
@@ -40,6 +39,8 @@ from ptyrodactyl.types import (
     GalerkinTargetManifest,
     create_galerkin_product_support,
     create_potential_3d,
+    helmholtz_coupling,
+    relativistic_wavelength_ang,
 )
 from tests._galerkin_target_fixture import (
     TARGET_CAP_SCALE,
@@ -196,13 +197,14 @@ class TestScalarGalerkinSystem:
     :see: :class:`ptyrodactyl.types.GalerkinTargetManifest`
     :see: :func:`ptyrodactyl.types.create_galerkin_physical_residual`
     :see: :func:`ptyrodactyl.types.create_galerkin_source`
-    :see: :func:`ptyrodactyl.born.apply_galerkin_target`
-    :see: :func:`ptyrodactyl.born.apply_galerkin_target_adjoint`
-    :see: :func:`ptyrodactyl.born.create_galerkin_target`
-    :see: :func:`ptyrodactyl.born.create_host_checked_galerkin_target`
-    :see: :func:`ptyrodactyl.born.create_matched_galerkin_source`
-    :see: :func:`ptyrodactyl.born.evaluate_physical_galerkin_adjoint_residual`
-    :see: :func:`ptyrodactyl.born.evaluate_physical_galerkin_residual`
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_target`
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_target_adjoint`
+    :see: :func:`ptyrodactyl.galerkin.create_galerkin_target`
+    :see: :func:`ptyrodactyl.galerkin.create_host_checked_galerkin_target`
+    :see: :func:`ptyrodactyl.galerkin.create_matched_galerkin_source`
+    :see: :func:`ptyrodactyl.galerkin.\
+evaluate_physical_galerkin_adjoint_residual`
+    :see: :func:`ptyrodactyl.galerkin.evaluate_physical_galerkin_residual`
     """
 
     def test_production_target_signature_has_no_raw_coefficient_seam(
@@ -210,7 +212,7 @@ class TestScalarGalerkinSystem:
     ) -> None:
         """Freeze the sole Potential3D-to-checked-support builder signature.
 
-        :see: :func:`ptyrodactyl.born.system.create_galerkin_target`
+        :see: :func:`ptyrodactyl.galerkin.system.create_galerkin_target`
         """
         parameters = inspect.signature(create_galerkin_target).parameters
 

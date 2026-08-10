@@ -5,10 +5,16 @@ import jax
 import jax.numpy as jnp
 from beartype.typing import Tuple
 
-from ptyrodactyl.born.acquisition import (
+from ptyrodactyl.galerkin.acquisition import (
     check_galerkin_acquisition_support,
 )
-from ptyrodactyl.born.system import create_galerkin_target
+from ptyrodactyl.galerkin.system import create_galerkin_target
+from ptyrodactyl.types import (
+    C_LIGHT,
+    E_CHARGE,
+    H_PLANCK,
+    M_E,
+)
 from ptyrodactyl.types.acquisition_types import (
     GalerkinAcquisitionSupportResult,
     GalerkinBackwardDisposition,
@@ -23,12 +29,6 @@ from ptyrodactyl.types.acquisition_types import (
 from ptyrodactyl.types.born_potential_types import (
     GalerkinProductSupport,
     create_galerkin_product_support,
-)
-from ptyrodactyl.types.constants import (
-    C_LIGHT,
-    E_CHARGE,
-    H_PLANCK,
-    M_E,
 )
 from ptyrodactyl.types.galerkin_types import GalerkinTargetManifest
 from ptyrodactyl.types.potential_types import Potential3D, create_potential_3d

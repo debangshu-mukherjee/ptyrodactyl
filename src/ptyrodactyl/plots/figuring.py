@@ -25,8 +25,11 @@ from jax.image import resize
 from jaxtyping import Array, Float, Int, jaxtyped
 from matplotlib.colors import LinearSegmentedColormap
 
-from ptyrodactyl.tools import relativistic_wavelength_ang
-from ptyrodactyl.types import scalar_float, scalar_num
+from ptyrodactyl.types import (
+    relativistic_wavelength_ang,
+    scalar_float,
+    scalar_num,
+)
 
 
 @jax.jit

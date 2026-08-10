@@ -398,7 +398,7 @@ def build_interaction_coefficients(
 
     See Also
     --------
-    :func:`ptyrodactyl.tools.helmholtz_coupling`
+    :func:`ptyrodactyl.types.helmholtz_coupling`
         Compute the voltage-dependent coupling used by this builder.
     """
     coefficient_array: Complex[Array, " p"] = jnp.asarray(voltage_coefficients)

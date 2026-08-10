@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.sources`.
+"""Tests for :mod:`ptyrodactyl.galerkin.sources`.
 
 Extended Summary
 ----------------
@@ -19,15 +19,15 @@ import pytest
 from beartype.typing import Dict, Tuple
 
 from ptyrodactyl._interval import _upward_add
-from ptyrodactyl.born.potential import (
+from ptyrodactyl.galerkin.potential import (
     apply_absorber_action,
     apply_interaction_product,
 )
-from ptyrodactyl.born.sources import (
+from ptyrodactyl.galerkin.sources import (
     build_represented_focused_galerkin_source,
     build_represented_plane_galerkin_source,
 )
-from ptyrodactyl.born.system import create_galerkin_target
+from ptyrodactyl.galerkin.system import create_galerkin_target
 from ptyrodactyl.types.acquisition_types import GalerkinBackwardDisposition
 from ptyrodactyl.types.born_potential_types import (
     create_galerkin_product_support,
@@ -363,8 +363,9 @@ def _dense_actions(
 class TestRepresentedSources:
     """Verify represented stored-shell plane and coherent sources.
 
-    :see: :func:`ptyrodactyl.born.build_represented_focused_galerkin_source`
-    :see: :func:`ptyrodactyl.born.build_represented_plane_galerkin_source`
+    :see: :func:`ptyrodactyl.galerkin.\
+build_represented_focused_galerkin_source`
+    :see: :func:`ptyrodactyl.galerkin.build_represented_plane_galerkin_source`
     :see: :class:`ptyrodactyl.types.GalerkinRepresentedSource`
     :see: :class:`ptyrodactyl.types.GalerkinSourceActions`
     :see: :class:`ptyrodactyl.types.GalerkinSourceModes`

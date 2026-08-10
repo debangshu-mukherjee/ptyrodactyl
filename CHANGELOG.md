@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Moved the four multislice reconstruction entry points and their Optax
+  registry from `ptyrodactyl.invert.phase_recon` to
+  `ptyrodactyl.multislice.multislice_recon`, then removed the now-empty
+  `ptyrodactyl.invert` package without a compatibility alias. Multislice
+  forward and inverse operations now share one owning package; future
+  Galerkin reconstructors remain reserved for `ptyrodactyl.galerkin`.
+- Removed the redundant `ptyrodactyl.tools` namespace without compatibility
+  aliases. Derived electron-optics quantities now live with the canonical
+  physical constants in `ptyrodactyl.types`; reconstruction losses and
+  optimizer updates use Optax directly. The unused sharding helper and the
+  opt-in compilation-cache bootstrap were deleted, so
+  `PTYRODACTYL_CACHE_DIR` and `PTYRODACTYL_COMPILATION_CACHE` are no longer
+  package configuration inputs. The migration corrects the legacy
+  unconjugated JAX complex-cotangent update before it reaches Optax, so the
+  default reconstruction baselines were intentionally re-pinned; positions
+  now use native real-valued Optax state instead of complex staging. Explicit
+  Adagrad and RMSprop selections use Optax's update and epsilon conventions.
+- Hard-renamed the unreleased `ptyrodactyl.born` solver namespace to
+  `ptyrodactyl.galerkin` with no compatibility alias. The globally coupled
+  scalar Helmholtz solve is not a Born approximation. The `ptyrodactyl.born`
+  name now owns only the genuine convergent-Born-series Green-function
+  helpers; it does not re-export the Galerkin solver. This migration changes
+  package paths only;
+  it does not change physics, arithmetic, or dtype contracts.
 - Replaced built-in `tuple[...]` and `dict[...]` type hints with capital
   `Tuple[...]` and `Dict[...]` imported solely from `beartype.typing`
   throughout production and test code, with a repository AST regression
@@ -23,7 +47,7 @@
   certification.
 - Added exact integer Galerkin product supports, the volts-based SC-1
   interaction builder, endpoint-safe interaction and absorber actions, and
-  an analytic periodic cosine-shell absorber under `ptyrodactyl.born`. The
+  an analytic periodic cosine-shell absorber under `ptyrodactyl.galerkin`. The
   voltage coupling and interaction use a manifest-recorded 50-mantissa-bit
   rounding boundary so eager and compiled targets have identical bytes. The
   bounded dense factor is validation and falsification evidence only.
@@ -35,7 +59,7 @@
   state budget and fails closed; it is not a scalable universal proof, an
   outward source/action enclosure, or full RM-S3 eligibility.
 - Added fixed-support sparse scalar Galerkin carriers and matrix-free
-  `H_alg`/`H_alg*` actions under `ptyrodactyl.born` without assembling the
+  `H_alg`/`H_alg*` actions under `ptyrodactyl.galerkin` without assembling the
   dense operator.
 - Added separate CGLS and LSQR solvers that stop on a freshly evaluated
   original-system residual and report recurrence, normal-residual, work-count,
@@ -57,7 +81,7 @@
 - Exported `cbed_amplitude_from_atoms` and `cbed_image_from_atoms` from their
   owning `ptyrodactyl.multislice` package surface.
 - Exported the existing `OPTIMIZERS` registry from its owning
-  `ptyrodactyl.invert` package surface.
+  `ptyrodactyl.multislice` package surface.
 - Removed the stray `distributions` entry from `ptyrodactyl.types.__all__`;
   shared distribution symbols remain available from `ptyrodactyl.types`.
 
@@ -120,8 +144,8 @@ Moved: `src/ptyrodactyl/simul` -> `src/ptyrodactyl/multislice`
 Moved: `tests/test_ptyrodactyl/test_simul` -> `tests/test_ptyrodactyl/test_multislice`
 Retargeted: `ptyrodactyl.simul.*` imports -> `ptyrodactyl.multislice.*`
 
-`ptyrodactyl.born` remains a sibling subpackage; the multislice family does
-not absorb convergent Born series simulations.
+`ptyrodactyl.galerkin` and `ptyrodactyl.born` remain sibling
+subpackages; the multislice family does not absorb either forward family.
 
 The `checked_*` wrappers, reducer module, and producer module moved with the
 package unchanged.
@@ -187,10 +211,11 @@ intensities only through the distribution reducer. Probe modes returned by
 
 All seven phases landed (gates RJ1-RJ7): runtime typecheck stack
 (`@jaxtyped(typechecker=beartype)`) on every public function in `jacobian/`,
-`born/`, and `tools/`; duplicated PyTree helpers collapsed into
+`galerkin/`, and `tools/`; duplicated PyTree helpers collapsed into
 `jacobian/_treemath.py`; hard-coded `float32` purged; typed enums `LossType`
 and `OptimizableBlock` replace string dispatch (invalid keys raise
-`ValueError` at the boundary); `born/green.py` preconditions enforced
+`ValueError` at the boundary); `born/green.py` preconditions
+enforced
 (`safety_factor > 1`, finiteness); the four `phase_recon` reconstructors run
 `lax.scan` (no Python loops, no `print`; the `jnp.floor`-as-shape bug is
 fixed, so `single_slice_ptychography` runs); `annular_detector` takes a

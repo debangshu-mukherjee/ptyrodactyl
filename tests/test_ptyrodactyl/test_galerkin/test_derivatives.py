@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.derivatives`.
+"""Tests for :mod:`ptyrodactyl.galerkin.derivatives`.
 
 Extended Summary
 ----------------
@@ -20,7 +20,7 @@ from beartype.typing import Tuple
 from jaxtyping import Complex, Float, Int, TypeCheckError
 from numpy.typing import NDArray
 
-from ptyrodactyl.born import (
+from ptyrodactyl.galerkin import (
     create_galerkin_target,
     create_matched_galerkin_source,
     galerkin_state_jvp,
@@ -453,8 +453,8 @@ def _mixed_weights(size: int) -> Float[NDArray, "parameters"]:
 class TestGalerkinDerivatives:
     """Verify the canonical voxel/carrier/source derivative seam.
 
-    :see: :func:`ptyrodactyl.born.galerkin_state_jvp`
-    :see: :func:`ptyrodactyl.born.galerkin_state_vjp`
+    :see: :func:`ptyrodactyl.galerkin.galerkin_state_jvp`
+    :see: :func:`ptyrodactyl.galerkin.galerkin_state_vjp`
     """
 
     def test_jvp_matches_dense_realified_jacobian_jit_and_vmap(self) -> None:

@@ -1,5 +1,5 @@
 ptyrodactyl.born
-================
+============================
 
 .. automodule:: ptyrodactyl.born
    :members:

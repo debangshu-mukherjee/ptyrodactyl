@@ -329,8 +329,8 @@ TestLocalCellCoefficientCertificateTypes`
     Notes
     -----
     This public carrier is forgeable storage. Scientific consumers must run
-    the host authenticator owned by ``born.local_cell_certification`` before
-    using it; a checksum is not proof by construction.
+    the host authenticator owned by ``galerkin.local_cell_certification``
+    before using it; a checksum is not proof by construction.
     """
 
     exact_coefficient_real_lower_bounds: Float64[Array, " p"]

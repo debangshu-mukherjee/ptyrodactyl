@@ -6,8 +6,8 @@ This subpackage owns multislice forward simulation for electron microscopy,
 including CBED amplitudes and intensities, 4D-STEM data generation, sharded
 atom-slice entry points, checked wrappers, distribution producers, and
 late detector reducers. It is named for the algorithm family rather than a
-generic simulation bucket; :mod:`ptyrodactyl.born` remains a sibling
-subpackage for convergent Born series simulations.
+generic simulation bucket. :mod:`ptyrodactyl.galerkin` and
+:mod:`ptyrodactyl.born` remain distinct sibling forward families.
 
 The submodules are organized as follows:
 
@@ -17,6 +17,8 @@ The submodules are organized as follows:
     JIT-safe validating wrappers for simulation kernels.
 - :mod:`form_factors`
     Atomic form factors and projected potentials.
+- :mod:`multislice_recon`
+    Gradient-based reconstruction algorithms for multislice data.
 - :mod:`parallelized`
     Parallelized simulation functions for distributed microscopy.
 - :mod:`potential_volume`
@@ -84,6 +86,8 @@ Routine Listings
     Evaluate the Lobato--Van Dyck projected electrostatic potential.
 :func:`make_probe`
     Create an electron probe with spherical aberrations.
+:func:`multi_slice_multi_modal`
+    Reconstruct potential, beam, and positions with multi-slice.
 :func:`position_jitter_to_distribution`
     Build an incoherent two-dimensional position-jitter distribution.
 :func:`probe_modes_to_distribution`
@@ -98,12 +102,21 @@ Routine Listings
     Compute projected potential of a single atom.
 :func:`single_atom_potential_3d`
     Build one band-limited three-dimensional atomic potential.
+:func:`single_slice_multi_modal`
+    Reconstruct potential, multi-modal beam, and positions.
+:func:`single_slice_poscorrected`
+    Reconstruct potential, beam, and positions from 4D-STEM data.
+:func:`single_slice_ptychography`
+    Reconstruct potential and beam from 4D-STEM data.
 :func:`stem4d_sharded`
     Generate 4D-STEM data with on-the-fly beam shifting and slices.
 :func:`stem_4d`
     Generate 4D-STEM data at multiple probe positions.
 :func:`transmission_func`
     Calculate the complex transmission function of a potential slice.
+:obj:`OPTIMIZERS`
+    Registry mapping optimizer name strings to Optax
+    gradient-transformation factories.
 
 Notes
 -----
@@ -150,6 +163,13 @@ from .form_factors import (
     lobato_projected_potential,
     projected_atom_potential,
 )
+from .multislice_recon import (
+    OPTIMIZERS,
+    multi_slice_multi_modal,
+    single_slice_multi_modal,
+    single_slice_poscorrected,
+    single_slice_ptychography,
+)
 from .parallelized import (
     cbed_amplitude_from_atoms,
     cbed_image_from_atoms,
@@ -166,6 +186,7 @@ from .producers import (
 from .reduce import apply_distribution, apply_distributions
 
 __all__: list[str] = [
+    "OPTIMIZERS",
     "aberration",
     "annular_detector",
     "apply_distribution",
@@ -193,6 +214,7 @@ __all__: list[str] = [
     "lobato_form_factor",
     "lobato_projected_potential",
     "make_probe",
+    "multi_slice_multi_modal",
     "position_jitter_to_distribution",
     "probe_modes_to_distribution",
     "projected_atom_potential",
@@ -200,6 +222,9 @@ __all__: list[str] = [
     "shift_beam_fourier",
     "single_atom_potential",
     "single_atom_potential_3d",
+    "single_slice_multi_modal",
+    "single_slice_poscorrected",
+    "single_slice_ptychography",
     "stem_4d",
     "stem4d_sharded",
     "transmission_func",

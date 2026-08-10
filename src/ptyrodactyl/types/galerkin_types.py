@@ -695,9 +695,9 @@ class GalerkinTargetManifest(eqx.Module):
 
     See Also
     --------
-    :func:`ptyrodactyl.born.create_galerkin_target`
+    :func:`ptyrodactyl.galerkin.create_galerkin_target`
         Construct this target through the differentiable production route.
-    :func:`ptyrodactyl.born.create_host_checked_galerkin_target`
+    :func:`ptyrodactyl.galerkin.create_host_checked_galerkin_target`
         Construct this target after a direct host-certificate attempt.
     """
 
@@ -1100,7 +1100,7 @@ def _create_galerkin_target_manifest(
     longer exists. Those values are exposed as read-only properties of the
     nested checked artifacts. The helper accepts neither pre-coupled
     interaction coefficients nor arbitrary absorber coefficients. It is
-    deliberately private: only :mod:`ptyrodactyl.born.system` supplies the
+    deliberately private: only :mod:`ptyrodactyl.galerkin.system` supplies the
     realization and ledger, and certifying consumers rebuild that public
     constructor before trusting the target.
     """
@@ -1405,7 +1405,8 @@ def create_galerkin_source(
     Notes
     -----
     This factory validates storage only. Semantic RM-S3 conformance comes
-    exclusively from :func:`ptyrodactyl.born.create_matched_galerkin_source`.
+    exclusively from :func:`ptyrodactyl.galerkin.\
+create_matched_galerkin_source`.
     """
     checked_branch: GalerkinSourceBranch = GalerkinSourceBranch(branch)
     arrays: Tuple[Complex128[Array, "..."], ...] = tuple(

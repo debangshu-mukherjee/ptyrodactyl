@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from ptyrodactyl.born import (
+from ptyrodactyl.galerkin import (
     create_galerkin_target,
     create_host_checked_galerkin_target,
 )
@@ -55,8 +55,8 @@ class TestGalerkinProductionCarriers:
     :see: :func:`ptyrodactyl.types.create_galerkin_source`
     :see: :func:`ptyrodactyl.types.create_galerkin_stability_proof`
     :see: :func:`ptyrodactyl.types.create_galerkin_stability_result`
-    :see: :func:`ptyrodactyl.born.create_galerkin_target`
-    :see: :func:`ptyrodactyl.born.create_host_checked_galerkin_target`
+    :see: :func:`ptyrodactyl.galerkin.create_galerkin_target`
+    :see: :func:`ptyrodactyl.galerkin.create_host_checked_galerkin_target`
     """
 
     def test_enums_freeze_source_and_stability_vocabulary(self) -> None:

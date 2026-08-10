@@ -183,7 +183,7 @@ class ReconProblem(eqx.Module):
     loss_fn : Optional[Callable[..., Any]]
         Optional static scalar-loss hook.
     forward_family : str
-        Static forward-family label, for example ``"born"``.
+        Static forward-family label, for example ``"galerkin"``.
     terminal : str
         Static measurement-terminal label, for example ``"diffraction"``.
 

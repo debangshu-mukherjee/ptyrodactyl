@@ -95,7 +95,7 @@ def _carrier_case(
                 _identity,
                 _residual,
                 _loss,
-                "born",
+                "galerkin",
                 "diffraction",
             ),
             {
@@ -104,7 +104,7 @@ def _carrier_case(
                 "transform": _identity,
                 "residual_fn": _residual,
                 "loss_fn": _loss,
-                "forward_family": "born",
+                "forward_family": "galerkin",
                 "terminal": "diffraction",
             },
             1,
@@ -189,7 +189,7 @@ def _assert_static_fields_excluded(instance: eqx.Module) -> None:
     assert _identity not in leaves
     assert _residual not in leaves
     assert _loss not in leaves
-    assert "born" not in leaves
+    assert "galerkin" not in leaves
     assert "diffraction" not in leaves
     assert "success" not in leaves
 

@@ -31,9 +31,10 @@ Apply this invariant as follows:
 - Represent probe modes, position jitter, and partial coherence through an
   explicit `Distribution`. Do not hide these averages inside a propagation
   kernel.
-- Keep a three-dimensional `Potential3D` unsliced when the downstream Born or
-  Bloch model needs a volume. Projection and multislice slicing are explicit
-  model choices, not implicit producer behavior.
+- Keep a three-dimensional `Potential3D` unsliced when the downstream
+  Galerkin, convergent-Born, or Bloch model needs a volume. Projection and
+  multislice slicing are explicit model choices, not implicit producer
+  behavior.
 - Keep the detector reduction separate from reusable amplitude producers such
   as `cbed_amplitude`.
 - Treat a gradient as part of the physics. A zero, NaN, wrong-sign, or
@@ -96,8 +97,6 @@ these actions before it imports the public subpackages:
 - merges the package CPU defaults into an existing `XLA_FLAGS` value;
 - honors `PTYRODACTYL_DISABLE_RUNTIME_CHECKS=1` through `EQX_ON_ERROR`;
 - imports JAX and enables 64-bit precision;
-- optionally enables the compilation cache through
-  `PTYRODACTYL_CACHE_DIR` or `PTYRODACTYL_COMPILATION_CACHE=1`;
 - optionally initializes distributed execution through
   `PTYRODACTYL_DISTRIBUTED=1`.
 
@@ -113,13 +112,12 @@ ptyrodactyl/
 │   ├── types/          # carriers, aliases, constants, create_* factories
 │   ├── inout/          # parsers, coefficient data, and HDF5 ingest/emit
 │   ├── ucell/          # lattice, rotation, and crystal geometry
-│   ├── multislice/     # IAM potentials, amplitudes, reducers, and 4D-STEM
-│   ├── born/           # convergent-Born operators
+│   ├── multislice/     # IAM potentials, forward models, and reconstruction
+│   ├── born/ # convergent-Born-series helpers
+│   ├── galerkin/       # scalar Fourier-Galerkin Helmholtz operators
 │   ├── bloch/          # Bloch-wave operators
-│   ├── invert/         # reconstruction algorithms
 │   ├── jacobian/       # Jacobian, Fisher, gauge, and solver operations
 │   ├── plots/          # presentation-only helpers
-│   ├── tools/          # numerical, optimizer, cache, and parallel helpers
 │   └── workflows/      # end-to-end compositions
 ├── tests/
 │   ├── test_ptyrodactyl/  # mirrors the source package
@@ -133,8 +131,10 @@ The package boundaries have specific roles:
 - `types` owns shared carriers and their validation contracts.
 - `inout` is the host-world boundary. Filesystem access, NumPy parsing, HDF5,
   and packaged lookup data belong here.
-- `multislice`, `born`, and `bloch` are sibling forward-model families.
-- `invert` and `jacobian` own inverse and derivative operations.
+- `multislice`, `galerkin`, `born`, and `bloch` are sibling forward-model
+  families. Family-specific reconstruction belongs with its forward model;
+  `multislice` therefore owns multislice reconstruction.
+- `jacobian` owns derivative operations shared across forward families.
 - `workflows` composes lower-level APIs. It does not become a second owner for
   their symbols.
 
@@ -673,11 +673,10 @@ tests/test_ptyrodactyl/
 ├── test_ucell/
 ├── test_multislice/
 ├── test_born/
+├── test_galerkin/
 ├── test_bloch/
-├── test_invert/
 ├── test_jacobian/
 ├── test_plots/
-├── test_tools/
 ├── test_types/
 └── test_workflows/
 ```

@@ -72,7 +72,6 @@ from ptyrodactyl.multislice._ensemble_axes import (
     _POSITION_DIM,
     _PROBE_MODE_DIM,
 )
-from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
@@ -94,6 +93,7 @@ from ptyrodactyl.types import (
     create_distribution,
     create_probe_modes,
     create_stem4d,
+    relativistic_wavelength_ang,
     scalar_float,
     scalar_int,
     scalar_num,

@@ -37,7 +37,6 @@ from ptyrodactyl.multislice import (
     single_atom_potential,
     stem4d_sharded,
 )
-from ptyrodactyl.tools import relativistic_wavelength_ang
 from ptyrodactyl.types import (
     STEM4D,
     CrystalData,
@@ -47,6 +46,7 @@ from ptyrodactyl.types import (
     create_microscope_config,
     create_probe_modes,
     create_stem4d,
+    relativistic_wavelength_ang,
     scalar_float,
     scalar_num,
 )

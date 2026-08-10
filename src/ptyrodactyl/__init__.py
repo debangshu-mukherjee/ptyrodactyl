@@ -6,10 +6,8 @@ A comprehensive toolkit for electron ptychography simulations and
 reconstructions using JAX for automatic differentiation and accelerator
 execution. Numerical kernels support the JAX transformations declared by
 their public contracts. Host-side parsing, plotting, and runtime setup remain
-outside traced computation. Complex-valued optimization uses the convention
-documented by each optimizer, and distributed computing is available through
-JAX runtime initialization. Jaxtyping and beartype enforce public array
-contracts.
+outside traced computation. Distributed computing is available through JAX
+runtime initialization. Jaxtyping and beartype enforce public array contracts.
 
 Import-time bootstrap is deliberately ordered. The package merges its
 CPU XLA defaults into any operator-supplied ``XLA_FLAGS`` without
@@ -17,13 +15,6 @@ clobbering existing keys, optionally sets ``EQX_ON_ERROR=off`` when
 ``PTYRODACTYL_DISABLE_RUNTIME_CHECKS=1`` is present, imports JAX, and
 then enables 64-bit precision before importing submodules. The early
 64-bit setting ensures physical constants materialize as float64.
-
-The persistent XLA compilation cache is opt-in. Set
-``PTYRODACTYL_CACHE_DIR`` (or ``PTYRODACTYL_COMPILATION_CACHE=1`` to use
-the default location) before import and the package enables it before
-any compilation through :func:`~ptyrodactyl.tools.enable_compilation_cache`.
-Interactive users can call that function directly before their first
-compilation.
 
 Runtime input validation (``equinox.error_if`` in factory functions and
 checked simulators) is on by default. Equinox resolves ``EQX_ON_ERROR``
@@ -36,23 +27,18 @@ The submodules are organized as follows:
 - :mod:`bloch`
     Bloch wave simulations.
 - :mod:`born`
-    Scalar Galerkin scattering and Green-function utilities.
+    Convergent-Born-series Green-function utilities.
+- :mod:`galerkin`
+    Globally coupled scalar Fourier-Galerkin Helmholtz scattering.
 - :mod:`inout`
     Host-world parsers, lookup data, and versioned HDF5 ingest/emit.
-- :mod:`invert`
-    Electron microscopy reconstructions, ptychography and
-    focal series.
 - :mod:`jacobian`
     Jacobian computation submodule.
 - :mod:`multislice`
-    Multislice-family forward simulations including CBED and
-    4D-STEM.
+    Multislice-family forward simulations and reconstructions,
+    including CBED and 4D-STEM.
 - :mod:`plots`
     Plotting and visualization helper exports.
-- :mod:`tools`
-    Utility tools for optimization, loss functions, and
-    parallel processing including complex-valued optimizers
-    with Wirtinger derivatives.
 - :mod:`types`
     Single home for carriers, type aliases, physical constants,
     and validated create_* factories.
@@ -108,15 +94,6 @@ from beartype import beartype  # noqa: E402
 from jaxtyping import jaxtyped  # noqa: E402
 
 jax.config.update("jax_enable_x64", True)
-
-_cache_requested: bool = (
-    os.environ.get("PTYRODACTYL_COMPILATION_CACHE", "0") == "1"
-    or os.environ.get("PTYRODACTYL_CACHE_DIR") is not None
-)
-if _cache_requested:
-    from .tools.caching import enable_compilation_cache  # noqa: E402
-
-    enable_compilation_cache()
 
 
 @jaxtyped(typechecker=beartype)
@@ -186,12 +163,11 @@ init_distributed()
 from . import (  # noqa: E402, I001
     bloch,
     born,
+    galerkin,
     inout,
-    invert,
     jacobian,
     multislice,
     plots,
-    tools,
     types,
     ucell,
     workflows,
@@ -202,13 +178,12 @@ __version__: str = version("ptyrodactyl")
 __all__: list[str] = [
     "bloch",
     "born",
+    "galerkin",
     "init_distributed",
     "inout",
-    "invert",
     "jacobian",
     "multislice",
     "plots",
-    "tools",
     "types",
     "ucell",
     "workflows",

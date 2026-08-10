@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.enclosures`.
+"""Tests for :mod:`ptyrodactyl.galerkin.enclosures`.
 
 Extended Summary
 ----------------
@@ -18,12 +18,12 @@ from beartype.typing import Dict, Tuple
 from numpy.testing import assert_allclose, assert_array_equal
 
 from ptyrodactyl._physics import coupled_interaction_value
-from ptyrodactyl.born.enclosures import (
+from ptyrodactyl.galerkin.enclosures import (
     _ANGSTROM_SQUARED_LOWER,
     _exact_kinematic_intervals,
     build_galerkin_fixed_linear_error_ledger,
 )
-from ptyrodactyl.types.constants import (
+from ptyrodactyl.types import (
     C_LIGHT,
     E_CHARGE,
     H_PLANCK,
@@ -191,7 +191,7 @@ def _decimal_complex_error(
 class TestGalerkinFixedLinearEnclosure:
     """Verify independent RM-S2 component and matrix bounds.
 
-    :see: :func:`ptyrodactyl.born.build_galerkin_fixed_linear_error_ledger`
+    :see: :func:`ptyrodactyl.galerkin.build_galerkin_fixed_linear_error_ledger`
     """
 
     def test_exact_si_to_angstrom_conversion_is_bracketed(self) -> None:

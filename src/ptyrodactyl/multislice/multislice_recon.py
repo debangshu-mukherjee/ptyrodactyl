@@ -1,4 +1,4 @@
-"""Inverse reconstruction algorithms for electron ptychography.
+"""Multislice reconstruction algorithms for electron ptychography.
 
 Extended Summary
 ----------------
@@ -9,7 +9,7 @@ constructs a differentiable forward model via
 :func:`ptyrodactyl.multislice.simulations.stem_4d`, computes the loss
 and its gradients with ``jax.value_and_grad``, and iteratively
 updates the reconstruction variables using a first-order optimizer
-from :mod:`ptyrodactyl.types`.
+from :mod:`optax`.
 
 Routine Listings
 ----------------
@@ -23,39 +23,34 @@ Routine Listings
     Reconstruct potential and beam from 4D-STEM data.
 :obj:`OPTIMIZERS`
     Registry mapping optimizer name strings to
-    :class:`~ptyrodactyl.tools.Optimizer` instances.
+    Optax gradient-transformation factories.
 
 Notes
 -----
-All reconstruction functions use JAX-compatible optimizers and
+All reconstruction functions use Optax optimizers and
 support automatic differentiation. The functions are designed to
 work with experimental data and can handle various noise levels
 and experimental conditions. Input data should be properly
 preprocessed and validated using the factory functions from
-:mod:`ptyrodactyl.tools`.
+:mod:`ptyrodactyl.types`.
+
+JAX gradients of real losses with respect to complex reconstruction
+parameters are conjugated before they are passed to Optax. Scan positions
+remain real-valued and use their JAX gradients directly.
 """
 
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import optax
 from beartype import beartype
-from beartype.typing import Any, Dict, Tuple, Union
-from jaxtyping import Array, Complex, Float, Int, jaxtyped
+from beartype.typing import Any, Callable, Dict, Tuple, TypeAlias, Union, cast
+from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
-from ptyrodactyl.multislice import stem_4d
-from ptyrodactyl.tools import (
-    Optimizer,
-    adagrad_update,
-    adam_update,
-    create_loss_function,
-    init_adagrad,
-    init_adam,
-    init_rmsprop,
-    rmsprop_update,
-)
 from ptyrodactyl.types import (
     STEM4D,
     CalibratedArray,
+    LossType,
     ProbeModes,
     create_calibrated_array,
     create_detector_config,
@@ -66,30 +61,55 @@ from ptyrodactyl.types import (
     scalar_num,
 )
 
-OPTIMIZERS: Dict[str, Optimizer] = {
-    "adam": Optimizer(init_adam, adam_update),
-    "adagrad": Optimizer(init_adagrad, adagrad_update),
-    "rmsprop": Optimizer(init_rmsprop, rmsprop_update),
-}
-"""Registry mapping optimizer names to configured optimizer operations.
+from .simulations import stem_4d
 
-:see: :mod:`~.test_phase_recon`
+_OptimizerFactory: TypeAlias = Callable[
+    [scalar_float], optax.GradientTransformation
+]
+
+OPTIMIZERS: Dict[str, _OptimizerFactory] = {
+    "adam": lambda learning_rate: optax.adam(learning_rate),
+    "adagrad": lambda learning_rate: optax.adagrad(
+        learning_rate,
+        initial_accumulator_value=0.0,
+        eps=1e-8,
+    ),
+    "rmsprop": lambda learning_rate: optax.rmsprop(
+        learning_rate,
+        decay=0.9,
+        eps=1e-8,
+        initial_scale=0.0,
+    ),
+}
+"""Registry mapping optimizer names to Optax transformation factories.
+
+:see: :mod:`~.test_multislice_recon`
+
+Notes
+-----
+Complex gradients are conjugated by :func:`_apply_optimizer_step`
+before the configured transformation receives them.
 """
 
 
 @beartype
-def _get_optimizer(optimizer_name: str) -> Optimizer:
-    """PRIVATE: Look up an optimizer by name from the registry.
+def _get_optimizer(
+    optimizer_name: str,
+    learning_rate: scalar_float,
+) -> optax.GradientTransformation:
+    """PRIVATE: Build a named Optax optimizer at one learning rate.
 
     Parameters
     ----------
     optimizer_name : str
         Key into :data:`OPTIMIZERS` (e.g. ``"adam"``).
+    learning_rate : scalar_float
+        Step size supplied to the Optax transformation factory.
 
     Returns
     -------
-    result : Optimizer
-        The corresponding optimizer namedtuple.
+    result : optax.GradientTransformation
+        Configured Optax gradient transformation.
 
     Raises
     ------
@@ -98,7 +118,124 @@ def _get_optimizer(optimizer_name: str) -> Optimizer:
     """
     if optimizer_name not in OPTIMIZERS:
         raise ValueError(f"Unknown optimizer: {optimizer_name}")
-    result: Optimizer = OPTIMIZERS[optimizer_name]
+    result: optax.GradientTransformation = OPTIMIZERS[optimizer_name](
+        learning_rate
+    )
+    return result
+
+
+@jaxtyped(typechecker=beartype)
+def _reduce_loss(
+    model_output: Float[Array, " ..."],
+    experimental_data: Float[Array, " ..."],
+    loss_mode: LossType,
+) -> Float[Array, " "]:
+    """PRIVATE: Reduce elementwise model errors to a scalar loss.
+
+    Parameters
+    ----------
+    model_output : Float[Array, " ..."]
+        Simulated detector data.
+    experimental_data : Float[Array, " ..."]
+        Experimental detector data with the same shape as *model_output*.
+    loss_mode : LossType
+        Static reduction selection.
+
+    Returns
+    -------
+    result : Float[Array, " "]
+        Mean absolute, mean squared, or root-mean-squared error.
+
+    Notes
+    -----
+    MSE and RMSE use :func:`optax.squared_error`; MAE uses the elementwise
+    absolute residual because Optax does not expose a dedicated MAE loss.
+    """
+    if loss_mode is LossType.MAE:
+        loss = jnp.mean(jnp.abs(model_output - experimental_data))
+    elif loss_mode is LossType.MSE:
+        loss = jnp.mean(optax.squared_error(model_output, experimental_data))
+    else:
+        loss = jnp.sqrt(
+            jnp.mean(optax.squared_error(model_output, experimental_data))
+        )
+    result: Float[Array, " "] = loss
+    return result
+
+
+@jaxtyped(typechecker=beartype)
+def _apply_optimizer_step(
+    params: Num[Array, " ..."],
+    grads: Num[Array, " ..."],
+    optimizer: optax.GradientTransformation,
+    optimizer_state: Any,
+) -> Tuple[Num[Array, " ..."], Any]:
+    """PRIVATE: Apply one Optax step with the JAX gradient convention.
+
+    Parameters
+    ----------
+    params : Num[Array, " ..."]
+        Current real- or complex-valued parameters.
+    grads : Num[Array, " ..."]
+        Gradient returned by JAX for a real-valued loss.
+    optimizer : optax.GradientTransformation
+        Configured Optax gradient transformation.
+    optimizer_state : Any
+        Current Optax state for *params*.
+
+    Returns
+    -------
+    new_params : Num[Array, " ..."]
+        Parameters after one descent step.
+    new_state : Any
+        Updated Optax state.
+
+    Notes
+    -----
+    JAX returns the conjugate covector convention for a real loss with
+    complex inputs. Optax expects that gradient to be conjugated before it
+    constructs a complex descent update. Conjugation is a no-op for real
+    parameters.
+    """
+    updates, new_state = optimizer.update(
+        jnp.conj(grads),
+        optimizer_state,
+        params,
+    )
+    new_params = cast(
+        Num[Array, " ..."],
+        optax.apply_updates(params, updates),
+    )
+    result: Tuple[Num[Array, " ..."], Any] = new_params, new_state
+    return result
+
+
+@jaxtyped(typechecker=beartype)
+def _promote_to_complex(
+    values: Num[Array, " ..."],
+) -> Complex[Array, " ..."]:
+    """PRIVATE: Promote numeric values to a width-preserving complex dtype.
+
+    Parameters
+    ----------
+    values : Num[Array, " ..."]
+        Real- or complex-valued input array.
+
+    Returns
+    -------
+    result : Complex[Array, " ..."]
+        Complex array with the input's floating-point precision.
+
+    Notes
+    -----
+    Promotion uses ``result_type(values.dtype, complex64)`` so float32 and
+    complex64 inputs produce complex64, while float64 and complex128 inputs
+    produce complex128.
+    """
+    result: Complex[Array, " ..."] = jnp.asarray(
+        values,
+        dtype=jnp.result_type(values.dtype, jnp.complex64),
+    )
     return result
 
 
@@ -148,8 +285,7 @@ def single_slice_ptychography(  # noqa: PLR0915
        Wraps :func:`~ptyrodactyl.multislice.simulations.stem_4d` to
        map ``(pot_slice, beam)`` to simulated 4D-STEM data.
     2. **Construct loss** --
-       Creates the loss via
-       :func:`~ptyrodactyl.tools.create_loss_function`.
+       Reduces detector errors with the selected loss mode.
     3. **Iterate** --
        At each step compute gradients with
        ``jax.value_and_grad`` and update potential and beam with
@@ -180,8 +316,7 @@ def single_slice_ptychography(  # noqa: PLR0915
     learning_rate : scalar_float, optional
         Step size for the optimizer.  Default is ``0.001``.
     loss_type : str, optional
-        Loss function identifier passed to
-        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Loss reduction identifier.
         Default is ``"mse"``.
     optimizer_name : str, optional
         Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
@@ -259,8 +394,13 @@ def single_slice_ptychography(  # noqa: PLR0915
         result: Float[Array, "P H W"] = stem4d_result.data
         return result
 
-    loss_func: Any = create_loss_function(
-        _forward_fn, experimental_4dstem, loss_type
+    loss_mode: LossType = LossType(loss_type)
+    loss_func: Callable[..., Float[Array, " "]] = jax.jit(
+        lambda potential, probe: _reduce_loss(
+            _forward_fn(potential, probe),
+            experimental_4dstem,
+            loss_mode,
+        )
     )
 
     @jax.jit
@@ -293,17 +433,24 @@ def single_slice_ptychography(  # noqa: PLR0915
         )
         return result
 
-    optimizer: Optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state: Any = optimizer.init(initial_potential.data_array.shape)
-    beam_state: Any = optimizer.init(initial_beam.data_array.shape)
-
-    pot_slice: Complex[Array, "H W"] = initial_potential.data_array
+    pot_slice: Complex[Array, "H W"] = _promote_to_complex(
+        initial_potential.data_array
+    )
+    initial_beam_values: Complex[Array, "H W"] = _promote_to_complex(
+        initial_beam.data_array
+    )
     beam: Complex[Array, "H W"] = jax.lax.cond(
         initial_beam.real_space,
         lambda beam_data: beam_data,
         lambda beam_data: jnp.fft.ifft2(beam_data),
-        initial_beam.data_array,
+        initial_beam_values,
     )
+    optimizer: optax.GradientTransformation = _get_optimizer(
+        optimizer_name,
+        learning_rate,
+    )
+    pot_slice_state: Any = optimizer.init(pot_slice)
+    beam_state: Any = optimizer.init(beam)
 
     snapshot_count: int = num_iterations // save_every
 
@@ -349,12 +496,20 @@ def single_slice_ptychography(  # noqa: PLR0915
         loss: Float[Array, " "]
         grads: Dict[str, Complex[Array, "H W"]]
         loss, grads = _loss_and_grad(pot_slice, beam)
-        pot_slice, pot_slice_state = optimizer.update(
-            pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
+        pot_slice_next, pot_slice_state = _apply_optimizer_step(
+            pot_slice,
+            grads["pot_slice"],
+            optimizer,
+            pot_slice_state,
         )
-        beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, learning_rate
+        pot_slice = cast(Complex[Array, "H W"], pot_slice_next)
+        beam_next, beam_state = _apply_optimizer_step(
+            beam,
+            grads["beam"],
+            optimizer,
+            beam_state,
         )
+        beam = cast(Complex[Array, "H W"], beam_next)
         result: Tuple[
             Complex[Array, "H W"],
             Complex[Array, "H W"],
@@ -552,7 +707,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
 
     where :math:`\mathbf{r}_p` are the corrected scan positions.
 
-    :see: :func:`~.test_phase_recon.test_single_slice_poscorrected_regresses`
+    :see: :func:`~.test_single_slice_poscorrected_regresses`
 
     Implementation Logic
     --------------------
@@ -560,8 +715,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
        Wraps :func:`~ptyrodactyl.multislice.simulations.stem_4d` to
        map ``(pot_slice, beam, pos_list)`` to simulated 4D-STEM.
     2. **Construct loss** --
-       Creates the loss via
-       :func:`~ptyrodactyl.tools.create_loss_function`.
+       Reduces detector errors with the selected loss mode.
     3. **Parse learning rate** --
        If scalar, reuse for both potential/beam and positions;
        if length-2 array, element 0 is for potential/beam and
@@ -597,8 +751,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
         length-2 array, element 0 controls potential/beam and
         element 1 controls positions.  Default is ``0.01``.
     loss_type : str, optional
-        Loss function identifier passed to
-        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Loss reduction identifier.
         Default is ``"mse"``.
     optimizer_name : str, optional
         Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
@@ -684,8 +837,13 @@ def single_slice_poscorrected(  # noqa: PLR0915
         result: Float[Array, "P H W"] = stem4d_result.data
         return result
 
-    loss_func: Any = create_loss_function(
-        _forward_fn, experimental_4dstem, loss_type
+    loss_mode: LossType = LossType(loss_type)
+    loss_func: Callable[..., Float[Array, " "]] = jax.jit(
+        lambda potential, probe, positions: _reduce_loss(
+            _forward_fn(potential, probe, positions),
+            experimental_4dstem,
+            loss_mode,
+        )
     )
 
     @jax.jit
@@ -726,11 +884,6 @@ def single_slice_poscorrected(  # noqa: PLR0915
         )
         return result
 
-    optimizer: Optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state: Any = optimizer.init(initial_potential.data_array.shape)
-    beam_state: Any = optimizer.init(initial_beam.data_array.shape)
-    pos_state: Any = optimizer.init(initial_pos_list.shape)
-
     learning_rates: Float[Array, ...] = jnp.array(learning_rate)
     if len(learning_rates.shape) == 0:
         parameter_learning_rate: float = float(learning_rates)
@@ -738,6 +891,24 @@ def single_slice_poscorrected(  # noqa: PLR0915
     else:
         parameter_learning_rate = float(learning_rates[0])
         position_learning_rate = float(learning_rates[1])
+    parameter_optimizer: optax.GradientTransformation = _get_optimizer(
+        optimizer_name,
+        parameter_learning_rate,
+    )
+    position_optimizer: optax.GradientTransformation = _get_optimizer(
+        optimizer_name,
+        position_learning_rate,
+    )
+    pot_guess: Complex[Array, "H W"] = _promote_to_complex(
+        initial_potential.data_array
+    )
+    beam_guess: Complex[Array, "H W"] = _promote_to_complex(
+        initial_beam.data_array
+    )
+    pos_guess: Float[Array, "P 2"] = initial_pos_list
+    pot_slice_state: Any = parameter_optimizer.init(pot_guess)
+    beam_state: Any = parameter_optimizer.init(beam_guess)
+    pos_state: Any = position_optimizer.init(initial_pos_list)
 
     @jax.jit
     def _update_step(
@@ -793,22 +964,32 @@ def single_slice_poscorrected(  # noqa: PLR0915
         loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
-        pot_slice, pot_slice_state = optimizer.update(
+        pot_slice_next, pot_slice_state = _apply_optimizer_step(
             pot_slice,
             grads["pot_slice"],
+            parameter_optimizer,
             pot_slice_state,
-            parameter_learning_rate,
         )
-        beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, parameter_learning_rate
+        pot_slice = cast(Complex[Array, "H W"], pot_slice_next)
+        beam_next, beam_state = _apply_optimizer_step(
+            beam,
+            grads["beam"],
+            parameter_optimizer,
+            beam_state,
         )
-        pos_list_complex, pos_state = optimizer.update(
-            pos_list.astype(jnp.complex128),
-            grads["pos_list"].astype(jnp.complex128),
+        beam = cast(Complex[Array, "H W"], beam_next)
+        pos_list_updates, pos_state = position_optimizer.update(
+            grads["pos_list"],
             pos_state,
-            position_learning_rate,
+            pos_list,
         )
-        pos_list = jnp.real(pos_list_complex)
+        pos_list = cast(
+            Float[Array, "P 2"],
+            optax.apply_updates(
+                pos_list,
+                pos_list_updates,
+            ),
+        )
         result: Tuple[
             Complex[Array, "H W"],
             Complex[Array, "H W"],
@@ -827,10 +1008,6 @@ def single_slice_poscorrected(  # noqa: PLR0915
             loss,
         )
         return result
-
-    pot_guess: Complex[Array, "H W"] = initial_potential.data_array
-    beam_guess: Complex[Array, "H W"] = initial_beam.data_array
-    pos_guess: Float[Array, "P 2"] = initial_pos_list
 
     snapshot_count: int = num_iterations // save_every
 
@@ -1086,7 +1263,7 @@ def single_slice_multi_modal(  # noqa: PLR0915
     where :math:`\psi_m` are the probe modes with weights
     :math:`w_m` and :math:`t` is the transmission function.
 
-    :see: :func:`~.test_phase_recon.test_single_slice_multi_modal_regresses`
+    :see: :func:`~.test_single_slice_multi_modal_regresses`
 
     Implementation Logic
     --------------------
@@ -1095,8 +1272,7 @@ def single_slice_multi_modal(  # noqa: PLR0915
        accepting ``(pot_slice, beam, pos_list)`` where *beam*
        is a :class:`~ptyrodactyl.types.ProbeModes` instance.
     2. **Construct loss** --
-       Creates the loss via
-       :func:`~ptyrodactyl.tools.create_loss_function`.
+       Reduces detector errors with the selected loss mode.
     3. **Parse learning rate** --
        Scalar is broadcast to both groups; length-2 array
        splits into potential/beam (index 0) and positions
@@ -1133,8 +1309,7 @@ def single_slice_multi_modal(  # noqa: PLR0915
         length-2 array, element 0 controls potential/beam and
         element 1 controls positions.  Default is ``0.01``.
     loss_type : str, optional
-        Loss function identifier passed to
-        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Loss reduction identifier.
         Default is ``"mse"``.
     optimizer_name : str, optional
         Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
@@ -1213,8 +1388,13 @@ def single_slice_multi_modal(  # noqa: PLR0915
         result: Float[Array, "P H W"] = stem4d_result.data
         return result
 
-    loss_func: Any = create_loss_function(
-        _forward_fn, experimental_4dstem, loss_type
+    loss_mode: LossType = LossType(loss_type)
+    loss_func: Callable[..., Float[Array, " "]] = jax.jit(
+        lambda potential, probe, positions: _reduce_loss(
+            _forward_fn(potential, probe, positions),
+            experimental_4dstem,
+            loss_mode,
+        )
     )
 
     @jax.jit
@@ -1255,11 +1435,6 @@ def single_slice_multi_modal(  # noqa: PLR0915
         )
         return result
 
-    optimizer: Optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state: Any = optimizer.init(initial_pot_slice.shape)
-    beam_state: Any = optimizer.init(initial_beam.modes.shape)
-    pos_state: Any = optimizer.init(initial_pos_list.shape)
-
     learning_rates: Float[Array, ...] = jnp.array(learning_rate)
     if len(learning_rates.shape) == 0:
         parameter_learning_rate: float = float(learning_rates)
@@ -1267,6 +1442,27 @@ def single_slice_multi_modal(  # noqa: PLR0915
     else:
         parameter_learning_rate = float(learning_rates[0])
         position_learning_rate = float(learning_rates[1])
+    parameter_optimizer: optax.GradientTransformation = _get_optimizer(
+        optimizer_name,
+        parameter_learning_rate,
+    )
+    position_optimizer: optax.GradientTransformation = _get_optimizer(
+        optimizer_name,
+        position_learning_rate,
+    )
+    pot_slice: Complex[Array, "H W"] = _promote_to_complex(initial_pot_slice)
+    initial_beam_modes: Complex[Array, "H W M"] = _promote_to_complex(
+        initial_beam.modes
+    )
+    beam: ProbeModes = eqx.tree_at(
+        lambda probe: probe.modes,
+        initial_beam,
+        initial_beam_modes,
+    )
+    pos_list: Float[Array, "P 2"] = initial_pos_list
+    pot_slice_state: Any = parameter_optimizer.init(pot_slice)
+    beam_state: Any = parameter_optimizer.init(beam.modes)
+    pos_state: Any = position_optimizer.init(initial_pos_list)
 
     @jax.jit
     def _update_step(
@@ -1322,31 +1518,38 @@ def single_slice_multi_modal(  # noqa: PLR0915
         loss: Float[Array, " "]
         grads: Dict[str, Any]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
-        pot_slice, pot_slice_state = optimizer.update(
+        pot_slice_next, pot_slice_state = _apply_optimizer_step(
             pot_slice,
             grads["pot_slice"],
+            parameter_optimizer,
             pot_slice_state,
-            parameter_learning_rate,
         )
+        pot_slice = cast(Complex[Array, "H W"], pot_slice_next)
         beam_modes: Complex[Array, "H W M"]
-        beam_modes, beam_state = optimizer.update(
+        beam_modes_next, beam_state = _apply_optimizer_step(
             beam.modes,
             grads["beam"].modes,
+            parameter_optimizer,
             beam_state,
-            parameter_learning_rate,
         )
+        beam_modes = cast(Complex[Array, "H W M"], beam_modes_next)
         beam = eqx.tree_at(
             lambda probe: probe.modes,
             beam,
             beam_modes,
         )
-        pos_list_complex, pos_state = optimizer.update(
-            pos_list.astype(jnp.complex128),
-            grads["pos_list"].astype(jnp.complex128),
+        pos_list_updates, pos_state = position_optimizer.update(
+            grads["pos_list"],
             pos_state,
-            position_learning_rate,
+            pos_list,
         )
-        pos_list = jnp.real(pos_list_complex)
+        pos_list = cast(
+            Float[Array, "P 2"],
+            optax.apply_updates(
+                pos_list,
+                pos_list_updates,
+            ),
+        )
         result: Tuple[
             Complex[Array, "H W"],
             ProbeModes,
@@ -1365,10 +1568,6 @@ def single_slice_multi_modal(  # noqa: PLR0915
             loss,
         )
         return result
-
-    pot_slice: Complex[Array, "H W"] = initial_pot_slice
-    beam: ProbeModes = initial_beam
-    pos_list: Float[Array, "P 2"] = initial_pos_list
 
     snapshot_count: int = num_iterations // save_every
 
@@ -1579,7 +1778,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
     where the forward model applies the multislice algorithm
     through repeated transmission and propagation steps.
 
-    :see: :func:`~.test_phase_recon.test_multi_slice_multi_modal_regresses`
+    :see: :func:`~.test_multi_slice_multi_modal_regresses`
 
     Implementation Logic
     --------------------
@@ -1587,8 +1786,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
        Wraps :func:`~ptyrodactyl.multislice.simulations.stem_4d`
        accepting ``(pot_slice, beam, pos_list)``.
     2. **Construct loss** --
-       Creates the loss via
-       :func:`~ptyrodactyl.tools.create_loss_function`.
+       Reduces detector errors with the selected loss mode.
     3. **Iterate** --
        Gradients are computed for all three variable groups;
        potential and beam use *learning_rate* while positions
@@ -1621,8 +1819,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
         Step size for position updates.
         Default is ``0.01``.
     loss_type : str, optional
-        Loss function identifier passed to
-        :func:`~ptyrodactyl.tools.create_loss_function`.
+        Loss reduction identifier.
         Default is ``"mse"``.
     optimizer_name : str, optional
         Key into :data:`OPTIMIZERS`.  Default is ``"adam"``.
@@ -1706,8 +1903,13 @@ def multi_slice_multi_modal(  # noqa: PLR0915
         result: Float[Array, "P H W"] = stem4d_result.data
         return result
 
-    loss_func: Any = create_loss_function(
-        _forward_fn, experimental_4dstem, loss_type
+    loss_mode: LossType = LossType(loss_type)
+    loss_func: Callable[..., Float[Array, " "]] = jax.jit(
+        lambda potential, probe, positions: _reduce_loss(
+            _forward_fn(potential, probe, positions),
+            experimental_4dstem,
+            loss_mode,
+        )
     )
 
     @jax.jit
@@ -1748,10 +1950,20 @@ def multi_slice_multi_modal(  # noqa: PLR0915
         )
         return result
 
-    optimizer: Optimizer = _get_optimizer(optimizer_name)
-    pot_slice_state: Any = optimizer.init(initial_pot_slice.shape)
-    beam_state: Any = optimizer.init(initial_beam.shape)
-    pos_state: Any = optimizer.init(initial_pos_list.shape)
+    parameter_optimizer: optax.GradientTransformation = _get_optimizer(
+        optimizer_name,
+        learning_rate,
+    )
+    position_optimizer: optax.GradientTransformation = _get_optimizer(
+        optimizer_name,
+        pos_learning_rate,
+    )
+    pot_slice: Complex[Array, "H W"] = _promote_to_complex(initial_pot_slice)
+    beam: Complex[Array, "H W"] = _promote_to_complex(initial_beam)
+    pos_list: Float[Array, "P 2"] = initial_pos_list
+    pot_slice_state: Any = parameter_optimizer.init(pot_slice)
+    beam_state: Any = parameter_optimizer.init(beam)
+    pos_state: Any = position_optimizer.init(initial_pos_list)
 
     @jax.jit
     def _update_step(
@@ -1807,19 +2019,32 @@ def multi_slice_multi_modal(  # noqa: PLR0915
         loss: Float[Array, " "]
         grads: Dict[str, Array]
         loss, grads = _loss_and_grad(pot_slice, beam, pos_list)
-        pot_slice, pot_slice_state = optimizer.update(
-            pot_slice, grads["pot_slice"], pot_slice_state, learning_rate
+        pot_slice_next, pot_slice_state = _apply_optimizer_step(
+            pot_slice,
+            grads["pot_slice"],
+            parameter_optimizer,
+            pot_slice_state,
         )
-        beam, beam_state = optimizer.update(
-            beam, grads["beam"], beam_state, learning_rate
+        pot_slice = cast(Complex[Array, "H W"], pot_slice_next)
+        beam_next, beam_state = _apply_optimizer_step(
+            beam,
+            grads["beam"],
+            parameter_optimizer,
+            beam_state,
         )
-        pos_list_complex, pos_state = optimizer.update(
-            pos_list.astype(jnp.complex128),
-            grads["pos_list"].astype(jnp.complex128),
+        beam = cast(Complex[Array, "H W"], beam_next)
+        pos_list_updates, pos_state = position_optimizer.update(
+            grads["pos_list"],
             pos_state,
-            pos_learning_rate,
+            pos_list,
         )
-        pos_list = jnp.real(pos_list_complex)
+        pos_list = cast(
+            Float[Array, "P 2"],
+            optax.apply_updates(
+                pos_list,
+                pos_list_updates,
+            ),
+        )
         result: Tuple[
             Complex[Array, "H W"],
             Complex[Array, "H W"],
@@ -1838,10 +2063,6 @@ def multi_slice_multi_modal(  # noqa: PLR0915
             loss,
         )
         return result
-
-    pot_slice: Complex[Array, "H W"] = initial_pot_slice
-    beam: Complex[Array, "H W"] = initial_beam
-    pos_list: Float[Array, "P 2"] = initial_pos_list
 
     snapshot_count: int = num_iterations // save_every
 

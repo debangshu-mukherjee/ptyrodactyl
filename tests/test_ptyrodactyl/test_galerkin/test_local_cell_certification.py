@@ -19,12 +19,12 @@ import pytest
 from beartype.typing import Tuple
 from numpy.testing import assert_allclose
 
-import ptyrodactyl.born.local_cell_certification as certification_module
+import ptyrodactyl.galerkin.local_cell_certification as certification_module
 from ptyrodactyl._host_interval import _RootEnclosureError
-from ptyrodactyl.born.local_cell import (
+from ptyrodactyl.galerkin.local_cell import (
     realize_local_cell_galerkin_potential,
 )
-from ptyrodactyl.born.local_cell_certification import (
+from ptyrodactyl.galerkin.local_cell_certification import (
     _authenticate_local_cell_certificate,
     _certificate_digest,
     _validate_local_cell_certificate_binding,
@@ -210,7 +210,7 @@ def _shifted_fixture() -> Tuple[
 class TestLocalCellDirectCertification:
     """Verify exact LVT.7 rectangles, errors, budgets, and identities.
 
-    :see: :func:`ptyrodactyl.born.\
+    :see: :func:`ptyrodactyl.galerkin.\
 certify_local_cell_galerkin_potential`
     """
 

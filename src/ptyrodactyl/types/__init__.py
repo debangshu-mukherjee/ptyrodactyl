@@ -16,7 +16,7 @@ The submodules are organized as follows:
 - :mod:`born_types`
     Scalar Galerkin operator and solve-result carriers.
 - :mod:`constants`
-    Physical constants for electron microscopy.
+    Physical constants and derived electron-optics quantities.
 - :mod:`crystal_types`
     Crystal carriers and factories.
 - :mod:`custom_types`
@@ -31,6 +31,8 @@ The submodules are organized as follows:
     Production scalar Galerkin manifests and evidence carriers.
 - :mod:`jacobian_types`
     Jacobian parameter and solver-state carriers.
+- :mod:`local_cell_interaction_types`
+    Exact local-cell compression and fixed interaction-core carriers.
 - :mod:`local_cell_types`
     Disjoint periodic local-cell potential and realization carriers.
 - :mod:`potential_types`
@@ -110,8 +112,14 @@ Routine Listings
     Store the outcome of one direct local-cell certificate attempt.
 :class:`GalerkinLocalCellCoefficientCertificate`
     Store independently enclosed exact local-cell coefficients.
+:class:`GalerkinLocalCellCompressionFailure`
+    Enumerate typed LVT exact-compression noncertificate outcomes.
 :class:`GalerkinLocalCellErrorRoute`
     Store the outward local-cell coefficient-error route.
+:class:`GalerkinLocalCellExactCompression`
+    Store authenticated LVT.14--LVT.18 exact-compression evidence.
+:class:`GalerkinLocalCellInteractionCore`
+    Store one non-solver-ready fixed LVT interaction action core.
 :class:`GalerkinLocalCellPotentialRealization`
     Store one LVT-1 local-cell coefficient realization.
 :class:`GalerkinOperator`
@@ -328,6 +336,14 @@ Routine Listings
     Create a STEM4D with runtime validation.
 :func:`create_trivial_distribution`
     Create the one-sample identity distribution.
+:func:`helmholtz_coupling`
+    Compute the Helmholtz potential coupling in 1/(V·Angstrom²).
+:func:`phase_interaction_parameter`
+    Compute the phase interaction parameter in rad/(V·Angstrom).
+:func:`relativistic_mass`
+    Compute the relativistic electron mass in kg.
+:func:`relativistic_wavelength_ang`
+    Compute the relativistic electron wavelength in Angstroms.
 :obj:`A_BOHR`
     Bohr radius in Angstroms.
 :obj:`C_LIGHT`
@@ -413,6 +429,10 @@ from .constants import (
     M0C2_EV,
     M_E,
     MOTT_BETHE_VOLT_ANGSTROM_SQ,
+    helmholtz_coupling,
+    phase_interaction_parameter,
+    relativistic_mass,
+    relativistic_wavelength_ang,
 )
 from .crystal_types import (
     CrystalData,
@@ -504,6 +524,17 @@ from .jacobian_types import (
     create_lanczos_state,
     create_lm_state,
     create_ptycho_params,
+)
+from .local_cell_interaction_types import (
+    GalerkinLocalCellCompressionFailure,
+    GalerkinLocalCellExactCompression,
+    GalerkinLocalCellInteractionCore,
+)
+from .local_cell_interaction_types import (
+    _make_local_cell_exact_compression as _make_local_cell_exact_compression,
+)
+from .local_cell_interaction_types import (
+    _make_local_cell_interaction_core as _make_local_cell_interaction_core,
 )
 from .local_cell_types import (
     GalerkinLocalCellCertificateFailure,
@@ -614,7 +645,10 @@ __all__: list[str] = [
     "GalerkinFixedLinearErrorLedger",
     "GalerkinLocalCellCertificateFailure",
     "GalerkinLocalCellCoefficientCertificate",
+    "GalerkinLocalCellCompressionFailure",
     "GalerkinLocalCellErrorRoute",
+    "GalerkinLocalCellExactCompression",
+    "GalerkinLocalCellInteractionCore",
     "GalerkinLocalCellPotentialRealization",
     "GalerkinOperator",
     "GalerkinPhysicalResidual",
@@ -730,6 +764,10 @@ __all__: list[str] = [
     "create_represented_galerkin_source",
     "create_stem4d",
     "create_trivial_distribution",
+    "helmholtz_coupling",
+    "phase_interaction_parameter",
+    "relativistic_mass",
+    "relativistic_wavelength_ang",
     "float_jax_image",
     "float_np_image",
     "int_jax_image",

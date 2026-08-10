@@ -95,7 +95,7 @@ def _build():
 
     # NOTE: the short-recon leg specified by Plan 01 UG is EXCLUDED: at E0,
     # single_slice_ptychography is broken for any num_iterations/save_every
-    # (jnp.floor(...) used as an array shape, phase_recon.py:316 — the
+    # (jnp.floor(...) used as an array shape, multislice_recon.py:316 — the
     # pre-existing plumbing bug documented in Plan 04 §A.6). The reference
     # therefore pins the forward models + gradient; recon regression is owned
     # by Plan 04, which fixes that path.

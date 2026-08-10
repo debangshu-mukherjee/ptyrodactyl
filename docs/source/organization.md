@@ -16,16 +16,18 @@ I/O is separated from JAX kernels.
 - `ptyrodactyl.ucell` owns lattice, rotation, and crystal-tilt operations.
 - `ptyrodactyl.multislice` owns the Lobato-default independent-atom potential
   producers, projected multislice amplitudes, detector reductions,
-  distribution producers, and 4D-STEM simulation. Its volumetric producer
-  returns an unsliced `Potential3D`; it does not perform a beam-axis collapse.
-- `ptyrodactyl.born` owns scalar Galerkin scattering operators, solvers,
-  fixed-support derivatives, and Green-function utilities;
-  `ptyrodactyl.bloch` is the sibling Bloch-wave forward family.
+  distribution producers, 4D-STEM simulation, and multislice reconstruction.
+  Its volumetric producer returns an unsliced `Potential3D`; it does not
+  perform a beam-axis collapse.
+- `ptyrodactyl.galerkin` owns globally coupled scalar Fourier-Galerkin
+  Helmholtz operators, solvers, sources, certificates, derivatives, and
+  terminals.
+- `ptyrodactyl.born` owns the distinct convergent-Born-series
+  Green-function helpers; `ptyrodactyl.bloch` is the sibling Bloch-wave
+  forward family.
 - `ptyrodactyl.plots` owns presentation-only image and colormap helpers.
-- `ptyrodactyl.invert` and `ptyrodactyl.jacobian` own reconstruction and
-  derivative operations.
-- `ptyrodactyl.tools` contains numerical utilities, optimizer helpers, caching,
-  and sharding support; it does not own domain carriers.
+- `ptyrodactyl.jacobian` owns derivative operations shared across forward
+  families.
 - `ptyrodactyl.workflows` composes the lower-level packages into end-to-end
   tasks.
 
@@ -36,13 +38,12 @@ src/ptyrodactyl/
 ├── types/          # carriers, aliases, constants, validated constructors
 ├── inout/          # parsers, lookup assets, and HDF5 ingest/emit
 ├── ucell/          # unit-cell and rotation geometry
-├── multislice/     # IAM potentials, multislice amplitudes, and reducers
-├── born/           # scalar Galerkin scattering and Green-function utilities
+├── multislice/     # IAM potentials, forward models, and reconstruction
+├── born/ # convergent-Born-series Green-function helpers
+├── galerkin/       # scalar Fourier-Galerkin Helmholtz scattering
 ├── bloch/          # Bloch-wave utilities
 ├── plots/          # visualization helpers
-├── invert/         # reconstruction algorithms
 ├── jacobian/       # Jacobian, Fisher, gauge, and solver operations
-├── tools/          # shared numerical/runtime utilities
 └── workflows/      # high-level orchestration
 ```
 
@@ -57,7 +58,8 @@ src/ptyrodactyl/
 4. Carriers are constructed through `ptyrodactyl.types.create_*` functions.
 5. Coherent/incoherent averaging is represented by an explicit `Distribution`
    and reduced after the complex amplitude kernel.
-6. Symbols are exported from one owning subpackage; removed `ptyrodactyl.simul`
-   and `ptyrodactyl.tools.make_*` paths have no compatibility aliases.
+6. Symbols are exported from one owning subpackage; removed
+   `ptyrodactyl.simul`, `ptyrodactyl.tools`, and `ptyrodactyl.invert` paths
+   have no compatibility aliases.
 7. Filesystem and third-party file-format access belongs in
    `ptyrodactyl.inout`, outside differentiable JAX kernels.

@@ -2,7 +2,7 @@
 
 import jax.numpy as jnp
 
-from ptyrodactyl.born.terminal import enclose_galerkin_terminal_current
+from ptyrodactyl.galerkin.terminal import enclose_galerkin_terminal_current
 from ptyrodactyl.types.terminal_types import (
     GalerkinCoordinateCauchyCurrent,
     GalerkinDetectorFailure,

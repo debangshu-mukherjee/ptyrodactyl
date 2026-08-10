@@ -6,6 +6,7 @@ import ast
 import importlib
 import inspect
 import re
+from importlib.util import find_spec
 from pathlib import Path
 
 from beartype.typing import Dict, Tuple
@@ -15,12 +16,11 @@ import ptyrodactyl
 _PUBLIC_PACKAGES = (
     "ptyrodactyl.bloch",
     "ptyrodactyl.born",
+    "ptyrodactyl.galerkin",
     "ptyrodactyl.inout",
-    "ptyrodactyl.invert",
     "ptyrodactyl.jacobian",
     "ptyrodactyl.multislice",
     "ptyrodactyl.plots",
-    "ptyrodactyl.tools",
     "ptyrodactyl.types",
     "ptyrodactyl.ucell",
     "ptyrodactyl.workflows",
@@ -1022,6 +1022,21 @@ def _leaf_modules(package: str) -> list[Path]:
         for path in package_path.glob("*.py")
         if path.name != "__init__.py" and not path.name.startswith("_")
     )
+
+
+def test_removed_convergent_born_namespace_is_absent() -> None:
+    """Require the superseded verbose Born package name to remain removed."""
+    assert find_spec("ptyrodactyl.convergent_born") is None
+
+
+def test_removed_tools_namespace_is_absent() -> None:
+    """Require the redundant tools package to remain removed."""
+    assert find_spec("ptyrodactyl.tools") is None
+
+
+def test_removed_invert_namespace_is_absent() -> None:
+    """Require multislice reconstruction's former package to stay removed."""
+    assert find_spec("ptyrodactyl.invert") is None
 
 
 def test_public_exports_have_synchronized_routine_listings() -> None:

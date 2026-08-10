@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.engine`.
+"""Tests for :mod:`ptyrodactyl.galerkin.engine`.
 
 Extended Summary
 ----------------
@@ -21,7 +21,7 @@ from beartype.typing import Dict, Tuple
 from jaxtyping import Complex, Float
 from numpy.typing import NDArray
 
-from ptyrodactyl.born import (
+from ptyrodactyl.galerkin import (
     apply_galerkin_adjoint,
     apply_galerkin_operator,
     cgls_solve,
@@ -459,14 +459,14 @@ def _jaxpr_array_shapes(value: object) -> Tuple[Tuple[int, ...], ...]:
 class TestMatrixFreeGalerkinEngine:
     """Verify the fixed-support matrix-free Galerkin engine.
 
-    :see: :func:`ptyrodactyl.born.shifted_free_diagonal`
-    :see: :func:`ptyrodactyl.born.apply_galerkin_operator`
-    :see: :func:`ptyrodactyl.born.apply_galerkin_adjoint`
-    :see: :func:`ptyrodactyl.born.evaluate_galerkin_residual`
-    :see: :func:`ptyrodactyl.born.evaluate_galerkin_adjoint_residual`
-    :see: :func:`ptyrodactyl.born.cgls_solve`
-    :see: :func:`ptyrodactyl.born.lsqr_solve`
-    :see: :func:`ptyrodactyl.born.implicit_galerkin_solve`
+    :see: :func:`ptyrodactyl.galerkin.shifted_free_diagonal`
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_operator`
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_adjoint`
+    :see: :func:`ptyrodactyl.galerkin.evaluate_galerkin_residual`
+    :see: :func:`ptyrodactyl.galerkin.evaluate_galerkin_adjoint_residual`
+    :see: :func:`ptyrodactyl.galerkin.cgls_solve`
+    :see: :func:`ptyrodactyl.galerkin.lsqr_solve`
+    :see: :func:`ptyrodactyl.galerkin.implicit_galerkin_solve`
     """
 
     @pytest.mark.parametrize(

@@ -8,7 +8,7 @@ import pytest
 from beartype.typing import Tuple
 
 import ptyrodactyl._host_interval as host_interval
-import ptyrodactyl.born.coefficient_certification as vc_certificate
+import ptyrodactyl.galerkin.coefficient_certification as vc_certificate
 
 _EXTRACTED_NAMES: Tuple[str, ...] = (
     "_RealInterval",

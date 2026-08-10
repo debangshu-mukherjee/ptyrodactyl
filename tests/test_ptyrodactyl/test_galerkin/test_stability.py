@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.stability`."""
+"""Tests for :mod:`ptyrodactyl.galerkin.stability`."""
 
 import subprocess
 import sys
@@ -16,9 +16,9 @@ import numpy as np
 import pytest
 from beartype.typing import Dict, Tuple
 
-import ptyrodactyl.born.sources as sources_module
-import ptyrodactyl.born.stability as stability_module
-from ptyrodactyl.born import (
+import ptyrodactyl.galerkin.sources as sources_module
+import ptyrodactyl.galerkin.stability as stability_module
+from ptyrodactyl.galerkin import (
     cgls_solve,
     check_galerkin_absorber_floor,
     create_galerkin_target,
@@ -27,11 +27,11 @@ from ptyrodactyl.born import (
     invoke_galerkin_stability,
     lsqr_solve,
 )
-from ptyrodactyl.born.sources import (
+from ptyrodactyl.galerkin.sources import (
     build_represented_focused_galerkin_source,
     build_represented_plane_galerkin_source,
 )
-from ptyrodactyl.born.stability import (
+from ptyrodactyl.galerkin.stability import (
     check_represented_galerkin_absorber_floor,
     invoke_represented_galerkin_stability,
 )
@@ -280,8 +280,8 @@ def _represented_plane_source(
 class TestGalerkinStabilityInvocation:
     """Verify exact Route-A checking and per-result dispositions.
 
-    :see: :func:`ptyrodactyl.born.check_galerkin_absorber_floor`
-    :see: :func:`ptyrodactyl.born.invoke_galerkin_stability`
+    :see: :func:`ptyrodactyl.galerkin.check_galerkin_absorber_floor`
+    :see: :func:`ptyrodactyl.galerkin.invoke_galerkin_stability`
     """
 
     def test_exact_route_a_pass_bounds_true_dense_state_error(self) -> None:
@@ -1241,9 +1241,11 @@ class TestGalerkinStabilityInvocation:
             import equinox as eqx
             import jax.numpy as jnp
 
-            from ptyrodactyl.born import check_galerkin_absorber_floor
+            from ptyrodactyl.galerkin import check_galerkin_absorber_floor
             from ptyrodactyl.types import GalerkinStabilityFailure
-            from tests.test_ptyrodactyl.test_born.test_stability import _case
+            from tests.test_ptyrodactyl.test_galerkin.test_stability import (
+                _case,
+            )
 
             manifest, source, solve_result = _case()
             narrow_result = eqx.tree_at(
@@ -1384,8 +1386,8 @@ class TestGalerkinStabilityInvocation:
 class TestRepresentedSourceStabilityInvocation:
     """Verify the explicit RM-S3 source-error stability route.
 
-:see: :func:`ptyrodactyl.born.check_represented_galerkin_absorber_floor`
-:see: :func:`ptyrodactyl.born.invoke_represented_galerkin_stability`
+:see: :func:`ptyrodactyl.galerkin.check_represented_galerkin_absorber_floor`
+:see: :func:`ptyrodactyl.galerkin.invoke_represented_galerkin_stability`
     """
 # fmt: on
 

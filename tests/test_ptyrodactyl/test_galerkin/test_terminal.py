@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.terminal`.
+"""Tests for :mod:`ptyrodactyl.galerkin.terminal`.
 
 Extended Summary
 ----------------
@@ -17,9 +17,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from ptyrodactyl.born.acquisition import check_galerkin_acquisition_support
-from ptyrodactyl.born.system import create_galerkin_target
-from ptyrodactyl.born.terminal import (
+from ptyrodactyl.galerkin.acquisition import check_galerkin_acquisition_support
+from ptyrodactyl.galerkin.system import create_galerkin_target
+from ptyrodactyl.galerkin.terminal import (
     apply_galerkin_terminal_current,
     apply_galerkin_terminal_normal_derivative,
     apply_galerkin_terminal_normal_derivative_adjoint,
@@ -28,12 +28,12 @@ from ptyrodactyl.born.terminal import (
     enclose_galerkin_terminal_current,
     evaluate_galerkin_terminal_current,
 )
+from ptyrodactyl.types import C_LIGHT, E_CHARGE, HBAR, M_E
 from ptyrodactyl.types.acquisition_types import GalerkinTerminalSide
 from ptyrodactyl.types.born_potential_types import (
     GalerkinProductSupport,
     create_galerkin_product_support,
 )
-from ptyrodactyl.types.constants import C_LIGHT, E_CHARGE, HBAR, M_E
 from ptyrodactyl.types.galerkin_types import GalerkinTargetManifest
 from ptyrodactyl.types.terminal_types import GalerkinTerminalCurrentScope
 from tests._galerkin_target_fixture import (
@@ -122,14 +122,15 @@ def selected_sector_target() -> GalerkinTargetManifest:
 class TestCoordinateTerminal:
     """Bind every public coordinate-terminal map to this test module.
 
-    :see: :func:`ptyrodactyl.born.apply_galerkin_terminal_current`
-    :see: :func:`ptyrodactyl.born.apply_galerkin_terminal_normal_derivative`
-    :see: :func:`ptyrodactyl.born.\
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_terminal_current`
+    :see: :func:`ptyrodactyl.galerkin.\
+apply_galerkin_terminal_normal_derivative`
+    :see: :func:`ptyrodactyl.galerkin.\
 apply_galerkin_terminal_normal_derivative_adjoint`
-    :see: :func:`ptyrodactyl.born.apply_galerkin_terminal_trace`
-    :see: :func:`ptyrodactyl.born.apply_galerkin_terminal_trace_adjoint`
-    :see: :func:`ptyrodactyl.born.enclose_galerkin_terminal_current`
-    :see: :func:`ptyrodactyl.born.evaluate_galerkin_terminal_current`
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_terminal_trace`
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_terminal_trace_adjoint`
+    :see: :func:`ptyrodactyl.galerkin.enclose_galerkin_terminal_current`
+    :see: :func:`ptyrodactyl.galerkin.evaluate_galerkin_terminal_current`
     """
 
     def test_maps_have_actual_adjoints_and_hermitian_current(

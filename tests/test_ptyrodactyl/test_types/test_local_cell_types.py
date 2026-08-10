@@ -16,7 +16,7 @@ import jax.numpy as jnp
 import pytest
 from beartype.typing import Dict
 
-from ptyrodactyl.born.local_cell import (
+from ptyrodactyl.galerkin.local_cell import (
     realize_local_cell_galerkin_potential,
 )
 from ptyrodactyl.types.born_potential_types import (

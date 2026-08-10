@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.potential`.
+"""Tests for :mod:`ptyrodactyl.galerkin.potential`.
 
 Extended Summary
 ----------------
@@ -15,7 +15,7 @@ import pytest
 from beartype.typing import Dict, Tuple
 from numpy.testing import assert_allclose
 
-from ptyrodactyl.born import (
+from ptyrodactyl.galerkin import (
     apply_absorber_action,
     apply_interaction_product,
     build_absorber_factor,
@@ -159,11 +159,11 @@ def _dense_convolution(
 class TestScalarPotentialProducts:
     """Verify the SC-1 interaction and exact positive absorber products.
 
-    :see: :func:`ptyrodactyl.born.apply_absorber_action`
-    :see: :func:`ptyrodactyl.born.apply_interaction_product`
-    :see: :func:`ptyrodactyl.born.build_absorber_factor`
-    :see: :func:`ptyrodactyl.born.build_cosine_shell_absorber_coefficients`
-    :see: :func:`ptyrodactyl.born.build_interaction_coefficients`
+    :see: :func:`ptyrodactyl.galerkin.apply_absorber_action`
+    :see: :func:`ptyrodactyl.galerkin.apply_interaction_product`
+    :see: :func:`ptyrodactyl.galerkin.build_absorber_factor`
+    :see: :func:`ptyrodactyl.galerkin.build_cosine_shell_absorber_coefficients`
+    :see: :func:`ptyrodactyl.galerkin.build_interaction_coefficients`
     """
 
     def test_canonical_builders_and_actions_return_exact_widths(self) -> None:

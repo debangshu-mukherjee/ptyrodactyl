@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.source_derivatives`.
+"""Tests for :mod:`ptyrodactyl.galerkin.source_derivatives`.
 
 Extended Summary
 ----------------
@@ -22,7 +22,7 @@ from beartype.typing import Dict, Tuple
 from jaxtyping import TypeCheckError
 from numpy.typing import NDArray
 
-from ptyrodactyl.born import (
+from ptyrodactyl.galerkin import (
     build_represented_focused_galerkin_source,
     build_represented_plane_galerkin_source,
     represented_total_source_jvp,
@@ -34,7 +34,7 @@ from ptyrodactyl.types import (
     GalerkinSourcePhaseConvention,
     GalerkinStoredShellRoute,
 )
-from tests.test_ptyrodactyl.test_born.test_sources import (
+from tests.test_ptyrodactyl.test_galerkin.test_sources import (
     _manifest,
     _position,
 )
@@ -347,8 +347,8 @@ def _coordinate_directions(
 class TestRepresentedSourceDerivatives:
     """Verify the fixed-stratum represented-source derivative contract.
 
-    :see: :func:`ptyrodactyl.born.represented_total_source_jvp`
-    :see: :func:`ptyrodactyl.born.represented_total_source_vjp`
+    :see: :func:`ptyrodactyl.galerkin.represented_total_source_jvp`
+    :see: :func:`ptyrodactyl.galerkin.represented_total_source_vjp`
     """
 
     def test_plane_and_focused_jvps_match_dense_and_centered_oracles(

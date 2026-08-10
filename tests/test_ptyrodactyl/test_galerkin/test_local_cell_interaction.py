@@ -10,6 +10,7 @@ boundary.
 from __future__ import annotations
 
 import functools
+from dataclasses import replace
 from fractions import Fraction
 
 import equinox as eqx
@@ -20,19 +21,19 @@ import pytest
 from beartype.typing import Tuple
 from numpy.testing import assert_allclose, assert_array_equal
 
-import ptyrodactyl.born.local_cell_interaction as interaction_module
+import ptyrodactyl.galerkin.local_cell_interaction as interaction_module
 from ptyrodactyl._host_interval import (
     _fraction_from_float,
     _fraction_upper_float,
     _sqrt_fraction_upper,
 )
-from ptyrodactyl.born.local_cell import (
+from ptyrodactyl.galerkin.local_cell import (
     realize_local_cell_galerkin_potential,
 )
-from ptyrodactyl.born.local_cell_certification import (
+from ptyrodactyl.galerkin.local_cell_certification import (
     certify_local_cell_galerkin_potential,
 )
-from ptyrodactyl.born.local_cell_interaction import (
+from ptyrodactyl.galerkin.local_cell_interaction import (
     _authenticate_local_cell_exact_compression,
     _stream_difference_evidence,
     apply_local_cell_interaction,
@@ -41,11 +42,11 @@ from ptyrodactyl.born.local_cell_interaction import (
     create_local_cell_interaction_core,
     prepare_local_cell_interaction_core,
 )
+from ptyrodactyl.types import C_LIGHT, E_CHARGE, HBAR, M_E
 from ptyrodactyl.types.born_potential_types import (
     GalerkinProductSupport,
     create_galerkin_product_support,
 )
-from ptyrodactyl.types.constants import C_LIGHT, E_CHARGE, HBAR, M_E
 from ptyrodactyl.types.local_cell_interaction_types import (
     GalerkinLocalCellCompressionFailure,
     GalerkinLocalCellExactCompression,
@@ -176,7 +177,11 @@ def _exact_sigma(voltage_kv: float) -> Fraction:
 
 
 def test_complete_compression_has_exact_du_mapping_and_multiplicity() -> None:
-    """Freeze lexicographic Du, pair lookup, and the LVT.17 sum n squared."""
+    """Freeze lexicographic Du, pair lookup, and the LVT.17 sum n squared.
+
+    :see: :func:`ptyrodactyl.galerkin.\
+certify_local_cell_exact_compression`
+    """
     _, compression, _ = _successful_fixture()
     assert compression.failure is GalerkinLocalCellCompressionFailure.NONE
     assert bool(compression.finite_certificate)
@@ -272,7 +277,12 @@ def test_lvt18_is_exact_fraction_sum_of_stored_component_errors() -> None:
 
 
 def test_actions_match_dense_matrix_and_formal_adjoint() -> None:
-    """Match dense R/R-star and JAX's conjugated complex-VJP convention."""
+    """Match dense R/R-star and JAX's conjugated complex-VJP convention.
+
+    :see: :func:`ptyrodactyl.galerkin.apply_local_cell_interaction`
+    :see: :func:`ptyrodactyl.galerkin.apply_local_cell_interaction_adjoint`
+    :see: :func:`ptyrodactyl.galerkin.create_local_cell_interaction_core`
+    """
     _, _, stored_core = _successful_fixture()
     core = prepare_local_cell_interaction_core(stored_core)
     field = jnp.asarray((1.0 + 2.0j, -0.5 + 0.25j, 3.0 - 0.2j))
@@ -312,22 +322,25 @@ def test_actions_match_dense_matrix_and_formal_adjoint() -> None:
 
 
 def test_prepare_rejects_self_rehashed_coefficient_forgery() -> None:
-    """Require mathematical replay rather than digest-string consistency."""
+    """Require mathematical replay rather than digest-string consistency.
+
+    :see: :func:`ptyrodactyl.galerkin.prepare_local_cell_interaction_core`
+    """
     _, _, core = _successful_fixture()
     forged_compression = eqx.tree_at(
         lambda value: value.interaction_coefficients,
         core.compression,
         core.compression.interaction_coefficients.at[2].add(1.0e-12),
     )
-    forged_compression = eqx.tree_at(
-        lambda value: (value.operator_digest, value.certificate_digest),
+    forged_compression = replace(
         forged_compression,
-        ("d" * 64, "e" * 64),
+        operator_digest="d" * 64,
+        certificate_digest="e" * 64,
     )
-    forged_core = eqx.tree_at(
-        lambda value: (value.compression, value.operator_digest),
+    forged_core = replace(
         core,
-        (forged_compression, "d" * 64),
+        compression=forged_compression,
+        operator_digest="d" * 64,
     )
     with pytest.raises(ValueError, match="replay|match"):
         prepare_local_cell_interaction_core(forged_core)

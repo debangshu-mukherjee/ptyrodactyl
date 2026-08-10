@@ -1,4 +1,4 @@
-"""Tests for :mod:`ptyrodactyl.born.realization`.
+"""Tests for :mod:`ptyrodactyl.galerkin.realization`.
 
 Extended Summary
 ----------------
@@ -18,7 +18,7 @@ import pytest
 from beartype.typing import Tuple
 from numpy.testing import assert_allclose
 
-from ptyrodactyl.born.realization import (
+from ptyrodactyl.galerkin.realization import (
     apply_galerkin_potential_metric_adjoint,
     realize_galerkin_potential,
 )
@@ -163,8 +163,8 @@ def _dense_physical_coefficients(
 class TestGalerkinPotentialRealization:
     """Verify the finite VC-1 realization and its metric adjoint.
 
-    :see: :func:`ptyrodactyl.born.apply_galerkin_potential_metric_adjoint`
-    :see: :func:`ptyrodactyl.born.realize_galerkin_potential`
+    :see: :func:`ptyrodactyl.galerkin.apply_galerkin_potential_metric_adjoint`
+    :see: :func:`ptyrodactyl.galerkin.realize_galerkin_potential`
     """
 
     def test_constant_field_preserves_zero_mode_and_exact_widths(self) -> None:

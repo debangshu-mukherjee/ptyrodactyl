@@ -12,12 +12,11 @@ Submodules
 
    api/bloch
    api/born
+   api/galerkin
    api/inout
-   api/invert
    api/jacobian
    api/multislice
    api/plots
-   api/tools
    api/types
    api/ucell
    api/workflows

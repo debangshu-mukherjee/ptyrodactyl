@@ -60,30 +60,73 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, Int, PyTree, jaxtyped
 
 from .custom_types import scalar_float, scalar_int
 
 
 def _raise_if(condition: bool, message: str) -> None:
-    """Raise ValueError when a structural condition is true."""
+    """PRIVATE: Raise ``ValueError`` for a true structural condition.
+
+    Parameters
+    ----------
+    condition : bool
+        Whether the structural contract is invalid.
+    message : str
+        Error message for the rejected contract.
+
+    Raises
+    ------
+    ValueError
+        If ``condition`` is true.
+    """
     if condition:
         raise ValueError(message)
 
 
-def _tree_leaf_shapes(tree: PyTree) -> tuple[tuple[int, ...], ...]:
-    """Return the static shape of every dynamic PyTree leaf."""
-    shapes: tuple[tuple[int, ...], ...] = tuple(
+def _tree_leaf_shapes(tree: PyTree) -> Tuple[Tuple[int, ...], ...]:
+    """PRIVATE: Return the static shape of every dynamic PyTree leaf.
+
+    Parameters
+    ----------
+    tree : PyTree
+        PyTree whose leaves provide the static shapes.
+
+    Returns
+    -------
+    shapes : Tuple[Tuple[int, ...], ...]
+        Leaf shapes in JAX tree-flattening order.
+    """
+    shapes: Tuple[Tuple[int, ...], ...] = tuple(
         jnp.shape(leaf) for leaf in jax.tree_util.tree_leaves(tree)
     )
     return shapes
 
 
 def _checked_iteration(iteration: scalar_int) -> Int[Array, ""]:
-    """Validate one scalar non-negative iteration index."""
+    """PRIVATE: Validate one scalar non-negative iteration index.
+
+    Parameters
+    ----------
+    iteration : scalar_int
+        Iteration index to convert to a JAX scalar.
+
+    Returns
+    -------
+    checked_iteration : Int[Array, ""]
+        Integer scalar with a traced non-negative assertion.
+
+    Raises
+    ------
+    ValueError
+        If ``iteration`` is boolean or is not scalar-shaped.
+    equinox.EquinoxRuntimeError
+        If ``iteration`` is negative under compiled execution.
+    """
     _raise_if(isinstance(iteration, bool), "iteration must not be boolean")
     iteration_array: Int[Array, ""] = jnp.asarray(iteration)
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(
         iteration_array.shape != scalar_shape,
         "iteration must be a scalar",
@@ -100,9 +143,29 @@ def _checked_nonnegative_scalar(
     value: scalar_float,
     name: str,
 ) -> Float[Array, ""]:
-    """Validate one finite non-negative floating-point scalar."""
+    """PRIVATE: Validate one finite non-negative floating scalar.
+
+    Parameters
+    ----------
+    value : scalar_float
+        Floating value to convert to a JAX scalar.
+    name : str
+        Field name included in validation errors.
+
+    Returns
+    -------
+    checked_value : Float[Array, ""]
+        Floating scalar with traced finite and non-negative assertions.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not scalar-shaped.
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite or negative under compiled execution.
+    """
     value_array: Float[Array, ""] = jnp.asarray(value)
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(value_array.shape != scalar_shape, f"{name} must be a scalar")
     checked_value: Float[Array, ""] = eqx.error_if(
         value_array,
@@ -116,9 +179,29 @@ def _checked_positive_scalar(
     value: scalar_float,
     name: str,
 ) -> Float[Array, ""]:
-    """Validate one finite positive floating-point scalar."""
+    """PRIVATE: Validate one finite positive floating scalar.
+
+    Parameters
+    ----------
+    value : scalar_float
+        Floating value to convert to a JAX scalar.
+    name : str
+        Field name included in validation errors.
+
+    Returns
+    -------
+    checked_value : Float[Array, ""]
+        Floating scalar with traced finite and positive assertions.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not scalar-shaped.
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite or non-positive under compiled execution.
+    """
     value_array: Float[Array, ""] = jnp.asarray(value)
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(value_array.shape != scalar_shape, f"{name} must be a scalar")
     checked_value: Float[Array, ""] = eqx.error_if(
         value_array,
@@ -536,7 +619,7 @@ test_jacobian_types.TestCreateSolverStates`
         or x_structure != jax.tree_util.tree_structure(p),
         "x, r, and p must have matching PyTree structures",
     )
-    x_shapes: tuple[tuple[int, ...], ...] = _tree_leaf_shapes(x)
+    x_shapes: Tuple[Tuple[int, ...], ...] = _tree_leaf_shapes(x)
     _raise_if(
         x_shapes != _tree_leaf_shapes(r) or x_shapes != _tree_leaf_shapes(p),
         "x, r, and p leaves must have matching shapes",
@@ -836,7 +919,7 @@ def create_ptycho_params(
     vector_rank: int = 1
     mode_phase_rank: int = 3
     num_xy: int = 2
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(exit_wave_arr.ndim != image_rank, "exit_wave must be 2D")
     _raise_if(
         zernike_coeffs_arr.ndim != vector_rank,

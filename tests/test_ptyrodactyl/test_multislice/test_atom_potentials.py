@@ -12,6 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 from absl.testing import parameterized
+from beartype.typing import Tuple
 
 jax.config.update("jax_enable_x64", True)
 
@@ -676,8 +677,8 @@ class TestCrystalPotentialSlices(chex.TestCase):
         slice_thickness: float = 1.0,
         *,
         padding: float = 4.0,
-        repeats: tuple[int, int, int] = (1, 1, 1),
-        grid_shape: tuple[int, int, int],
+        repeats: Tuple[int, int, int] = (1, 1, 1),
+        grid_shape: Tuple[int, int, int],
         parameterization: str = "kirkland",
     ) -> PotentialSlices:
         """Run a variant with the explicit static shape required under JIT."""

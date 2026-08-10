@@ -79,7 +79,7 @@ OPTIMIZERS: Dict[str, Optimizer] = {
 
 @beartype
 def _get_optimizer(optimizer_name: str) -> Optimizer:
-    """Look up an optimizer by name from the registry.
+    """PRIVATE: Look up an optimizer by name from the registry.
 
     Parameters
     ----------
@@ -88,7 +88,7 @@ def _get_optimizer(optimizer_name: str) -> Optimizer:
 
     Returns
     -------
-    optimizer : :class:`~ptyrodactyl.tools.Optimizer`
+    result : Optimizer
         The corresponding optimizer namedtuple.
 
     Raises
@@ -222,7 +222,7 @@ def single_slice_ptychography(  # noqa: PLR0915
     def _forward_fn(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Float[Array, "P H W"]:
-        """Simulate 4D-STEM patterns from potential and beam.
+        """PRIVATE: Simulate 4D-STEM patterns from potential and beam.
 
         Parameters
         ----------
@@ -233,7 +233,7 @@ def single_slice_ptychography(  # noqa: PLR0915
 
         Returns
         -------
-        patterns : Float[Array, "P H W"]
+        result : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
         potential_slices = create_potential_slices(
@@ -267,7 +267,7 @@ def single_slice_ptychography(  # noqa: PLR0915
     def _loss_and_grad(
         pot_slice: Complex[Array, "H W"], beam: Complex[Array, "H W"]
     ) -> Tuple[Float[Array, " "], Dict[str, Complex[Array, "H W"]]]:
-        """Compute loss and gradients for potential and beam.
+        """PRIVATE: Compute loss and gradients for potential and beam.
 
         Parameters
         ----------
@@ -320,7 +320,7 @@ def single_slice_ptychography(  # noqa: PLR0915
         Any,
         Float[Array, " "],
     ]:
-        """Perform one optimisation step for potential and beam.
+        """PRIVATE: Perform one optimisation step for potential and beam.
 
         Parameters
         ----------
@@ -382,8 +382,24 @@ def single_slice_ptychography(  # noqa: PLR0915
     )
 
     def _scan_step(
-        carry: tuple[Any, ...], ii: Int[Array, ""]
-    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        carry: Tuple[Any, ...], ii: Int[Array, ""]
+    ) -> Tuple[Tuple[Any, ...], Float[Array, " "]]:
+        """PRIVATE: Advance one potential-and-beam reconstruction step.
+
+        Parameters
+        ----------
+        carry : Tuple[Any, ...]
+            Current potential, beam, optimizer, and snapshot state.
+        ii : Int[Array, ""]
+            Zero-based optimization iteration.
+
+        Returns
+        -------
+        carry : Tuple[Any, ...]
+            Updated reconstruction and snapshot state.
+        loss : Float[Array, " "]
+            Scalar loss for the completed iteration.
+        """
         (
             pot_slice,
             beam,
@@ -396,12 +412,24 @@ def single_slice_ptychography(  # noqa: PLR0915
             pot_slice, beam, pot_slice_state, beam_state
         )
 
-        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+        def _save_snapshot(args: Tuple[Any, ...]) -> Tuple[Any, ...]:
+            """PRIVATE: Save the current potential and beam snapshots.
+
+            Parameters
+            ----------
+            args : Tuple[Any, ...]
+                Potential and beam snapshot arrays.
+
+            Returns
+            -------
+            result : Tuple[Any, ...]
+                Snapshot arrays with the current estimates stored.
+            """
             pots, beams = args
             saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
             pots = pots.at[:, :, saver].set(pot_slice)
             beams = beams.at[:, :, saver].set(beam)
-            result: tuple[Any, ...] = pots, beams
+            result: Tuple[Any, ...] = pots, beams
             return result
 
         intermediate_potslice, intermediate_beam = jax.lax.cond(
@@ -410,7 +438,7 @@ def single_slice_ptychography(  # noqa: PLR0915
             lambda args: args,
             (intermediate_potslice, intermediate_beam),
         )
-        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+        result: Tuple[Tuple[Any, ...], Float[Array, " "]] = (
             (
                 pot_slice,
                 beam,
@@ -617,7 +645,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        """Simulate 4D-STEM with position-corrected scan.
+        """PRIVATE: Simulate 4D-STEM with position-corrected scan.
 
         Parameters
         ----------
@@ -630,7 +658,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
 
         Returns
         -------
-        patterns : Float[Array, "P H W"]
+        result : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
         potential_slices = create_potential_slices(
@@ -666,7 +694,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
-        """Compute loss and gradients for potential, beam, and positions.
+        """PRIVATE: Compute loss and all position-corrected gradients.
 
         Parameters
         ----------
@@ -728,7 +756,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
         Any,
         Float[Array, " "],
     ]:
-        """Update potential, beam, and positions by one step.
+        """PRIVATE: Update potential, beam, and positions by one step.
 
         Parameters
         ----------
@@ -832,8 +860,24 @@ def single_slice_poscorrected(  # noqa: PLR0915
     )
 
     def _scan_step(
-        carry: tuple[Any, ...], ii: Int[Array, ""]
-    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        carry: Tuple[Any, ...], ii: Int[Array, ""]
+    ) -> Tuple[Tuple[Any, ...], Float[Array, " "]]:
+        """PRIVATE: Advance one position-corrected reconstruction step.
+
+        Parameters
+        ----------
+        carry : Tuple[Any, ...]
+            Current potential, beam, positions, optimizers, and snapshots.
+        ii : Int[Array, ""]
+            Zero-based optimization iteration.
+
+        Returns
+        -------
+        carry : Tuple[Any, ...]
+            Updated reconstruction and snapshot state.
+        loss : Float[Array, " "]
+            Scalar loss for the completed iteration.
+        """
         (
             pot_guess,
             beam_guess,
@@ -862,13 +906,25 @@ def single_slice_poscorrected(  # noqa: PLR0915
             pos_state,
         )
 
-        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+        def _save_snapshot(args: Tuple[Any, ...]) -> Tuple[Any, ...]:
+            """PRIVATE: Save potential, beam, and position snapshots.
+
+            Parameters
+            ----------
+            args : Tuple[Any, ...]
+                Potential, beam, and position snapshot arrays.
+
+            Returns
+            -------
+            result : Tuple[Any, ...]
+                Snapshot arrays with the current estimates stored.
+            """
             pots, beams, positions = args
             saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
             pots = pots.at[:, :, saver].set(pot_guess)
             beams = beams.at[:, :, saver].set(beam_guess)
             positions = positions.at[:, :, saver].set(pos_guess)
-            result: tuple[Any, ...] = pots, beams, positions
+            result: Tuple[Any, ...] = pots, beams, positions
             return result
 
         (
@@ -885,7 +941,7 @@ def single_slice_poscorrected(  # noqa: PLR0915
                 intermediate_positions,
             ),
         )
-        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+        result: Tuple[Tuple[Any, ...], Float[Array, " "]] = (
             (
                 pot_guess,
                 beam_guess,
@@ -1123,20 +1179,20 @@ def single_slice_multi_modal(  # noqa: PLR0915
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        """Simulate 4D-STEM with multi-modal probe.
+        """PRIVATE: Simulate 4D-STEM with multi-modal probe.
 
         Parameters
         ----------
         pot_slice : Complex[Array, "H W"]
             Electrostatic potential slice.
-        beam : :class:`~ptyrodactyl.types.ProbeModes`
+        beam : ProbeModes
             Multi-modal probe.
         pos_list : Float[Array, "P 2"]
             Scan positions, in Angstroms.
 
         Returns
         -------
-        patterns : Float[Array, "P H W"]
+        result : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
         potential_slices = create_potential_slices(
@@ -1167,13 +1223,13 @@ def single_slice_multi_modal(  # noqa: PLR0915
         beam: ProbeModes,
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Any]]:
-        """Compute loss and gradients for potential, modes, positions.
+        """PRIVATE: Compute loss and gradients for potential, modes, positions.
 
         Parameters
         ----------
         pot_slice : Complex[Array, "H W"]
             Current potential slice estimate.
-        beam : :class:`~ptyrodactyl.types.ProbeModes`
+        beam : ProbeModes
             Current multi-modal probe estimate.
         pos_list : Float[Array, "P 2"]
             Current scan positions, in Angstroms.
@@ -1229,13 +1285,13 @@ def single_slice_multi_modal(  # noqa: PLR0915
         Any,
         Float[Array, " "],
     ]:
-        """Update potential, multi-modal beam, and positions.
+        """PRIVATE: Update potential, multi-modal beam, and positions.
 
         Parameters
         ----------
         pot_slice : Complex[Array, "H W"]
             Current potential slice.
-        beam : :class:`~ptyrodactyl.types.ProbeModes`
+        beam : ProbeModes
             Current multi-modal probe.
         pos_list : Float[Array, "P 2"]
             Current scan positions, in Angstroms.
@@ -1250,7 +1306,7 @@ def single_slice_multi_modal(  # noqa: PLR0915
         -------
         pot_slice : Complex[Array, "H W"]
             Updated potential slice.
-        beam : :class:`~ptyrodactyl.types.ProbeModes`
+        beam : ProbeModes
             Updated multi-modal probe.
         pos_list : Float[Array, "P 2"]
             Updated scan positions.
@@ -1335,8 +1391,25 @@ def single_slice_multi_modal(  # noqa: PLR0915
     )
 
     def _scan_step(
-        carry: tuple[Any, ...], ii: Int[Array, ""]
-    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        carry: Tuple[Any, ...], ii: Int[Array, ""]
+    ) -> Tuple[Tuple[Any, ...], Float[Array, " "]]:
+        """PRIVATE: Advance one multi-modal reconstruction step.
+
+        Parameters
+        ----------
+        carry : Tuple[Any, ...]
+            Current potential, probe modes, positions, optimizers, and
+            snapshots.
+        ii : Int[Array, ""]
+            Zero-based optimization iteration.
+
+        Returns
+        -------
+        carry : Tuple[Any, ...]
+            Updated reconstruction and snapshot state.
+        loss : Float[Array, " "]
+            Scalar loss for the completed iteration.
+        """
         (
             pot_slice,
             beam,
@@ -1359,12 +1432,24 @@ def single_slice_multi_modal(  # noqa: PLR0915
             pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
         )
 
-        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+        def _save_snapshot(args: Tuple[Any, ...]) -> Tuple[Any, ...]:
+            """PRIVATE: Save the current potential and probe-mode snapshots.
+
+            Parameters
+            ----------
+            args : Tuple[Any, ...]
+                Potential and multi-modal beam snapshot arrays.
+
+            Returns
+            -------
+            result : Tuple[Any, ...]
+                Snapshot arrays with the current estimates stored.
+            """
             pots, beams = args
             saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
             pots = pots.at[:, :, saver].set(pot_slice)
             beams = beams.at[:, :, :, saver].set(beam.modes)
-            result: tuple[Any, ...] = pots, beams
+            result: Tuple[Any, ...] = pots, beams
             return result
 
         intermediate_potslice, intermediate_beam = jax.lax.cond(
@@ -1373,7 +1458,7 @@ def single_slice_multi_modal(  # noqa: PLR0915
             lambda args: args,
             (intermediate_potslice, intermediate_beam),
         )
-        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+        result: Tuple[Tuple[Any, ...], Float[Array, " "]] = (
             (
                 pot_slice,
                 beam,
@@ -1582,7 +1667,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Float[Array, "P H W"]:
-        """Simulate multi-slice 4D-STEM from potential and beam.
+        """PRIVATE: Simulate multi-slice 4D-STEM from potential and beam.
 
         Parameters
         ----------
@@ -1595,7 +1680,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
 
         Returns
         -------
-        patterns : Float[Array, "P H W"]
+        result : Float[Array, "P H W"]
             Simulated diffraction patterns.
         """
         potential_slices = create_potential_slices(
@@ -1631,7 +1716,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
         beam: Complex[Array, "H W"],
         pos_list: Float[Array, "P 2"],
     ) -> Tuple[Float[Array, " "], Dict[str, Array]]:
-        """Compute loss and gradients for multi-slice reconstruction.
+        """PRIVATE: Compute loss and gradients for multi-slice reconstruction.
 
         Parameters
         ----------
@@ -1685,7 +1770,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
         Any,
         Float[Array, " "],
     ]:
-        """Update potential, beam, and positions for multi-slice.
+        """PRIVATE: Update potential, beam, and positions for multi-slice.
 
         Parameters
         ----------
@@ -1778,8 +1863,24 @@ def multi_slice_multi_modal(  # noqa: PLR0915
     )
 
     def _scan_step(
-        carry: tuple[Any, ...], ii: Int[Array, ""]
-    ) -> tuple[tuple[Any, ...], Float[Array, " "]]:
+        carry: Tuple[Any, ...], ii: Int[Array, ""]
+    ) -> Tuple[Tuple[Any, ...], Float[Array, " "]]:
+        """PRIVATE: Advance one multi-slice reconstruction step.
+
+        Parameters
+        ----------
+        carry : Tuple[Any, ...]
+            Current potential, beam, positions, optimizers, and snapshots.
+        ii : Int[Array, ""]
+            Zero-based optimization iteration.
+
+        Returns
+        -------
+        carry : Tuple[Any, ...]
+            Updated reconstruction and snapshot state.
+        loss : Float[Array, " "]
+            Scalar loss for the completed iteration.
+        """
         (
             pot_slice,
             beam,
@@ -1802,12 +1903,24 @@ def multi_slice_multi_modal(  # noqa: PLR0915
             pot_slice, beam, pos_list, pot_slice_state, beam_state, pos_state
         )
 
-        def _save_snapshot(args: tuple[Any, ...]) -> tuple[Any, ...]:
+        def _save_snapshot(args: Tuple[Any, ...]) -> Tuple[Any, ...]:
+            """PRIVATE: Save the current multi-slice reconstruction snapshots.
+
+            Parameters
+            ----------
+            args : Tuple[Any, ...]
+                Potential and beam snapshot arrays.
+
+            Returns
+            -------
+            result : Tuple[Any, ...]
+                Snapshot arrays with the current estimates stored.
+            """
             pots, beams = args
             saver: Int[Array, ""] = (ii // save_every).astype(jnp.int32)
             pots = pots.at[:, :, saver].set(pot_slice)
             beams = beams.at[:, :, saver].set(beam)
-            result: tuple[Any, ...] = pots, beams
+            result: Tuple[Any, ...] = pots, beams
             return result
 
         intermediate_potslice, intermediate_beam = jax.lax.cond(
@@ -1816,7 +1929,7 @@ def multi_slice_multi_modal(  # noqa: PLR0915
             lambda args: args,
             (intermediate_potslice, intermediate_beam),
         )
-        result: tuple[tuple[Any, ...], Float[Array, " "]] = (
+        result: Tuple[Tuple[Any, ...], Float[Array, " "]] = (
             (
                 pot_slice,
                 beam,

@@ -10,6 +10,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
+from beartype.typing import Tuple
 from jaxtyping import TypeCheckError
 
 from ptyrodactyl.multislice import (
@@ -379,7 +380,7 @@ def test_volume_apis_reject_boolean_atomic_numbers() -> None:
 )
 def test_volume_builders_reject_boolean_geometry(
     voxel_size: object,
-    origin: tuple[object, object, object],
+    origin: Tuple[object, object, object],
     message: str,
 ) -> None:
     """Boolean geometry cannot silently become zero or one Angstrom."""

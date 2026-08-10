@@ -123,7 +123,7 @@ class MicroscopeConfig(eqx.Module):
         Fifth-order spherical aberration in Angstroms.
     ensemble : EnsembleAxes
         Optional ensemble distributions applied by public integrators.
-    probe_shape : Optional[tuple[int, int]]
+    probe_shape : Optional[Tuple[int, int]]
         Static probe grid shape ``(H, W)``.
 
     See Also
@@ -168,7 +168,7 @@ class DetectorConfig(eqx.Module):
         Scan positions in pixels for ``stem_4d``.
     scan_positions_ang : Optional[Float[Array, "P 2"]]
         Scan positions in Angstroms for ``stem4d_sharded``.
-    scan_shape : Optional[tuple[int, int]]
+    scan_shape : Optional[Tuple[int, int]]
         Static raster shape ``(ny, nx)`` for detector reshaping.
 
     See Also
@@ -374,14 +374,14 @@ class STEM4D(eqx.Module):
 
 
 @jaxtyped(typechecker=beartype)
-def combine_axis_updates(updates: tuple[AxisUpdate, ...]) -> AxisUpdate:
+def combine_axis_updates(updates: Tuple[AxisUpdate, ...]) -> AxisUpdate:
     """Sum a tuple of additive axis-update carriers.
 
     :see: :func:`~.test_combine_axis_updates_sums_all_deltas`
 
     Parameters
     ----------
-    updates : tuple[AxisUpdate, ...]
+    updates : Tuple[AxisUpdate, ...]
         Axis updates to combine. An empty tuple returns the zero-effect
         update.
 
@@ -898,7 +898,7 @@ Complex[Array, "..."]]
     real_space_arr = jnp.asarray(real_space, dtype=jnp.bool_)
 
     expected_rank: int = 2
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     if data_array_arr.ndim != expected_rank:
         raise ValueError("data_array must be 2D")
     if calib_y_arr.shape != scalar_shape:
@@ -935,7 +935,23 @@ def _validate_distribution_axis(
     expected_axis_id: str,
     expected_dim: int,
 ) -> None:
-    """Validate static structure for an optional distribution axis."""
+    """PRIVATE: Validate one optional distribution axis structure.
+
+    Parameters
+    ----------
+    axis : Optional[Distribution]
+        Distribution axis to validate, or ``None``.
+    expected_axis_id : str
+        Required static axis identifier when one is declared.
+    expected_dim : int
+        Required sample-vector width.
+
+    Raises
+    ------
+    ValueError
+        If sample or weight shapes are invalid, or the axis identifier does
+        not match ``expected_axis_id``.
+    """
     if axis is None:
         return
     if axis.samples.ndim != _MATRIX_RANK:
@@ -955,7 +971,25 @@ def _validate_distribution_axis(
 
 
 def _scalar_float_array(value: scalar_num, name: str) -> Float[Array, ""]:
-    """Return a float64 scalar array with static shape validation."""
+    """PRIVATE: Convert one value to a binary64 scalar array.
+
+    Parameters
+    ----------
+    value : scalar_num
+        Numeric value to convert.
+    name : str
+        Field name included in the validation error.
+
+    Returns
+    -------
+    value_arr : Float[Array, ""]
+        Binary64 scalar array.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not scalar-shaped.
+    """
     value_arr: Float[Array, ""] = jnp.asarray(value, dtype=jnp.float64)
     if value_arr.shape != ():
         raise ValueError(f"{name} must be a scalar")
@@ -966,7 +1000,25 @@ def _checked_finite_scalar(
     value: Float[Array, ""],
     name: str,
 ) -> Float[Array, ""]:
-    """Return a scalar with a traced finiteness check."""
+    """PRIVATE: Attach a traced finite-value check to one scalar.
+
+    Parameters
+    ----------
+    value : Float[Array, ""]
+        Floating scalar to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    result : Float[Array, ""]
+        Input scalar with a traced finite-value assertion.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite under compiled execution.
+    """
     result: Float[Array, ""] = eqx.error_if(
         value, ~jnp.isfinite(value), f"{name} must be finite"
     )
@@ -977,7 +1029,25 @@ def _checked_positive_scalar(
     value: Float[Array, ""],
     name: str,
 ) -> Float[Array, ""]:
-    """Return a scalar with traced finite and positive checks."""
+    """PRIVATE: Attach traced finite and positive checks to one scalar.
+
+    Parameters
+    ----------
+    value : Float[Array, ""]
+        Floating scalar to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    result : Float[Array, ""]
+        Input scalar with traced finite and positive assertions.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite or non-positive under compiled execution.
+    """
     checked_value: Float[Array, ""] = _checked_finite_scalar(value, name)
     result: Float[Array, ""] = eqx.error_if(
         checked_value, checked_value <= 0, f"{name} must be positive"
@@ -989,7 +1059,25 @@ def _checked_nonnegative_scalar(
     value: Float[Array, ""],
     name: str,
 ) -> Float[Array, ""]:
-    """Return a scalar with traced finite and non-negative checks."""
+    """PRIVATE: Attach traced finite and non-negative checks to one scalar.
+
+    Parameters
+    ----------
+    value : Float[Array, ""]
+        Floating scalar to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    result : Float[Array, ""]
+        Input scalar with traced finite and non-negative assertions.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite or negative under compiled execution.
+    """
     checked_value: Float[Array, ""] = _checked_finite_scalar(value, name)
     result: Float[Array, ""] = eqx.error_if(
         checked_value, checked_value < 0, f"{name} must be non-negative"
@@ -1001,7 +1089,25 @@ def _optional_positions(
     positions: Optional[Float[Array, "..."]],
     name: str,
 ) -> Optional[Float[Array, "P 2"]]:
-    """Return optional scan positions with static shape validation."""
+    """PRIVATE: Convert optional scan positions and validate their shape.
+
+    Parameters
+    ----------
+    positions : Optional[Float[Array, "..."]]
+        Scan positions in ``(x, y)`` order, or ``None``.
+    name : str
+        Field name included in the validation error.
+
+    Returns
+    -------
+    result : Optional[Float[Array, "P 2"]]
+        Binary64 scan positions with shape ``(P, 2)``, or ``None``.
+
+    Raises
+    ------
+    ValueError
+        If provided positions do not have shape ``(P, 2)``.
+    """
     if positions is None:
         result: Optional[Float[Array, "P 2"]] = None
         return result
@@ -1014,14 +1120,33 @@ def _optional_positions(
         or positions_arr.shape[1] != _XY_COORDS
     ):
         raise ValueError(f"{name} must have shape (P, 2)")
-    return positions_arr
+    result = positions_arr
+    return result  # noqa: RET504
 
 
 def _optional_shape_tuple(
     shape: Optional[Tuple[int, int] | Int[Array, " 2"]],
     name: str,
 ) -> Optional[Tuple[int, int]]:
-    """Return optional static ``(H, W)`` shape as a Python tuple."""
+    """PRIVATE: Convert an optional static shape to a Python tuple.
+
+    Parameters
+    ----------
+    shape : Optional[Tuple[int, int] | Int[Array, " 2"]]
+        Positive ``(H, W)`` shape, or ``None``.
+    name : str
+        Field name included in validation errors.
+
+    Returns
+    -------
+    result : Optional[Tuple[int, int]]
+        Positive Python ``(H, W)`` tuple, or ``None``.
+
+    Raises
+    ------
+    ValueError
+        If a provided shape does not contain exactly two positive entries.
+    """
     if shape is None:
         result: Optional[Tuple[int, int]] = None
         return result
@@ -1031,21 +1156,41 @@ def _optional_shape_tuple(
         shape_tuple: Tuple[int, int] = (int(shape[0]), int(shape[1]))
         if shape_tuple[0] <= 0 or shape_tuple[1] <= 0:
             raise ValueError(f"{name} entries must be positive")
-        return shape_tuple
+        result = shape_tuple
+        return result  # noqa: RET504
     shape_arr: Int[Array, " 2"] = jnp.asarray(shape)
     if shape_arr.shape != (2,):
         raise ValueError(f"{name} must have shape (2,)")
     shape_tuple = (int(shape_arr[0]), int(shape_arr[1]))
     if shape_tuple[0] <= 0 or shape_tuple[1] <= 0:
         raise ValueError(f"{name} entries must be positive")
-    return shape_tuple
+    result = shape_tuple
+    return result  # noqa: RET504
 
 
 def _axis_update_scalar(
     value: Optional[Float[Array, " "]],
     name: str,
 ) -> Float[Array, " "]:
-    """Return a scalar axis-update field with static shape validation."""
+    """PRIVATE: Convert one optional scalar axis-update field.
+
+    Parameters
+    ----------
+    value : Optional[Float[Array, " "]]
+        Scalar update value, or ``None`` for zero.
+    name : str
+        Field name included in the validation error.
+
+    Returns
+    -------
+    scalar : Float[Array, " "]
+        Binary64 scalar update value.
+
+    Raises
+    ------
+    ValueError
+        If the converted value is not scalar-shaped.
+    """
     scalar: Float[Array, " "] = (
         jnp.asarray(0.0, dtype=jnp.float64)
         if value is None
@@ -1060,7 +1205,25 @@ def _axis_update_vector(
     value: Optional[Float[Array, " 2"]],
     name: str,
 ) -> Float[Array, " 2"]:
-    """Return a two-vector axis-update field with static shape validation."""
+    """PRIVATE: Convert one optional two-vector axis-update field.
+
+    Parameters
+    ----------
+    value : Optional[Float[Array, " 2"]]
+        Two-vector update value, or ``None`` for zeros.
+    name : str
+        Field name included in the validation error.
+
+    Returns
+    -------
+    vector : Float[Array, " 2"]
+        Binary64 update vector with shape ``(2,)``.
+
+    Raises
+    ------
+    ValueError
+        If the converted value does not have shape ``(2,)``.
+    """
     vector: Float[Array, " 2"] = (
         jnp.zeros((2,), dtype=jnp.float64)
         if value is None
@@ -1116,7 +1279,7 @@ def create_probe_modes(
 
     expected_rank: int = 3
     weights_rank: int = 1
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     if modes_arr.ndim != expected_rank:
         raise ValueError("modes must be 3D")
     if weights_arr.ndim != weights_rank:
@@ -1205,7 +1368,7 @@ def create_potential_slices(
     calib_arr: Float[Array, ""] = jnp.asarray(calib, dtype=jnp.float64)
 
     expected_rank: int = 3
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     if slices_arr.ndim != expected_rank:
         raise ValueError("slices must be 3D")
     if thickness_arr.shape != scalar_shape:
@@ -1295,7 +1458,7 @@ def create_stem4d(
     expected_data_rank: int = 3
     expected_scan_rank: int = 2
     num_scan_coords: int = 2
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     if data_arr.ndim != expected_data_rank:
         raise ValueError("data must be 3D")
     if scan_positions_arr.ndim != expected_scan_rank:

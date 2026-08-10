@@ -14,6 +14,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
+from beartype.typing import Tuple
 from jaxtyping import TypeCheckError
 
 from ptyrodactyl.types import (
@@ -28,7 +29,7 @@ _RUNTIME_ERRORS = (
 )
 
 
-def _line_indices(values: tuple[int, ...]) -> jax.Array:
+def _line_indices(values: Tuple[int, ...]) -> jax.Array:
     """Place one-dimensional exact indices on the final work-grid axis."""
     indices: jax.Array = jnp.asarray(
         [[0, 0, value] for value in values],
@@ -67,6 +68,19 @@ class TestGalerkinProductSupport:
         assert support.work_shape == (1, 1, 7)
         assert support.state_indices is not support.interaction_indices
         assert support.absorber_indices is not support.work_indices
+        assert support.state_indices.dtype == jnp.int64
+        assert support.interaction_indices.dtype == jnp.int64
+        assert support.absorber_indices.dtype == jnp.int64
+        assert support.work_indices.dtype == jnp.int64
+        for field_name in (
+            "state_indices",
+            "interaction_indices",
+            "absorber_indices",
+            "work_indices",
+        ):
+            assert GalerkinProductSupport.__annotations__[
+                field_name
+            ].dtypes == ("int64",)
 
     def test_factory_is_jit_compatible_for_frozen_structure(self) -> None:
         """Compile support checks with the work shape fixed statically."""
@@ -97,7 +111,7 @@ class TestGalerkinProductSupport:
             "_restricted_product_has_no_alias",
             "create_galerkin_product_support",
         }
-        offenders: list[tuple[str, str]] = []
+        offenders: list[Tuple[str, str]] = []
         for node in tree.body:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -184,7 +198,7 @@ class TestGalerkinProductSupport:
     )
     def test_factory_rejects_invalid_static_work_shape(
         self,
-        work_shape: tuple[int, ...],
+        work_shape: Tuple[int, ...],
     ) -> None:
         """Reject a wrong-rank, Boolean, or nonpositive work-grid shape."""
         with pytest.raises((ValueError, TypeCheckError), match="work_shape"):

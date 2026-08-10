@@ -25,6 +25,7 @@ import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import Array, Float, jaxtyped
 from numpy.typing import NDArray
 
@@ -202,7 +203,29 @@ def _collapse_width(
     nodes: Float[Array, " Q"],
     name: str,
 ) -> Float[Array, " Q"]:
-    """Scale GH nodes while collapsing nonpositive widths to zero safely."""
+    """PRIVATE: Scale GH nodes while collapsing zero widths safely.
+
+    Parameters
+    ----------
+    width : scalar_float
+        Non-negative Gaussian width in the units of the target distribution.
+    nodes : Float[Array, " Q"]
+        Standard-normal Gauss--Hermite nodes.
+    name : str
+        Parameter name used in validation errors.
+
+    Returns
+    -------
+    scaled_nodes : Float[Array, " Q"]
+        Width-scaled nodes, or zeros when ``width`` is zero.
+
+    Raises
+    ------
+    ValueError
+        If ``width`` is not scalar.
+    equinox.EquinoxRuntimeError
+        If ``width`` is negative or non-finite.
+    """
     width_arr: Float[Array, " "] = jnp.asarray(width, dtype=jnp.float64)
     if width_arr.shape != ():
         raise ValueError(f"{name} must be a scalar")
@@ -226,8 +249,34 @@ def _collapse_width(
 
 def _normal_gauss_hermite_rule(
     n_quad: scalar_int,
-) -> tuple[Float[Array, " Q"], Float[Array, " Q"]]:
-    """Return standard-normal GH nodes and normalized weights."""
+) -> Tuple[Float[Array, " Q"], Float[Array, " Q"]]:
+    """PRIVATE: Return standard-normal GH nodes and normalized weights.
+
+    Parameters
+    ----------
+    n_quad : scalar_int
+        Positive quadrature order.
+
+    Returns
+    -------
+    nodes : Float[Array, " Q"]
+        Standard-normal quadrature nodes.
+    weights : Float[Array, " Q"]
+        Positive quadrature weights normalized to unit sum.
+
+    Raises
+    ------
+    ValueError
+        If ``n_quad`` is not positive.
+
+    Notes
+    -----
+    ``hermgauss`` integrates against ``exp(-x**2)``. Multiplying its nodes by
+    ``sqrt(2)`` converts them to standard-normal coordinates, and dividing
+    its weights by ``sqrt(pi)`` gives the standard-normal expectation rule.
+    The weights sum to one analytically; their binary64 sum can differ by
+    roundoff because this helper does not renormalize it.
+    """
     n_quad_int: int = int(n_quad)
     if n_quad_int <= 0:
         raise ValueError("n_quad must be positive")
@@ -242,7 +291,7 @@ def _normal_gauss_hermite_rule(
         weights_np / np.sqrt(np.pi),
         dtype=jnp.float64,
     )
-    result: tuple[Float[Array, " Q"], Float[Array, " Q"]] = nodes, weights
+    result: Tuple[Float[Array, " Q"], Float[Array, " Q"]] = nodes, weights
     return result
 
 

@@ -42,7 +42,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Callable
+from beartype.typing import Callable, Tuple
 from jax import lax
 from jaxtyping import Array, Complex, Float, PyTree, jaxtyped
 
@@ -62,7 +62,7 @@ from ptyrodactyl.types import (
 @jaxtyped(typechecker=beartype)
 def split_params(
     params: PtychoParams,
-) -> tuple[
+) -> Tuple[
     ExitWaveParams,
     AberrationParams,
     GeometryParams,
@@ -100,7 +100,7 @@ def split_params(
     geometry: GeometryParams = params.geometry
     positions: PositionParams = params.positions
     probe_modes: ProbeModeParams = params.probe_modes
-    parameter_blocks: tuple[
+    parameter_blocks: Tuple[
         ExitWaveParams,
         AberrationParams,
         GeometryParams,
@@ -264,7 +264,7 @@ def block_vjp_operator(
         cotangent: Float[Array, "num_pos det_h det_w"],
     ) -> PyTree:
         """Compute J_block^T @ cotangent."""
-        full_grad: tuple[PtychoParams] = full_vjp_fn(cotangent)
+        full_grad: Tuple[PtychoParams] = full_vjp_fn(cotangent)
         params_grad: PtychoParams = _tree_conj(full_grad[0])
 
         if block_name is OptimizableBlock.EXIT_WAVE:
@@ -531,7 +531,7 @@ def block_gauss_newton_step(
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
-            new_aberrations: tuple[
+            new_aberrations: Tuple[
                 Float[Array, "num_zernike"],
                 Float[Array, ""],
                 Float[Array, ""],
@@ -555,7 +555,7 @@ def block_gauss_newton_step(
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
-            new_geometry: tuple[
+            new_geometry: Tuple[
                 Float[Array, ""],
                 Float[Array, "2"],
                 Float[Array, "2"],
@@ -593,7 +593,7 @@ def block_gauss_newton_step(
             step, _ = conjugate_gradient(
                 jtj_fn, gradient, x0, cg_max_iterations, cg_tolerance
             )
-            new_probe_modes: tuple[
+            new_probe_modes: Tuple[
                 Float[Array, "num_modes"],
                 Float[Array, "num_modes h w"],
             ] = (
@@ -621,7 +621,7 @@ def alternating_block_solve(
     num_outer_iterations: int = 10,
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
-) -> tuple[PtychoParams, Float[Array, "num_outer"]]:
+) -> Tuple[PtychoParams, Float[Array, "num_outer"]]:
     """Solve via alternating block updates following a schedule.
 
     Extended Summary
@@ -695,7 +695,7 @@ def alternating_block_solve(
     def outer_iteration(
         params: PtychoParams,
         _: None,
-    ) -> tuple[PtychoParams, Float[Array, ""]]:
+    ) -> Tuple[PtychoParams, Float[Array, ""]]:
         """Execute one full pass through block_schedule."""
 
         def inner_step(
@@ -719,7 +719,7 @@ def alternating_block_solve(
 
         residual_norm: Float[Array, ""] = compute_residual_norm(updated_params)
 
-        result: tuple[PtychoParams, Float[Array, ""]] = (
+        result: Tuple[PtychoParams, Float[Array, ""]] = (
             updated_params,
             residual_norm,
         )
@@ -731,7 +731,7 @@ def alternating_block_solve(
         outer_iteration, params_init, None, length=num_outer_iterations
     )
 
-    solve_result: tuple[PtychoParams, Float[Array, "num_outer"]] = (
+    solve_result: Tuple[PtychoParams, Float[Array, "num_outer"]] = (
         final_params,
         residual_history,
     )

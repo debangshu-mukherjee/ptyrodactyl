@@ -27,6 +27,7 @@ from pathlib import Path
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import Array, Float, Int, jaxtyped
 from numpy.typing import NDArray
 
@@ -41,11 +42,29 @@ _LOBATO_PATH: Path = _LUGGAGE_DIR / "Lobato_van_Dyck.csv"
 def _validate_coefficients(
     coefficients: Float[NDArray, "rows columns"],
     *,
-    expected_shape: tuple[int, int],
+    expected_shape: Tuple[int, int],
     scale_columns: slice,
     table_name: str,
 ) -> None:
-    """Validate one host-side coefficient matrix before JAX conversion."""
+    """PRIVATE: Validate one host-side coefficient matrix.
+
+    Parameters
+    ----------
+    coefficients : Float[NDArray, "rows columns"]
+        Host coefficient matrix to validate before JAX conversion.
+    expected_shape : Tuple[int, int]
+        Required matrix shape.
+    scale_columns : slice
+        Columns that contain strictly positive physical scales.
+    table_name : str
+        Table name included in validation errors.
+
+    Raises
+    ------
+    ValueError
+        If the shape is wrong, a coefficient is non-finite, or a physical
+        scale is non-positive.
+    """
     if coefficients.shape != expected_shape:
         raise ValueError(
             f"Expected {table_name} CSV shape {expected_shape}, "
@@ -61,11 +80,11 @@ def _validate_coefficients(
 def _load_kirkland_csv(
     file_path: Path | None = None,
 ) -> Float[Array, "103 12"]:
-    """Load and validate the Kirkland coefficient table.
+    """PRIVATE: Load and validate the Kirkland coefficient table.
 
     Parameters
     ----------
-    file_path : Path | None, optional
+    file_path : Path | None
         Alternate CSV path. The bundled table is used when omitted.
 
     Returns
@@ -102,11 +121,11 @@ def _load_kirkland_csv(
 def _load_lobato_csv(
     file_path: Path | None = None,
 ) -> Float[Array, "103 10"]:
-    """Load and validate the Lobato--Van Dyck coefficient table.
+    """PRIVATE: Load and validate the Lobato--Van Dyck coefficient table.
 
     Parameters
     ----------
-    file_path : Path | None, optional
+    file_path : Path | None
         Alternate CSV path. The bundled table is used when omitted.
 
     Returns

@@ -1,4 +1,5 @@
 import os
+import re
 import sys
 from datetime import datetime
 
@@ -148,12 +149,20 @@ typehints_type_aliases = napoleon_type_aliases
 
 nitpick_ignore = [
     ("py:class", "Float"),
+    ("py:class", "Float64"),
     ("py:class", "Array"),
     ("py:class", "Int"),
+    ("py:class", "Int32"),
+    ("py:class", "Int64"),
+    ("py:class", "Complex128"),
     ("py:class", "Num"),
     ("py:class", "Bool"),
     ("py:class", "jaxtyping.Float"),
+    ("py:class", "jaxtyping.Float64"),
     ("py:class", "jaxtyping.Array"),
+    ("py:class", "jaxtyping.Int32"),
+    ("py:class", "jaxtyping.Int64"),
+    ("py:class", "jaxtyping.Complex128"),
     ("py:class", "beartype"),
     ("py:class", "jaxtyped"),
     ("py:obj", "beartype"),
@@ -174,8 +183,12 @@ def skip_member(app, what, name, obj, skip, options):
     """Skip specific members in documentation."""
     skip_names = [
         "Float",
+        "Float64",
         "Array",
         "Int",
+        "Int32",
+        "Int64",
+        "Complex128",
         "Num",
         "Bool",
         "beartype",
@@ -192,12 +205,19 @@ def skip_member(app, what, name, obj, skip, options):
 
 def process_signature(app, what, name, obj, options, signature, return_annotation):
     """Process signatures to handle jaxtyping annotations."""
+    pattern = (
+        r"(?:jaxtyping\.)?"
+        r"(Float64|Complex128|Int32|Int64|Float|Complex|Int|Bool|Num)"
+        r"\[Array, ['\"]\s*([^'\"]*)['\"]\]"
+    )
     if signature:
-        signature = signature.replace('Float[Array, " ', "FloatArray[")
-        signature = signature.replace('Int[Array, " ', "IntArray[")
-        signature = signature.replace('Bool[Array, " ', "BoolArray[")
-        signature = signature.replace('Num[Array, " ', "NumArray[")
-        signature = signature.replace('"]', "]")
+        signature = re.sub(pattern, r"\1Array[\2]", signature)
+    if return_annotation:
+        return_annotation = re.sub(
+            pattern,
+            r"\1Array[\2]",
+            return_annotation,
+        )
     return signature, return_annotation
 
 

@@ -30,7 +30,7 @@ import jax
 import jax.numpy as jnp
 from beartype import beartype
 from jax import Array
-from jaxtyping import Float, jaxtyped
+from jaxtyping import Float, Float64, jaxtyped
 
 from ptyrodactyl._physics import helmholtz_coupling_value
 from ptyrodactyl.types import (
@@ -184,7 +184,7 @@ def phase_interaction_parameter(
 @jaxtyped(typechecker=beartype)
 def helmholtz_coupling(
     voltage_kv: scalar_num,
-) -> Float[Array, " "]:
+) -> Float64[Array, " "]:
     r"""Helmholtz potential coupling sigma_H in 1/(V·Angstrom^2).
 
     Extended Summary
@@ -232,7 +232,7 @@ def helmholtz_coupling(
 
     Returns
     -------
-    sigma_h : Float[Array, " "]
+    sigma_h : Float64[Array, " "]
         Helmholtz potential coupling in 1/(V·Angstrom^2).
 
     See Also
@@ -243,7 +243,7 @@ def helmholtz_coupling(
     :func:`relativistic_mass` :
         Relativistic mass used in computation.
     """
-    sigma_h: Float[Array, " "] = helmholtz_coupling_value(
+    sigma_h: Float64[Array, " "] = helmholtz_coupling_value(
         voltage_kv,
         M_E,
         E_CHARGE,

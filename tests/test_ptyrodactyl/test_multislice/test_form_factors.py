@@ -11,6 +11,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from beartype.typing import Tuple
 from equinox import EquinoxRuntimeError
 
 from ptyrodactyl.inout import kirkland_potentials, lobato_potentials
@@ -31,7 +32,7 @@ from ptyrodactyl.types import (
 
 _FORM_FACTOR_RELATIVE_BOUND: float = 6e-3
 _PROJECTED_RELATIVE_BOUND: float = 3e-2
-_TRACED_ERROR_TYPES: tuple[type[Exception], ...] = (
+_TRACED_ERROR_TYPES: Tuple[type[Exception], ...] = (
     EquinoxRuntimeError,
     jax.errors.JaxRuntimeError,
     ValueError,
@@ -294,12 +295,16 @@ def test_primitive_coefficient_gradients_are_finite() -> None:
     r = jnp.asarray(0.3, dtype=jnp.float64)
 
     lobato_gradient = jax.grad(
-        lambda params: lobato_form_factor(params, q)
-        + lobato_projected_potential(params, r)
+        lambda params: (
+            lobato_form_factor(params, q)
+            + lobato_projected_potential(params, r)
+        )
     )(lobato_params)
     kirkland_gradient = jax.grad(
-        lambda params: kirkland_form_factor(params, q)
-        + kirkland_projected_potential(params, r)
+        lambda params: (
+            kirkland_form_factor(params, q)
+            + kirkland_projected_potential(params, r)
+        )
     )(kirkland_params)
 
     for gradient in jax.tree_util.tree_leaves(

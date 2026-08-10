@@ -105,7 +105,7 @@ def rotmatrix_vectors(
     sin_theta: Float[Array, " "] = jnp.linalg.norm(cross)
 
     def _fallback_parallel() -> Float[Array, "3 3"]:
-        """Return identity when vectors are already parallel.
+        """PRIVATE: Return identity when vectors are already parallel.
 
         Returns
         -------
@@ -116,13 +116,21 @@ def rotmatrix_vectors(
         return rotation_matrix_parallel
 
     def _fallback_opposite() -> Float[Array, "3 3"]:
-        """Compute 180-degree rotation for anti-parallel vectors.
+        """PRIVATE: Compute 180-degree rotation for anti-parallel vectors.
 
         Returns
         -------
         rotation_matrix_opposite : Float[Array, "3 3"]
             Rotation matrix for 180-degree rotation around an
             axis orthogonal to v1.
+
+        Notes
+        -----
+        For a unit axis with cross-product matrix ``K``, the 180-degree
+        Rodrigues formula reduces to ``I + 2 * K @ K``. The chosen basis
+        vector keeps the constructed axis away from zero. This branch maps
+        ``v1`` to exact ``-v1``; a merely near-opposite ``v2`` is aligned only
+        to the caller's branch tolerance.
         """
         magic_number: scalar_float = 0.9
         ortho: Float[Array, " 3"] = jnp.where(
@@ -145,13 +153,21 @@ def rotmatrix_vectors(
         return rotation_matrix_opposite
 
     def _compute() -> Float[Array, "3 3"]:
-        """Compute rotation via Rodrigues formula.
+        """PRIVATE: Compute rotation via Rodrigues formula.
 
         Returns
         -------
         rotation_matrix_general : Float[Array, "3 3"]
             Rotation matrix for the general (non-degenerate)
             case.
+
+        Notes
+        -----
+        For normalized inputs, ``sin_theta`` is the cross-product norm and
+        ``dot`` is ``cos(theta)``. Rodrigues' formula is therefore
+        ``I + sin_theta * K + (1 - dot) * K @ K``. The caller handles
+        near-parallel inputs before this branch, so division by ``sin_theta``
+        stays outside its zero-limit regime.
         """
         axis: Float[Array, " 3"] = cross / sin_theta
         kk: Float[Array, "3 3"] = jnp.array(
@@ -334,11 +350,11 @@ def rotate_structure(
     rotated_cell: Real[Array, "3 3"] = cell @ rotation_matrix.T
 
     def _apply_inplane_rotation() -> Float[Array, " N 4"]:
-        """Apply in-plane z-axis rotation to coordinates.
+        """PRIVATE: Apply in-plane z-axis rotation to coordinates.
 
         Returns
         -------
-        Float[Array, " N 4"]
+        result : Float[Array, " N 4"]
             Coordinates after secondary z-axis rotation.
         """
         in_plane_rotation: Float[Array, "3 3"] = rotmatrix_axis(
@@ -353,11 +369,11 @@ def rotate_structure(
         return result
 
     def _no_inplane_rotation() -> Float[Array, " N 4"]:
-        """Return coordinates unchanged (no-op branch).
+        """PRIVATE: Return coordinates unchanged for the no-op branch.
 
         Returns
         -------
-        Float[Array, " N 4"]
+        result : Float[Array, " N 4"]
             Unmodified rotated coordinates.
         """
         result: Float[Array, " N 4"] = rotated_coords_with_ids

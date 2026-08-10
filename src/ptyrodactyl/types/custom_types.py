@@ -34,7 +34,10 @@ Routine Listings
 Notes
 -----
 These aliases are re-exported from :mod:`ptyrodactyl.types` as the
-canonical type import path for the package.
+canonical type import path for the package. They are intentionally
+width-polymorphic. Canonical carrier fields and post-conversion arrays use
+width-qualified jaxtyping dtypes such as ``Float64`` or ``Int64`` instead.
+An exact dtype annotation asserts a contract; it does not convert a value.
 """
 
 from enum import Enum

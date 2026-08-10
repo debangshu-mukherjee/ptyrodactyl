@@ -5,8 +5,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from beartype.typing import Dict
+
 _TYPES_SOURCE = Path(__file__).parents[3] / "src" / "ptyrodactyl" / "types"
-_FACTORY_BY_MODULE: dict[str, dict[str, str]] = {
+_FACTORY_BY_MODULE: Dict[str, Dict[str, str]] = {
     "born_types": {
         "GalerkinOperator": "create_galerkin_operator",
         "GalerkinSolveResult": "create_galerkin_solve_result",
@@ -38,7 +40,6 @@ _FACTORY_BY_MODULE: dict[str, dict[str, str]] = {
         "GalerkinSource": "create_galerkin_source",
         "GalerkinStabilityProof": "create_galerkin_stability_proof",
         "GalerkinStabilityResult": "create_galerkin_stability_result",
-        "GalerkinTargetManifest": "create_galerkin_target_manifest",
     },
     "jacobian_types": {
         "AberrationParams": "create_ptycho_params",

@@ -25,6 +25,7 @@ from pathlib import Path
 import chex
 import jax.numpy as jnp
 import numpy as np
+from beartype.typing import Dict
 from jaxtyping import Array, Shaped
 from numpy.typing import NDArray
 
@@ -35,7 +36,7 @@ _ORACLE_PATH = (
 )
 
 
-def _load_oracle() -> dict[str, Shaped[NDArray, "..."]]:
+def _load_oracle() -> Dict[str, Shaped[NDArray, "..."]]:
     """Load independent copies of every stored optimizer-oracle array."""
     with np.load(_ORACLE_PATH) as archive:
         oracle = {name: archive[name].copy() for name in archive.files}

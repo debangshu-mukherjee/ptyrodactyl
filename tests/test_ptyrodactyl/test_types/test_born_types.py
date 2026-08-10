@@ -12,7 +12,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
-from beartype.typing import Any
+from beartype.typing import Any, Dict
 
 from ptyrodactyl.types import (
     GalerkinCertificateReason,
@@ -31,9 +31,9 @@ _RUNTIME_ERRORS = (
 )
 
 
-def _operator_inputs() -> dict[str, Any]:
+def _operator_inputs() -> Dict[str, Any]:
     """Return one valid sparse scalar Galerkin operator input set."""
-    inputs: dict[str, Any] = {
+    inputs: Dict[str, Any] = {
         "free_diagonal": jnp.array([-0.4, 0.2, 1.1], dtype=jnp.float64),
         "interaction_rows": jnp.array([0, 0, 1, 2], dtype=jnp.int32),
         "interaction_columns": jnp.array([0, 1, 0, 2], dtype=jnp.int32),
@@ -53,13 +53,13 @@ def _operator_inputs() -> dict[str, Any]:
     return inputs
 
 
-def _result_inputs() -> dict[str, Any]:
+def _result_inputs() -> Dict[str, Any]:
     """Return one valid converged algebraic solve-result input set."""
     residual: jax.Array = jnp.array(
         [1.0e-9 + 2.0e-9j, -3.0e-9 + 0.0j, 2.0e-9 - 1.0e-9j],
         dtype=jnp.complex128,
     )
-    inputs: dict[str, Any] = {
+    inputs: Dict[str, Any] = {
         "field": jnp.array(
             [0.4 + 0.2j, -0.1 + 0.5j, 0.7 - 0.3j],
             dtype=jnp.complex128,
@@ -119,7 +119,7 @@ class TestGalerkinCarriers:
 
     def test_operator_factory_preserves_sparse_fields(self) -> None:
         """Preserve validated COO arrays without dense matrix construction."""
-        inputs: dict[str, Any] = _operator_inputs()
+        inputs: Dict[str, Any] = _operator_inputs()
         operator: GalerkinOperator = create_galerkin_operator(**inputs)
         jax.block_until_ready(operator)
 
@@ -141,14 +141,81 @@ class TestGalerkinCarriers:
         )
         assert operator.absorber_factor_size == 2
 
+    def test_operator_factory_preserves_polymorphic_array_dtypes(self) -> None:
+        """Preserve algebraic arrays while canonicalizing only CAP scale."""
+        inputs: Dict[str, Any] = _operator_inputs()
+        inputs["free_diagonal"] = inputs["free_diagonal"].astype(jnp.float32)
+        for name in (
+            "interaction_rows",
+            "interaction_columns",
+            "absorber_factor_rows",
+            "absorber_factor_columns",
+        ):
+            inputs[name] = inputs[name].astype(jnp.int16)
+        for name in ("interaction_values", "absorber_factor_values"):
+            inputs[name] = inputs[name].astype(jnp.complex64)
+        inputs["cap_scale"] = inputs["cap_scale"].astype(jnp.float32)
+
+        @jax.jit
+        def compiled(
+            free_diagonal: jax.Array,
+            interaction_rows: jax.Array,
+            interaction_columns: jax.Array,
+            interaction_values: jax.Array,
+            absorber_factor_rows: jax.Array,
+            absorber_factor_columns: jax.Array,
+            absorber_factor_values: jax.Array,
+            cap_scale: jax.Array,
+        ) -> GalerkinOperator:
+            """Build the polymorphic operator through traced inputs."""
+            operator: GalerkinOperator = create_galerkin_operator(
+                free_diagonal=free_diagonal,
+                interaction_rows=interaction_rows,
+                interaction_columns=interaction_columns,
+                interaction_values=interaction_values,
+                absorber_factor_rows=absorber_factor_rows,
+                absorber_factor_columns=absorber_factor_columns,
+                absorber_factor_values=absorber_factor_values,
+                cap_scale=cap_scale,
+                absorber_factor_size=2,
+            )
+            return operator
+
+        eager: GalerkinOperator = create_galerkin_operator(**inputs)
+        traced_arguments = tuple(
+            inputs[name]
+            for name in (
+                "free_diagonal",
+                "interaction_rows",
+                "interaction_columns",
+                "interaction_values",
+                "absorber_factor_rows",
+                "absorber_factor_columns",
+                "absorber_factor_values",
+                "cap_scale",
+            )
+        )
+        compiled_operator: GalerkinOperator = compiled(*traced_arguments)
+        jax.block_until_ready((eager, compiled_operator))
+
+        for operator in (eager, compiled_operator):
+            assert operator.free_diagonal.dtype == jnp.float32
+            assert operator.interaction_rows.dtype == jnp.int16
+            assert operator.interaction_columns.dtype == jnp.int16
+            assert operator.interaction_values.dtype == jnp.complex64
+            assert operator.absorber_factor_rows.dtype == jnp.int16
+            assert operator.absorber_factor_columns.dtype == jnp.int16
+            assert operator.absorber_factor_values.dtype == jnp.complex64
+            assert operator.cap_scale.dtype == jnp.float64
+
     def test_operator_factory_is_jittable_and_keeps_static_size(self) -> None:
         """Compile checks while retaining the factor row count as static."""
-        inputs: dict[str, Any] = _operator_inputs()
+        inputs: Dict[str, Any] = _operator_inputs()
 
         @jax.jit
         def compiled(cap_scale: jax.Array) -> GalerkinOperator:
             """Construct an operator with one traced CAP scale."""
-            traced_inputs: dict[str, Any] = dict(inputs)
+            traced_inputs: Dict[str, Any] = dict(inputs)
             traced_inputs["cap_scale"] = cap_scale
             operator: GalerkinOperator = create_galerkin_operator(
                 **traced_inputs
@@ -162,7 +229,7 @@ class TestGalerkinCarriers:
 
     def test_operator_factory_allows_zero_interaction_entries(self) -> None:
         """Allow the empty Hermitian interaction needed by free-space cases."""
-        inputs: dict[str, Any] = _operator_inputs()
+        inputs: Dict[str, Any] = _operator_inputs()
         inputs["interaction_rows"] = jnp.array([], dtype=jnp.int32)
         inputs["interaction_columns"] = jnp.array([], dtype=jnp.int32)
         inputs["interaction_values"] = jnp.array([], dtype=jnp.complex128)
@@ -221,12 +288,12 @@ class TestGalerkinCarriers:
 
     def test_operator_factory_rejects_structural_errors(self) -> None:
         """Reject mismatched COO lengths and empty absorber factors eagerly."""
-        mismatched: dict[str, Any] = _operator_inputs()
+        mismatched: Dict[str, Any] = _operator_inputs()
         mismatched["interaction_columns"] = jnp.array([0], dtype=jnp.int32)
         with pytest.raises(ValueError, match="matching shapes"):
             create_galerkin_operator(**mismatched)
 
-        empty_factor: dict[str, Any] = _operator_inputs()
+        empty_factor: Dict[str, Any] = _operator_inputs()
         empty_factor["absorber_factor_rows"] = jnp.array([], dtype=jnp.int32)
         empty_factor["absorber_factor_columns"] = jnp.array(
             [], dtype=jnp.int32
@@ -237,7 +304,7 @@ class TestGalerkinCarriers:
         with pytest.raises(ValueError, match="must be nonempty"):
             create_galerkin_operator(**empty_factor)
 
-        invalid_size: dict[str, Any] = _operator_inputs()
+        invalid_size: Dict[str, Any] = _operator_inputs()
         invalid_size["absorber_factor_size"] = 0
         with pytest.raises(ValueError, match="must be positive"):
             create_galerkin_operator(**invalid_size)
@@ -256,12 +323,12 @@ class TestGalerkinCarriers:
         message: str,
     ) -> None:
         """Reject non-positive or non-finite traced CAP scales."""
-        inputs: dict[str, Any] = _operator_inputs()
+        inputs: Dict[str, Any] = _operator_inputs()
 
         @jax.jit
         def compiled(value: jax.Array) -> GalerkinOperator:
             """Construct an operator with one invalid traced scalar."""
-            traced_inputs: dict[str, Any] = dict(inputs)
+            traced_inputs: Dict[str, Any] = dict(inputs)
             traced_inputs[field_name] = value
             operator: GalerkinOperator = create_galerkin_operator(
                 **traced_inputs
@@ -276,12 +343,12 @@ class TestGalerkinCarriers:
         self,
     ) -> None:
         """Reject a traced interaction whose reverse entry is not conjugate."""
-        inputs: dict[str, Any] = _operator_inputs()
+        inputs: Dict[str, Any] = _operator_inputs()
 
         @jax.jit
         def compiled(values: jax.Array) -> GalerkinOperator:
             """Construct an operator from traced interaction values."""
-            traced_inputs: dict[str, Any] = dict(inputs)
+            traced_inputs: Dict[str, Any] = dict(inputs)
             traced_inputs["interaction_values"] = values
             operator: GalerkinOperator = create_galerkin_operator(
                 **traced_inputs
@@ -299,7 +366,7 @@ class TestGalerkinCarriers:
         self,
     ) -> None:
         """Reject duplicate interaction keys and invalid factor indices."""
-        duplicate: dict[str, Any] = _operator_inputs()
+        duplicate: Dict[str, Any] = _operator_inputs()
         duplicate["interaction_rows"] = jnp.array([0, 0], dtype=jnp.int32)
         duplicate["interaction_columns"] = jnp.array([0, 0], dtype=jnp.int32)
         duplicate["interaction_values"] = jnp.array(
@@ -310,7 +377,7 @@ class TestGalerkinCarriers:
             operator: GalerkinOperator = create_galerkin_operator(**duplicate)
             jax.block_until_ready(operator)
 
-        out_of_range: dict[str, Any] = _operator_inputs()
+        out_of_range: Dict[str, Any] = _operator_inputs()
         out_of_range["absorber_factor_rows"] = jnp.array(
             [0, 0, 2], dtype=jnp.int32
         )
@@ -322,7 +389,7 @@ class TestGalerkinCarriers:
         self,
     ) -> None:
         """Preserve separate algebraic, normal, and recurrence residuals."""
-        inputs: dict[str, Any] = _result_inputs()
+        inputs: Dict[str, Any] = _result_inputs()
         result: GalerkinSolveResult = create_galerkin_solve_result(**inputs)
         jax.block_until_ready(result)
 
@@ -337,9 +404,81 @@ class TestGalerkinCarriers:
             GalerkinCertificateReason.NO_OUTWARD_RESIDUAL_BOUND
         )
 
+    def test_solve_result_factory_canonicalizes_only_scalar_diagnostics(
+        self,
+    ) -> None:
+        """Canonicalize metrics and counters while preserving vector dtype."""
+        inputs: Dict[str, Any] = _result_inputs()
+        inputs["field"] = inputs["field"].astype(jnp.complex64)
+        inputs["residual"] = inputs["residual"].astype(jnp.complex64)
+        for name in (
+            "residual_norm",
+            "normal_residual_norm",
+            "recurrence_residual_norm",
+        ):
+            inputs[name] = jnp.asarray(inputs[name], dtype=jnp.float32)
+        inputs["iterations"] = jnp.asarray(7, dtype=jnp.int16)
+        inputs["operator_applications"] = jnp.asarray(16, dtype=jnp.int64)
+        inputs["status"] = jnp.asarray(
+            GalerkinSolveStatus.CONVERGED, dtype=jnp.int64
+        )
+
+        @jax.jit
+        def compiled(
+            field: jax.Array,
+            residual: jax.Array,
+            residual_norm: jax.Array,
+            normal_residual_norm: jax.Array,
+            recurrence_residual_norm: jax.Array,
+            iterations: jax.Array,
+            operator_applications: jax.Array,
+            status: jax.Array,
+        ) -> GalerkinSolveResult:
+            """Build the mixed-precision result through traced inputs."""
+            result: GalerkinSolveResult = create_galerkin_solve_result(
+                field=field,
+                residual=residual,
+                residual_norm=residual_norm,
+                normal_residual_norm=normal_residual_norm,
+                recurrence_residual_norm=recurrence_residual_norm,
+                iterations=iterations,
+                operator_applications=operator_applications,
+                status=status,
+                converged=True,
+                method=GalerkinSolveMethod.CGLS,
+                certificate_reason=(
+                    GalerkinCertificateReason.NO_OUTWARD_RESIDUAL_BOUND
+                ),
+            )
+            return result
+
+        eager: GalerkinSolveResult = create_galerkin_solve_result(**inputs)
+        compiled_result: GalerkinSolveResult = compiled(
+            inputs["field"],
+            inputs["residual"],
+            inputs["residual_norm"],
+            inputs["normal_residual_norm"],
+            inputs["recurrence_residual_norm"],
+            inputs["iterations"],
+            inputs["operator_applications"],
+            inputs["status"],
+        )
+        jax.block_until_ready((eager, compiled_result))
+
+        for result in (eager, compiled_result):
+            assert result.field.dtype == jnp.complex64
+            assert result.residual.dtype == jnp.complex64
+            assert result.residual_norm.dtype == jnp.float64
+            assert result.normal_residual_norm.dtype == jnp.float64
+            assert result.recurrence_residual_norm.dtype == jnp.float64
+            assert result.iterations.dtype == jnp.int32
+            assert result.operator_applications.dtype == jnp.int32
+            assert result.status.dtype == jnp.int32
+            assert result.converged.dtype == jnp.bool_
+
     def test_solve_result_factory_normalizes_static_enums(self) -> None:
         """Normalize valid labels and reject invalid static enum labels."""
-        inputs: dict[str, Any] = _result_inputs()
+        inputs: Dict[str, Any] = _result_inputs()
         inputs["method"] = "lsqr"
         inputs["certificate_reason"] = "no_stability_bound"
         result: GalerkinSolveResult = create_galerkin_solve_result(**inputs)
@@ -353,14 +492,14 @@ class TestGalerkinCarriers:
             ("method", "unknown-method"),
             ("certificate_reason", "not-a-reason"),
         ):
-            invalid: dict[str, Any] = dict(inputs)
+            invalid: Dict[str, Any] = dict(inputs)
             invalid[field] = label
             with pytest.raises(ValueError):
                 create_galerkin_solve_result(**invalid)
 
     def test_solve_result_factory_is_jittable(self) -> None:
         """Compile result validation for traced residual and status scalars."""
-        inputs: dict[str, Any] = _result_inputs()
+        inputs: Dict[str, Any] = _result_inputs()
 
         @jax.jit
         def compiled(
@@ -369,7 +508,7 @@ class TestGalerkinCarriers:
             converged: jax.Array,
         ) -> GalerkinSolveResult:
             """Construct a result from traced diagnostic scalars."""
-            traced_inputs: dict[str, Any] = dict(inputs)
+            traced_inputs: Dict[str, Any] = dict(inputs)
             traced_inputs["residual_norm"] = residual_norm
             traced_inputs["status"] = status
             traced_inputs["converged"] = converged
@@ -389,12 +528,12 @@ class TestGalerkinCarriers:
 
     def test_solve_result_factory_rejects_structural_errors(self) -> None:
         """Reject non-vector fields and mismatched residual shapes eagerly."""
-        nonvector: dict[str, Any] = _result_inputs()
+        nonvector: Dict[str, Any] = _result_inputs()
         nonvector["field"] = jnp.ones((1, 3), dtype=jnp.complex128)
         with pytest.raises(ValueError, match="field must be 1D"):
             create_galerkin_solve_result(**nonvector)
 
-        mismatched: dict[str, Any] = _result_inputs()
+        mismatched: Dict[str, Any] = _result_inputs()
         mismatched["residual"] = jnp.ones(2, dtype=jnp.complex128)
         with pytest.raises(ValueError, match="matching shapes"):
             create_galerkin_solve_result(**mismatched)
@@ -416,12 +555,12 @@ class TestGalerkinCarriers:
         message: str,
     ) -> None:
         """Reject invalid traced scalar diagnostics with their field names."""
-        inputs: dict[str, Any] = _result_inputs()
+        inputs: Dict[str, Any] = _result_inputs()
 
         @jax.jit
         def compiled(value: jax.Array) -> GalerkinSolveResult:
             """Construct a result with one invalid traced scalar."""
-            traced_inputs: dict[str, Any] = dict(inputs)
+            traced_inputs: Dict[str, Any] = dict(inputs)
             traced_inputs[field_name] = value
             result: GalerkinSolveResult = create_galerkin_solve_result(
                 **traced_inputs
@@ -434,7 +573,7 @@ class TestGalerkinCarriers:
 
     def test_solve_result_factory_rejects_status_flag_mismatch(self) -> None:
         """Reject a convergence flag that disagrees with solver status."""
-        inputs: dict[str, Any] = _result_inputs()
+        inputs: Dict[str, Any] = _result_inputs()
 
         @jax.jit
         def compiled(
@@ -442,7 +581,7 @@ class TestGalerkinCarriers:
             converged: jax.Array,
         ) -> GalerkinSolveResult:
             """Construct a result from inconsistent traced status values."""
-            traced_inputs: dict[str, Any] = dict(inputs)
+            traced_inputs: Dict[str, Any] = dict(inputs)
             traced_inputs["status"] = status
             traced_inputs["converged"] = converged
             result: GalerkinSolveResult = create_galerkin_solve_result(

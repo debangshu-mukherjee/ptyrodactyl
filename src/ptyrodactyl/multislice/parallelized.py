@@ -63,7 +63,7 @@ def _compute_slice_potential(
     calib_ang: scalar_float,
     atom_mask: Optional[Float[Array, " N"]] = None,
 ) -> Float[Array, "H W"]:
-    """Compute a potential slice by summing atom type contributions.
+    """PRIVATE: Compute a potential slice from atom-type contributions.
 
     Extended Summary
     ----------------
@@ -94,15 +94,16 @@ def _compute_slice_potential(
     z_max : scalar_float
         Maximum z coordinate for this slice in Angstroms.
     atom_potentials : Float[Array, "T H W"]
-        Precomputed 2D atomic potentials for each atom type.
+        Precomputed 2D atomic potentials in volt-Angstroms for each atom type.
         T is the number of unique atom types.
     grid_shape : Tuple[int, int]
-        Output grid shape ``(height, width)``.
+        Static output grid shape ``(height, width)``. Changing it causes
+        retracing because it determines compiled array shapes.
     calib_ang : scalar_float
         Pixel size in Angstroms.
     atom_mask : Optional[Float[Array, " N"]]
         Mask for atoms to include (1.0 = include,
-        0.0 = exclude). If ``None``, all atoms are included.
+        0.0 = exclude). Default is ``None``, which includes all atoms.
 
     Returns
     -------
@@ -124,7 +125,7 @@ def _compute_slice_potential(
     def _process_atom_type(
         atom_type_idx: scalar_int,
     ) -> Float[Array, "H W"]:
-        """Compute potential contribution from one atom type.
+        """PRIVATE: Compute the potential contribution from one atom type.
 
         Parameters
         ----------
@@ -134,7 +135,7 @@ def _compute_slice_potential(
         Returns
         -------
         convolved : Float[Array, "H W"]
-            FFT-convolved potential contribution.
+            FFT-convolved potential contribution in volt-Angstroms.
         """
         type_mask: Float[Array, " N"] = (
             atom_types == atom_type_idx
@@ -219,6 +220,18 @@ def cbed_amplitude_from_atoms(
     )
 
     def _slice_at(slice_idx: scalar_int) -> Float[Array, "H W"]:
+        """PRIVATE: Build one potential slice for provider-backed propagation.
+
+        Parameters
+        ----------
+        slice_idx : scalar_int
+            Zero-based slice index.
+
+        Returns
+        -------
+        pot_slice : Float[Array, "H W"]
+            Projected potential slice in volt-Angstroms.
+        """
         z_min: Float[Array, " "] = slice_z_bounds[slice_idx, 0]
         z_max: Float[Array, " "] = slice_z_bounds[slice_idx, 1]
         pot_slice: Float[Array, "H W"] = _compute_slice_potential(
@@ -309,6 +322,18 @@ def cbed_image_from_atoms(
     def _mode_amplitude(
         sample: Float[Array, " D"],
     ) -> Complex[Array, "H W"]:
+        """PRIVATE: Select one retained detector amplitude by mode sample.
+
+        Parameters
+        ----------
+        sample : Float[Array, " D"]
+            Distribution sample whose first value is the probe-mode index.
+
+        Returns
+        -------
+        amplitude : Complex[Array, "H W"]
+            Complex detector amplitude for the selected mode.
+        """
         mode_idx: Int[Array, ""] = sample[0].astype(jnp.int32)
         amplitude: Complex[Array, "H W"] = amplitudes[..., mode_idx]
         return amplitude
@@ -410,7 +435,7 @@ def stem4d_sharded(
     def _shift_probe(
         position_ang: Float[Array, " 2"],
     ) -> Complex[Array, "H W M"]:
-        """Shift probe modes via Fourier phase ramp.
+        """PRIVATE: Shift probe modes with a Fourier phase ramp.
 
         Parameters
         ----------
@@ -437,7 +462,7 @@ def stem4d_sharded(
     def _process_single_position(
         position_ang: Float[Array, " 2"],
     ) -> Float[Array, "H W"]:
-        """Compute CBED pattern for a single scan position.
+        """PRIVATE: Compute a CBED pattern for one scan position.
 
         Parameters
         ----------
@@ -467,7 +492,7 @@ def stem4d_sharded(
     def _process_batch(
         positions_batch: Float[Array, "B 2"],
     ) -> Float[Array, "B H W"]:
-        """Process a batch of positions (one shard).
+        """PRIVATE: Process one shard of scan positions.
 
         Parameters
         ----------
@@ -476,7 +501,7 @@ def stem4d_sharded(
 
         Returns
         -------
-        Float[Array, "B H W"]
+        result : Float[Array, "B H W"]
             CBED patterns for the batch.
         """
         result: Float[Array, "B H W"] = jax.vmap(_process_single_position)(

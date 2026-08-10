@@ -8,6 +8,8 @@ import subprocess
 import sys
 import textwrap
 
+from beartype.typing import Dict
+
 _ENV_KEYS = (
     "EQX_ON_ERROR",
     "PTYRODACTYL_CACHE_DIR",
@@ -20,14 +22,14 @@ _ENV_KEYS = (
 )
 
 
-def _clean_env() -> dict[str, str]:
+def _clean_env() -> Dict[str, str]:
     env = os.environ.copy()
     for key in _ENV_KEYS:
         env.pop(key, None)
     return env
 
 
-def _run_script(script: str, env: dict[str, str] | None = None):
+def _run_script(script: str, env: Dict[str, str] | None = None):
     return subprocess.run(
         [sys.executable, "-c", textwrap.dedent(script)],
         capture_output=True,

@@ -2,6 +2,7 @@
 [![Documentation Status](https://readthedocs.org/projects/ptyrodactyl/badge/?version=latest)](https://ptyrodactyl.readthedocs.io/en/latest/?badge=latest)
 [![Tests](https://github.com/debangshu-mukherjee/ptyrodactyl/actions/workflows/tests.yml/badge.svg)](https://github.com/debangshu-mukherjee/ptyrodactyl/actions/workflows/tests.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](https://github.com/debangshu-mukherjee/ptyrodactyl/blob/main/LICENSE.md)
+[![Lines of Code](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/debangshu-mukherjee/ptyrodactyl/main/.github/badges/loc.json)](https://github.com/debangshu-mukherjee/ptyrodactyl)
 [![DOI](https://zenodo.org/badge/905915185.svg)](https://doi.org/10.5281/zenodo.14861992)
 
 # ptyrodactyl

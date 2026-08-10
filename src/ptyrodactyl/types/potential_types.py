@@ -25,11 +25,13 @@ and the declared additive reference are measured in volts.
 import math
 import re
 from collections.abc import Sequence
+from fractions import Fraction
 
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
-from jaxtyping import Array, Float, Num, jaxtyped
+from beartype.typing import Tuple
+from jaxtyping import Array, Float64, Num, jaxtyped
 
 from .custom_types import scalar_num
 
@@ -47,14 +49,17 @@ class Potential3D(eqx.Module):
 
     Attributes
     ----------
-    volume : Float[Array, "nz ny nx"]
+    volume : Float64[Array, "nz ny nx"]
         Sampled electrostatic potential in volts.  This is the carrier's only
         dynamic PyTree leaf.
-    voxel_size : tuple[float, float, float]
-        Static voxel spacing ``(dx, dy, dz)`` in Angstroms.
-    box_size : tuple[float, float, float]
+    voxel_size : Tuple[float, float, float]
+        Canonical binary64 diagnostic spacing ``(Lx / Nx, Ly / Ny,
+        Lz / Nz)`` in Angstroms.  The exact finite-target grid is owned by
+        ``box_size`` and the integer volume shape, not by multiplying these
+        rounded values back by the shape.
+    box_size : Tuple[float, float, float]
         Static periodic box lengths ``(Lx, Ly, Lz)`` in Angstroms.
-    origin : tuple[float, float, float]
+    origin : Tuple[float, float, float]
         Static physical coordinate of sample ``volume[0, 0, 0]``, in
         Angstroms and ``(x, y, z)`` order.
     units : str
@@ -83,10 +88,10 @@ class Potential3D(eqx.Module):
         Create and validate a :class:`Potential3D`.
     """
 
-    volume: Float[Array, "nz ny nx"]
-    voxel_size: tuple[float, float, float] = eqx.field(static=True)
-    box_size: tuple[float, float, float] = eqx.field(static=True)
-    origin: tuple[float, float, float] = eqx.field(static=True)
+    volume: Float64[Array, "nz ny nx"]
+    voxel_size: Tuple[float, float, float] = eqx.field(static=True)
+    box_size: Tuple[float, float, float] = eqx.field(static=True)
+    origin: Tuple[float, float, float] = eqx.field(static=True)
     units: str = eqx.field(static=True)
     reference_value: float = eqx.field(static=True)
     reference_semantics: str = eqx.field(static=True)
@@ -97,8 +102,30 @@ class Potential3D(eqx.Module):
     band_limit: float = eqx.field(static=True)
 
 
-def _xyz_tuple(values: _StaticXYZ, name: str) -> tuple[float, float, float]:
-    """Convert and validate one static physical ``(x, y, z)`` tuple."""
+def _xyz_tuple(values: _StaticXYZ, name: str) -> Tuple[float, float, float]:
+    """PRIVATE: Convert and validate one physical ``(x, y, z)`` tuple.
+
+    Parameters
+    ----------
+    values : _StaticXYZ
+        Three real physical-coordinate values in Angstroms.
+    name : str
+        Field name included in validation errors.
+
+    Returns
+    -------
+    x : float
+        Finite physical x value in Angstroms.
+    y : float
+        Finite physical y value in Angstroms.
+    z : float
+        Finite physical z value in Angstroms.
+
+    Raises
+    ------
+    ValueError
+        If ``values`` does not contain exactly three finite real numbers.
+    """
     if isinstance(values, str | bytes) or len(values) != _XYZ_SIZE:
         raise ValueError(f"{name} must contain exactly three values")
     if any(isinstance(value, bool) for value in values):
@@ -107,18 +134,40 @@ def _xyz_tuple(values: _StaticXYZ, name: str) -> tuple[float, float, float]:
     if jnp.issubdtype(values_array.dtype, jnp.bool_):
         raise ValueError(f"{name} values must be real numbers")
     try:
-        result: tuple[float, float, float] = tuple(
+        converted_values: Tuple[float, ...] = tuple(
             float(value) for value in values
-        )  # type: ignore[assignment]
+        )
     except (TypeError, ValueError) as error:
         raise ValueError(f"{name} values must be real numbers") from error
+    x: float = converted_values[0]
+    y: float = converted_values[1]
+    z: float = converted_values[2]
+    result: Tuple[float, float, float] = (x, y, z)
     if not all(math.isfinite(value) for value in result):
         raise ValueError(f"{name} values must be finite")
     return result
 
 
 def _nonempty_text(value: str, name: str) -> str:
-    """Validate and normalize one required static text declaration."""
+    """PRIVATE: Validate and normalize one required text declaration.
+
+    Parameters
+    ----------
+    value : str
+        Static text to strip and validate.
+    name : str
+        Field name included in the validation error.
+
+    Returns
+    -------
+    result : str
+        Stripped non-empty text.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not a string or contains only whitespace.
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{name} must be a non-empty string")
     result: str = value.strip()
@@ -150,10 +199,14 @@ def create_potential_3d(  # noqa: PLR0912, PLR0913, PLR0915
     volume : Num[Array, "..."]
         Real sampled voltage field with shape ``(nz, ny, nx)``.
     voxel_size : Sequence[float]
-        Voxel spacing ``(dx, dy, dz)`` in Angstroms.
+        Submitted voxel spacing ``(dx, dy, dz)`` in Angstroms.  It is checked
+        against the grid spacing implied by ``box_size`` and the integer
+        volume shape; the returned carrier stores that canonical binary64
+        quotient as diagnostic metadata.
     box_size : Sequence[float]
-        Box lengths ``(Lx, Ly, Lz)`` in Angstroms.  They must agree with the
-        volume shape and voxel spacing.
+        Authoritative exact-target box lengths ``(Lx, Ly, Lz)`` in
+        Angstroms.  Together with the integer volume shape they define sample
+        coordinates and the physical voxel metric.
     origin : Sequence[float]
         Coordinate of the first sample in ``(x, y, z)`` order, in Angstroms.
     units : str, optional
@@ -195,18 +248,18 @@ def create_potential_3d(  # noqa: PLR0912, PLR0913, PLR0915
     raw_volume: Num[Array, "..."] = jnp.asarray(volume)
     if jnp.issubdtype(raw_volume.dtype, jnp.complexfloating):
         raise ValueError("volume must be a real electrostatic potential")
-    volume_arr: Float[Array, "nz ny nx"] = raw_volume.astype(jnp.float64)
+    volume_arr: Float64[Array, "nz ny nx"] = raw_volume.astype(jnp.float64)
     if volume_arr.ndim != _CUBE_RANK:
         raise ValueError("volume must have shape (nz, ny, nx)")
     if any(size <= 0 for size in volume_arr.shape):
         raise ValueError("volume dimensions must be positive")
 
-    voxel_xyz: tuple[float, float, float] = _xyz_tuple(
+    voxel_xyz: Tuple[float, float, float] = _xyz_tuple(
         voxel_size,
         "voxel_size",
     )
-    box_xyz: tuple[float, float, float] = _xyz_tuple(box_size, "box_size")
-    origin_xyz: tuple[float, float, float] = _xyz_tuple(origin, "origin")
+    box_xyz: Tuple[float, float, float] = _xyz_tuple(box_size, "box_size")
+    origin_xyz: Tuple[float, float, float] = _xyz_tuple(origin, "origin")
     if any(value <= 0.0 for value in voxel_xyz):
         raise ValueError("voxel_size values must be positive")
     if any(value <= 0.0 for value in box_xyz):
@@ -216,14 +269,25 @@ def create_potential_3d(  # noqa: PLR0912, PLR0913, PLR0915
     ny: int
     nx: int
     nz, ny, nx = volume_arr.shape
-    expected_box: tuple[float, float, float] = (
-        nx * voxel_xyz[0],
-        ny * voxel_xyz[1],
-        nz * voxel_xyz[2],
+    canonical_voxel_xyz: Tuple[float, float, float] = (
+        box_xyz[0] / nx,
+        box_xyz[1] / ny,
+        box_xyz[2] / nz,
     )
     if not all(
-        math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-12)
-        for actual, expected in zip(box_xyz, expected_box, strict=True)
+        math.isfinite(value) and value > 0.0 for value in canonical_voxel_xyz
+    ):
+        raise ValueError(
+            "box_size / (nx, ny, nz) must remain a positive finite "
+            "binary64 diagnostic spacing"
+        )
+    if not all(
+        math.isclose(submitted, canonical, rel_tol=1e-12, abs_tol=1e-12)
+        for submitted, canonical in zip(
+            voxel_xyz,
+            canonical_voxel_xyz,
+            strict=True,
+        )
     ):
         raise ValueError(
             "box_size must equal voxel_size * (nx, ny, nz) in xyz order"
@@ -257,7 +321,7 @@ def create_potential_3d(  # noqa: PLR0912, PLR0913, PLR0915
         "unknown",
         "unspecified",
     }
-    ambiguous_reference_phrases: tuple[str, ...] = (
+    ambiguous_reference_phrases: Tuple[str, ...] = (
         "not declared",
         "not specified",
         "not stated",
@@ -302,20 +366,27 @@ def create_potential_3d(  # noqa: PLR0912, PLR0913, PLR0915
     band_limit_float: float = float(band_limit)
     if not math.isfinite(band_limit_float) or band_limit_float <= 0.0:
         raise ValueError("band_limit must be positive and finite")
-    common_nyquist: float = min(0.5 / spacing for spacing in voxel_xyz)
-    if band_limit_float > common_nyquist * (1.0 + 1e-12):
+    common_nyquist: Fraction = min(
+        Fraction(count, 1) / (2 * Fraction.from_float(length))
+        for count, length in zip(
+            (nx, ny, nz),
+            box_xyz,
+            strict=True,
+        )
+    )
+    if Fraction.from_float(band_limit_float) > common_nyquist:
         raise ValueError(
             "band_limit exceeds the common representable Nyquist frequency"
         )
 
-    checked_volume: Float[Array, "nz ny nx"] = eqx.error_if(
+    checked_volume: Float64[Array, "nz ny nx"] = eqx.error_if(
         volume_arr,
         jnp.any(~jnp.isfinite(volume_arr)),
         "volume contains non-finite values",
     )
     potential: Potential3D = Potential3D(
         volume=checked_volume,
-        voxel_size=voxel_xyz,
+        voxel_size=canonical_voxel_xyz,
         box_size=box_xyz,
         origin=origin_xyz,
         units=units,

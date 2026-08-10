@@ -36,14 +36,32 @@ Units are Angstroms and inverse Angstroms throughout.
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 
 def _validate_grid_inputs(
-    grid_shape: tuple[int, int, int],
+    grid_shape: Tuple[int, int, int],
     grid_spacing_ang: float,
 ) -> None:
-    """Validate static grid structure for Fourier-space helpers."""
+    """PRIVATE: Validate static grid structure for Fourier-space helpers.
+
+    Parameters
+    ----------
+    grid_shape : Tuple[int, int, int]
+        Static positive grid shape in ``(x, y, z)`` axis order.
+    grid_spacing_ang : float
+        Positive isotropic grid spacing in Angstroms.
+
+    Raises
+    ------
+    ValueError
+        If the spacing or any grid extent is not positive.
+
+    Notes
+    -----
+    This host-side check runs before JAX constructs reciprocal coordinates.
+    """
     min_grid_spacing: float = 0.0
     min_grid_size: int = 0
     if grid_spacing_ang <= min_grid_spacing:
@@ -202,9 +220,9 @@ def convergence_parameter(
 
 @jaxtyped(typechecker=beartype)
 def reciprocal_coords(
-    grid_shape: tuple[int, int, int],
+    grid_shape: Tuple[int, int, int],
     grid_spacing_ang: float,
-) -> tuple[
+) -> Tuple[
     Float[Array, "Nx Ny Nz"],
     Float[Array, "Nx Ny Nz"],
     Float[Array, "Nx Ny Nz"],
@@ -241,7 +259,7 @@ def reciprocal_coords(
 
     Parameters
     ----------
-    grid_shape : tuple[int, int, int]
+    grid_shape : Tuple[int, int, int]
         Number of voxels ``(Nx, Ny, Nz)`` along each axis.
     grid_spacing_ang : float
         Isotropic voxel size in Angstrom. At 10 pm this is
@@ -283,7 +301,7 @@ def reciprocal_coords(
     pz: Float[Array, "Nx Ny Nz"]
     px, py, pz = jnp.meshgrid(px_1d, py_1d, pz_1d, indexing="ij")
 
-    coordinates: tuple[
+    coordinates: Tuple[
         Float[Array, "Nx Ny Nz"],
         Float[Array, "Nx Ny Nz"],
         Float[Array, "Nx Ny Nz"],
@@ -293,7 +311,7 @@ def reciprocal_coords(
 
 @jaxtyped(typechecker=beartype)
 def green_function_fourier(
-    grid_shape: tuple[int, int, int],
+    grid_shape: Tuple[int, int, int],
     grid_spacing_ang: float,
     k0_squared: Float[Array, ""],
     epsilon: Float[Array, ""],
@@ -349,7 +367,7 @@ def green_function_fourier(
 
     Parameters
     ----------
-    grid_shape : tuple[int, int, int]
+    grid_shape : Tuple[int, int, int]
         Number of voxels ``(Nx, Ny, Nz)`` along each axis.
     grid_spacing_ang : float
         Isotropic voxel size in Angstrom.

@@ -245,7 +245,24 @@ def create_trivial_distribution(
 def _normalize_probability_weights(
     weights: Float[Array, "M"],
 ) -> Float[Array, "M"]:
-    """Normalize probability weights with a uniform zero-sum fallback."""
+    """PRIVATE: Normalize weights with a uniform zero-sum fallback.
+
+    Parameters
+    ----------
+    weights : Float[Array, "M"]
+        Probability weights to clip at zero and normalize.
+
+    Returns
+    -------
+    normalized_weights : Float[Array, "M"]
+        Non-negative weights with unit sum. A non-positive clipped sum
+        produces uniform weights.
+
+    Notes
+    -----
+    The branch uses :func:`jax.lax.cond` so normalization remains compatible
+    with JAX transformations.
+    """
     clipped_weights: Float[Array, "M"] = jnp.clip(
         jnp.asarray(weights, dtype=jnp.float64),
         0.0,

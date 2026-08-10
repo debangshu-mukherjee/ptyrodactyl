@@ -22,7 +22,7 @@ Routine Listings
 
 import jax
 from beartype import beartype
-from beartype.typing import Callable
+from beartype.typing import Callable, Tuple
 from jaxtyping import Array, Float, PyTree, jaxtyped
 
 
@@ -123,7 +123,7 @@ def vjp_operator(
         cotangent_vector: Float[Array, "..."],
     ) -> PyTree:
         """Compute J^T @ cotangent_vector via reverse-mode AD."""
-        result_tuple: tuple[PyTree, ...] = vjp_fn_raw(cotangent_vector)
+        result_tuple: Tuple[PyTree, ...] = vjp_fn_raw(cotangent_vector)
         result: PyTree = result_tuple[0]
         return result
 
@@ -177,7 +177,7 @@ def jtj_operator(
     ) -> PyTree:
         """Compute J^T J @ vector via JVP then VJP."""
         _, forward_tangent = jax.jvp(forward_fn, (params,), (vector,))
-        backward_result: tuple[PyTree, ...] = vjp_fn_raw(forward_tangent)
+        backward_result: Tuple[PyTree, ...] = vjp_fn_raw(forward_tangent)
         result: PyTree = backward_result[0]
         return result
 

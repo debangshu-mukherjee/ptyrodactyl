@@ -506,7 +506,30 @@ def _cbed_amplitude_from_slice_provider(
     calib_ang: scalar_float,
     slice_provider: Callable[[scalar_int], Float[Array, " H W"]],
 ) -> Complex[Array, " H W M"]:
-    """Return detector amplitudes from one provider-backed multislice scan."""
+    """PRIVATE: Return amplitudes from one provider-backed multislice scan.
+
+    Parameters
+    ----------
+    beam_modes : Complex[Array, " H W M"]
+        Incident dimensionless complex probe amplitudes.
+    num_slices : int
+        Static number of potential slices.
+    slice_thickness : scalar_num
+        Uniform slice thickness in Angstroms.
+    voltage_kv : scalar_num
+        Accelerating voltage in kilovolts.
+    calib_ang : scalar_float
+        Real-space pixel calibration in Angstroms.
+    slice_provider : Callable[[scalar_int], Float[Array, " H W"]]
+        Callable that returns one projected potential slice in
+        volt-Angstroms by index.
+
+    Returns
+    -------
+    detector_amplitude : Complex[Array, " H W M"]
+        Dimensionless complex detector-plane amplitude for each retained
+        probe mode.
+    """
     dtype: jnp.dtype = beam_modes.dtype
     propagator: Complex[Array, " H W"] = propagation_func(
         beam_modes.shape[0],
@@ -520,7 +543,23 @@ def _cbed_amplitude_from_slice_provider(
     def _scan_fn(
         carry: Complex[Array, " H W M"], slice_idx: scalar_int
     ) -> Tuple[Complex[Array, " H W M"], None]:
-        """Propagate wave through one potential slice."""
+        """PRIVATE: Propagate a wave through one potential slice.
+
+        Parameters
+        ----------
+        carry : Complex[Array, " H W M"]
+            Dimensionless complex wave entering the slice.
+        slice_idx : scalar_int
+            Zero-based slice index.
+
+        Returns
+        -------
+        wave : Complex[Array, " H W M"]
+            Dimensionless complex wave after transmission and optional
+            propagation.
+        auxiliary : None
+            No stacked scan output.
+        """
         wave: Complex[Array, " H W M"] = carry
         pot_single_slice: Float[Array, " H W"] = slice_provider(slice_idx)
         trans_slice: Complex[Array, " H W"] = transmission_func(
@@ -531,7 +570,18 @@ def _cbed_amplitude_from_slice_provider(
         def _propagate(
             w: Complex[Array, " H W M"],
         ) -> Complex[Array, " H W M"]:
-            """Apply Fresnel propagation in Fourier space."""
+            """PRIVATE: Apply Fresnel propagation in Fourier space.
+
+            Parameters
+            ----------
+            w : Complex[Array, " H W M"]
+                Dimensionless complex post-transmission wave.
+
+            Returns
+            -------
+            result : Complex[Array, " H W M"]
+                Propagated dimensionless complex wave.
+            """
             w_k: Complex[Array, " H W M"] = jnp.fft.fft2(w, axes=(0, 1))
             w_k = w_k * propagator[..., jnp.newaxis]
             result: Complex[Array, " H W M"] = jnp.fft.ifft2(
@@ -541,7 +591,8 @@ def _cbed_amplitude_from_slice_provider(
 
         is_last_slice: Bool[Array, ""] = jnp.array(slice_idx == num_slices - 1)
         wave = lax.cond(is_last_slice, lambda w: w, _propagate, wave)
-        result: Tuple[Complex[Array, " H W M"], None] = (wave, None)
+        auxiliary: None = None
+        result: Tuple[Complex[Array, " H W M"], None] = (wave, auxiliary)
         return result
 
     final_wave: Complex[Array, " H W M"]
@@ -595,6 +646,18 @@ def cbed_amplitude(
     num_slices: int = pot_slice.shape[-1]
 
     def _slice_at(slice_idx: scalar_int) -> Float[Array, " H W"]:
+        """PRIVATE: Select one projected potential slice by index.
+
+        Parameters
+        ----------
+        slice_idx : scalar_int
+            Zero-based slice index.
+
+        Returns
+        -------
+        squeezed_slice : Float[Array, " H W"]
+            Selected projected potential slice in volt-Angstroms.
+        """
         pot_single_slice: Float[Array, " H W 1"] = lax.dynamic_slice_in_dim(
             pot_slice, slice_idx, 1, axis=2
         )
@@ -649,7 +712,18 @@ def probe_modes_to_distribution(probe: ProbeModes) -> Distribution:
 
 
 def _has_extra_ensemble_axes(ensemble: EnsembleAxes) -> bool:
-    """Return whether cbed_image should use the generalized axis binder."""
+    """PRIVATE: Return whether CBED needs the generalized axis binder.
+
+    Parameters
+    ----------
+    ensemble : EnsembleAxes
+        Optional probe-mode, position-jitter, and coherence axes.
+
+    Returns
+    -------
+    result : bool
+        True when at least one explicit ensemble axis is present.
+    """
     result: bool = (
         ensemble.probe_modes is not None
         or ensemble.position_jitter is not None
@@ -661,8 +735,21 @@ def _has_extra_ensemble_axes(ensemble: EnsembleAxes) -> bool:
 def _ensemble_axes_for_cbed(
     ensemble: EnsembleAxes,
     beam: ProbeModes,
-) -> tuple[Distribution, ...]:
-    """Return ordered CBED axes with probe modes first when needed."""
+) -> Tuple[Distribution, ...]:
+    """PRIVATE: Return ordered CBED axes with probe modes first.
+
+    Parameters
+    ----------
+    ensemble : EnsembleAxes
+        Optional explicit ensemble axes.
+    beam : ProbeModes
+        Probe modes used to synthesize a missing mode distribution.
+
+    Returns
+    -------
+    result : Tuple[Distribution, ...]
+        Ordered non-empty distribution tuple.
+    """
     axes: list[Distribution] = []
     mode_count: int = jnp.atleast_3d(beam.modes).shape[-1]
     if ensemble.probe_modes is not None:
@@ -675,7 +762,7 @@ def _ensemble_axes_for_cbed(
         axes.append(ensemble.coherence)
     if len(axes) == 0:
         axes.append(probe_modes_to_distribution(beam))
-    result: tuple[Distribution, ...] = tuple(axes)
+    result: Tuple[Distribution, ...] = tuple(axes)
     return result
 
 
@@ -685,8 +772,8 @@ def bind_cbed_axes(
     probe_modes: ProbeModes,
     microscope: MicroscopeConfig,
     detector: DetectorConfig,
-    axes: tuple[Distribution, ...],
-    column_maps: tuple[str, ...] = (),
+    axes: Tuple[Distribution, ...],
+    column_maps: Tuple[str, ...] = (),
 ) -> Callable[[Float[Array, " D"]], Complex[Array, " H W"]]:
     """Return a CBED amplitude closure bound to distribution-axis columns.
 
@@ -704,10 +791,10 @@ def bind_cbed_axes(
         Nominal microscope voltage and aberration configuration.
     detector : DetectorConfig
         Real-space pixel size used for position shifts and tilt ramps.
-    axes : tuple[Distribution, ...]
+    axes : Tuple[Distribution, ...]
         Distribution axes whose sample rows are concatenated by
         :func:`~ptyrodactyl.multislice.reduce.apply_distributions`.
-    column_maps : tuple[str, ...], optional
+    column_maps : Tuple[str, ...], optional
         Static column-map names. An empty tuple derives them from each
         distribution ``axis_id``. Supported names are ``"probe_modes"``,
         ``"position_jitter"``, and ``"coherence"``.
@@ -737,7 +824,7 @@ def bind_cbed_axes(
     :see: cbed_amplitude, apply_distributions, coherence_to_distribution.
     """
     bound_amplitude: Callable[[Float[Array, " D"]], Complex[Array, " H W"]]
-    axis_maps: tuple[str, ...] = _resolve_column_maps(axes, column_maps)
+    axis_maps: Tuple[str, ...] = _resolve_column_maps(axes, column_maps)
     _validate_axis_maps(axes, axis_maps, probe_modes)
     expected_dim: int = sum(axis.samples.shape[1] for axis in axes)
     nominal_voltage_kv: Float[Array, " "] = jnp.asarray(
@@ -807,11 +894,32 @@ def _apply_tilt_phase_ramp(
     voltage_kv: scalar_num,
     calib_ang: scalar_float,
 ) -> Complex[Array, " H W M"]:
-    r"""Apply a small-angle incident-tilt phase ramp to real-space modes.
+    r"""PRIVATE: Apply a small-angle tilt phase ramp to real-space modes.
 
     The convention is ``exp(i k dot r)`` with
     ``k = 2 pi theta / lambda``. Tilt columns are stored as
     ``[dtheta_x_mrad, dtheta_y_mrad]`` and converted to radians.
+
+    Parameters
+    ----------
+    modes : Complex[Array, " H W M"]
+        Complex real-space probe modes.
+    tilt_delta_mrad : Float[Array, " 2"]
+        Incident ``(x, y)`` tilt change in milliradians.
+    voltage_kv : scalar_num
+        Accelerating voltage in kilovolts.
+    calib_ang : scalar_float
+        Real-space pixel calibration in Angstroms.
+
+    Returns
+    -------
+    tilted_modes : Complex[Array, " H W M"]
+        Probe modes with the incident-tilt ramp applied.
+
+    Notes
+    -----
+    The ramp uses :math:`\exp(i\mathbf{k}\cdot\mathbf{r})` with
+    :math:`\mathbf{k}=2\pi\boldsymbol{\theta}/\lambda`.
     """
     height: int = modes.shape[0]
     width: int = modes.shape[1]
@@ -840,10 +948,32 @@ def _apply_tilt_phase_ramp(
 @jaxtyped(typechecker=beartype)
 def _axis_update_from_sample(
     sample: Float[Array, " D"],
-    axes: tuple[Distribution, ...],
-    axis_maps: tuple[str, ...],
-) -> tuple[AxisUpdate, Array]:
-    """Fold one concatenated cursor row into an AxisUpdate and mode index."""
+    axes: Tuple[Distribution, ...],
+    axis_maps: Tuple[str, ...],
+) -> Tuple[AxisUpdate, Array]:
+    """PRIVATE: Fold one cursor row into an axis update and mode index.
+
+    Parameters
+    ----------
+    sample : Float[Array, " D"]
+        One row of concatenated distribution samples.
+    axes : Tuple[Distribution, ...]
+        Distribution axes in cursor-column order.
+    axis_maps : Tuple[str, ...]
+        Static map name for each distribution axis.
+
+    Returns
+    -------
+    update : AxisUpdate
+        Combined microscope, tilt, and position update.
+    mode_idx : Array
+        Selected probe-mode index as an integer scalar array.
+
+    Raises
+    ------
+    ValueError
+        If an axis map is unknown.
+    """
     cursor: int = 0
     updates: list[AxisUpdate] = []
     mode_idx: Array = jnp.asarray(0, dtype=jnp.int32)
@@ -866,12 +996,28 @@ def _axis_update_from_sample(
         cursor += axis_dim
 
     update: AxisUpdate = combine_axis_updates(tuple(updates))
-    result: tuple[AxisUpdate, Array] = (update, mode_idx)
+    result: Tuple[AxisUpdate, Array] = (update, mode_idx)
     return result
 
 
 def _expected_axis_dim(axis_map: str) -> int:
-    """Return the static sample-column count for one supported axis map."""
+    """PRIVATE: Return the sample-column count for one axis map.
+
+    Parameters
+    ----------
+    axis_map : str
+        Static distribution-axis map name.
+
+    Returns
+    -------
+    axis_dim : int
+        Required sample-column count.
+
+    Raises
+    ------
+    ValueError
+        If ``axis_map`` is unknown.
+    """
     if axis_map == _AXIS_PROBE_MODES:
         axis_dim: int = _PROBE_MODE_DIM
     elif axis_map == _AXIS_POSITION_JITTER:
@@ -884,12 +1030,31 @@ def _expected_axis_dim(axis_map: str) -> int:
 
 
 def _resolve_column_maps(
-    axes: tuple[Distribution, ...],
-    column_maps: tuple[str, ...],
-) -> tuple[str, ...]:
-    """Return explicit static column-map names for all axes."""
+    axes: Tuple[Distribution, ...],
+    column_maps: Tuple[str, ...],
+) -> Tuple[str, ...]:
+    """PRIVATE: Return explicit static column-map names for all axes.
+
+    Parameters
+    ----------
+    axes : Tuple[Distribution, ...]
+        Distribution axes in concatenation order.
+    column_maps : Tuple[str, ...]
+        Explicit map names, or an empty tuple to use axis identifiers.
+
+    Returns
+    -------
+    resolved_maps : Tuple[str, ...]
+        One static map name for each axis.
+
+    Raises
+    ------
+    ValueError
+        If explicit map count differs from axis count or an axis identifier is
+        absent.
+    """
     if len(column_maps) == 0:
-        resolved_maps: tuple[str, ...] = tuple(
+        resolved_maps: Tuple[str, ...] = tuple(
             _require_axis_id(axis) for axis in axes
         )
     elif len(column_maps) == len(axes):
@@ -900,7 +1065,23 @@ def _resolve_column_maps(
 
 
 def _require_axis_id(axis: Distribution) -> str:
-    """Return a distribution axis_id or raise for missing metadata."""
+    """PRIVATE: Return a distribution axis identifier.
+
+    Parameters
+    ----------
+    axis : Distribution
+        Distribution carrying optional axis metadata.
+
+    Returns
+    -------
+    axis_id : str
+        Required distribution axis identifier.
+
+    Raises
+    ------
+    ValueError
+        If the distribution has no axis identifier.
+    """
     if axis.axis_id is None:
         raise ValueError("distribution axis_id is required")
     axis_id: str = axis.axis_id
@@ -908,11 +1089,27 @@ def _require_axis_id(axis: Distribution) -> str:
 
 
 def _validate_axis_maps(
-    axes: tuple[Distribution, ...],
-    axis_maps: tuple[str, ...],
+    axes: Tuple[Distribution, ...],
+    axis_maps: Tuple[str, ...],
     probe_modes: ProbeModes,
 ) -> None:
-    """Validate static axis-map dimensions and probe-mode composition."""
+    """PRIVATE: Validate axis-map dimensions and probe-mode composition.
+
+    Parameters
+    ----------
+    axes : Tuple[Distribution, ...]
+        Distribution axes in concatenation order.
+    axis_maps : Tuple[str, ...]
+        Static map name for each axis.
+    probe_modes : ProbeModes
+        Probe modes governed by the axis composition.
+
+    Raises
+    ------
+    ValueError
+        If a map is unknown, a sample width is invalid, the mode axis is not
+        first, or a multimode probe lacks its explicit axis.
+    """
     for axis_index, (axis, axis_map) in enumerate(
         zip(axes, axis_maps, strict=True),
     ):
@@ -971,7 +1168,7 @@ def cbed_image(
             real_space_calib_ang=calib_ang,
             probe_calibration_pm=calib_ang * 100.0,
         )
-        axes: tuple[Distribution, ...] = _ensemble_axes_for_cbed(
+        axes: Tuple[Distribution, ...] = _ensemble_axes_for_cbed(
             microscope.ensemble,
             beam,
         )
@@ -1003,6 +1200,18 @@ def cbed_image(
     distribution: Distribution = probe_modes_to_distribution(beam)
 
     def _mode_amplitude(sample: Float[Array, " D"]) -> Complex[Array, " H W"]:
+        """PRIVATE: Select one retained detector amplitude by mode sample.
+
+        Parameters
+        ----------
+        sample : Float[Array, " D"]
+            Distribution sample whose first value is the probe-mode index.
+
+        Returns
+        -------
+        amplitude : Complex[Array, " H W"]
+            Complex detector amplitude for the selected mode.
+        """
         mode_idx: Int[Array, ""] = sample[0].astype(jnp.int32)
         amplitude: Complex[Array, " H W"] = amplitudes[..., mode_idx]
         return amplitude
@@ -1082,7 +1291,7 @@ def shift_beam_fourier(
     def _apply_shift(
         position_idx: scalar_int,
     ) -> Complex128[Array, " hh ww #mm"]:
-        """Apply Fourier phase ramp shift for one position.
+        """PRIVATE: Apply a Fourier phase-ramp shift for one position.
 
         Parameters
         ----------
@@ -1185,7 +1394,7 @@ def stem_4d(
     )
 
     def _process_single_position(pos_idx: scalar_int) -> Float[Array, " H W"]:
-        """Compute CBED pattern for a single beam position.
+        """PRIVATE: Compute a CBED pattern for one beam position.
 
         Parameters
         ----------
@@ -1194,7 +1403,7 @@ def stem_4d(
 
         Returns
         -------
-        Float[Array, " H W"]
+        result : Float[Array, " H W"]
             CBED intensity pattern at this position.
         """
         current_beam: Complex[Array, " H W #M"] = jnp.take(
@@ -1410,7 +1619,7 @@ def annular_detector(
     def _integrate_pattern(
         pattern: Float[Array, " hh ww"],
     ) -> Float[Array, " "]:
-        """Sum intensity within the annular mask.
+        """PRIVATE: Sum intensity within the annular mask.
 
         Parameters
         ----------
@@ -1419,7 +1628,7 @@ def annular_detector(
 
         Returns
         -------
-        Float[Array, " "]
+        result : Float[Array, " "]
             Integrated intensity.
         """
         result: Float[Array, " "] = jnp.sum(pattern * annular_mask)

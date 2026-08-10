@@ -25,7 +25,8 @@ Notes
 The interaction uses the positive SC-1 sign
 ``chi = sigma_H(voltage_kv) * phi``. All multiplier coefficients use the
 normalization in SC.13b. The bounded absorber factor satisfies
-``G.conj().T @ G = A`` up to binary64 rounding. It can falsify a candidate
+``G.conj().T @ G = A`` up to input-dtype floating-point rounding. It can
+falsify a candidate
 compression, but it is not an exact positivity or stability proof.
 """
 
@@ -34,7 +35,18 @@ import math
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
-from jaxtyping import Array, Bool, Complex, Float, Int, jaxtyped
+from beartype.typing import Tuple
+from jaxtyping import (
+    Array,
+    Bool,
+    Complex,
+    Complex128,
+    Float,
+    Float64,
+    Int,
+    Int64,
+    jaxtyped,
+)
 
 from ptyrodactyl._numeric import (
     has_lost_nonzero_components,
@@ -54,7 +66,20 @@ _MAX_DENSE_VALIDATION_SIZE: int = 32
 
 
 def _raise_if(condition: bool, message: str) -> None:
-    """Raise ``ValueError`` when a structural condition is true."""
+    """PRIVATE: Raise ``ValueError`` when a structural condition is true.
+
+    Parameters
+    ----------
+    condition : bool
+        Structural condition that triggers rejection when true.
+    message : str
+        Error message for the rejected condition.
+
+    Raises
+    ------
+    ValueError
+        If ``condition`` is true.
+    """
     if condition:
         raise ValueError(message)
 
@@ -64,7 +89,31 @@ def _checked_multiplier_coefficients(
     coefficients: Complex[Array, " p"],
     name: str,
 ) -> Complex[Array, " p"]:
-    """Attach finite and exact Hermitian-symmetry checks."""
+    """PRIVATE: Attach finite and exact Hermitian-symmetry checks.
+
+    Parameters
+    ----------
+    indices : Int[Array, "p 3"]
+        Reciprocal multiplier indices in fixed coefficient order.
+    coefficients : Complex[Array, " p"]
+        Candidate multiplier coefficients.
+    name : str
+        Multiplier name used in the traced error message.
+
+    Returns
+    -------
+    checked : Complex[Array, " p"]
+        Coefficients with traced range and Hermitian checks attached.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If coefficients are non-finite, subnormal, or not exactly Hermitian.
+
+    Notes
+    -----
+    The inverse-index comparison uses lexicographic order and exact equality.
+    """
     inverse_indices: Int[Array, "p 3"] = -indices
     forward_order: Int[Array, " p"] = jnp.lexsort(
         (indices[:, 2], indices[:, 1], indices[:, 0])
@@ -93,9 +142,27 @@ def _checked_multiplier_coefficients(
 
 def _flat_residues(
     indices: Int[Array, "n 3"],
-    work_shape: tuple[int, int, int],
+    work_shape: Tuple[int, int, int],
 ) -> Int[Array, " n"]:
-    """Map exact indices to flat row-major work-grid positions."""
+    """PRIVATE: Map exact indices to flat row-major work-grid positions.
+
+    Parameters
+    ----------
+    indices : Int[Array, "n 3"]
+        Signed reciprocal indices in ``(x, y, z)`` axis order.
+    work_shape : Tuple[int, int, int]
+        Positive endpoint-safe work-grid shape in ``(x, y, z)`` order.
+
+    Returns
+    -------
+    flat : Int[Array, " n"]
+        Periodic row-major positions in the flattened work grid.
+
+    Notes
+    -----
+    Modular residues implement periodic index embedding without endpoint
+    aliasing on the validated work shape.
+    """
     moduli: Int[Array, " 3"] = jnp.asarray(work_shape, dtype=indices.dtype)
     residues: Int[Array, "n 3"] = jnp.mod(indices, moduli)
     flat: Int[Array, " n"] = (
@@ -105,19 +172,36 @@ def _flat_residues(
 
 
 def _cosine_shell_coefficients(
-    indices: Int[Array, "q 3"],
-) -> Complex[Array, " q"]:
-    """Independently evaluate the analytic cosine-shell coefficients."""
-    axis_coefficients: Float[Array, "q 3"] = jnp.where(
+    indices: Int64[Array, "q 3"],
+) -> Complex128[Array, " q"]:
+    """PRIVATE: Evaluate analytic cosine-shell coefficients independently.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "q 3"]
+        Absorber reciprocal indices in ``(x, y, z)`` order.
+
+    Returns
+    -------
+    coefficients : Complex128[Array, " q"]
+        Analytic shell coefficients in the supplied index order.
+
+    Notes
+    -----
+    The separable interior profile has one-dimensional coefficients
+    ``(1/4, 1/2, 1/4)`` on modes ``(-1, 0, 1)``. The shell is one minus that
+    profile.
+    """
+    axis_coefficients: Float64[Array, "q 3"] = jnp.where(
         indices == 0,
         0.5,
         jnp.where(jnp.abs(indices) == 1, 0.25, 0.0),
     )
-    interior_coefficients: Float[Array, " q"] = jnp.prod(
+    interior_coefficients: Float64[Array, " q"] = jnp.prod(
         axis_coefficients, axis=-1
     )
     zero_mode: Bool[Array, " q"] = jnp.all(indices == 0, axis=-1)
-    coefficients: Complex[Array, " q"] = jnp.where(
+    coefficients: Complex128[Array, " q"] = jnp.where(
         zero_mode,
         1.0 - interior_coefficients,
         -interior_coefficients,
@@ -126,12 +210,27 @@ def _cosine_shell_coefficients(
 
 
 def _has_complete_cosine_shell_support(
-    indices: Int[Array, "q 3"],
+    indices: Int64[Array, "q 3"],
 ) -> Bool[Array, ""]:
-    """Return whether the absorber band contains all 27 profile modes."""
-    axis: Int[Array, " 3"] = jnp.asarray((-1, 0, 1), dtype=jnp.int64)
+    """PRIVATE: Determine whether the absorber contains all 27 shell modes.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "q 3"]
+        Absorber reciprocal indices in ``(x, y, z)`` order.
+
+    Returns
+    -------
+    complete : Bool[Array, ""]
+        True when every index in ``{-1, 0, 1}^3`` is present.
+
+    Notes
+    -----
+    Extra absorber modes do not affect this completeness test.
+    """
+    axis: Int64[Array, " 3"] = jnp.asarray((-1, 0, 1), dtype=jnp.int64)
     mesh = jnp.meshgrid(axis, axis, axis, indexing="ij")
-    required: Int[Array, "27 3"] = jnp.stack(mesh, axis=-1).reshape((27, 3))
+    required: Int64[Array, "27 3"] = jnp.stack(mesh, axis=-1).reshape((27, 3))
     matches: Bool[Array, "27 q"] = jnp.all(
         required[:, None, :] == indices[None, :, :], axis=-1
     )
@@ -143,7 +242,25 @@ def _compressed_absorber(
     support: GalerkinProductSupport,
     absorber_coefficients: Complex[Array, " q"],
 ) -> Complex[Array, "n n"]:
-    """Assemble the exact direct-branch absorber compression."""
+    """PRIVATE: Assemble the exact direct-branch absorber compression.
+
+    Parameters
+    ----------
+    support : GalerkinProductSupport
+        Fixed state and absorber supports.
+    absorber_coefficients : Complex[Array, " q"]
+        Absorber multiplier coefficients in support order.
+
+    Returns
+    -------
+    absorber : Complex[Array, "n n"]
+        Dense state-space absorber compression.
+
+    Notes
+    -----
+    Entry ``(i, j)`` is the coefficient at the exact state-index difference
+    ``k_i - k_j`` or zero when that mode is absent.
+    """
     differences: Int[Array, "n n 3"] = (
         support.state_indices[:, None, :] - support.state_indices[None, :, :]
     )
@@ -168,8 +285,30 @@ def _apply_multiplier_product(
     multiplier_indices: Int[Array, "p 3"],
     multiplier_coefficients: Complex[Array, " p"],
     field: Complex[Array, " n"],
-) -> Complex[Array, " n"]:
-    """Apply one validated unitary-DFT multiplier product."""
+) -> Complex128[Array, " n"]:
+    """PRIVATE: Apply one validated unitary-DFT multiplier product.
+
+    Parameters
+    ----------
+    support : GalerkinProductSupport
+        Fixed state support and endpoint-safe work quotient.
+    multiplier_indices : Int[Array, "p 3"]
+        Multiplier indices in ``(x, y, z)`` order.
+    multiplier_coefficients : Complex[Array, " p"]
+        Multiplier coefficients in the supplied index order.
+    field : Complex[Array, " n"]
+        State coefficients in fixed support order.
+
+    Returns
+    -------
+    product : Complex128[Array, " n"]
+        Retained coefficients of the multiplier-field product.
+
+    Notes
+    -----
+    Unitary FFT normalization requires the explicit square-root work-size
+    factor on the multiplier grid.
+    """
     work_size: int = math.prod(support.work_shape)
     state_positions: Int[Array, " n"] = _flat_residues(
         support.state_indices,
@@ -195,19 +334,19 @@ def _apply_multiplier_product(
         embedded_state.reshape(support.work_shape),
         norm="ortho",
     )
-    multiplier_grid: Complex[Array, "nw0 nw1 nw2"] = jnp.sqrt(
+    multiplier_grid: Complex128[Array, "nw0 nw1 nw2"] = jnp.sqrt(
         jnp.asarray(work_size, dtype=jnp.float64)
     ) * jnp.fft.ifftn(
         embedded_multiplier.reshape(support.work_shape),
         norm="ortho",
     )
-    product_coefficients: Complex[Array, "nw0 nw1 nw2"] = jnp.fft.fftn(
+    product_coefficients: Complex128[Array, "nw0 nw1 nw2"] = jnp.fft.fftn(
         multiplier_grid * state_grid,
         norm="ortho",
     )
-    product: Complex[Array, " n"] = product_coefficients.reshape((work_size,))[
-        state_positions
-    ]
+    product: Complex128[Array, " n"] = product_coefficients.reshape(
+        (work_size,)
+    )[state_positions]
     return product
 
 
@@ -216,7 +355,7 @@ def build_interaction_coefficients(
     support: GalerkinProductSupport,
     voltage_coefficients: Complex[Array, "..."],
     voltage_kv: scalar_num,
-) -> Complex[Array, " p"]:
+) -> Complex128[Array, " p"]:
     r"""Build SC-1 interaction coefficients from voltage coefficients.
 
     :see: :class:`~.test_potential.TestScalarPotentialProducts`
@@ -239,8 +378,9 @@ def build_interaction_coefficients(
 
     Returns
     -------
-    interaction_coefficients : Complex[Array, " p"]
-        Real-interaction multiplier coefficients in inverse-square Angstroms.
+    interaction_coefficients : Complex128[Array, " p"]
+        Canonical binary64-complex interaction coefficients in inverse-square
+        Angstroms.
 
     Raises
     ------
@@ -270,12 +410,12 @@ def build_interaction_coefficients(
         coefficient_array.shape[0] != support.interaction_indices.shape[0],
         "voltage_coefficients must match the interaction support",
     )
-    voltage_array: Float[Array, ""] = jnp.asarray(
+    voltage_array: Float64[Array, ""] = jnp.asarray(
         voltage_kv,
         dtype=jnp.float64,
     )
     _raise_if(voltage_array.shape != (), "voltage_kv must be a scalar")
-    checked_voltage: Float[Array, ""] = eqx.error_if(
+    checked_voltage: Float64[Array, ""] = eqx.error_if(
         voltage_array,
         (~jnp.isfinite(voltage_array)) | (voltage_array <= 0.0),
         "voltage_kv must be finite and positive",
@@ -295,7 +435,7 @@ def build_interaction_coefficients(
         C_LIGHT,
         H_PLANCK,
     )
-    interaction_coefficients: Complex[Array, " p"] = eqx.error_if(
+    interaction_coefficients: Complex128[Array, " p"] = eqx.error_if(
         raw_interaction_coefficients,
         jnp.any(~jnp.isfinite(raw_interaction_coefficients))
         | jnp.any(~jnp.isfinite(checked_coefficients))
@@ -313,7 +453,7 @@ def build_interaction_coefficients(
 @jaxtyped(typechecker=beartype)
 def build_cosine_shell_absorber_coefficients(
     support: GalerkinProductSupport,
-) -> Complex[Array, " q"]:
+) -> Complex128[Array, " q"]:
     r"""Build analytic coefficients of the bounded periodic shell absorber.
 
     :see: :class:`~.test_potential.TestScalarPotentialProducts`
@@ -325,8 +465,9 @@ def build_cosine_shell_absorber_coefficients(
 
     Returns
     -------
-    absorber_coefficients : Complex[Array, " q"]
-        Exact SC.13b coefficients of the declared cosine-shell profile.
+    absorber_coefficients : Complex128[Array, " q"]
+        Exact binary64-complex SC.13b coefficients of the declared
+        cosine-shell profile.
 
     Raises
     ------
@@ -341,10 +482,10 @@ def build_cosine_shell_absorber_coefficients(
     one whenever any coordinate is on its boundary. Its only nonzero modes
     lie in ``{-1, 0, 1}^3``; coefficients on extra ``K_a`` modes are zero.
     """
-    coefficients: Complex[Array, " q"] = _cosine_shell_coefficients(
+    coefficients: Complex128[Array, " q"] = _cosine_shell_coefficients(
         support.absorber_indices
     )
-    absorber_coefficients: Complex[Array, " q"] = eqx.error_if(
+    absorber_coefficients: Complex128[Array, " q"] = eqx.error_if(
         coefficients,
         ~_has_complete_cosine_shell_support(support.absorber_indices),
         "absorber support must contain all cosine-shell profile modes",
@@ -357,7 +498,7 @@ def apply_interaction_product(
     support: GalerkinProductSupport,
     interaction_coefficients: Complex[Array, "..."],
     field: Complex[Array, "..."],
-) -> Complex[Array, " n"]:
+) -> Complex128[Array, " n"]:
     r"""Apply the endpoint-safe fixed-support interaction product.
 
     :see: :class:`~.test_potential.TestScalarPotentialProducts`
@@ -379,8 +520,9 @@ def apply_interaction_product(
 
     Returns
     -------
-    interaction : Complex[Array, " n"]
-        Compressed interaction action in inverse-square Angstroms times field.
+    interaction : Complex128[Array, " n"]
+        Binary64-complex compressed interaction action in inverse-square
+        Angstroms times field.
 
     Raises
     ------
@@ -427,13 +569,13 @@ def apply_interaction_product(
         "field must be finite and contain no nonzero subnormal components",
     )
 
-    raw_interaction: Complex[Array, " n"] = _apply_multiplier_product(
+    raw_interaction: Complex128[Array, " n"] = _apply_multiplier_product(
         support,
         support.interaction_indices,
         checked_coefficients,
         checked_field,
     )
-    interaction: Complex[Array, " n"] = eqx.error_if(
+    interaction: Complex128[Array, " n"] = eqx.error_if(
         raw_interaction,
         jnp.any(~jnp.isfinite(raw_interaction))
         | has_subnormal_components(raw_interaction),
@@ -481,13 +623,13 @@ def build_absorber_factor(
 
     Notes
     -----
-    This helper is limited to 32 state modes and uses binary64
-    eigendecomposition and Cholesky factorization. It is validation and
-    falsification evidence, not an exact positivity certificate or per-result
-    stability proof. Production actions use :func:`apply_absorber_action` and
-    do not store this square factor. This function does not infer
-    continuous-profile coefficients from raw samples. The factor is
-    dimensionless; the physical CAP scale remains separate.
+    This helper is limited to 32 state modes and uses eigendecomposition and
+    Cholesky factorization in the input coefficient dtype. It is validation
+    and falsification evidence, not an exact positivity certificate or
+    per-result stability proof. Production actions use
+    :func:`apply_absorber_action` and do not store this square factor. This
+    function does not infer continuous-profile coefficients from raw samples.
+    The factor is dimensionless; the physical CAP scale remains separate.
     """
     coefficient_array: Complex[Array, " q"] = jnp.asarray(
         absorber_coefficients
@@ -531,7 +673,7 @@ def apply_absorber_action(
     support: GalerkinProductSupport,
     absorber_coefficients: Complex[Array, "..."],
     field: Complex[Array, "..."],
-) -> Complex[Array, " n"]:
+) -> Complex128[Array, " n"]:
     r"""Apply the endpoint-safe fixed-support absorber product.
 
     :see: :class:`~.test_potential.TestScalarPotentialProducts`
@@ -547,8 +689,9 @@ def apply_absorber_action(
 
     Returns
     -------
-    absorber : Complex[Array, " n"]
-        Exact compressed absorber action ``P_u M_a P_u field``.
+    absorber : Complex128[Array, " n"]
+        Binary64-complex compressed absorber action
+        ``P_u M_a P_u field``.
 
     Raises
     ------
@@ -598,13 +741,13 @@ def apply_absorber_action(
         | has_subnormal_components(field_array),
         "field must be finite and contain no nonzero subnormal components",
     )
-    raw_absorber: Complex[Array, " n"] = _apply_multiplier_product(
+    raw_absorber: Complex128[Array, " n"] = _apply_multiplier_product(
         support,
         support.absorber_indices,
         checked_coefficients,
         checked_field,
     )
-    absorber: Complex[Array, " n"] = eqx.error_if(
+    absorber: Complex128[Array, " n"] = eqx.error_if(
         raw_absorber,
         jnp.any(~jnp.isfinite(raw_absorber))
         | has_subnormal_components(raw_absorber),

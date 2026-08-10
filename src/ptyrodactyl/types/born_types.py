@@ -37,7 +37,18 @@ from enum import Enum, IntEnum
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
-from jaxtyping import Array, Bool, Complex, Float, Int, jaxtyped
+from beartype.typing import Tuple
+from jaxtyping import (
+    Array,
+    Bool,
+    Complex,
+    Float,
+    Float64,
+    Int,
+    Int32,
+    Int64,
+    jaxtyped,
+)
 
 from ptyrodactyl._numeric import has_subnormal_components
 
@@ -45,7 +56,20 @@ from .custom_types import scalar_bool, scalar_float, scalar_int
 
 
 def _raise_if(condition: bool, message: str) -> None:
-    """Raise ``ValueError`` when a structural condition is true."""
+    """PRIVATE: Raise ``ValueError`` for a true structural condition.
+
+    Parameters
+    ----------
+    condition : bool
+        Whether the structural contract is invalid.
+    message : str
+        Error message for the rejected contract.
+
+    Raises
+    ------
+    ValueError
+        If ``condition`` is true.
+    """
     if condition:
         raise ValueError(message)
 
@@ -54,7 +78,25 @@ def _checked_finite_vector(
     values: Complex[Array, " n"] | Float[Array, " n"],
     name: str,
 ) -> Complex[Array, " n"] | Float[Array, " n"]:
-    """Attach a traced finite-value check to one numeric vector."""
+    """PRIVATE: Attach a traced finite-value check to one numeric vector.
+
+    Parameters
+    ----------
+    values : Complex[Array, " n"] | Float[Array, " n"]
+        Numeric vector to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    checked_values : Complex[Array, " n"] | Float[Array, " n"]
+        Input vector with a traced finite-value assertion.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any vector element is non-finite under compiled execution.
+    """
     checked_values: Complex[Array, " n"] | Float[Array, " n"] = eqx.error_if(
         values,
         jnp.any(~jnp.isfinite(values)),
@@ -66,12 +108,32 @@ def _checked_finite_vector(
 def _checked_nonnegative_scalar(
     value: scalar_float,
     name: str,
-) -> Float[Array, ""]:
-    """Convert and validate one finite non-negative scalar."""
-    value_array: Float[Array, ""] = jnp.asarray(value, dtype=jnp.float64)
-    scalar_shape: tuple[()] = ()
+) -> Float64[Array, ""]:
+    """PRIVATE: Convert and validate one finite non-negative scalar.
+
+    Parameters
+    ----------
+    value : scalar_float
+        Scalar value to convert to binary64.
+    name : str
+        Field name included in validation errors.
+
+    Returns
+    -------
+    checked_value : Float64[Array, ""]
+        Binary64 scalar with traced finite and non-negative assertions.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not scalar-shaped.
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite or negative under compiled execution.
+    """
+    value_array: Float64[Array, ""] = jnp.asarray(value, dtype=jnp.float64)
+    scalar_shape: Tuple[()] = ()
     _raise_if(value_array.shape != scalar_shape, f"{name} must be a scalar")
-    checked_value: Float[Array, ""] = eqx.error_if(
+    checked_value: Float64[Array, ""] = eqx.error_if(
         value_array,
         (~jnp.isfinite(value_array)) | (value_array < 0.0),
         f"{name} must be finite and non-negative",
@@ -82,13 +144,33 @@ def _checked_nonnegative_scalar(
 def _checked_nonnegative_integer(
     value: scalar_int,
     name: str,
-) -> Int[Array, ""]:
-    """Convert and validate one non-negative integer scalar."""
+) -> Int32[Array, ""]:
+    """PRIVATE: Convert and validate one non-negative integer scalar.
+
+    Parameters
+    ----------
+    value : scalar_int
+        Integer scalar to convert to signed 32-bit storage.
+    name : str
+        Field name included in validation errors.
+
+    Returns
+    -------
+    checked_value : Int32[Array, ""]
+        Signed 32-bit scalar with a traced non-negative assertion.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is boolean or is not scalar-shaped.
+    equinox.EquinoxRuntimeError
+        If ``value`` is negative under compiled execution.
+    """
     _raise_if(isinstance(value, bool), f"{name} must not be boolean")
-    value_array: Int[Array, ""] = jnp.asarray(value, dtype=jnp.int32)
-    scalar_shape: tuple[()] = ()
+    value_array: Int32[Array, ""] = jnp.asarray(value, dtype=jnp.int32)
+    scalar_shape: Tuple[()] = ()
     _raise_if(value_array.shape != scalar_shape, f"{name} must be a scalar")
-    checked_value: Int[Array, ""] = eqx.error_if(
+    checked_value: Int32[Array, ""] = eqx.error_if(
         value_array,
         value_array < 0,
         f"{name} must be non-negative",
@@ -140,7 +222,7 @@ class GalerkinOperator(eqx.Module):
         Column indices of the unique absorber-factor COO entries.
     absorber_factor_values : Complex[Array, " q"]
         Dimensionless absorber-factor entries.
-    cap_scale : Float[Array, ""]
+    cap_scale : Float64[Array, ""]
         Positive normal-range physical CAP scale in inverse-square Angstroms.
     absorber_factor_size : int
         Static row count of the absorber factor. This value affects tracing.
@@ -165,7 +247,7 @@ class GalerkinOperator(eqx.Module):
     absorber_factor_rows: Int[Array, " q"]
     absorber_factor_columns: Int[Array, " q"]
     absorber_factor_values: Complex[Array, " q"]
-    cap_scale: Float[Array, ""]
+    cap_scale: Float64[Array, ""]
     absorber_factor_size: int = eqx.field(static=True)
 
 
@@ -197,17 +279,17 @@ class GalerkinSolveResult(eqx.Module):
         Computed retained-state coefficient vector.
     residual : Complex[Array, " n"]
         Independently recomputed algebraic residual vector.
-    residual_norm : Float[Array, ""]
+    residual_norm : Float64[Array, ""]
         Norm of the independently recomputed algebraic residual.
-    normal_residual_norm : Float[Array, ""]
+    normal_residual_norm : Float64[Array, ""]
         Norm of the normal-equation residual.
-    recurrence_residual_norm : Float[Array, ""]
+    recurrence_residual_norm : Float64[Array, ""]
         Residual norm reported by the iterative recurrence.
-    iterations : Int[Array, ""]
+    iterations : Int32[Array, ""]
         Number of completed solver iterations.
-    operator_applications : Int[Array, ""]
+    operator_applications : Int32[Array, ""]
         Number of forward and adjoint operator applications.
-    status : Int[Array, ""]
+    status : Int32[Array, ""]
         Integer code from :class:`GalerkinSolveStatus`.
     converged : Bool[Array, ""]
         Whether ``status`` equals :attr:`GalerkinSolveStatus.CONVERGED`.
@@ -230,12 +312,12 @@ class GalerkinSolveResult(eqx.Module):
 
     field: Complex[Array, " n"]
     residual: Complex[Array, " n"]
-    residual_norm: Float[Array, ""]
-    normal_residual_norm: Float[Array, ""]
-    recurrence_residual_norm: Float[Array, ""]
-    iterations: Int[Array, ""]
-    operator_applications: Int[Array, ""]
-    status: Int[Array, ""]
+    residual_norm: Float64[Array, ""]
+    normal_residual_norm: Float64[Array, ""]
+    recurrence_residual_norm: Float64[Array, ""]
+    iterations: Int32[Array, ""]
+    operator_applications: Int32[Array, ""]
+    status: Int32[Array, ""]
     converged: Bool[Array, ""]
     method: GalerkinSolveMethod = eqx.field(static=True)
     certificate_reason: GalerkinCertificateReason = eqx.field(static=True)
@@ -353,13 +435,13 @@ def create_galerkin_operator(  # noqa: PLR0915
     absorber_values_array: Complex[Array, " q"] = jnp.asarray(
         absorber_factor_values
     )
-    cap_scale_array: Float[Array, ""] = jnp.asarray(
+    cap_scale_array: Float64[Array, ""] = jnp.asarray(
         cap_scale,
         dtype=jnp.float64,
     )
 
     vector_rank: int = 1
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(free_array.ndim != vector_rank, "free_diagonal must be 1D")
     _raise_if(free_array.shape[0] == 0, "free_diagonal must be nonempty")
     _raise_if(
@@ -374,7 +456,7 @@ def create_galerkin_operator(  # noqa: PLR0915
         interaction_values_array.ndim != vector_rank,
         "interaction_values must be 1D",
     )
-    interaction_shape: tuple[int, ...] = interaction_rows_array.shape
+    interaction_shape: Tuple[int, ...] = interaction_rows_array.shape
     _raise_if(
         interaction_columns_array.shape != interaction_shape
         or interaction_values_array.shape != interaction_shape,
@@ -392,7 +474,7 @@ def create_galerkin_operator(  # noqa: PLR0915
         absorber_values_array.ndim != vector_rank,
         "absorber_factor_values must be 1D",
     )
-    absorber_shape: tuple[int, ...] = absorber_rows_array.shape
+    absorber_shape: Tuple[int, ...] = absorber_rows_array.shape
     _raise_if(
         absorber_columns_array.shape != absorber_shape
         or absorber_values_array.shape != absorber_shape,
@@ -408,27 +490,27 @@ def create_galerkin_operator(  # noqa: PLR0915
     )
 
     state_size: int = free_array.shape[0]
-    interaction_key_rows: Int[Array, " p"] = interaction_rows_array.astype(
+    interaction_key_rows: Int64[Array, " p"] = interaction_rows_array.astype(
         jnp.int64
     )
-    interaction_key_columns: Int[Array, " p"] = (
+    interaction_key_columns: Int64[Array, " p"] = (
         interaction_columns_array.astype(jnp.int64)
     )
-    interaction_keys: Int[Array, " p"] = (
+    interaction_keys: Int64[Array, " p"] = (
         interaction_key_rows * state_size + interaction_key_columns
     )
-    interaction_order: Int[Array, " p"] = jnp.argsort(interaction_keys)
-    sorted_interaction_keys: Int[Array, " p"] = interaction_keys[
+    interaction_order: Int64[Array, " p"] = jnp.argsort(interaction_keys)
+    sorted_interaction_keys: Int64[Array, " p"] = interaction_keys[
         interaction_order
     ]
     sorted_interaction_values: Complex[Array, " p"] = interaction_values_array[
         interaction_order
     ]
-    reverse_keys: Int[Array, " p"] = (
+    reverse_keys: Int64[Array, " p"] = (
         interaction_key_columns * state_size + interaction_key_rows
     )
-    reverse_order: Int[Array, " p"] = jnp.argsort(reverse_keys)
-    sorted_reverse_keys: Int[Array, " p"] = reverse_keys[reverse_order]
+    reverse_order: Int64[Array, " p"] = jnp.argsort(reverse_keys)
+    sorted_reverse_keys: Int64[Array, " p"] = reverse_keys[reverse_order]
     sorted_reverse_values: Complex[Array, " p"] = jnp.conj(
         interaction_values_array[reverse_order]
     )
@@ -445,14 +527,16 @@ def create_galerkin_operator(  # noqa: PLR0915
         sorted_interaction_keys != sorted_reverse_keys
     ) | jnp.any(sorted_interaction_values != sorted_reverse_values)
 
-    absorber_key_rows: Int[Array, " q"] = absorber_rows_array.astype(jnp.int64)
-    absorber_key_columns: Int[Array, " q"] = absorber_columns_array.astype(
+    absorber_key_rows: Int64[Array, " q"] = absorber_rows_array.astype(
         jnp.int64
     )
-    absorber_keys: Int[Array, " q"] = (
+    absorber_key_columns: Int64[Array, " q"] = absorber_columns_array.astype(
+        jnp.int64
+    )
+    absorber_keys: Int64[Array, " q"] = (
         absorber_key_rows * state_size + absorber_key_columns
     )
-    sorted_absorber_keys: Int[Array, " q"] = jnp.sort(absorber_keys)
+    sorted_absorber_keys: Int64[Array, " q"] = jnp.sort(absorber_keys)
     duplicate_absorber: Bool[Array, ""] = jnp.any(
         sorted_absorber_keys[1:] == sorted_absorber_keys[:-1]
     )
@@ -513,7 +597,7 @@ def create_galerkin_operator(  # noqa: PLR0915
         | has_subnormal_components(absorber_values_array),
         "absorber_factor_values must contain only finite normal-range values",
     )
-    checked_cap_scale: Float[Array, ""] = eqx.error_if(
+    checked_cap_scale: Float64[Array, ""] = eqx.error_if(
         cap_scale_array,
         (~jnp.isfinite(cap_scale_array))
         | (cap_scale_array < jnp.finfo(jnp.float64).tiny)
@@ -627,36 +711,36 @@ def create_galerkin_solve_result(  # noqa: PLR0913
     )
     checked_field: Complex[Array, " n"] = checked_field_value
     checked_residual: Complex[Array, " n"] = checked_residual_value
-    checked_residual_norm: Float[Array, ""] = _checked_nonnegative_scalar(
+    checked_residual_norm: Float64[Array, ""] = _checked_nonnegative_scalar(
         residual_norm,
         "residual_norm",
     )
-    checked_normal_residual_norm: Float[Array, ""] = (
+    checked_normal_residual_norm: Float64[Array, ""] = (
         _checked_nonnegative_scalar(
             normal_residual_norm,
             "normal_residual_norm",
         )
     )
-    checked_recurrence_residual_norm: Float[Array, ""] = (
+    checked_recurrence_residual_norm: Float64[Array, ""] = (
         _checked_nonnegative_scalar(
             recurrence_residual_norm,
             "recurrence_residual_norm",
         )
     )
-    checked_iterations: Int[Array, ""] = _checked_nonnegative_integer(
+    checked_iterations: Int32[Array, ""] = _checked_nonnegative_integer(
         iterations,
         "iterations",
     )
-    checked_operator_applications: Int[Array, ""] = (
+    checked_operator_applications: Int32[Array, ""] = (
         _checked_nonnegative_integer(
             operator_applications,
             "operator_applications",
         )
     )
     _raise_if(isinstance(status, bool), "status must not be boolean")
-    status_array: Int[Array, ""] = jnp.asarray(status, dtype=jnp.int32)
+    status_array: Int32[Array, ""] = jnp.asarray(status, dtype=jnp.int32)
     converged_array: Bool[Array, ""] = jnp.asarray(converged, dtype=jnp.bool_)
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(status_array.shape != scalar_shape, "status must be a scalar")
     _raise_if(
         converged_array.shape != scalar_shape,
@@ -668,7 +752,7 @@ def create_galerkin_solve_result(  # noqa: PLR0913
         | (status_array == int(GalerkinSolveStatus.BREAKDOWN))
         | (status_array == int(GalerkinSolveStatus.RESIDUAL_MISMATCH))
     )
-    checked_status: Int[Array, ""] = eqx.error_if(
+    checked_status: Int32[Array, ""] = eqx.error_if(
         status_array,
         ~valid_status,
         "status must be a GalerkinSolveStatus value",

@@ -304,14 +304,28 @@ Apply these rules:
 - Use descriptive dimension names. Examples include
   `Complex[Array, "H W M"]`, `Float[Array, "P H W"]`, and
   `Float[Array, "N 3"]`.
+- Use width-qualified jaxtyping dtypes when an array has a canonical storage
+  contract. Examples include `Float64`, `Complex128`, `Int64`, and `Int32`.
+  Apply them to carrier fields, post-conversion locals, and returned arrays
+  whose producer guarantees that width.
+- Keep `Float`, `Complex`, and `Int` only at an explicit conversion boundary
+  or in a genuinely dtype-polymorphic function. An exact dtype annotation is
+  an assertion, not a cast. Convert first, then annotate the converted value.
+- Use `Float32` or `Complex64` when single-precision storage is intentional.
+  Do not describe a width-qualified annotation as proof of numerical accuracy
+  or an outward rounding bound.
 - Use `Float[Array, ""]` for a rank-zero float array. Follow the existing
   whitespace convention only where a touched module requires migration-free
   consistency.
 - Prefer `scalar_float`, `scalar_int`, `scalar_bool`, and `scalar_num` from
   `ptyrodactyl.types` for public scalar arguments that accept Python and JAX
   scalars.
-- Import `Optional`, `Union`, `Tuple`, `List`, `Dict`, and related runtime
-  typing constructs from `beartype.typing` when beartype must inspect them.
+- Use capital `Tuple[...]` and `Dict[...]` hints throughout `src/` and
+  `tests/`, importing both from `beartype.typing`. Do not use the built-in
+  `tuple[...]` or `dict[...]` generic forms, and never import or qualify the
+  capital forms from `typing` or `typing_extensions`. Import other runtime
+  typing constructs such as `Optional`, `Union`, and `List` from
+  `beartype.typing` when beartype must inspect them.
 - Import shared carriers, aliases, and constants from `ptyrodactyl.types`.
   Do not redefine them in a consuming module.
 
@@ -387,28 +401,36 @@ Use two validation tiers:
   value checks that can receive tracers.
 
 ```python
+import equinox as eqx
+import jax.numpy as jnp
+from beartype import beartype
+from jaxtyping import Array, Float, Float64, jaxtyped
+
+from ptyrodactyl.types import LobatoParameters
+
+
 @jaxtyped(typechecker=beartype)
 def create_lobato_parameters(
     amplitudes: Float[Array, "..."],
     scales: Float[Array, "..."],
 ) -> LobatoParameters:
-    amplitudes_array: Float[Array, " 5"] = jnp.asarray(
+    amplitudes_array: Float64[Array, " 5"] = jnp.asarray(
         amplitudes,
         dtype=jnp.float64,
     )
-    scales_array: Float[Array, " 5"] = jnp.asarray(
+    scales_array: Float64[Array, " 5"] = jnp.asarray(
         scales,
         dtype=jnp.float64,
     )
     if amplitudes_array.shape != (5,) or scales_array.shape != (5,):
         raise ValueError("Lobato coefficients must have shape (5,)")
 
-    checked_amplitudes: Float[Array, " 5"] = eqx.error_if(
+    checked_amplitudes: Float64[Array, " 5"] = eqx.error_if(
         amplitudes_array,
         jnp.any(~jnp.isfinite(amplitudes_array)),
         "Lobato amplitudes must be finite",
     )
-    checked_scales: Float[Array, " 5"] = eqx.error_if(
+    checked_scales: Float64[Array, " 5"] = eqx.error_if(
         scales_array,
         jnp.any(~jnp.isfinite(scales_array))
         | jnp.any(scales_array <= 0.0),
@@ -569,6 +591,39 @@ Use a raw docstring when LaTeX contains backslashes. Use unique reference
 footnote labels across one module because Sphinx renders the module on one
 page.
 
+### Private function docstrings
+
+A `_`-prefixed function in a source module receives a fully structured
+numpydoc docstring. Use the public section order, including `Parameters`,
+`Returns`, `Raises`, and `Notes` where they apply.
+
+Apply these rules:
+
+- Start the summary line with `PRIVATE:` and continue with the imperative
+  summary.
+- Keep private functions out of `__all__` and every Routine Listings section.
+- Do not add a `:see:` test cross-reference. Verify private behavior through
+  the public callers.
+
+```python
+def _outward_sqrt(
+    value: Float64[Array, "..."],
+) -> Float64[Array, "..."]:
+    """PRIVATE: Round one non-negative binary64 square root upward.
+
+    Parameters
+    ----------
+    value : Float64[Array, "..."]
+        Non-negative radicand.
+
+    Returns
+    -------
+    result : Float64[Array, "..."]
+        Square root rounded one ULP toward positive infinity, with an
+        exact zero preserved.
+    """
+```
+
 ### Class and factory docstrings
 
 An `eqx.Module` docstring documents every field in declaration order under
@@ -710,6 +765,43 @@ surfaces.
 Keep private helpers local and `_`-prefixed. Move a helper into shared test
 support only after more than one module needs it.
 
+### Test type annotations and the annotation pre-flight
+
+Annotate every test function signature. Test functions return `None`.
+Annotate fixture and parametrized arguments with the same jaxtyping
+specifications as source code. Decorate array-typed helpers defined inside
+tests with `@jaxtyped(typechecker=beartype)`. Body locals may stay
+unannotated. Ruff does not enforce test annotations; keep them present and
+correct in every new or touched test.
+
+`pytest` runs an annotation gate before it collects one test. The gate is
+`tests/_preflight_types.py`. It imports every module in `ptyrodactyl` and
+`tests` while the jaxtyping import hook is active. The hook decorates every
+function with `@jaxtyped(typechecker=beartype)`, and decoration evaluates
+each annotation. An invalid annotation therefore fails the session before
+collection.
+
+The gate rejects three defect classes without running one test:
+
+- a malformed jaxtyping specification, such as a wrong dtype name or a wrong
+  shape string;
+- a name that an annotation uses but the module does not import;
+- a hint that beartype cannot use, such as a bare `NDArray`.
+
+Run the gate alone during development:
+
+```bash
+uv run --frozen python tests/_preflight_types.py
+```
+
+Set `PTYRODACTYL_SKIP_PREFLIGHT=1` to skip the gate for one fast local run.
+Do not skip it before you submit a pull request.
+
+The gate does not detect a wrong dtype at runtime, because that defect
+requires real array values. The test suite detects that defect for `src/`,
+where the pytest jaxtyping hook checks every signature. Annotations in
+`tests/` carry no runtime check, so keep them correct by inspection.
+
 ### Running tests
 
 Run the full deterministic CPU suite:
@@ -785,9 +877,16 @@ checks when the executable exists in the active environment. Do not describe
 them as a reproducible required gate until their dependencies and baseline are
 declared in the repository.
 
-The repository currently has no `.pre-commit-config.yaml`. Run the explicit
-commands above. When pre-commit configuration lands, update this guide in the
-same change.
+The repository declares pre-commit hooks in `.pre-commit-config.yaml`. The
+hooks run the locked ruff check, ruff format, `ty check`, and the local
+lines-of-code badge through `uv run`. Install them once per clone:
+
+```bash
+uv run pre-commit install
+```
+
+The hooks complement the explicit commands above; they do not replace the
+full test suite or the documentation build.
 
 ### PR description and review
 

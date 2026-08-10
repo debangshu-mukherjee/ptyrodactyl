@@ -44,21 +44,27 @@ from .form_factors import projected_atom_potential
 def _bessel_iv_series(
     v_order: scalar_float, x_val: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
-    r"""Compute :math:`I_v(x)` via 20-term series expansion.
+    r"""PRIVATE: Compute :math:`I_v(x)` via a 20-term series expansion.
 
     Parameters
     ----------
     v_order : scalar_float
-        Order of the Bessel function.
+        Dimensionless order of the Bessel function.
     x_val : Float[Array, " ..."]
-        Positive real input values.
+        Positive dimensionless arguments.
     dtype : jnp.dtype
         Data type for intermediate computation.
 
     Returns
     -------
     result : Float[Array, " ..."]
-        Approximation of :math:`I_v(x)`.
+        Dimensionless approximation of :math:`I_v(x)`.
+
+    Notes
+    -----
+    The defining power series is truncated after 20 terms. This helper is
+    therefore an evaluated approximation rather than a closed-form
+    special-function evaluation.
     """
     x_half: Float[Array, " ..."] = x_val / 2.0
     x_half_v: Float[Array, " ..."] = jnp.power(x_half, v_order)
@@ -89,19 +95,24 @@ def _bessel_iv_series(
 def _bessel_k0_series(
     x: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
-    r"""Compute :math:`K_0(x)` via polynomial series expansion.
+    r"""PRIVATE: Compute :math:`K_0(x)` via a polynomial series expansion.
 
     Parameters
     ----------
     x : Float[Array, " ..."]
-        Positive real input values.
+        Positive dimensionless arguments.
     dtype : jnp.dtype
         Data type for coefficients.
 
     Returns
     -------
     result : Float[Array, " ..."]
-        Approximation of :math:`K_0(x)`.
+        Dimensionless approximation of :math:`K_0(x)`.
+
+    Notes
+    -----
+    This polynomial representation is evaluated only by the small-argument
+    branch and inherits the accuracy limits of its seven stored coefficients.
     """
     i0: Float[Array, " ..."] = jax.scipy.special.i0(x)
     coeffs: Float[Array, " 7"] = jnp.array(
@@ -132,32 +143,43 @@ def _bessel_kn_recurrence(
     k0: Float[Array, " ..."],
     k1: Float[Array, " ..."],
 ) -> Float[Array, " ..."]:
-    r"""Compute :math:`K_n(x)` via forward recurrence.
+    r"""PRIVATE: Compute :math:`K_n(x)` via forward recurrence.
 
     Parameters
     ----------
     n : Int[Array, ""]
-        Target integer order.
+        Target dimensionless integer order.
     x : Float[Array, " ..."]
-        Positive real input values.
+        Positive dimensionless arguments.
     k0 : Float[Array, " ..."]
-        Pre-computed :math:`K_0(x)`.
+        Pre-computed dimensionless :math:`K_0(x)` values.
     k1 : Float[Array, " ..."]
-        Pre-computed :math:`K_1(x)`.
+        Pre-computed dimensionless :math:`K_1(x)` values.
 
     Returns
     -------
     kn_result : Float[Array, " ..."]
-        :math:`K_n(x)` values.
+        Dimensionless :math:`K_n(x)` values.
+
+    Notes
+    -----
+    The recurrence uses
+    :math:`K_{i+1}(x) = K_{i-1}(x) + 2iK_i(x)/x` and advances through the
+    fixed order cap used by the surrounding JAX scan.
     """
 
     def _compute_kn() -> Float[Array, " ..."]:
-        """Forward recurrence from K_0 and K_1 up to K_n.
+        """PRIVATE: Apply forward recurrence from K_0 and K_1 through K_n.
 
         Returns
         -------
         final_k : Float[Array, " ..."]
-            K_n(x) computed via masked recurrence.
+            Dimensionless K_n(x) computed via masked recurrence.
+
+        Notes
+        -----
+        The scan has a fixed 19-step extent so its compiled shape is
+        independent of the requested traced order.
         """
         init = (k0, k1)
         max_n = 20
@@ -174,16 +196,16 @@ def _bessel_kn_recurrence(
 
             Parameters
             ----------
-            carry : tuple
+            carry : Tuple[Float[Array, " ..."], Float[Array, " ..."]]
                 ``(k_prev2, k_prev1)`` from previous steps.
             i : Float[Array, ""]
                 Current recurrence index.
 
             Returns
             -------
-            tuple
+            result : Tuple[Tuple[Float[Array, " ..."], Float[Array, " ..."]], Float[Array, " ..."]]
                 Updated ``(k_prev1, k_curr)`` and ``k_curr``.
-            """
+            """  # noqa: E501
             k_prev2, k_prev1 = carry
             mask = i < n
             two_i_over_x: Float[Array, " ..."] = 2.0 * i / x
@@ -208,7 +230,7 @@ def _bessel_kn_recurrence(
 def _bessel_kv_small_non_integer(
     v: scalar_float, x: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
-    r"""Compute :math:`K_v(x)` for small x and non-integer v.
+    r"""PRIVATE: Compute :math:`K_v(x)` for small x and non-integer v.
 
     Uses the reflection formula
     :math:`K_v = \frac{\pi}{2\sin(\pi v)}(I_{-v} - I_v)`.
@@ -216,16 +238,21 @@ def _bessel_kv_small_non_integer(
     Parameters
     ----------
     v : scalar_float
-        Non-integer order.
+        Dimensionless non-integer order.
     x : Float[Array, " ..."]
-        Positive real input (small regime, x <= 2).
+        Positive dimensionless argument in the small ``x <= 2`` regime.
     dtype : jnp.dtype
         Data type for computation.
 
     Returns
     -------
     result : Float[Array, " ..."]
-        Approximation of :math:`K_v(x)`.
+        Dimensionless approximation of :math:`K_v(x)`.
+
+    Notes
+    -----
+    This helper evaluates the reflection formula only in the ``x <= 2``
+    non-integer regime. Orders too close to a sine singularity are masked.
     """
     error_bound: Float[Array, ""] = jnp.asarray(1e-10, dtype=dtype)
     iv_pos: Float[Array, " ..."] = _bessel_iv_series(v, x, dtype)
@@ -246,7 +273,7 @@ def _bessel_kv_small_non_integer(
 def _bessel_kv_small_integer(
     v: Float[Array, ""], x: Float[Array, " ..."], dtype: jnp.dtype
 ) -> Float[Array, " ..."]:
-    r"""Compute :math:`K_v(x)` for small x and integer v.
+    r"""PRIVATE: Compute :math:`K_v(x)` for small x and integer v.
 
     Uses specialised series for :math:`K_0`, :math:`K_1`,
     and forward recurrence for higher integer orders.
@@ -254,16 +281,21 @@ def _bessel_kv_small_integer(
     Parameters
     ----------
     v : Float[Array, ""]
-        Order (must be close to an integer).
+        Dimensionless order that must be close to an integer.
     x : Float[Array, " ..."]
-        Positive real input (small regime, x <= 2).
+        Positive dimensionless argument in the small ``x <= 2`` regime.
     dtype : jnp.dtype
         Data type for computation.
 
     Returns
     -------
     pos_v_result : Float[Array, " ..."]
-        Approximation of :math:`K_n(x)`.
+        Dimensionless approximation of :math:`K_n(x)`.
+
+    Notes
+    -----
+    This helper rounds the supplied order before evaluating the ``x <= 2``
+    integer branch from the K_0 and K_1 series and forward recurrence.
     """
     v_int: Float[Array, ""] = jnp.round(v)
     n: Int[Array, ""] = jnp.abs(v_int).astype(jnp.int32)
@@ -301,21 +333,27 @@ def _bessel_kv_small_integer(
 def _bessel_kv_large(
     v: scalar_float, x: Float[Array, " ..."]
 ) -> Float[Array, " ..."]:
-    r"""Asymptotic expansion for :math:`K_v(x)` at large x.
+    r"""PRIVATE: Compute an asymptotic expansion of :math:`K_v(x)` at large x.
 
     Uses a 5-term asymptotic series valid for ``x > 2``.
 
     Parameters
     ----------
     v : scalar_float
-        Order of the Bessel function.
+        Dimensionless order of the Bessel function.
     x : Float[Array, " ..."]
-        Positive real input (large regime, x > 2).
+        Positive dimensionless argument in the large ``x > 2`` regime.
 
     Returns
     -------
     large_x_result : Float[Array, " ..."]
-        Asymptotic approximation of :math:`K_v(x)`.
+        Dimensionless asymptotic approximation of :math:`K_v(x)`.
+
+    Notes
+    -----
+    The generic branch retains five asymptotic terms for ``x > 2``. The
+    zero- and unit-order branches instead use coefficient evaluations chosen
+    to remain continuous at the regime boundary.
     """
     sqrt_term: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
     exp_term: Float[Array, " ..."] = jnp.exp(-x)
@@ -384,17 +422,23 @@ def _bessel_kv_large(
 
 
 def _bessel_k_half(x: Float[Array, " ..."]) -> Float[Array, " ..."]:
-    r"""Exact formula :math:`K_{1/2}(x)=\sqrt{\pi/(2x)}\,e^{-x}`.
+    r"""PRIVATE: Evaluate the half-order Bessel K function in closed form.
 
     Parameters
     ----------
     x : Float[Array, " ..."]
-        Positive real input.
+        Positive dimensionless argument.
 
     Returns
     -------
     k_half_result : Float[Array, " ..."]
-        Exact :math:`K_{1/2}(x)` values.
+        Dimensionless values evaluated from the closed-form expression.
+
+    Notes
+    -----
+    The identity :math:`K_{1/2}(x)=\sqrt{\pi/(2x)}\,e^{-x}` is closed form;
+    its array evaluation still follows the floating-point accuracy of ``sqrt``
+    and ``exp``.
     """
     sqrt_pi_over_2x: Float[Array, " ..."] = jnp.sqrt(jnp.pi / (2.0 * x))
     exp_neg_x: Float[Array, " ..."] = jnp.exp(-x)
@@ -431,7 +475,7 @@ def bessel_kv(
     4. **Combine** --
        ``jnp.where`` selects the appropriate branch.
     5. **Half-integer shortcut** --
-       Exact formula for v = 0.5.
+       Evaluate the closed-form expression for v = 0.5.
 
     Parameters
     ----------
@@ -496,12 +540,12 @@ def _downsample_potential(
     target_height: int,
     target_width: int,
 ) -> Float[Array, " h_out w_out"]:
-    """Downsample supersampled potential to target resolution.
+    """PRIVATE: Downsample a supersampled potential to the target resolution.
 
     Parameters
     ----------
     supersampled_potential : Float[Array, " h_in w_in"]
-        Potential on the fine (supersampled) grid.
+        Potential on the fine grid in volt-Angstroms.
     supersampling : int
         Supersampling factor used during computation.
     target_height : int
@@ -512,7 +556,7 @@ def _downsample_potential(
     Returns
     -------
     potential_resized : Float[Array, " h_out w_out"]
-        Potential averaged down to target resolution.
+        Potential averaged to the target resolution in volt-Angstroms.
     """
     height: int = supersampled_potential.shape[0]
     width: int = supersampled_potential.shape[1]
@@ -642,7 +686,7 @@ def _slice_atoms(
     atom_numbers: Int[Array, " N"],
     slice_thickness: scalar_num,
 ) -> Float[Array, " N 4"]:
-    """Partition atoms into slices along the z-axis.
+    """PRIVATE: Partition atoms into slices along the z-axis.
 
     Extended Summary
     ----------------
@@ -709,7 +753,7 @@ def _compute_grid_dimensions(
     grid_height: Optional[int] = None,
     grid_width: Optional[int] = None,
 ) -> Tuple[Float[Array, ""], Float[Array, ""], int, int]:
-    """Compute grid dimensions and coordinate origins.
+    """PRIVATE: Compute grid dimensions and coordinate origins.
 
     Parameters
     ----------
@@ -721,12 +765,12 @@ def _compute_grid_dimensions(
         Padding added to each side in Angstroms.
     pixel_size : scalar_float
         Pixel size in Angstroms.
-    grid_height : int, optional
-        Fixed grid height (for JIT). If ``None``, computed
-        from coordinate range.
-    grid_width : int, optional
-        Fixed grid width (for JIT). If ``None``, computed
-        from coordinate range.
+    grid_height : Optional[int]
+        Fixed grid height for JIT, or ``None`` to compute it from the
+        coordinate range. Default is ``None``.
+    grid_width : Optional[int]
+        Fixed grid width for JIT, or ``None`` to compute it from the
+        coordinate range. Default is ``None``.
 
     Returns
     -------
@@ -734,9 +778,9 @@ def _compute_grid_dimensions(
         Minimum x with padding in Angstroms.
     y_min : Float[Array, ""]
         Minimum y with padding in Angstroms.
-    width : int
+    grid_width_out : int
         Grid width in pixels.
-    height : int
+    grid_height_out : int
         Grid height in pixels.
     """
     x_coords_min: Float[Array, ""] = jnp.min(x_coords)
@@ -745,11 +789,13 @@ def _compute_grid_dimensions(
     y_min: Float[Array, ""] = y_coords_min - padding
 
     if grid_height is not None and grid_width is not None:
+        grid_width_out: int = grid_width
+        grid_height_out: int = grid_height
         result: Tuple[Float[Array, ""], Float[Array, ""], int, int] = (
             x_min,
             y_min,
-            grid_width,
-            grid_height,
+            grid_width_out,
+            grid_height_out,
         )
         return result
 
@@ -765,13 +811,13 @@ def _compute_grid_dimensions(
     height: Int[Array, ""] = height_float.astype(jnp.int32)
     crop_pixels: int = int(jnp.round(padding / pixel_size))
     padded_minimum: int = 2 * crop_pixels + 1
-    width_int: int = max(int(width), padded_minimum)
-    height_int: int = max(int(height), padded_minimum)
+    grid_width_out = max(int(width), padded_minimum)
+    grid_height_out = max(int(height), padded_minimum)
     result: Tuple[Float[Array, ""], Float[Array, ""], int, int] = (
         x_min,
         y_min,
-        width_int,
-        height_int,
+        grid_width_out,
+        grid_height_out,
     )
     return result
 
@@ -797,7 +843,7 @@ def _process_all_slices(
     ],
     num_slices: Optional[int] = None,
 ) -> Float[Array, " h w n_slices"]:
-    """Assemble all potential slices from atomic contributions.
+    """PRIVATE: Assemble all potential slices from atomic contributions.
 
     Extended Summary
     ----------------
@@ -807,23 +853,25 @@ def _process_all_slices(
 
     Parameters
     ----------
-    atom_data : tuple
-        ``(x_coords, y_coords, atom_nums, slice_indices)``
-        arrays of length N.
-    potential_data : tuple
-        ``(atomic_potentials, atom_to_idx_array)`` -- lookup
-        table of precomputed potentials.
-    grid_params : tuple
-        ``(x_min, y_min, pixel_size, height, width)``.
-    num_slices : int, optional
-        Fixed number of slices (for JIT). If ``None``,
-        computed from max slice index.
+    atom_data : Tuple[Float[Array, " N"], Float[Array, " N"], Int[Array, " N"], Int[Array, " N"]]
+        ``(x_coords, y_coords, atom_nums, slice_indices)`` arrays of length
+        N. The x and y coordinates are in Angstroms.
+    potential_data : Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]
+        ``(atomic_potentials, atom_to_idx_array)`` lookup data. Atomic
+        potentials are in volt-Angstroms; the second array maps atomic number
+        to lookup index.
+    grid_params : Tuple[scalar_float, scalar_float, scalar_float, int, int]
+        ``(x_min, y_min, pixel_size, height, width)``. The first three values
+        are in Angstroms, and height and width are pixel counts.
+    num_slices : Optional[int]
+        Static number of slices, or ``None`` to compute it from the maximum
+        slice index. Default is ``None``; changing it causes retracing.
 
     Returns
     -------
     all_slices : Float[Array, " h w n_slices"]
-        3D array of potential slices.
-    """
+        Potential slices in volt-Angstroms.
+    """  # noqa: E501
     x_coords, y_coords, atom_nums, slice_indices = atom_data
     atomic_potentials, atom_to_idx_array = potential_data
     x_min, y_min, pixel_size, height, width = grid_params
@@ -842,7 +890,7 @@ def _process_all_slices(
     kx: Float[Array, " 1 w"] = jnp.fft.fftfreq(width, d=1.0).reshape(1, -1)
 
     def _process_single_slice(slice_idx: scalar_int) -> Float[Array, " h w"]:
-        """Accumulate potentials for atoms in one slice.
+        """PRIVATE: Accumulate potentials for atoms in one slice.
 
         Parameters
         ----------
@@ -852,7 +900,7 @@ def _process_all_slices(
         Returns
         -------
         slice_potential : Float[Array, " h w"]
-            Accumulated potential for this slice.
+            Accumulated potential for this slice in volt-Angstroms.
         """
         slice_potential: Float[Array, " h w"] = jnp.zeros(
             (height, width), dtype=jnp.float32
@@ -869,22 +917,23 @@ def _process_all_slices(
                 scalar_int,
             ],
         ) -> Tuple[Float[Array, " h w"], None]:
-            """Add one atom's FFT-shifted potential to the slice.
+            """PRIVATE: Add one atom's FFT-shifted potential to the slice.
 
             Parameters
             ----------
             carry : Float[Array, " h w"]
-                Running slice potential.
-            atom_data : tuple
-                ``(x, y, atom_no, atom_slice_idx)``.
+                Running slice potential in volt-Angstroms.
+            atom_data : Tuple[scalar_float, scalar_float, scalar_int, scalar_int]
+                ``(x, y, atom_no, atom_slice_idx)``. The x and y coordinates
+                are in Angstroms.
 
             Returns
             -------
             updated_pot : Float[Array, " h w"]
-                Slice potential with this atom added.
-            None
+                Slice potential with this atom added, in volt-Angstroms.
+            auxiliary : None
                 No stacked output.
-            """
+            """  # noqa: E501
             slice_pot: Float[Array, " h w"] = carry
             x: scalar_float
             y: scalar_float
@@ -919,7 +968,11 @@ def _process_all_slices(
             updated_pot: Float[Array, " h w"] = (
                 slice_pot + contribution
             ).astype(jnp.float32)
-            result: Tuple[Float[Array, " h w"], None] = updated_pot, None
+            auxiliary: None = None
+            result: Tuple[Float[Array, " h w"], None] = (
+                updated_pot,
+                auxiliary,
+            )
             return result
 
         slice_potential, _ = jax.lax.scan(
@@ -944,20 +997,21 @@ def _build_shift_masks(
     repeats: Int[Array, " 3"],
     max_n: int = 20,
 ) -> Tuple[Bool[Array, " s"], Int[Array, " s 3"]]:
-    """Build shift indices and validity masks for periodic repeats.
+    """PRIVATE: Build shift indices and validity masks for periodic repeats.
 
     Parameters
     ----------
     repeats : Int[Array, " 3"]
         Number of repeats in ``(x, y, z)``.
-    max_n : int, optional
-        Maximum repeat count per axis. Default is 20.
+    max_n : int
+        Static maximum repeat count per axis. Default is 20; changing it
+        causes retracing because it changes the returned array shapes.
 
     Returns
     -------
-    mask_flat : Bool[Array, " max_n^3"]
+    mask_flat : Bool[Array, " s"]
         Validity mask for each shift combination.
-    shift_indices : Int[Array, " max_n^3 3"]
+    shift_indices : Int[Array, " s 3"]
         Integer shift indices ``(ix, iy, iz)``.
     """
     nx: Int[Array, ""] = repeats[0]
@@ -1006,7 +1060,7 @@ def _tile_positions_with_shifts(
     shift_vectors: Float[Array, " s 3"],
     mask_flat: Bool[Array, " s"],
 ) -> Tuple[Float[Array, " sn 3"], Int[Array, " sn"]]:
-    """Tile atomic positions by adding shift vectors.
+    """PRIVATE: Tile atomic positions by adding shift vectors.
 
     Parameters
     ----------
@@ -1014,16 +1068,16 @@ def _tile_positions_with_shifts(
         Original positions in Angstroms.
     atomic_numbers : Int[Array, " N"]
         Atomic numbers for the original atoms.
-    shift_vectors : Float[Array, "s 3"]
+    shift_vectors : Float[Array, " s 3"]
         Lattice shift vectors in Angstroms.
     mask_flat : Bool[Array, " s"]
         Validity mask for each shift.
 
     Returns
     -------
-    repeated_positions_masked : Float[Array, "s*N 3"]
-        Tiled positions (invalid ones zeroed out).
-    repeated_atomic_numbers_masked : Int[Array, " s*N"]
+    repeated_positions_masked : Float[Array, " sn 3"]
+        Tiled positions in Angstroms, with invalid entries zeroed out.
+    repeated_atomic_numbers_masked : Int[Array, " sn"]
         Tiled atomic numbers (invalid ones zeroed).
     """
     n_atoms: int = positions.shape[0]
@@ -1075,7 +1129,7 @@ def _apply_repeats_or_return(
     lattice: Float[Array, " 3 3"],
     repeats: Int[Array, " 3"],
 ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
-    """Apply periodic repeats or return unchanged positions.
+    """PRIVATE: Apply periodic repeats or return unchanged positions.
 
     Parameters
     ----------
@@ -1093,7 +1147,7 @@ def _apply_repeats_or_return(
     -------
     positions_out : Float[Array, " M 3"]
         Tiled positions when ``repeats`` exceeds ``[1, 1, 1]``,
-        otherwise the original positions unchanged.
+        otherwise the original positions unchanged, in Angstroms.
     atomic_numbers_out : Int[Array, " M"]
         Tiled atomic numbers, or the original numbers unchanged.
 
@@ -1108,21 +1162,24 @@ def _apply_repeats_or_return(
         atomic_numbers: Int[Array, " N"],
         lattice: Float[Array, " 3 3"],
     ) -> Tuple[Float[Array, " M 3"], Int[Array, " M"]]:
-        """Tile positions using lattice vectors.
+        """PRIVATE: Tile positions using lattice vectors.
 
         Parameters
         ----------
         positions : Float[Array, " N 3"]
-            Original positions.
+            Original positions in Angstroms.
         atomic_numbers : Int[Array, " N"]
             Original atomic numbers.
         lattice : Float[Array, " 3 3"]
-            Lattice vectors.
+            Lattice vectors in Angstroms.
 
         Returns
         -------
-        tuple
-            Tiled positions and atomic numbers.
+        tiled_positions : Float[Array, " M 3"]
+            Positions in Angstroms translated by every requested lattice
+            vector.
+        tiled_atomic_numbers : Int[Array, " M"]
+            Atomic numbers repeated with the translated positions.
         """
         nx, ny, nz = repeat_values
         ix: Int[Array, " nx"] = jnp.arange(nx, dtype=jnp.int32)
@@ -1142,10 +1199,17 @@ def _apply_repeats_or_return(
             shift_vectors.shape[0], dtype=jnp.bool_
         )
 
+        tiled_positions: Float[Array, " M 3"]
+        tiled_atomic_numbers: Int[Array, " M"]
+        tiled_positions, tiled_atomic_numbers = _tile_positions_with_shifts(
+            positions,
+            atomic_numbers,
+            shift_vectors,
+            mask_flat,
+        )
         result: Tuple[Float[Array, " M 3"], Int[Array, " M"]] = (
-            _tile_positions_with_shifts(
-                positions, atomic_numbers, shift_vectors, mask_flat
-            )
+            tiled_positions,
+            tiled_atomic_numbers,
         )
         return result
 
@@ -1155,13 +1219,23 @@ def _apply_repeats_or_return(
     repeat_values: list[int] = repeats.tolist()
     needs_repeats: bool = any(repeat > 1 for repeat in repeat_values)
     if needs_repeats:
+        positions_out: Float[Array, " M 3"]
+        atomic_numbers_out: Int[Array, " M"]
+        positions_out, atomic_numbers_out = _apply_repeats_with_lattice(
+            positions,
+            atomic_numbers,
+            lattice,
+        )
         result: Tuple[Float[Array, " M 3"], Int[Array, " M"]] = (
-            _apply_repeats_with_lattice(positions, atomic_numbers, lattice)
+            positions_out,
+            atomic_numbers_out,
         )
         return result
+    positions_out = positions
+    atomic_numbers_out = atomic_numbers
     result: Tuple[Float[Array, " M 3"], Int[Array, " M"]] = (
-        positions,
-        atomic_numbers,
+        positions_out,
+        atomic_numbers_out,
     )
     return result
 
@@ -1175,7 +1249,7 @@ def _build_potential_lookup(
     supersampling: scalar_int,
     parameterization: str,
 ) -> Tuple[Float[Array, " 118 h w"], Int[Array, " 119"]]:
-    """Build lookup table of precomputed atomic potentials.
+    """PRIVATE: Build a lookup table of precomputed atomic potentials.
 
     Parameters
     ----------
@@ -1195,7 +1269,8 @@ def _build_potential_lookup(
     Returns
     -------
     atomic_potentials : Float[Array, " 118 h w"]
-        Precomputed potentials for up to 118 elements.
+        Precomputed projected potentials in volt-Angstroms for up to 118
+        elements.
     atom_to_idx_array : Int[Array, " 119"]
         Mapping from atomic number to index in
         *atomic_potentials*.
@@ -1209,19 +1284,19 @@ def _build_potential_lookup(
     def _calc_single_potential_fixed_grid(
         atom_no: scalar_int, is_valid: Bool[Array, ""]
     ) -> Float[Array, " h w"]:
-        """Compute potential for one atom type on the fixed grid.
+        """PRIVATE: Compute a potential for one atom type on the fixed grid.
 
         Parameters
         ----------
         atom_no : scalar_int
             Atomic number.
-        is_valid : Bool
+        is_valid : Bool[Array, ""]
             Whether this slot contains a real element.
 
         Returns
         -------
-        Float[Array, " h w"]
-            Potential (zeros if invalid).
+        result : Float[Array, " h w"]
+            Potential in volt-Angstroms, or zeros for an invalid slot.
         """
         safe_atom_no: Int[Array, ""] = jnp.where(is_valid, atom_no, 1)
         potential = single_atom_potential(
@@ -1248,20 +1323,20 @@ def _build_potential_lookup(
     def _update_mapping2(
         carry: Int[Array, " 119"], idx_atom: Tuple[scalar_int, scalar_int]
     ) -> Tuple[Int[Array, " 119"], None]:
-        """Update atomic-number-to-index mapping.
+        """PRIVATE: Update the atomic-number-to-index mapping.
 
         Parameters
         ----------
         carry : Int[Array, " 119"]
             Current mapping array.
-        idx_atom : tuple
+        idx_atom : Tuple[scalar_int, scalar_int]
             ``(index, atomic_number)`` pair.
 
         Returns
         -------
         mapping_array : Int[Array, " 119"]
             Updated mapping.
-        None
+        auxiliary : None
             No stacked output.
         """
         mapping_array: Int[Array, " 119"] = carry
@@ -1271,7 +1346,8 @@ def _build_potential_lookup(
         mapping_array = jnp.where(
             atom >= 0, mapping_array.at[atom].set(idx), mapping_array
         )
-        result: Tuple[Int[Array, " 119"], None] = mapping_array, None
+        auxiliary: None = None
+        result: Tuple[Int[Array, " 119"], None] = mapping_array, auxiliary
         return result
 
     atom_to_idx_array, _ = jax.lax.scan(

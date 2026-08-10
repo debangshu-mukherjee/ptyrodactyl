@@ -29,7 +29,7 @@ transformation context, and the runtime checks remain compatible with
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Optional
+from beartype.typing import Optional, Tuple
 from jax.sharding import Mesh
 from jaxtyping import Array, Complex, Float, Int, Num, jaxtyped
 
@@ -56,12 +56,38 @@ _XYZ_COORDS = 3
 _SINGLE_MODE = 1
 
 
-def _shape(value: Array) -> tuple[int, ...]:
-    result: tuple[int, ...] = tuple(jnp.shape(value))
+def _shape(value: Array) -> Tuple[int, ...]:
+    """PRIVATE: Return an array shape as a static integer tuple.
+
+    Parameters
+    ----------
+    value : Array
+        Array whose shape is inspected.
+
+    Returns
+    -------
+    result : Tuple[int, ...]
+        Static array shape.
+    """
+    result: Tuple[int, ...] = tuple(jnp.shape(value))
     return result
 
 
 def _raise_if(condition: bool, message: str) -> None:
+    """PRIVATE: Raise a structural validation error when a condition holds.
+
+    Parameters
+    ----------
+    condition : bool
+        Static failure condition.
+    message : str
+        Validation error message.
+
+    Raises
+    ------
+    ValueError
+        If ``condition`` is true.
+    """
     if condition:
         raise ValueError(message)
 
@@ -70,6 +96,27 @@ def _checked_positive_scalar(
     value: scalar_num,
     name: str,
 ) -> Num[Array, ""]:
+    """PRIVATE: Validate one finite positive scalar under tracing.
+
+    Parameters
+    ----------
+    value : scalar_num
+        Candidate scalar value.
+    name : str
+        Parameter name used in validation errors.
+
+    Returns
+    -------
+    result : Num[Array, ""]
+        Scalar with finite and positive traced checks attached.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not scalar.
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite or non-positive.
+    """
     value_arr: Num[Array, ""] = jnp.asarray(value)
     _raise_if(value_arr.shape != (), f"{name} must be a scalar")
 
@@ -90,6 +137,27 @@ def _checked_finite_scalar(
     value: scalar_num,
     name: str,
 ) -> Num[Array, ""]:
+    """PRIVATE: Validate one finite scalar under tracing.
+
+    Parameters
+    ----------
+    value : scalar_num
+        Candidate scalar value.
+    name : str
+        Parameter name used in validation errors.
+
+    Returns
+    -------
+    result : Num[Array, ""]
+        Scalar with the finite traced check attached.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not scalar.
+    equinox.EquinoxRuntimeError
+        If ``value`` is non-finite.
+    """
     value_arr: Num[Array, ""] = jnp.asarray(value)
     _raise_if(value_arr.shape != (), f"{name} must be a scalar")
     result: Num[Array, ""] = eqx.error_if(
@@ -104,6 +172,27 @@ def _checked_nonnegative_scalar(
     value: scalar_num,
     name: str,
 ) -> Num[Array, ""]:
+    """PRIVATE: Validate one finite non-negative scalar under tracing.
+
+    Parameters
+    ----------
+    value : scalar_num
+        Candidate scalar value.
+    name : str
+        Parameter name used in validation errors.
+
+    Returns
+    -------
+    result : Num[Array, ""]
+        Scalar with finite and non-negative traced checks attached.
+
+    Raises
+    ------
+    ValueError
+        If ``value`` is not scalar.
+    equinox.EquinoxRuntimeError
+        If ``value`` is negative or non-finite.
+    """
     checked_value: Num[Array, ""] = _checked_finite_scalar(value, name)
     result: Num[Array, ""] = eqx.error_if(
         checked_value,
@@ -114,7 +203,25 @@ def _checked_nonnegative_scalar(
 
 
 def _checked_microscope(microscope: MicroscopeConfig) -> MicroscopeConfig:
-    """Return a microscope carrier with traced scalar checks attached."""
+    """PRIVATE: Return a microscope carrier with traced checks attached.
+
+    Parameters
+    ----------
+    microscope : MicroscopeConfig
+        Microscope configuration to validate.
+
+    Returns
+    -------
+    result : MicroscopeConfig
+        Configuration with traced scalar checks attached.
+
+    Raises
+    ------
+    ValueError
+        If a checked value is not scalar.
+    equinox.EquinoxRuntimeError
+        If a checked value violates its finite or positivity constraint.
+    """
     checked_values = (
         _checked_positive_scalar(microscope.voltage_kv, "voltage_kv"),
         _checked_positive_scalar(microscope.aperture_mrad, "aperture_mrad"),
@@ -137,7 +244,26 @@ def _checked_microscope(microscope: MicroscopeConfig) -> MicroscopeConfig:
 
 
 def _checked_detector(detector: DetectorConfig) -> DetectorConfig:
-    """Return a detector carrier with traced scalar checks attached."""
+    """PRIVATE: Return a detector carrier with traced checks attached.
+
+    Parameters
+    ----------
+    detector : DetectorConfig
+        Detector configuration to validate.
+
+    Returns
+    -------
+    checked_detector : DetectorConfig
+        Configuration with traced scalar and position checks attached.
+
+    Raises
+    ------
+    ValueError
+        If a checked value is not scalar.
+    equinox.EquinoxRuntimeError
+        If a checked value violates its finite, non-negative, ordering, or
+        positivity constraint.
+    """
     checked_inner: Num[Array, ""] = _checked_nonnegative_scalar(
         detector.collection_inner_mrad,
         "collection_inner_mrad",
@@ -200,19 +326,63 @@ def _checked_detector(detector: DetectorConfig) -> DetectorConfig:
 def _potential_grid_shape(
     pot_slices: PotentialSlices,
     name: str,
-) -> tuple[int, int]:
-    slices_shape: tuple[int, ...] = _shape(pot_slices.slices)
+) -> Tuple[int, int]:
+    """PRIVATE: Return the validated spatial shape of potential slices.
+
+    Parameters
+    ----------
+    pot_slices : PotentialSlices
+        Potential-slice carrier to inspect.
+    name : str
+        Carrier name used in validation errors.
+
+    Returns
+    -------
+    height : int
+        Spatial grid height in pixels.
+    width : int
+        Spatial grid width in pixels.
+
+    Raises
+    ------
+    ValueError
+        If the slice array is neither two-dimensional nor three-dimensional.
+    """
+    slices_shape: Tuple[int, ...] = _shape(pot_slices.slices)
     _raise_if(
         len(slices_shape) not in (_MATRIX_RANK, _CUBE_RANK),
         f"{name}.slices must be 2D or 3D",
     )
-    result: tuple[int, int] = slices_shape[0], slices_shape[1]
+    height: int = slices_shape[0]
+    width: int = slices_shape[1]
+    result: Tuple[int, int] = height, width
     return result
 
 
-def _beam_grid_shape(beam: ProbeModes, name: str) -> tuple[int, int]:
-    modes_shape: tuple[int, ...] = _shape(beam.modes)
-    weights_shape: tuple[int, ...] = _shape(beam.weights)
+def _beam_grid_shape(beam: ProbeModes, name: str) -> Tuple[int, int]:
+    """PRIVATE: Return the validated spatial shape of probe modes.
+
+    Parameters
+    ----------
+    beam : ProbeModes
+        Probe-mode carrier to inspect.
+    name : str
+        Carrier name used in validation errors.
+
+    Returns
+    -------
+    height : int
+        Spatial grid height in pixels.
+    width : int
+        Spatial grid width in pixels.
+
+    Raises
+    ------
+    ValueError
+        If mode or weight ranks are invalid or their mode counts disagree.
+    """
+    modes_shape: Tuple[int, ...] = _shape(beam.modes)
+    weights_shape: Tuple[int, ...] = _shape(beam.weights)
     _raise_if(
         len(modes_shape) not in (_MATRIX_RANK, _CUBE_RANK),
         f"{name}.modes must be 2D or 3D",
@@ -229,7 +399,9 @@ def _beam_grid_shape(beam: ProbeModes, name: str) -> tuple[int, int]:
         weights_shape != (num_modes,),
         f"{name}.weights must have shape (M,)",
     )
-    result: tuple[int, int] = modes_shape[0], modes_shape[1]
+    height: int = modes_shape[0]
+    width: int = modes_shape[1]
+    result: Tuple[int, int] = height, width
     return result
 
 
@@ -238,11 +410,27 @@ def _validate_cbed_structure(
     beam: ProbeModes,
     pot_name: str,
 ) -> None:
-    pot_grid_shape: tuple[int, int] = _potential_grid_shape(
+    """PRIVATE: Validate the static structure of CBED inputs.
+
+    Parameters
+    ----------
+    pot_slices : PotentialSlices
+        Potential-slice carrier to inspect.
+    beam : ProbeModes
+        Probe-mode carrier to inspect.
+    pot_name : str
+        Potential carrier name used in validation errors.
+
+    Raises
+    ------
+    ValueError
+        If the slice or probe structure is invalid or spatial shapes differ.
+    """
+    pot_grid_shape: Tuple[int, int] = _potential_grid_shape(
         pot_slices,
         pot_name,
     )
-    beam_grid_shape: tuple[int, int] = _beam_grid_shape(beam, "beam")
+    beam_grid_shape: Tuple[int, int] = _beam_grid_shape(beam, "beam")
     _raise_if(
         beam_grid_shape != pot_grid_shape,
         f"beam.modes spatial shape must match {pot_name}.slices",
@@ -253,6 +441,26 @@ def _checked_potential_slices(
     pot_slices: PotentialSlices,
     name: str,
 ) -> PotentialSlices:
+    """PRIVATE: Attach traced value checks to potential slices.
+
+    Parameters
+    ----------
+    pot_slices : PotentialSlices
+        Potential-slice carrier to validate.
+    name : str
+        Carrier name used in validation errors.
+
+    Returns
+    -------
+    result : PotentialSlices
+        Carrier with finite and positive traced checks attached.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If slices are non-finite or thickness or calibration is non-positive
+        or non-finite.
+    """
     checked_pot_slices: PotentialSlices = eqx.error_if(
         pot_slices,
         jnp.any(~jnp.isfinite(jnp.asarray(pot_slices.slices))),
@@ -282,6 +490,23 @@ def _checked_potential_slices(
 
 
 def _checked_beam(beam: ProbeModes) -> ProbeModes:
+    """PRIVATE: Attach traced value checks to probe modes.
+
+    Parameters
+    ----------
+    beam : ProbeModes
+        Probe-mode carrier to validate.
+
+    Returns
+    -------
+    result : ProbeModes
+        Carrier with finite and positive traced checks attached.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If modes, weights, or calibration violate finite or positivity checks.
+    """
     checked_beam: ProbeModes = eqx.error_if(
         beam,
         jnp.any(~jnp.isfinite(jnp.asarray(beam.modes))),
@@ -309,7 +534,21 @@ def _validate_positions_structure(
     positions: Array,
     name: str,
 ) -> None:
-    positions_shape: tuple[int, ...] = _shape(positions)
+    """PRIVATE: Validate the static structure of scan positions.
+
+    Parameters
+    ----------
+    positions : Array
+        Candidate scan positions in ``(row, column)`` pixel coordinates.
+    name : str
+        Array name used in validation errors.
+
+    Raises
+    ------
+    ValueError
+        If positions do not have shape ``(P, 2)``.
+    """
+    positions_shape: Tuple[int, ...] = _shape(positions)
     _raise_if(len(positions_shape) != _MATRIX_RANK, f"{name} must be 2D")
     _raise_if(
         positions_shape[1] != _XY_COORDS,
@@ -319,8 +558,27 @@ def _validate_positions_structure(
 
 def _checked_positions_in_pixels(
     positions: Num[Array, "#P 2"],
-    grid_shape: tuple[int, int],
+    grid_shape: Tuple[int, int],
 ) -> Num[Array, "#P 2"]:
+    """PRIVATE: Validate finite in-grid scan positions in pixels.
+
+    Parameters
+    ----------
+    positions : Num[Array, "#P 2"]
+        Scan positions in ``(row, column)`` pixel coordinates.
+    grid_shape : Tuple[int, int]
+        Spatial ``(height, width)`` grid shape.
+
+    Returns
+    -------
+    result : Num[Array, "#P 2"]
+        Positions with finite and grid-bound checks attached.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If a position is non-finite or outside the potential grid.
+    """
     checked_positions: Num[Array, "#P 2"] = eqx.error_if(
         positions,
         jnp.any(~jnp.isfinite(positions)),
@@ -350,12 +608,35 @@ def _validate_sharded_structure(
     slice_z_bounds: Float[Array, "S 2"],
     atom_potentials: Float[Array, "T H W"],
 ) -> None:
-    probe_shape: tuple[int, ...] = _shape(probe_modes)
-    scan_shape: tuple[int, ...] = _shape(scan_positions_ang)
-    coords_shape: tuple[int, ...] = _shape(atom_coords)
-    types_shape: tuple[int, ...] = _shape(atom_types)
-    bounds_shape: tuple[int, ...] = _shape(slice_z_bounds)
-    potentials_shape: tuple[int, ...] = _shape(atom_potentials)
+    """PRIVATE: Validate the static structure of sharded STEM inputs.
+
+    Parameters
+    ----------
+    probe_modes : Complex[Array, "H W M"]
+        Complex probe modes on the simulation grid.
+    scan_positions_ang : Float[Array, "P 2"]
+        Scan positions in Angstroms.
+    atom_coords : Float[Array, "N 3"]
+        Cartesian atom coordinates in Angstroms.
+    atom_types : Int[Array, " N"]
+        Atom-type indices aligned with ``atom_coords``.
+    slice_z_bounds : Float[Array, "S 2"]
+        Lower and upper z bounds for each slice in Angstroms.
+    atom_potentials : Float[Array, "T H W"]
+        Projected potential lookup by atom type in volt-Angstroms.
+
+    Raises
+    ------
+    ValueError
+        If an input rank, coordinate width, aligned length, or spatial shape
+        is invalid.
+    """
+    probe_shape: Tuple[int, ...] = _shape(probe_modes)
+    scan_shape: Tuple[int, ...] = _shape(scan_positions_ang)
+    coords_shape: Tuple[int, ...] = _shape(atom_coords)
+    types_shape: Tuple[int, ...] = _shape(atom_types)
+    bounds_shape: Tuple[int, ...] = _shape(slice_z_bounds)
+    potentials_shape: Tuple[int, ...] = _shape(atom_potentials)
 
     _raise_if(len(probe_shape) != _CUBE_RANK, "probe_modes must be 3D")
     _raise_if(
@@ -401,13 +682,51 @@ def _checked_sharded_arrays(
     slice_z_bounds: Float[Array, "S 2"],
     atom_potentials: Float[Array, "T H W"],
     calib_ang: Num[Array, ""],
-) -> tuple[
+) -> Tuple[
     Complex[Array, "H W M"],
     Float[Array, "P 2"],
     Float[Array, "N 3"],
     Float[Array, "S 2"],
     Float[Array, "T H W"],
 ]:
+    """PRIVATE: Attach traced value checks to sharded STEM arrays.
+
+    Parameters
+    ----------
+    probe_modes : Complex[Array, "H W M"]
+        Complex probe modes on the simulation grid.
+    scan_positions_ang : Float[Array, "P 2"]
+        Scan positions in Angstroms.
+    atom_coords : Float[Array, "N 3"]
+        Cartesian atom coordinates in Angstroms.
+    slice_z_bounds : Float[Array, "S 2"]
+        Lower and upper z bounds for each slice in Angstroms.
+    atom_potentials : Float[Array, "T H W"]
+        Projected potential lookup by atom type in volt-Angstroms.
+    calib_ang : Num[Array, ""]
+        Real-space grid calibration in Angstroms per pixel.
+
+    Returns
+    -------
+    checked_probe_modes : Complex[Array, "H W M"]
+        Dimensionless probe amplitudes with a finite-value check attached.
+    checked_scan_positions : Float[Array, "P 2"]
+        Scan positions in Angstroms with finite and grid-bound checks attached.
+    checked_atom_coords : Float[Array, "N 3"]
+        Atom coordinates in Angstroms with a finite-value check attached.
+    checked_slice_z_bounds : Float[Array, "S 2"]
+        Slice bounds in Angstroms with finite and positive-thickness checks
+        attached.
+    checked_atom_potentials : Float[Array, "T H W"]
+        Projected atomic potentials in volt-Angstroms with a finite-value check
+        attached.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If an input is non-finite, slice thickness is non-positive, or a scan
+        position lies outside the calibrated grid.
+    """
     checked_probe_modes: Complex[Array, "H W M"] = eqx.error_if(
         probe_modes,
         jnp.any(~jnp.isfinite(probe_modes)),
@@ -453,7 +772,7 @@ def _checked_sharded_arrays(
         ),
         "scan_positions_ang must be within atom_potentials grid bounds",
     )
-    result: tuple[
+    result: Tuple[
         Complex[Array, "H W M"],
         Float[Array, "P 2"],
         Float[Array, "N 3"],

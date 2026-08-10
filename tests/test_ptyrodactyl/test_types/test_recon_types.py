@@ -19,7 +19,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
-from beartype.typing import Any
+from beartype.typing import Any, Dict, Tuple
 
 from ptyrodactyl.types import (
     LaplaceUncertainty,
@@ -59,7 +59,7 @@ def _loss(residual: jax.Array) -> jax.Array:
 
 def _carrier_case(
     case_name: str,
-) -> tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]:
+) -> Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int]:
     """Return constructor data for one reconstruction carrier.
 
     Parameters
@@ -69,7 +69,7 @@ def _carrier_case(
 
     Returns
     -------
-    case : tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]
+    case : Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int]
         Carrier class, positional arguments, keyword arguments, and
         expected dynamic leaf count.
     """
@@ -83,8 +83,8 @@ def _carrier_case(
     converged: jax.Array = jnp.array(True, dtype=jnp.bool_)
     samples: jax.Array = jnp.arange(6, dtype=jnp.float64).reshape(3, 2)
 
-    cases: dict[
-        str, tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]
+    cases: Dict[
+        str, Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int]
     ]
     cases = {
         "problem": (
@@ -170,7 +170,7 @@ def _carrier_case(
             6,
         ),
     }
-    case: tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int] = (
+    case: Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int] = (
         cases[case_name]
     )
     return case

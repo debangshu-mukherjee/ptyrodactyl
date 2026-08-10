@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types_or: [python, toml]
+        files: ^(pyproject\.toml|src/.*\.py|tests/.*\.py)$
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        files: ^(src/.*\.py|tests/.*\.py)$
+      - id: ty
+        name: ty
+        entry: uv run ty check
+        language: system
+        pass_filenames: false
+      - id: loc-badge
+        name: loc badge (local count, no CI commits)
+        entry: uv run python .github/badges/loc_badge.py
+        language: system
+        pass_filenames: false
+        always_run: true

@@ -166,7 +166,7 @@ def contrast_stretch(
     def _rescale_single_image(
         image: Float[Array, " H W"],
     ) -> Float[Array, " H W"]:
-        """Rescale one image via percentile-based stretching.
+        """PRIVATE: Rescale one image via percentile-based stretching.
 
         Parameters
         ----------

@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Replaced built-in `tuple[...]` and `dict[...]` type hints with capital
+  `Tuple[...]` and `Dict[...]` imported solely from `beartype.typing`
+  throughout production and test code, with a repository AST regression
+  guard.
+- Added the annotation pre-flight gate `tests/_preflight_types.py`. Pytest
+  imports every `ptyrodactyl` and `tests` module under the jaxtyping import
+  hook before collection, so a malformed annotation fails the session
+  immediately; `PTYRODACTYL_SKIP_PREFLIGHT=1` skips one local run. Exported
+  the represented-source carriers from `ptyrodactyl.types` so the gate and
+  the canonical import contract agree.
+- Standardized private source-function documentation with structured
+  NumPy-style sections, explicit `PRIVATE:` summaries, and an AST guard that
+  prevents private exports, Routine Listings, and test cross-references.
+- Tightened canonical `Potential3D` and scalar Galerkin array contracts to
+  width-qualified jaxtyping dtypes. Coercing inputs and genuinely
+  dtype-polymorphic kernels remain broad, while the fixed-support derivative
+  chart now explicitly requires binary64 inputs. These annotations assert
+  storage dtype; they do not change arithmetic or provide accuracy
+  certification.
 - Added exact integer Galerkin product supports, the volts-based SC-1
   interaction builder, endpoint-safe interaction and absorber actions, and
   an analytic periodic cosine-shell absorber under `ptyrodactyl.born`. The

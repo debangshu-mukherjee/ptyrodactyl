@@ -28,14 +28,27 @@ when present.
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Dict, List, Optional, Union
+from beartype.typing import Dict, List, Optional, Tuple, Union
 from jaxtyping import Array, Float, Int, Num, jaxtyped
 
 from .custom_types import scalar_float
 
 
 def _raise_if(condition: bool, message: str) -> None:
-    """Raise ValueError when a structural condition is true."""
+    """PRIVATE: Raise ``ValueError`` for a true structural condition.
+
+    Parameters
+    ----------
+    condition : bool
+        Whether the structural contract is invalid.
+    message : str
+        Error message for the rejected contract.
+
+    Raises
+    ------
+    ValueError
+        If ``condition`` is true.
+    """
     if condition:
         raise ValueError(message)
 
@@ -306,8 +319,8 @@ def create_crystal_data(
     max_position_cols: int = 3
     positions_rank: int = 2
     atom_rank: int = 1
-    matrix_shape: tuple[int, int] = (3, 3)
-    scalar_shape: tuple[()] = ()
+    matrix_shape: Tuple[int, int] = (3, 3)
+    scalar_shape: Tuple[()] = ()
     _raise_if(positions_arr.ndim != positions_rank, "positions must be 2D")
     _raise_if(
         positions_arr.shape[1] != max_position_cols,

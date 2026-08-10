@@ -4,24 +4,8 @@ Extended Summary
 ----------------
 Provides small algebraic operations over matching JAX PyTrees so
 solvers, gauge analysis, block updates, and Fisher utilities use one
-shared implementation.
-
-Routine Listings
-----------------
-:func:`_tree_add`
-    Element-wise addition of two PyTrees.
-:func:`_tree_conj`
-    Element-wise complex conjugation of a PyTree.
-:func:`_tree_dot`
-    Inner product between two PyTrees.
-:func:`_tree_norm`
-    L2 norm of a PyTree.
-:func:`_tree_scalar_mul`
-    Scalar multiplication of a PyTree.
-:func:`_tree_sub`
-    Element-wise subtraction of two PyTrees.
-:func:`_tree_zeros_like`
-    Zero-valued PyTree matching an input structure.
+shared implementation. The helpers remain private and are imported directly
+only by sibling Jacobian modules.
 """
 
 import jax
@@ -35,7 +19,7 @@ def _tree_add(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> PyTree:
-    """Element-wise addition of two PyTrees.
+    """PRIVATE: Add two PyTrees element by element.
 
     Parameters
     ----------
@@ -58,7 +42,7 @@ def _tree_add(
 def _tree_conj(
     tree: PyTree,
 ) -> PyTree:
-    """Complex-conjugate every leaf of a PyTree.
+    """PRIVATE: Conjugate every leaf of one PyTree.
 
     Parameters
     ----------
@@ -80,7 +64,7 @@ def _tree_dot(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> Float[Array, ""]:
-    r"""Compute the real Hermitian inner product of two PyTrees.
+    r"""PRIVATE: Compute the real Hermitian inner product of two PyTrees.
 
     Parameters
     ----------
@@ -119,7 +103,7 @@ def _tree_dot(
 def _tree_norm(
     tree: PyTree,
 ) -> Float[Array, ""]:
-    """Compute L2 norm of a PyTree.
+    """PRIVATE: Compute the L2 norm of one PyTree.
 
     Parameters
     ----------
@@ -141,7 +125,7 @@ def _tree_scalar_mul(
     scalar: Float[Array, ""],
     tree: PyTree,
 ) -> PyTree:
-    """Multiply all leaves of a PyTree by a scalar.
+    """PRIVATE: Multiply every PyTree leaf by one scalar.
 
     Parameters
     ----------
@@ -164,7 +148,7 @@ def _tree_sub(
     tree_a: PyTree,
     tree_b: PyTree,
 ) -> PyTree:
-    """Element-wise subtraction of two PyTrees.
+    """PRIVATE: Subtract two PyTrees element by element.
 
     Parameters
     ----------
@@ -186,7 +170,7 @@ def _tree_sub(
 def _tree_zeros_like(
     tree: PyTree,
 ) -> PyTree:
-    """Create a PyTree of zeros matching the input structure.
+    """PRIVATE: Create zeros that match one PyTree structure.
 
     Parameters
     ----------
@@ -200,14 +184,3 @@ def _tree_zeros_like(
     """
     zeros: PyTree = jax.tree_util.tree_map(jnp.zeros_like, tree)
     return zeros
-
-
-__all__: list[str] = [
-    "_tree_add",
-    "_tree_conj",
-    "_tree_dot",
-    "_tree_norm",
-    "_tree_scalar_mul",
-    "_tree_sub",
-    "_tree_zeros_like",
-]

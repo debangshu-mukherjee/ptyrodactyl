@@ -241,15 +241,17 @@ def test_checked_cbed_image_transparent_jit_grad_vmap_and_raises():
         axis=0,
     )
     vmapped = jax.vmap(
-        lambda slices: checked_cbed_image(
-            create_potential_slices(
-                slices,
-                pot_slices.slice_thickness,
-                pot_slices.calib,
-            ),
-            beam,
-            microscope,
-        ).data_array
+        lambda slices: (
+            checked_cbed_image(
+                create_potential_slices(
+                    slices,
+                    pot_slices.slice_thickness,
+                    pot_slices.calib,
+                ),
+                beam,
+                microscope,
+            ).data_array
+        )
     )(batched_slices)
     assert vmapped.shape == (2, _GRID_SIZE, _GRID_SIZE)
     _assert_finite(vmapped)

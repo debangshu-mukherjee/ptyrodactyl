@@ -12,6 +12,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from beartype.typing import Dict, Tuple
 from numpy.testing import assert_allclose
 
 from ptyrodactyl.born import (
@@ -33,7 +34,7 @@ _RUNTIME_ERRORS = (
 )
 
 
-def _line_indices(values: tuple[int, ...]) -> jax.Array:
+def _line_indices(values: Tuple[int, ...]) -> jax.Array:
     """Place one-dimensional exact indices on the final work-grid axis."""
     indices: jax.Array = jnp.asarray(
         [[0, 0, value] for value in values],
@@ -135,7 +136,7 @@ def _dense_convolution(
     state: np.ndarray = np.asarray(state_indices)
     multiplier: np.ndarray = np.asarray(multiplier_indices)
     values: np.ndarray = np.asarray(coefficients)
-    lookup: dict[tuple[int, int, int], complex] = {
+    lookup: Dict[Tuple[int, int, int], complex] = {
         (int(index[0]), int(index[1]), int(index[2])): complex(value)
         for index, value in zip(multiplier, values, strict=True)
     }
@@ -146,7 +147,7 @@ def _dense_convolution(
     for row, output_index in enumerate(state):
         for column, input_index in enumerate(state):
             delta: np.ndarray = output_index - input_index
-            difference: tuple[int, int, int] = (
+            difference: Tuple[int, int, int] = (
                 int(delta[0]),
                 int(delta[1]),
                 int(delta[2]),
@@ -164,6 +165,32 @@ class TestScalarPotentialProducts:
     :see: :func:`ptyrodactyl.born.build_cosine_shell_absorber_coefficients`
     :see: :func:`ptyrodactyl.born.build_interaction_coefficients`
     """
+
+    def test_canonical_builders_and_actions_return_exact_widths(self) -> None:
+        """Expose binary64 outputs while retaining a polymorphic diagnostic."""
+        support = _support()
+        voltage = _voltage_coefficients().astype(jnp.complex64)
+        absorber = _absorber_coefficients().astype(jnp.complex64)
+        field = jnp.asarray(
+            [0.2 + 0.1j, -0.3 + 0.05j, 0.4 - 0.2j],
+            dtype=jnp.complex64,
+        )
+
+        interaction = build_interaction_coefficients(support, voltage, 100.0)
+        interaction_action = apply_interaction_product(
+            support,
+            voltage,
+            field,
+        )
+        absorber_action = apply_absorber_action(support, absorber, field)
+        shell = build_cosine_shell_absorber_coefficients(_mixed_axis_support())
+        diagnostic_factor = build_absorber_factor(support, absorber)
+
+        assert interaction.dtype == jnp.complex128
+        assert interaction_action.dtype == jnp.complex128
+        assert absorber_action.dtype == jnp.complex128
+        assert shell.dtype == jnp.complex128
+        assert diagnostic_factor.dtype == jnp.complex64
 
     def test_voltage_builder_has_sc1_units_and_positive_sign(self) -> None:
         """Match the 100 kV coupling and preserve positive voltage sign."""

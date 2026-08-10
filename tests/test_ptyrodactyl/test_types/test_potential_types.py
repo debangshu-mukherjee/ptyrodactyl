@@ -4,9 +4,12 @@
 :see: :func:`ptyrodactyl.types.create_potential_3d`
 """
 
+import math
+
 import jax
 import jax.numpy as jnp
 import pytest
+from beartype.typing import Dict
 from jaxtyping import TypeCheckError
 
 from ptyrodactyl.types import Potential3D, create_potential_3d
@@ -50,6 +53,66 @@ def test_potential_3d_preserves_voltage_geometry_and_one_dynamic_leaf() -> (
     assert leaves[0] is potential.volume
 
 
+def test_potential_3d_canonicalizes_lower_precision_volume() -> None:
+    """Store accepted real input as the declared Float64 carrier leaf."""
+    volume = jnp.arange(24, dtype=jnp.float32).reshape(2, 3, 4)
+
+    potential = _create(volume)
+
+    assert volume.dtype == jnp.float32
+    assert potential.volume.dtype == jnp.float64
+    assert Potential3D.__annotations__["volume"].dtypes == ("float64",)
+
+
+def test_potential_3d_uses_box_and_shape_as_exact_grid_geometry() -> None:
+    """A tolerated input-spacing discrepancy cannot split target geometry."""
+    box_x = 2.0 + 5.0e-13
+    potential = create_potential_3d(
+        jnp.zeros((2, 3, 4)),
+        voxel_size=(0.5, 0.25, 0.2),
+        box_size=(box_x, 0.75, 0.4),
+        origin=(0.0, 0.0, 0.0),
+        producer="test producer",
+        provenance_hash=_PROVENANCE,
+        coefficient_normalization=_NORMALIZATION,
+        band_limit=0.75,
+    )
+
+    assert potential.box_size == (box_x, 0.75, 0.4)
+    assert potential.voxel_size == (box_x / 4, 0.75 / 3, 0.4 / 2)
+
+
+def test_potential_3d_rejects_band_above_exact_box_nyquist() -> None:
+    """Do not admit a band above Nyquist through a relative tolerance."""
+    with pytest.raises(ValueError, match="Nyquist"):
+        create_potential_3d(
+            jnp.zeros((2, 3, 4)),
+            voxel_size=(0.5, 0.25, 0.2),
+            box_size=(2.0, 0.75, 0.4),
+            origin=(0.0, 0.0, 0.0),
+            producer="test producer",
+            provenance_hash=_PROVENANCE,
+            coefficient_normalization=_NORMALIZATION,
+            band_limit=math.nextafter(1.0, math.inf),
+        )
+
+
+def test_potential_3d_rejects_underflowed_diagnostic_spacing() -> None:
+    """Keep the box-owned carrier factory-idempotent at range boundaries."""
+    subnormal = float.fromhex("0x0.0000000000001p-1022")
+    with pytest.raises(ValueError, match="positive finite binary64"):
+        create_potential_3d(
+            jnp.zeros((1, 1, 2)),
+            voxel_size=(subnormal, 1.0, 1.0),
+            box_size=(subnormal, 1.0, 1.0),
+            origin=(0.0, 0.0, 0.0),
+            producer="test producer",
+            provenance_hash=_PROVENANCE,
+            coefficient_normalization=_NORMALIZATION,
+            band_limit=0.1,
+        )
+
+
 def test_potential_3d_factory_is_jittable_and_volume_differentiable() -> None:
     """Validation leaves the voltage samples differentiable end to end."""
 
@@ -81,11 +144,11 @@ def test_potential_3d_factory_is_jittable_and_volume_differentiable() -> None:
     ],
 )
 def test_potential_3d_rejects_ambiguous_metadata(
-    override: dict[str, object],
+    override: Dict[str, object],
     message: str,
 ) -> None:
     """Quantitative fields cannot carry guessed units or discretization."""
-    arguments: dict[str, object] = {
+    arguments: Dict[str, object] = {
         "volume": jnp.zeros((2, 3, 4)),
         "voxel_size": (0.5, 0.25, 0.2),
         "box_size": (2.0, 0.75, 0.4),
@@ -119,10 +182,10 @@ def test_potential_3d_rejects_nonfinite_voltage_samples() -> None:
     ],
 )
 def test_potential_3d_rejects_boolean_metadata(
-    override: dict[str, object],
+    override: Dict[str, object],
 ) -> None:
     """Boolean metadata cannot masquerade as zero or one physical units."""
-    arguments: dict[str, object] = {
+    arguments: Dict[str, object] = {
         "volume": jnp.zeros((2, 3, 4)),
         "voxel_size": (0.5, 0.25, 0.2),
         "box_size": (2.0, 0.75, 0.4),

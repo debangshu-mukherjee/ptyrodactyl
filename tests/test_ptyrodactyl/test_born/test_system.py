@@ -1,5 +1,6 @@
 """Tests for :mod:`ptyrodactyl.born.system`."""
 
+import inspect
 from collections.abc import Callable
 
 import chex
@@ -17,20 +18,36 @@ from ptyrodactyl.born import (
     build_cosine_shell_absorber_coefficients,
     build_interaction_coefficients,
     cgls_solve,
+    create_host_checked_galerkin_target,
     create_matched_galerkin_source,
     evaluate_physical_galerkin_adjoint_residual,
     evaluate_physical_galerkin_residual,
     lsqr_solve,
 )
+from ptyrodactyl.born.acquisition import (
+    check_galerkin_acquisition_support,
+)
+from ptyrodactyl.born.system import create_galerkin_target
 from ptyrodactyl.tools import helmholtz_coupling, relativistic_wavelength_ang
 from ptyrodactyl.types import (
+    GalerkinAcquisitionSupportStatus,
+    GalerkinPotentialCertificateFailure,
+    GalerkinPotentialErrorRoute,
     GalerkinProductSupport,
     GalerkinSolveMethod,
     GalerkinSolveResult,
     GalerkinSolveStatus,
     GalerkinTargetManifest,
     create_galerkin_product_support,
-    create_galerkin_target_manifest,
+    create_potential_3d,
+)
+from tests._galerkin_target_fixture import (
+    TARGET_CAP_SCALE,
+    TARGET_VOLTAGE_KV,
+    checked_acquisition,
+    periodic_target_potential,
+    production_target,
+    target_support,
 )
 
 _RUNTIME_ERRORS = (
@@ -42,61 +59,30 @@ _RUNTIME_ERRORS = (
 
 def _support() -> GalerkinProductSupport:
     """Create one three-mode support with independent coefficient bands."""
-    state = jnp.array([[0, 0, -1], [0, 0, 0], [0, 0, 1]], dtype=jnp.int32)
-    interaction = jnp.array(
-        [[0, 0, -1], [0, 0, 0], [0, 0, 1]], dtype=jnp.int32
-    )
-    absorber = jnp.array(
-        [
-            [first, second, third]
-            for first in range(-1, 2)
-            for second in range(-1, 2)
-            for third in range(-1, 2)
-        ]
-        + [[0, 0, -2], [0, 0, 2]],
-        dtype=jnp.int32,
-    )
-    work = jnp.array(
-        [
-            [first, second, third]
-            for first in range(-1, 2)
-            for second in range(-1, 2)
-            for third in range(-3, 4)
-        ],
-        dtype=jnp.int32,
-    )
-    return create_galerkin_product_support(
-        state,
-        interaction,
-        absorber,
-        work,
-        (3, 3, 7),
-    )
+    support: GalerkinProductSupport = target_support()
+    return support
 
 
 def _manifest(*, interaction: bool = True) -> GalerkinTargetManifest:
     """Create one on-axis manifested target with an analytic absorber."""
-    support = _support()
-    voltage_kv = jnp.asarray(200.0, dtype=jnp.float64)
-    k0 = 2.0 * jnp.pi / relativistic_wavelength_ang(voltage_kv)
-    voltage_coefficients = (
-        jnp.array(
-            [0.02 - 0.01j, 0.10 + 0.0j, 0.02 + 0.01j],
-            dtype=jnp.complex128,
-        )
-        if interaction
-        else jnp.zeros((3,), dtype=jnp.complex128)
+    if interaction:
+        manifest: GalerkinTargetManifest = production_target()
+        return manifest
+    potential = periodic_target_potential()
+    vacuum = eqx.tree_at(
+        lambda candidate: candidate.volume,
+        potential,
+        jnp.zeros_like(potential.volume),
     )
-    return create_galerkin_target_manifest(
-        support=support,
-        preterminal_indices=support.state_indices,
-        voltage_coefficients=voltage_coefficients,
-        box_lengths=jnp.array([5.0, 6.0, 7.0], dtype=jnp.float64),
-        carrier=jnp.array([0.0, 0.0, k0], dtype=jnp.float64),
-        accelerating_voltage_kv=voltage_kv,
-        cap_scale=jnp.asarray(0.25, dtype=jnp.float64),
-        target_name="three-mode-on-axis",
+    eligibility = checked_acquisition(_support(), vacuum.box_size)
+    manifest = create_galerkin_target(
+        vacuum,
+        eligibility,
+        accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+        cap_scale=TARGET_CAP_SCALE,
+        target_name="three-mode-on-axis-vacuum",
     )
+    return manifest
 
 
 def _one_mode_manifest(
@@ -120,15 +106,21 @@ def _one_mode_manifest(
         work_indices=profile_indices,
         work_shape=(3, 3, 3),
     )
-    voltage_kv = jnp.asarray(200.0, dtype=jnp.float64)
-    wavenumber = 2.0 * jnp.pi / relativistic_wavelength_ang(voltage_kv)
-    manifest = create_galerkin_target_manifest(
-        support=support,
-        preterminal_indices=state_indices,
-        voltage_coefficients=jnp.zeros(1, dtype=jnp.complex128),
-        box_lengths=jnp.array([5.0, 6.0, 7.0], dtype=jnp.float64),
-        carrier=jnp.array([0.0, 0.0, wavenumber], dtype=jnp.float64),
-        accelerating_voltage_kv=voltage_kv,
+    potential = create_potential_3d(
+        jnp.zeros((3, 3, 3), dtype=jnp.float64),
+        voxel_size=(1.0, 1.0, 1.0),
+        box_size=(3.0, 3.0, 3.0),
+        origin=(0.0, 0.0, 0.0),
+        producer="one-mode-system-fixture-v1",
+        provenance_hash="e" * 64,
+        coefficient_normalization="VC-1 periodic trigonometric mean DFT",
+        band_limit=0.2,
+    )
+    eligibility = checked_acquisition(support, potential.box_size)
+    manifest = create_galerkin_target(
+        potential,
+        eligibility,
+        accelerating_voltage_kv=TARGET_VOLTAGE_KV,
         cap_scale=cap_scale,
         target_name="one-mode-on-axis",
     )
@@ -137,49 +129,21 @@ def _one_mode_manifest(
 
 def _tilted_manifest() -> GalerkinTargetManifest:
     """Create one mixed-axis target with a tilted on-shell carrier."""
-    state = jnp.array([[-1, 0, 0], [0, 0, 0], [1, 0, 0]])
-    absorber = jnp.array(
-        [
-            [first, second, third]
-            for first in range(-1, 2)
-            for second in range(-1, 2)
-            for third in range(-1, 2)
-        ]
-        + [[-2, 0, 0], [2, 0, 0]]
+    potential = periodic_target_potential()
+    support = _support()
+    eligibility = checked_acquisition(
+        support,
+        potential.box_size,
+        carrier_direction=(1.0, -0.018, 0.031),
     )
-    work = jnp.array(
-        [
-            [first, second, third]
-            for first in range(-3, 4)
-            for second in range(-1, 2)
-            for third in range(-1, 2)
-        ]
-    )
-    support = create_galerkin_product_support(
-        state_indices=state,
-        interaction_indices=state,
-        absorber_indices=absorber,
-        work_indices=work,
-        work_shape=(7, 3, 3),
-    )
-    voltage_kv = jnp.asarray(200.0, dtype=jnp.float64)
-    k0 = 2.0 * jnp.pi / relativistic_wavelength_ang(voltage_kv)
-    carrier_x = jnp.asarray(0.31, dtype=jnp.float64)
-    carrier_y = jnp.asarray(-0.18, dtype=jnp.float64)
-    carrier_z = jnp.sqrt(k0**2 - carrier_x**2 - carrier_y**2)
-    return create_galerkin_target_manifest(
-        support=support,
-        preterminal_indices=support.state_indices,
-        voltage_coefficients=jnp.array(
-            [0.045 - 0.025j, 0.22 + 0.0j, 0.045 + 0.025j],
-            dtype=jnp.complex128,
-        ),
-        box_lengths=jnp.array([5.0, 6.0, 7.0], dtype=jnp.float64),
-        carrier=jnp.stack((carrier_x, carrier_y, carrier_z)),
-        accelerating_voltage_kv=voltage_kv,
-        cap_scale=jnp.asarray(0.23, dtype=jnp.float64),
+    manifest: GalerkinTargetManifest = create_galerkin_target(
+        potential,
+        eligibility,
+        accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+        cap_scale=0.23,
         target_name="three-mode-tilted",
     )
+    return manifest
 
 
 def _dense_target(manifest: GalerkinTargetManifest) -> np.ndarray:
@@ -232,13 +196,265 @@ class TestScalarGalerkinSystem:
     :see: :class:`ptyrodactyl.types.GalerkinTargetManifest`
     :see: :func:`ptyrodactyl.types.create_galerkin_physical_residual`
     :see: :func:`ptyrodactyl.types.create_galerkin_source`
-    :see: :func:`ptyrodactyl.types.create_galerkin_target_manifest`
     :see: :func:`ptyrodactyl.born.apply_galerkin_target`
     :see: :func:`ptyrodactyl.born.apply_galerkin_target_adjoint`
+    :see: :func:`ptyrodactyl.born.create_galerkin_target`
+    :see: :func:`ptyrodactyl.born.create_host_checked_galerkin_target`
     :see: :func:`ptyrodactyl.born.create_matched_galerkin_source`
     :see: :func:`ptyrodactyl.born.evaluate_physical_galerkin_adjoint_residual`
     :see: :func:`ptyrodactyl.born.evaluate_physical_galerkin_residual`
     """
+
+    def test_production_target_signature_has_no_raw_coefficient_seam(
+        self,
+    ) -> None:
+        """Freeze the sole Potential3D-to-checked-support builder signature.
+
+        :see: :func:`ptyrodactyl.born.system.create_galerkin_target`
+        """
+        parameters = inspect.signature(create_galerkin_target).parameters
+
+        assert tuple(parameters) == (
+            "potential",
+            "support_eligibility",
+            "accelerating_voltage_kv",
+            "cap_scale",
+            "target_name",
+        )
+        for forbidden in (
+            "support",
+            "preterminal_indices",
+            "voltage_coefficients",
+            "carrier",
+            "box_lengths",
+            "wavenumber",
+        ):
+            assert forbidden not in parameters
+        with pytest.raises(TypeError):
+            create_galerkin_target(
+                support=_support(),
+                preterminal_indices=_support().state_indices,
+                voltage_coefficients=jnp.zeros((3,), dtype=jnp.complex128),
+                accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+                cap_scale=TARGET_CAP_SCALE,
+                target_name="forbidden-raw-path",
+            )
+
+    def test_host_certificate_is_consumed_before_rm_s2_construction(
+        self,
+    ) -> None:
+        """Put useful VC.17 evidence on an explicit production target path."""
+        potential = periodic_target_potential()
+        eligibility = checked_acquisition(_support(), potential.box_size)
+        fallback = create_galerkin_target(
+            potential,
+            eligibility,
+            accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+            cap_scale=TARGET_CAP_SCALE,
+            target_name="triangle-target",
+        )
+        checked = create_host_checked_galerkin_target(
+            potential,
+            eligibility,
+            accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+            cap_scale=TARGET_CAP_SCALE,
+            target_name="host-checked-target",
+            maximum_direct_terms=1_000,
+        )
+        failed = create_host_checked_galerkin_target(
+            potential,
+            eligibility,
+            accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+            cap_scale=TARGET_CAP_SCALE,
+            target_name="host-budget-failure-target",
+            maximum_direct_terms=1,
+        )
+        jax.block_until_ready((fallback, checked, failed))
+
+        certificate = checked.realization.coefficient_certificate
+        failed_certificate = failed.realization.coefficient_certificate
+        assert certificate is not None
+        assert bool(certificate.finite_certificate)
+        assert (
+            checked.realization.error_route
+            is GalerkinPotentialErrorRoute.DIRECT_PAIRWISE_HOST_INTERVAL
+        )
+        np.testing.assert_array_equal(
+            checked.voltage_coefficients,
+            fallback.voltage_coefficients,
+        )
+        checked_bound = (
+            checked.fixed_linear_error_ledger.fixed_linear_operator_error_bound
+        )
+        fallback_ledger = fallback.fixed_linear_error_ledger
+        fallback_bound = fallback_ledger.fixed_linear_operator_error_bound
+        assert checked_bound < fallback_bound
+        assert failed_certificate is not None
+        assert not bool(failed_certificate.finite_certificate)
+        assert (
+            failed_certificate.failure
+            is GalerkinPotentialCertificateFailure.WORK_BUDGET_EXCEEDED
+        )
+        assert jnp.isinf(
+            failed.fixed_linear_error_ledger.fixed_linear_operator_error_bound
+        )
+
+    def test_target_rechecks_ineligible_and_forged_support_results(
+        self,
+    ) -> None:
+        """Reject honest ineligibility and forged aggregate eligibility."""
+        potential = periodic_target_potential()
+        valid = checked_acquisition(_support(), potential.box_size)
+        invalid_manifest = eqx.tree_at(
+            lambda manifest: manifest.preterminal_indices,
+            valid.manifest,
+            jnp.zeros((1, 3), dtype=jnp.int64),
+        )
+        ineligible = check_galerkin_acquisition_support(invalid_manifest)
+        forged = eqx.tree_at(
+            lambda result: (result.status, result.support_eligible),
+            ineligible,
+            (
+                jnp.asarray(
+                    GalerkinAcquisitionSupportStatus.SUPPORT_ELIGIBLE,
+                    dtype=jnp.int32,
+                ),
+                jnp.asarray(True),
+            ),
+        )
+
+        assert not ineligible.support_eligible
+        for submitted in (ineligible, forged):
+            with pytest.raises(_RUNTIME_ERRORS, match="independently"):
+                target = create_galerkin_target(
+                    potential,
+                    submitted,
+                    accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+                    cap_scale=TARGET_CAP_SCALE,
+                    target_name="rejected-support",
+                )
+                jax.block_until_ready(target)
+
+    def test_target_rejects_box_and_nominal_wavenumber_mismatches(
+        self,
+    ) -> None:
+        """Require exact voxel/acquisition boxes and canonical voltage k0."""
+        potential = periodic_target_potential()
+        box_mismatch = checked_acquisition(
+            _support(),
+            (6.0, 3.0, 3.0),
+        )
+        wavenumber_mismatch = checked_acquisition(
+            _support(),
+            potential.box_size,
+            voltage_kv=300.0,
+        )
+
+        with pytest.raises(_RUNTIME_ERRORS, match="box lengths"):
+            target = create_galerkin_target(
+                potential,
+                box_mismatch,
+                accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+                cap_scale=TARGET_CAP_SCALE,
+                target_name="box-mismatch",
+            )
+            jax.block_until_ready(target)
+        with pytest.raises(_RUNTIME_ERRORS, match="canonical voltage"):
+            target = create_galerkin_target(
+                potential,
+                wavenumber_mismatch,
+                accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+                cap_scale=TARGET_CAP_SCALE,
+                target_name="wavenumber-mismatch",
+            )
+            jax.block_until_ready(target)
+
+    def test_exact_and_projected_rows_bind_exact_target_geometry(self) -> None:
+        """Keep zero rows symbolic and inflate only projected evidence."""
+        exact = production_target()
+        potential = periodic_target_potential()
+        projected_support = checked_acquisition(
+            _support(),
+            potential.box_size,
+            projected_offset=(0.0, 0.1, 0.0),
+        )
+        projected = create_galerkin_target(
+            potential,
+            projected_support,
+            accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+            cap_scale=TARGET_CAP_SCALE,
+            target_name="projected-direction-target",
+        )
+        jax.block_until_ready((exact, projected))
+
+        np.testing.assert_array_equal(
+            exact.exact_target_incident_shell_defect_bounds,
+            jnp.zeros((1,), dtype=jnp.float64),
+        )
+        np.testing.assert_array_equal(
+            exact.exact_target_incident_projection_error_bounds,
+            jnp.zeros((1,), dtype=jnp.float64),
+        )
+        assert exact.incident_full_offset_max == 0.0
+        assert (
+            projected.exact_target_incident_shell_defect_bounds[0]
+            >= projected_support.incident_shell_defect_upper_bounds[0]
+        )
+        assert (
+            projected.exact_target_incident_projection_error_bounds[0]
+            >= projected_support.incident_projection_error_upper_bounds[0]
+        )
+        assert (
+            projected.incident_full_offset_max
+            > projected_support.incident_full_offset_max
+        )
+
+    def test_target_source_and_residual_canonicalize_complex64_inputs(
+        self,
+    ) -> None:
+        """Canonicalize the production physics seam to binary64 complex."""
+        manifest = _manifest()
+        field = jnp.asarray(
+            [0.2 + 0.1j, -0.3 + 0.05j, 0.4 - 0.2j],
+            dtype=jnp.complex64,
+        )
+        additional = jnp.asarray(
+            [0.01 - 0.02j, 0.03 + 0.01j, -0.02 + 0.04j],
+            dtype=jnp.complex64,
+        )
+
+        action = apply_galerkin_target(manifest, field)
+        adjoint_action = apply_galerkin_target_adjoint(manifest, field)
+        matched = create_matched_galerkin_source(
+            manifest,
+            field,
+            additional,
+        )
+        residual = evaluate_physical_galerkin_residual(
+            manifest,
+            field,
+            additional,
+        )
+        adjoint_residual = evaluate_physical_galerkin_adjoint_residual(
+            manifest,
+            field,
+            additional,
+        )
+
+        assert action.dtype == jnp.complex128
+        assert adjoint_action.dtype == jnp.complex128
+        for value in (
+            matched.incident_field,
+            matched.incident_source,
+            matched.additional_source,
+            matched.total_source,
+            matched.scattered_source,
+            residual.residual,
+            adjoint_residual.residual,
+        ):
+            assert value.dtype == jnp.complex128
+        assert residual.residual_norm.dtype == jnp.float64
+        assert adjoint_residual.residual_norm.dtype == jnp.float64
 
     def test_manifest_derives_voltage_consistent_shifted_diagonal(
         self,
@@ -495,76 +711,34 @@ class TestScalarGalerkinSystem:
             assert int(result.status) == int(expected_status)
             assert float(result.residual_norm) > 0.0
 
-    @pytest.mark.parametrize(
-        ("box_lengths", "voltage_kv", "carrier", "message"),
-        [
-            (
-                jnp.array([1.0, 1.0, 1.0e-300]),
-                jnp.asarray(200.0),
-                None,
-                "free_diagonal",
-            ),
-            (
-                jnp.ones(3),
-                jnp.asarray(1.0e308),
-                jnp.zeros(3),
-                "voltage-derived (interaction coupling|wavenumber)",
-            ),
-        ],
-    )
-    def test_manifest_rejects_nonfinite_derived_physics_eager_and_compiled(
-        self,
-        box_lengths: jax.Array,
-        voltage_kv: jax.Array,
-        carrier: jax.Array | None,
-        message: str,
-    ) -> None:
-        """Reject overflow in voltage-derived or shifted-free quantities."""
-        support = _support()
-        if carrier is None:
-            k0 = 2.0 * jnp.pi / relativistic_wavelength_ang(voltage_kv)
-            carrier = jnp.array([0.0, 0.0, k0])
-
-        def build(box, voltage, wavevector):
-            return create_galerkin_target_manifest(
-                support=support,
-                preterminal_indices=support.state_indices,
-                voltage_coefficients=jnp.zeros(3, dtype=jnp.complex128),
-                box_lengths=box,
-                carrier=wavevector,
-                accelerating_voltage_kv=voltage,
-                cap_scale=0.25,
-                target_name="overflowing-manifest",
-            )
-
-        with pytest.raises(_RUNTIME_ERRORS, match=message):
-            jax.block_until_ready(build(box_lengths, voltage_kv, carrier))
-        with pytest.raises(_RUNTIME_ERRORS, match=message):
-            jax.block_until_ready(
-                jax.jit(build)(box_lengths, voltage_kv, carrier)
-            )
-
-    def test_manifest_binds_bit_exact_voltage_coupling_eager_and_jit(
+    def test_target_binds_same_exact_voltage_target_eager_and_jit(
         self,
     ) -> None:
-        """Bind phi, voltage, coupling, chi, and canonical rounding bytes."""
+        """Bind one exact target while enclosing either rounded realization."""
         eager = _manifest()
 
-        def rebuild(phi: jax.Array) -> GalerkinTargetManifest:
-            """Rebuild the same target with dynamic voltage coefficients."""
-            manifest = create_galerkin_target_manifest(
-                support=eager.support,
-                preterminal_indices=eager.preterminal_indices,
-                voltage_coefficients=phi,
-                box_lengths=eager.box_lengths,
-                carrier=eager.carrier,
+        def rebuild(volume: jax.Array) -> GalerkinTargetManifest:
+            """Rebuild the same target with dynamic voxel values."""
+            potential = eqx.tree_at(
+                lambda candidate: candidate.volume,
+                eager.potential,
+                volume,
+            )
+            manifest = create_galerkin_target(
+                potential,
+                eager.support_eligibility,
                 accelerating_voltage_kv=eager.accelerating_voltage_kv,
                 cap_scale=eager.cap_scale,
                 target_name=eager.target_name,
             )
             return manifest
 
-        compiled = jax.jit(rebuild)(eager.voltage_coefficients)
+        compiled = jax.jit(rebuild)(eager.potential.volume)
+        _, volume_tangent = jax.jvp(
+            lambda volume: rebuild(volume).interaction_coefficients,
+            (eager.potential.volume,),
+            (jnp.ones_like(eager.potential.volume),),
+        )
         eager_builder = build_interaction_coefficients(
             eager.support,
             eager.voltage_coefficients,
@@ -572,7 +746,7 @@ class TestScalarGalerkinSystem:
         )
         compiled_builder = jax.jit(build_interaction_coefficients)(
             eager.support,
-            eager.voltage_coefficients,
+            compiled.voltage_coefficients,
             eager.accelerating_voltage_kv,
         )
         eager_coupling = helmholtz_coupling(eager.accelerating_voltage_kv)
@@ -580,14 +754,45 @@ class TestScalarGalerkinSystem:
             eager.accelerating_voltage_kv
         )
 
-        np.testing.assert_array_equal(
-            eager.interaction_coefficients, compiled.interaction_coefficients
+        np.testing.assert_allclose(
+            eager.voltage_coefficients,
+            compiled.voltage_coefficients,
+            rtol=2.0e-14,
+            atol=2.0e-14,
+        )
+        assert bool(
+            jnp.all(
+                jnp.abs(
+                    eager.voltage_coefficients - compiled.voltage_coefficients
+                )
+                <= (
+                    eager.realization.coefficient_error_bounds
+                    + compiled.realization.coefficient_error_bounds
+                )
+            )
         )
         np.testing.assert_array_equal(
             eager.interaction_coefficients, eager_builder
         )
         np.testing.assert_array_equal(
             compiled.interaction_coefficients, compiled_builder
+        )
+        eager_ledger = eager.fixed_linear_error_ledger
+        compiled_ledger = compiled.fixed_linear_error_ledger
+        eager_interaction_errors = (
+            eager_ledger.interaction_coefficient_error_bounds
+        )
+        compiled_interaction_errors = (
+            compiled_ledger.interaction_coefficient_error_bounds
+        )
+        assert bool(
+            jnp.all(
+                jnp.abs(
+                    eager.interaction_coefficients
+                    - compiled.interaction_coefficients
+                )
+                <= (eager_interaction_errors + compiled_interaction_errors)
+            )
         )
         np.testing.assert_array_equal(
             eager.interaction_coupling, compiled.interaction_coupling
@@ -596,10 +801,12 @@ class TestScalarGalerkinSystem:
             eager.interaction_coupling, eager_coupling
         )
         np.testing.assert_array_equal(eager_coupling, compiled_coupling)
+        assert bool(jnp.all(jnp.isfinite(volume_tangent)))
+        assert bool(jnp.any(jnp.abs(volume_tangent) > 0.0))
         assert "50-mantissa-bit" in eager.precision
         assert "50 mantissa bits" in eager.interaction_coefficient_provenance
 
-    def test_manifest_cap_boundary_preserves_the_analytic_absorber(
+    def test_target_cap_boundary_preserves_the_analytic_absorber(
         self,
     ) -> None:
         """Reject a low CAP and retain a normal action at the boundary."""
@@ -609,12 +816,9 @@ class TestScalarGalerkinSystem:
 
         def rebuild(cap_scale: jax.Array) -> GalerkinTargetManifest:
             """Rebuild the fixed target with one dynamic CAP scale."""
-            manifest = create_galerkin_target_manifest(
-                support=base.support,
-                preterminal_indices=base.preterminal_indices,
-                voltage_coefficients=jnp.zeros(1, dtype=jnp.complex128),
-                box_lengths=base.box_lengths,
-                carrier=base.carrier,
+            manifest = create_galerkin_target(
+                base.potential,
+                base.support_eligibility,
                 accelerating_voltage_kv=base.accelerating_voltage_kv,
                 cap_scale=cap_scale,
                 target_name="cap-boundary-target",

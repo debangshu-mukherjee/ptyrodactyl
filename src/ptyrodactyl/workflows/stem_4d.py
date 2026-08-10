@@ -25,7 +25,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from beartype import beartype
-from beartype.typing import Optional, Tuple
+from beartype.typing import Dict, Optional, Tuple
 from jax import lax
 from jax.sharding import Mesh, NamedSharding, PartitionSpec
 from jaxtyping import Array, Complex, Float, Int, jaxtyped
@@ -61,7 +61,7 @@ def _estimate_memory_gb(
     num_modes: int,
     num_slices: int,
 ) -> float:
-    r"""Estimate memory requirements for 4D-STEM simulation.
+    r"""PRIVATE: Estimate memory requirements for 4D-STEM simulation.
 
     Extended Summary
     ----------------
@@ -107,6 +107,15 @@ def _estimate_memory_gb(
     memory_gb : float
         Estimated memory requirement in gigabytes.
 
+    Notes
+    -----
+    The estimate divides by ``1024**3`` and therefore reports binary
+    gibibytes despite the historical ``gb`` name. It assumes complex128
+    beams, float64 detector and slice arrays, and an empirical 2.5 working
+    overhead. It excludes allocator fragmentation, compiler buffers,
+    sharding replication, and device-specific workspace choices, so it is a
+    planning estimate rather than an allocation guarantee.
+
     See Also
     --------
     :func:`_get_device_memory_gb` :
@@ -130,7 +139,7 @@ def _estimate_memory_gb(
 
 
 def _get_device_memory_gb() -> float:
-    """Get available memory on the first JAX device.
+    """PRIVATE: Get available memory on the first JAX device.
 
     Extended Summary
     ----------------
@@ -153,7 +162,7 @@ def _get_device_memory_gb() -> float:
 
     Returns
     -------
-    memory_gb : float
+    result : float
         Available device memory in gigabytes.
         Returns 16.0 as default if unable to determine.
 
@@ -404,7 +413,7 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     unique_atoms: list[int] = sorted(
         {int(x) for x in crystal_data.atomic_numbers}
     )
-    atom_type_map: dict[int, int] = {
+    atom_type_map: Dict[int, int] = {
         atom_num: idx for idx, atom_num in enumerate(unique_atoms)
     }
 
@@ -494,7 +503,7 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
     clip_w: int = x_end - x_start
 
     def _clip_single_cbed(cbed: Float[Array, "H W"]) -> Float[Array, "Ho Wo"]:
-        """Clip a CBED to the extent region and resize.
+        """PRIVATE: Clip a CBED to the extent region and resize.
 
         Parameters
         ----------
@@ -503,7 +512,7 @@ def crystal2stem4d(  # noqa: PLR0913, PLR0915
 
         Returns
         -------
-        resized : Float[Array, "Ho Wo"]
+        result : Float[Array, "Ho Wo"]
             Clipped and bilinearly resized CBED.
         """
         clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(
@@ -745,7 +754,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     unique_atoms: list[int] = sorted(
         {int(x) for x in crystal_data.atomic_numbers}
     )
-    atom_type_map: dict[int, int] = {
+    atom_type_map: Dict[int, int] = {
         atom_num: idx for idx, atom_num in enumerate(unique_atoms)
     }
 
@@ -832,7 +841,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     def _process_single_position(
         position_ang: Float[Array, " 2"],
     ) -> Float[Array, "H W"]:
-        """Run multislice for one scan position in its tile.
+        """PRIVATE: Run multislice for one scan position in its tile.
 
         Parameters
         ----------
@@ -917,7 +926,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
         def _compute_all_cbeds(
             positions: Float[Array, "P 2"],
         ) -> Float[Array, "P H W"]:
-            """Compute CBEDs for all positions with sharding.
+            """PRIVATE: Compute CBEDs for all positions with sharding.
 
             Parameters
             ----------
@@ -926,7 +935,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
 
             Returns
             -------
-            cbeds : Float[Array, "P H W"]
+            result : Float[Array, "P H W"]
                 Raw CBED patterns for all positions.
             """
             result: Float[Array, "P H W"] = jax.vmap(_process_single_position)(
@@ -957,7 +966,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
     clip_w: int = x_end - x_start
 
     def _clip_single_cbed(cbed: Float[Array, "H W"]) -> Float[Array, "Ho Wo"]:
-        """Clip a CBED to the extent region and resize.
+        """PRIVATE: Clip a CBED to the extent region and resize.
 
         Parameters
         ----------
@@ -966,7 +975,7 @@ def crystal2stem4d_tiled(  # noqa: PLR0913, PLR0915
 
         Returns
         -------
-        resized : Float[Array, "Ho Wo"]
+        result : Float[Array, "Ho Wo"]
             Clipped and bilinearly resized CBED.
         """
         clipped: Float[Array, "Hc Wc"] = lax.dynamic_slice(

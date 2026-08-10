@@ -17,6 +17,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from beartype.typing import Dict, Tuple
 from jaxtyping import Complex, Float
 from numpy.typing import NDArray
 
@@ -92,15 +93,15 @@ class _ImplicitAdjointCase(NamedTuple):
     """Store one locally copied fixed-support RM-I1 oracle case."""
 
     case_id: str
-    indices: tuple[int, ...]
+    indices: Tuple[int, ...]
     length: float
     wavenumber: float
-    interaction_coefficients: dict[int, complex]
-    absorber_coefficients: dict[int, complex]
-    source: tuple[complex, ...]
-    terminal: tuple[complex, ...]
+    interaction_coefficients: Dict[int, complex]
+    absorber_coefficients: Dict[int, complex]
+    source: Tuple[complex, ...]
+    terminal: Tuple[complex, ...]
     target: complex
-    parameters: tuple[float, float, float, float, float]
+    parameters: Tuple[float, float, float, float, float]
     tolerance: float
 
 
@@ -206,7 +207,7 @@ def _create_operator(
 
 def _operator_and_source(
     parameters: Float[jax.Array, "4"],
-) -> tuple[GalerkinOperator, Complex[jax.Array, "4"]]:
+) -> Tuple[GalerkinOperator, Complex[jax.Array, "4"]]:
     """Map the four state-equation parameters to one fixed support."""
     carrier = jnp.asarray(_BASE_CARRIER).at[0].set(parameters[0])
     operator = _create_operator(
@@ -241,7 +242,7 @@ def _implicit_loss(
 
 def _reference_coefficient_matrix(
     case: _ImplicitAdjointCase,
-    coefficients: dict[int, complex],
+    coefficients: Dict[int, complex],
 ) -> Complex[NDArray, "n n"]:
     """Assemble one dense multiplier from copied Fourier coefficients."""
     matrix = np.array(
@@ -257,7 +258,7 @@ def _reference_coefficient_matrix(
 def _reference_operator_and_source(
     case: _ImplicitAdjointCase,
     parameters: Float[jax.Array, "5"],
-) -> tuple[GalerkinOperator, Complex[jax.Array, " n"]]:
+) -> Tuple[GalerkinOperator, Complex[jax.Array, " n"]]:
     """Map one copied RM-I1 parameter chart into the production carrier."""
     state_size = len(case.indices)
     reciprocal_frequencies = np.zeros((state_size, 3), dtype=np.float64)
@@ -398,9 +399,9 @@ def _realify_matrix(
     return realified
 
 
-def _jaxpr_array_shapes(value: object) -> tuple[tuple[int, ...], ...]:
+def _jaxpr_array_shapes(value: object) -> Tuple[Tuple[int, ...], ...]:
     """Collect array shapes from a nested custom-VJP JAXPR."""
-    shapes: list[tuple[int, ...]] = []
+    shapes: list[Tuple[int, ...]] = []
     visited: set[int] = set()
 
     def visit(candidate: object) -> None:
@@ -735,6 +736,15 @@ class TestMatrixFreeGalerkinEngine:
         assert compiled.status == eager.status
         assert bool(compiled.converged)
         assert compiled.method is method
+        for result in (eager, compiled):
+            assert result.field.dtype == jnp.complex128
+            assert result.residual.dtype == jnp.complex128
+            assert result.residual_norm.dtype == jnp.float64
+            assert result.normal_residual_norm.dtype == jnp.float64
+            assert result.recurrence_residual_norm.dtype == jnp.float64
+            assert result.iterations.dtype == jnp.int32
+            assert result.operator_applications.dtype == jnp.int32
+            assert result.status.dtype == jnp.int32
 
     @pytest.mark.parametrize(
         "solver",
@@ -1272,7 +1282,7 @@ class TestMatrixFreeGalerkinEngine:
 
         def action_and_source(
             candidate_parameters: Float[jax.Array, "4"],
-        ) -> tuple[Complex[jax.Array, "4"], Complex[jax.Array, "4"]]:
+        ) -> Tuple[Complex[jax.Array, "4"], Complex[jax.Array, "4"]]:
             """Apply the varying operator to the fixed converged state."""
             candidate_operator, candidate_source = _operator_and_source(
                 candidate_parameters

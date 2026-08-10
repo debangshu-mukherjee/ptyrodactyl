@@ -37,14 +37,27 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Any, Callable, Optional
+from beartype.typing import Any, Callable, Optional, Tuple
 from jaxtyping import Array, Bool, Float, Int, Num, PyTree, jaxtyped
 
 from .custom_types import scalar_bool, scalar_int, scalar_num
 
 
 def _raise_if(condition: bool, message: str) -> None:
-    """Raise ValueError when a structural condition is true."""
+    """PRIVATE: Raise ``ValueError`` for a true structural condition.
+
+    Parameters
+    ----------
+    condition : bool
+        Whether the structural contract is invalid.
+    message : str
+        Error message for the rejected contract.
+
+    Raises
+    ------
+    ValueError
+        If ``condition`` is true.
+    """
     if condition:
         raise ValueError(message)
 
@@ -53,7 +66,25 @@ def _check_finite_array(
     array: Num[Array, "..."],
     name: str,
 ) -> Num[Array, "..."]:
-    """Attach a traced finite-value check to one numeric array."""
+    """PRIVATE: Attach a traced finite-value check to one numeric array.
+
+    Parameters
+    ----------
+    array : Num[Array, "..."]
+        Numeric array to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    checked_array : Num[Array, "..."]
+        Input array with a traced finite-value assertion.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any array element is non-finite under compiled execution.
+    """
     checked_array: Num[Array, "..."] = eqx.error_if(
         array,
         jnp.any(~jnp.isfinite(array)),
@@ -63,13 +94,42 @@ def _check_finite_array(
 
 
 def _coerce_array_tree(tree: PyTree) -> PyTree:
-    """Convert every dynamic tree leaf to a JAX array."""
+    """PRIVATE: Convert every dynamic tree leaf to a JAX array.
+
+    Parameters
+    ----------
+    tree : PyTree
+        PyTree containing array-compatible leaves.
+
+    Returns
+    -------
+    array_tree : PyTree
+        Matching PyTree with each leaf converted by :func:`jax.numpy.asarray`.
+    """
     array_tree: PyTree = jax.tree_util.tree_map(jnp.asarray, tree)
     return array_tree
 
 
 def _check_finite_leaf(leaf: Any, name: str) -> Any:
-    """Attach a traced finite-value check to one PyTree leaf."""
+    """PRIVATE: Attach a traced finite-value check to one PyTree leaf.
+
+    Parameters
+    ----------
+    leaf : Any
+        Numeric PyTree leaf to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    checked_leaf : Any
+        Input leaf with a traced finite-value assertion.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any leaf element is non-finite under compiled execution.
+    """
     checked_leaf: Any = eqx.error_if(
         leaf,
         jnp.any(~jnp.isfinite(leaf)),
@@ -79,7 +139,25 @@ def _check_finite_leaf(leaf: Any, name: str) -> Any:
 
 
 def _check_finite_tree(tree: PyTree, name: str) -> PyTree:
-    """Attach traced finite-value checks to every PyTree leaf."""
+    """PRIVATE: Attach traced finite-value checks to every PyTree leaf.
+
+    Parameters
+    ----------
+    tree : PyTree
+        Numeric PyTree to validate.
+    name : str
+        Field name included in runtime errors.
+
+    Returns
+    -------
+    checked_tree : PyTree
+        Matching PyTree with a traced finite-value assertion on each leaf.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any leaf element is non-finite under compiled execution.
+    """
     checked_tree: PyTree = jax.tree_util.tree_map(
         lambda leaf: _check_finite_leaf(leaf, name),
         tree,
@@ -378,7 +456,7 @@ def create_recon_result(
     iterations_arr: Int[Array, ""] = jnp.asarray(iterations, dtype=jnp.int32)
     converged_arr: Bool[Array, ""] = jnp.asarray(converged, dtype=jnp.bool_)
 
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(
         simulated_arr.shape != residual_arr.shape,
         "simulated and residual must have matching shapes",
@@ -607,7 +685,7 @@ def create_posterior_samples(
 
     matrix_rank: int = 2
     vector_rank: int = 1
-    scalar_shape: tuple[()] = ()
+    scalar_shape: Tuple[()] = ()
     _raise_if(samples_arr.ndim != matrix_rank, "samples must be 2D")
     _raise_if(mean_arr.ndim != vector_rank, "mean must be 1D")
     _raise_if(covariance_arr.ndim != matrix_rank, "covariance must be 2D")

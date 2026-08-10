@@ -32,7 +32,7 @@ import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Callable
+from beartype.typing import Callable, Tuple
 from jax import lax
 from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree, jaxtyped
 
@@ -48,7 +48,7 @@ def nullspace_vectors_lanczos(
     num_lanczos_iterations: int = 100,
     threshold: float = 1e-6,  # noqa: ARG001
     random_seed: int = 42,
-) -> tuple[Float[Array, "num_vectors n"], Float[Array, "num_vectors"]]:
+) -> Tuple[Float[Array, "num_vectors n"], Float[Array, "num_vectors"]]:
     r"""Estimate basis vectors for the Jacobian nullspace.
 
     Extended Summary
@@ -129,10 +129,10 @@ def nullspace_vectors_lanczos(
 
     def lanczos_body(
         iteration: int,
-        carry: tuple[
+        carry: Tuple[
             Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]
         ],
-    ) -> tuple[Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]]:
+    ) -> Tuple[Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]]:
         """Execute one Lanczos iteration."""
         vectors, alphas, betas = carry
         v_curr: Float[Array, "n"] = vectors[iteration]
@@ -162,7 +162,7 @@ def nullspace_vectors_lanczos(
             lambda: vectors,
         )
 
-        result: tuple[
+        result: Tuple[
             Float[Array, "k n"], Float[Array, "k"], Float[Array, "k"]
         ] = (vectors_new, alphas_new, betas_new)
         return result
@@ -195,7 +195,7 @@ def nullspace_vectors_lanczos(
     )
     nullspace_basis = nullspace_basis / (norms + 1e-12)
 
-    nullspace_result: tuple[
+    nullspace_result: Tuple[
         Float[Array, "num_vectors n"], Float[Array, "num_vectors"]
     ] = nullspace_basis, eigenvalues
     return nullspace_result
@@ -360,7 +360,7 @@ def decompose_gauge_observable(
     num_nullspace_vectors: int = 20,
     threshold: float = 1e-6,
     random_seed: int = 42,
-) -> tuple[PyTree, PyTree]:
+) -> Tuple[PyTree, PyTree]:
     r"""Decompose a perturbation into gauge and observable parts.
 
     Extended Summary
@@ -421,7 +421,7 @@ def decompose_gauge_observable(
         random_seed,
     )
     observable_component: PyTree = _tree_sub(perturbation, gauge_component)
-    decomposition: tuple[PyTree, PyTree] = (
+    decomposition: Tuple[PyTree, PyTree] = (
         gauge_component,
         observable_component,
     )
@@ -505,13 +505,13 @@ def effective_rank(
 
     def lanczos_step(
         iteration: int,
-        carry: tuple[
+        carry: Tuple[
             Float[Array, "n"],
             Float[Array, "n"],
             Float[Array, "k"],
             Float[Array, "k"],
         ],
-    ) -> tuple[
+    ) -> Tuple[
         Float[Array, "n"],
         Float[Array, "n"],
         Float[Array, "k"],
@@ -535,7 +535,7 @@ def effective_rank(
         alphas_new: Float[Array, "k"] = alphas.at[iteration].set(alpha_i)
         betas_new: Float[Array, "k"] = betas.at[iteration].set(beta_i)
 
-        result: tuple[
+        result: Tuple[
             Float[Array, "n"],
             Float[Array, "n"],
             Float[Array, "k"],

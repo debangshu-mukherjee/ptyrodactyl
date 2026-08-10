@@ -45,7 +45,7 @@ import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Callable
+from beartype.typing import Callable, Tuple
 from jax import lax
 from jaxtyping import Array, Float, Int, PRNGKeyArray, PyTree, jaxtyped
 
@@ -56,7 +56,24 @@ from ptyrodactyl.jacobian.operators import jtj_operator
 def _validate_noise_variance(
     noise_variance: Float[Array, ""],
 ) -> Float[Array, ""]:
-    """Validate traced Gaussian noise variance."""
+    """PRIVATE: Validate one traced Gaussian noise variance.
+
+    Parameters
+    ----------
+    noise_variance : Float[Array, ""]
+        Gaussian measurement-noise variance.
+
+    Returns
+    -------
+    checked_noise_variance : Float[Array, ""]
+        Input variance with traced finite and positive assertions.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If ``noise_variance`` is non-finite or non-positive under compiled
+        execution.
+    """
     checked_noise_variance: Float[Array, ""] = eqx.error_if(
         noise_variance,
         (~jnp.isfinite(noise_variance)) | (noise_variance <= 0),
@@ -284,7 +301,7 @@ def fisher_diagonal(
     def hutchinson_sample(
         carry: Float[Array, "n"],
         key_i: PRNGKeyArray,
-    ) -> tuple[Float[Array, "n"], None]:
+    ) -> Tuple[Float[Array, "n"], None]:
         """Accumulate one Hutchinson diagonal sample."""
         z: Float[Array, "n"] = jax.random.rademacher(key_i, (n,)).astype(
             flat_params.dtype
@@ -292,7 +309,7 @@ def fisher_diagonal(
         jtj_z: Float[Array, "n"] = jtj_flat_fn(z)
         sample: Float[Array, "n"] = z * jtj_z
         new_carry: Float[Array, "n"] = carry + sample
-        result: tuple[Float[Array, "n"], None] = new_carry, None
+        result: Tuple[Float[Array, "n"], None] = new_carry, None
         return result
 
     keys: PRNGKeyArray = jax.random.split(key, num_hutchinson_samples)
@@ -563,13 +580,13 @@ def fisher_eigenspectrum(
 
     def lanczos_step(
         iteration: int,
-        carry: tuple[
+        carry: Tuple[
             Float[Array, "n"],
             Float[Array, "n"],
             Float[Array, "k"],
             Float[Array, "k"],
         ],
-    ) -> tuple[
+    ) -> Tuple[
         Float[Array, "n"],
         Float[Array, "n"],
         Float[Array, "k"],
@@ -593,7 +610,7 @@ def fisher_eigenspectrum(
         alphas_new: Float[Array, "k"] = alphas.at[iteration].set(alpha_i)
         betas_new: Float[Array, "k"] = betas.at[iteration].set(beta_i)
 
-        result: tuple[
+        result: Tuple[
             Float[Array, "n"],
             Float[Array, "n"],
             Float[Array, "k"],

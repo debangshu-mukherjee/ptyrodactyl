@@ -37,7 +37,19 @@ _DEFAULT_CACHE_ROOT: str = "~/.cache/ptyrodactyl/xla"
 
 
 def _architecture_tag() -> str:
-    """Build a directory tag that discriminates XLA codegen targets."""
+    """PRIVATE: Build a directory tag that distinguishes XLA targets.
+
+    Returns
+    -------
+    result : str
+        Host system, machine, and CPU-feature digest joined as one directory
+        tag.
+
+    Notes
+    -----
+    Linux hosts include a short SHA-1 digest of the ``/proc/cpuinfo`` feature
+    flags. Other hosts use the literal ``noflags`` component.
+    """
     system: str = platform.system()
     machine: str = platform.machine()
     flags: str = ""

@@ -30,6 +30,7 @@ import math
 import equinox as eqx
 import jax.numpy as jnp
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import Array, Float, Int, jaxtyped
 
 from ptyrodactyl.inout import kirkland_potentials, lobato_potentials
@@ -44,21 +45,48 @@ from ptyrodactyl.types import (
 )
 
 _TWO_PI: scalar_float = 2.0 * jnp.pi
-_LOBATO_AMPLITUDE_INDICES: tuple[int, ...] = (0, 2, 4, 6, 8)
-_LOBATO_SCALE_INDICES: tuple[int, ...] = (1, 3, 5, 7, 9)
-_KIRKLAND_AMPLITUDE_INDICES: tuple[int, ...] = (0, 2, 4, 6, 8, 10)
-_KIRKLAND_SCALE_INDICES: tuple[int, ...] = (1, 3, 5, 7, 9, 11)
+_LOBATO_AMPLITUDE_INDICES: Tuple[int, ...] = (0, 2, 4, 6, 8)
+_LOBATO_SCALE_INDICES: Tuple[int, ...] = (1, 3, 5, 7, 9)
+_KIRKLAND_AMPLITUDE_INDICES: Tuple[int, ...] = (0, 2, 4, 6, 8, 10)
+_KIRKLAND_SCALE_INDICES: Tuple[int, ...] = (1, 3, 5, 7, 9, 11)
 _MAX_ATOMIC_NUMBER: int = 103
 
 
 def _validate_parameterization(parameterization: str) -> None:
-    """Reject an unsupported independent-atom parameterization."""
+    """PRIVATE: Reject an unsupported independent-atom parameterization.
+
+    Parameters
+    ----------
+    parameterization : str
+        Independent-atom parameterization name.
+
+    Raises
+    ------
+    ValueError
+        If ``parameterization`` is neither ``"lobato"`` nor ``"kirkland"``.
+    """
     if parameterization not in {"lobato", "kirkland"}:
         raise ValueError("parameterization must be 'lobato' or 'kirkland'")
 
 
 def _checked_radius(r: Float[Array, "..."]) -> Float[Array, "..."]:
-    """Reject negative or non-finite radial coordinates under tracing."""
+    """PRIVATE: Reject negative or non-finite radial coordinates under tracing.
+
+    Parameters
+    ----------
+    r : Float[Array, "..."]
+        Radial coordinates in Angstroms.
+
+    Returns
+    -------
+    checked : Float[Array, "..."]
+        Radial coordinates with the traced value check attached.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any coordinate is negative or non-finite.
+    """
     checked: Float[Array, "..."] = eqx.error_if(
         r,
         jnp.any(~jnp.isfinite(r)) | jnp.any(r < 0.0),
@@ -68,7 +96,25 @@ def _checked_radius(r: Float[Array, "..."]) -> Float[Array, "..."]:
 
 
 def _checked_atom_index(atom_no: scalar_int) -> Int[Array, ""]:
-    """Validate an atomic number and return its zero-based table index."""
+    """PRIVATE: Return the validated zero-based index for an atomic number.
+
+    Parameters
+    ----------
+    atom_no : scalar_int
+        One-based atomic number.
+
+    Returns
+    -------
+    result : Int[Array, ""]
+        Zero-based coefficient-table index.
+
+    Raises
+    ------
+    ValueError
+        If a concrete atomic number is a Boolean or is outside ``[1, 103]``.
+    equinox.EquinoxRuntimeError
+        If a traced atomic number is outside ``[1, 103]``.
+    """
     if isinstance(atom_no, bool):
         raise ValueError("atom_no must be an integer between 1 and 103")
     if isinstance(atom_no, int) and not 1 <= atom_no <= _MAX_ATOMIC_NUMBER:
@@ -84,7 +130,25 @@ def _checked_atom_index(atom_no: scalar_int) -> Int[Array, ""]:
 
 
 def _load_lobato_parameters(atom_no: scalar_int) -> LobatoParameters:
-    """Load one element's Lobato coefficients into the validated carrier."""
+    """PRIVATE: Load one element's Lobato coefficients into its carrier.
+
+    Parameters
+    ----------
+    atom_no : scalar_int
+        One-based atomic number.
+
+    Returns
+    -------
+    result : LobatoParameters
+        Validated Lobato--Van Dyck coefficient carrier.
+
+    Raises
+    ------
+    ValueError
+        If a concrete atomic number is a Boolean or is outside ``[1, 103]``.
+    equinox.EquinoxRuntimeError
+        If a traced atomic number is outside ``[1, 103]``.
+    """
     atom_index: Int[Array, ""] = _checked_atom_index(atom_no)
     row: Float[Array, " 10"] = lobato_potentials()[atom_index]
     amplitudes: Float[Array, " 5"] = row[
@@ -100,7 +164,25 @@ def _load_lobato_parameters(atom_no: scalar_int) -> LobatoParameters:
 
 
 def _load_kirkland_parameters(atom_no: scalar_int) -> KirklandParameters:
-    """Load one element's Kirkland coefficients into the validated carrier."""
+    """PRIVATE: Load one element's Kirkland coefficients into its carrier.
+
+    Parameters
+    ----------
+    atom_no : scalar_int
+        One-based atomic number.
+
+    Returns
+    -------
+    result : KirklandParameters
+        Validated Kirkland coefficient carrier.
+
+    Raises
+    ------
+    ValueError
+        If a concrete atomic number is a Boolean or is outside ``[1, 103]``.
+    equinox.EquinoxRuntimeError
+        If a traced atomic number is outside ``[1, 103]``.
+    """
     atom_index: Int[Array, ""] = _checked_atom_index(atom_no)
     row: Float[Array, " 12"] = kirkland_potentials()[atom_index]
     amplitudes: Float[Array, " 6"] = row[
@@ -209,7 +291,25 @@ def kirkland_form_factor(
 def _bessel_kv(
     order: float, argument: Float[Array, "..."]
 ) -> Float[Array, "..."]:
-    """Evaluate the local differentiable Bessel-K implementation lazily."""
+    """PRIVATE: Evaluate the differentiable Bessel-K implementation lazily.
+
+    Parameters
+    ----------
+    order : float
+        Dimensionless real Bessel-function order.
+    argument : Float[Array, "..."]
+        Positive dimensionless real arguments.
+
+    Returns
+    -------
+    result : Float[Array, "..."]
+        Dimensionless modified Bessel values :math:`K_v(x)`.
+
+    Notes
+    -----
+    The local import avoids the module cycle created by the public form-factor
+    dispatcher in :mod:`atom_potentials`.
+    """
     # A lazy import avoids a module cycle: atom_potentials consumes the public
     # dispatchers below, while its established Bessel implementation remains
     # the single numerical source used by both parameterizations.

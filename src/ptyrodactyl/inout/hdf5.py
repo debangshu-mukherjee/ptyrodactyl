@@ -28,11 +28,11 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import h5py
 import jax.numpy as jnp
 import numpy as np
+from beartype.typing import Any, Dict, Tuple
 from jaxtyping import Shaped
 from numpy.typing import NDArray
 
@@ -77,11 +77,11 @@ class _CarrierMeta:
 
     cls: type[Any]
     factory: Callable[..., Any]
-    dynamic_fields: tuple[str, ...]
-    static_fields: tuple[str, ...] = ()
+    dynamic_fields: Tuple[str, ...]
+    static_fields: Tuple[str, ...] = ()
 
 
-_CARRIER_REGISTRY: dict[str, _CarrierMeta] = {
+_CARRIER_REGISTRY: Dict[str, _CarrierMeta] = {
     "Potential3D": _CarrierMeta(
         cls=Potential3D,
         factory=create_potential_3d,
@@ -106,13 +106,34 @@ _CARRIER_REGISTRY: dict[str, _CarrierMeta] = {
         dynamic_fields=("slices", "slice_thickness", "calib"),
     ),
 }
-_CARRIER_REGISTRY_BY_CLASS: dict[type[Any], _CarrierMeta] = {
+_CARRIER_REGISTRY_BY_CLASS: Dict[type[Any], _CarrierMeta] = {
     metadata.cls: metadata for metadata in _CARRIER_REGISTRY.values()
 }
 
 
 def _encode_json_value(value: Any) -> Any:  # noqa: PLR0911
-    """Convert supported static metadata to an exact JSON representation."""
+    """PRIVATE: Convert static metadata to an exact JSON representation.
+
+    Parameters
+    ----------
+    value : Any
+        Supported scalar, container, mapping, or scalar array value.
+
+    Returns
+    -------
+    result : Any
+        JSON-encodable value that preserves tuples, mappings, and complex
+        scalars through explicit tags.
+
+    Raises
+    ------
+    TypeError
+        If ``value`` has no registered static-metadata representation.
+
+    Notes
+    -----
+    Mapping keys use the same tagged representation as mapping values.
+    """
     if value is None or isinstance(value, bool | int | float | str):
         result: Any = value
         return result
@@ -161,7 +182,23 @@ def _encode_json_value(value: Any) -> Any:  # noqa: PLR0911
 
 
 def _decode_json_value(value: Any) -> Any:
-    """Reconstruct a value produced by :func:`_encode_json_value`."""
+    """PRIVATE: Reconstruct one tagged static-metadata value.
+
+    Parameters
+    ----------
+    value : Any
+        JSON-decoded value produced by :func:`_encode_json_value`.
+
+    Returns
+    -------
+    result : Any
+        Reconstructed scalar, tuple, list, or mapping value.
+
+    Raises
+    ------
+    HDF5SchemaError
+        If a tagged mapping uses an unknown metadata representation.
+    """
     if isinstance(value, list):
         result: Any = [_decode_json_value(item) for item in value]
         return result
@@ -191,7 +228,25 @@ def _decode_json_value(value: Any) -> Any:
 
 
 def _attribute_text(node: Any, name: str) -> str:
-    """Return one required HDF5 attribute as text."""
+    """PRIVATE: Return one required HDF5 attribute as text.
+
+    Parameters
+    ----------
+    node : Any
+        HDF5 node that owns the required attribute.
+    name : str
+        Required attribute name.
+
+    Returns
+    -------
+    result : str
+        UTF-8 attribute text.
+
+    Raises
+    ------
+    HDF5SchemaError
+        If the attribute is missing or is not stored as text.
+    """
     if name not in node.attrs:
         raise HDF5SchemaError(f"Missing required HDF5 attribute: {name}")
     value: Any = node.attrs[name]
@@ -199,12 +254,27 @@ def _attribute_text(node: Any, name: str) -> str:
         result: str = value.decode("utf-8")
         return result
     if isinstance(value, str):
-        return value
+        result: str = value
+        return result
     raise HDF5SchemaError(f"HDF5 attribute {name!r} must be text")
 
 
 def _write_carrier_node(node: Any, carrier: Any) -> None:
-    """Write one registered carrier into an existing HDF5 group."""
+    """PRIVATE: Write one registered carrier into an HDF5 group.
+
+    Parameters
+    ----------
+    node : Any
+        Existing HDF5 group that receives the carrier fields and metadata.
+    carrier : Any
+        Carrier instance registered in schema version 1.
+
+    Raises
+    ------
+    TypeError
+        If the carrier type is not registered or its static metadata contains
+        an unsupported value.
+    """
     metadata: _CarrierMeta | None = _CARRIER_REGISTRY_BY_CLASS.get(
         type(carrier)
     )
@@ -217,7 +287,7 @@ def _write_carrier_node(node: Any, carrier: Any) -> None:
 
     node.attrs[_ATTR_NODE_KIND] = _KIND_PYTREE
     node.attrs[_ATTR_PYTREE_TYPE] = type(carrier).__name__
-    static_metadata: dict[str, Any] = {
+    static_metadata: Dict[str, Any] = {
         field_name: getattr(carrier, field_name)
         for field_name in metadata.static_fields
     }
@@ -229,7 +299,28 @@ def _write_carrier_node(node: Any, carrier: Any) -> None:
 
 
 def _write_value(parent: Any, name: str, value: Any) -> None:
-    """Write one recursively supported value below an HDF5 group."""
+    """PRIVATE: Write one recursively supported value below an HDF5 group.
+
+    Parameters
+    ----------
+    parent : Any
+        HDF5 group that receives the new child node.
+    name : str
+        Name of the child group or dataset.
+    value : Any
+        Registered carrier, supported container, scalar, or numeric array.
+
+    Raises
+    ------
+    TypeError
+        If ``value`` contains unsupported metadata or has a non-numeric array
+        dtype.
+
+    Notes
+    -----
+    Numeric arrays at least one mebibyte use lossless gzip compression and
+    byte shuffling.
+    """
     if type(value) in _CARRIER_REGISTRY_BY_CLASS:
         group: Any = parent.create_group(name)
         _write_carrier_node(group, value)
@@ -274,7 +365,7 @@ def _write_value(parent: Any, name: str, value: Any) -> None:
         )
         raise TypeError(message)
 
-    dataset_options: dict[str, Any] = {}
+    dataset_options: Dict[str, Any] = {}
     if (
         array_value.ndim > 0
         and array_value.nbytes >= _COMPRESSION_THRESHOLD_BYTES
@@ -288,7 +379,23 @@ def _write_value(parent: Any, name: str, value: Any) -> None:
 
 
 def _read_carrier_node(node: Any) -> Any:
-    """Read one registered carrier from an existing HDF5 group."""
+    """PRIVATE: Read one registered carrier from an HDF5 group.
+
+    Parameters
+    ----------
+    node : Any
+        HDF5 group containing one encoded carrier.
+
+    Returns
+    -------
+    result : Any
+        Carrier reconstructed through its registered canonical factory.
+
+    Raises
+    ------
+    HDF5SchemaError
+        If the node kind, carrier type, fields, or static metadata is invalid.
+    """
     node_kind: str = _attribute_text(node, _ATTR_NODE_KIND)
     if node_kind != _KIND_PYTREE:
         raise HDF5SchemaError(f"Unknown HDF5 node kind: {node_kind}")
@@ -321,7 +428,7 @@ def _read_carrier_node(node: Any) -> Any:
     if set(decoded_static) != set(metadata.static_fields):
         raise HDF5SchemaError("Static carrier metadata fields do not match")
 
-    fields: dict[str, Any] = {
+    fields: Dict[str, Any] = {
         field_name: _read_value(node[field_name])
         for field_name in metadata.dynamic_fields
     }
@@ -331,7 +438,23 @@ def _read_carrier_node(node: Any) -> Any:
 
 
 def _read_length(node: Any) -> int:
-    """Read and validate a container length attribute."""
+    """PRIVATE: Read and validate one container length attribute.
+
+    Parameters
+    ----------
+    node : Any
+        HDF5 container node with a stored item count.
+
+    Returns
+    -------
+    length : int
+        Validated non-negative container length.
+
+    Raises
+    ------
+    HDF5SchemaError
+        If the length is missing, non-integral, boolean, or negative.
+    """
     if _ATTR_LENGTH not in node.attrs:
         raise HDF5SchemaError(
             f"Missing required HDF5 attribute: {_ATTR_LENGTH}"
@@ -348,7 +471,23 @@ def _read_length(node: Any) -> int:
 
 
 def _read_value(node: Any) -> Any:  # noqa: PLR0911, PLR0912
-    """Read one recursively supported value from an HDF5 node."""
+    """PRIVATE: Read one recursively supported value from an HDF5 node.
+
+    Parameters
+    ----------
+    node : Any
+        HDF5 dataset or tagged group to decode.
+
+    Returns
+    -------
+    result : Any
+        Reconstructed JAX array, carrier, container, scalar, or ``None``.
+
+    Raises
+    ------
+    HDF5SchemaError
+        If the node kind or encoded container payload is malformed.
+    """
     if isinstance(node, h5py.Dataset):
         result: Any = jnp.asarray(node[()])
         return result
@@ -408,7 +547,19 @@ def _read_value(node: Any) -> Any:  # noqa: PLR0911, PLR0912
 
 
 def _validate_schema_version(handle: Any) -> None:
-    """Validate the root schema-version attribute."""
+    """PRIVATE: Validate the root schema-version attribute.
+
+    Parameters
+    ----------
+    handle : Any
+        Open HDF5 file handle whose root metadata is validated.
+
+    Raises
+    ------
+    HDF5SchemaError
+        If ``schema_version`` is missing, non-integral, boolean, or
+        unsupported.
+    """
     if _ATTR_SCHEMA_VERSION not in handle.attrs:
         raise HDF5SchemaError(
             f"Missing required HDF5 attribute: {_ATTR_SCHEMA_VERSION}"

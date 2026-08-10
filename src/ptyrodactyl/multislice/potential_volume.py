@@ -33,6 +33,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
+from beartype.typing import Tuple
 from jaxtyping import Array, Float, Int, Num, jaxtyped
 
 from ..types import (
@@ -69,8 +70,28 @@ type _StaticXYZ = Sequence[float] | Num[Array, " 3"]
 type _VoxelSizeInput = scalar_num | _StaticXYZ
 
 
-def _grid_shape_tuple(grid_shape: _GridShapeInput) -> tuple[int, int, int]:
-    """Validate a static ``(nz, ny, nx)`` grid shape."""
+def _grid_shape_tuple(grid_shape: _GridShapeInput) -> Tuple[int, int, int]:
+    """PRIVATE: Validate a static ``(nz, ny, nx)`` grid shape.
+
+    Parameters
+    ----------
+    grid_shape : _GridShapeInput
+        Candidate grid shape in storage-axis order.
+
+    Returns
+    -------
+    nz : int
+        Positive storage-axis depth.
+    ny : int
+        Positive storage-axis height.
+    nx : int
+        Positive storage-axis width.
+
+    Raises
+    ------
+    ValueError
+        If the shape does not contain exactly three positive integers.
+    """
     if isinstance(grid_shape, str | bytes) or len(grid_shape) != _XYZ_SIZE:
         raise ValueError("grid_shape must contain exactly (nz, ny, nx)")
     shape_values: list[int] = []
@@ -90,14 +111,35 @@ def _grid_shape_tuple(grid_shape: _GridShapeInput) -> tuple[int, int, int]:
     ny: int
     nx: int
     nz, ny, nx = shape_values
-    result: tuple[int, int, int] = (nz, ny, nx)
+    result: Tuple[int, int, int] = (nz, ny, nx)
     return result
 
 
 def _voxel_size_tuple(
     voxel_size: _VoxelSizeInput,
-) -> tuple[float, float, float]:
-    """Normalize scalar or xyz voxel spacing to a positive static tuple."""
+) -> Tuple[float, float, float]:
+    """PRIVATE: Normalize voxel spacing to a positive static xyz tuple.
+
+    Parameters
+    ----------
+    voxel_size : _VoxelSizeInput
+        Scalar spacing or physical ``(dx, dy, dz)`` spacing in Angstroms.
+
+    Returns
+    -------
+    dx : float
+        Positive finite x spacing in Angstroms.
+    dy : float
+        Positive finite y spacing in Angstroms.
+    dz : float
+        Positive finite z spacing in Angstroms.
+
+    Raises
+    ------
+    ValueError
+        If a value is Boolean, non-real, non-finite, non-positive, or has an
+        unsupported shape.
+    """
     if isinstance(voxel_size, bool) or (
         isinstance(voxel_size, Sequence)
         and any(isinstance(value, bool) for value in voxel_size)
@@ -105,10 +147,13 @@ def _voxel_size_tuple(
         raise ValueError("voxel_size values must not be booleans")
     if isinstance(voxel_size, Real) and not isinstance(voxel_size, bool):
         scalar_spacing: float = float(voxel_size)
-        values: tuple[float, float, float] = (
-            scalar_spacing,
-            scalar_spacing,
-            scalar_spacing,
+        dx: float = scalar_spacing
+        dy: float = scalar_spacing
+        dz: float = scalar_spacing
+        values: Tuple[float, float, float] = (
+            dx,
+            dy,
+            dz,
         )
     else:
         voxel_array: Num[Array, "..."] = jnp.asarray(voxel_size)
@@ -116,10 +161,13 @@ def _voxel_size_tuple(
             raise ValueError("voxel_size values must not be booleans")
         if voxel_array.shape == ():
             scalar_spacing = float(voxel_array)
+            dx = scalar_spacing
+            dy = scalar_spacing
+            dz = scalar_spacing
             values = (
-                scalar_spacing,
-                scalar_spacing,
-                scalar_spacing,
+                dx,
+                dy,
+                dz,
             )
             if not math.isfinite(scalar_spacing) or scalar_spacing <= 0.0:
                 raise ValueError(
@@ -131,21 +179,44 @@ def _voxel_size_tuple(
                 "voxel_size must be a scalar or contain exactly (dx, dy, dz)"
             )
         try:
-            voxel_values: tuple[float, ...] = tuple(
+            voxel_values: Tuple[float, ...] = tuple(
                 float(value) for value in voxel_array
             )
         except (TypeError, ValueError) as error:
             raise ValueError(
                 "voxel_size values must be real numbers"
             ) from error
-        values = (voxel_values[0], voxel_values[1], voxel_values[2])
+        dx = voxel_values[0]
+        dy = voxel_values[1]
+        dz = voxel_values[2]
+        values = (dx, dy, dz)
     if not all(math.isfinite(value) and value > 0.0 for value in values):
         raise ValueError("voxel_size values must be positive and finite")
     return values
 
 
-def _origin_tuple(origin: _StaticXYZ) -> tuple[float, float, float]:
-    """Validate a static physical ``(x, y, z)`` origin."""
+def _origin_tuple(origin: _StaticXYZ) -> Tuple[float, float, float]:
+    """PRIVATE: Validate a static physical ``(x, y, z)`` origin.
+
+    Parameters
+    ----------
+    origin : _StaticXYZ
+        Physical ``(x, y, z)`` origin in Angstroms.
+
+    Returns
+    -------
+    x : float
+        Finite physical x origin in Angstroms.
+    y : float
+        Finite physical y origin in Angstroms.
+    z : float
+        Finite physical z origin in Angstroms.
+
+    Raises
+    ------
+    ValueError
+        If the origin is not three finite real non-Boolean values.
+    """
     if isinstance(origin, str | bytes) or len(origin) != _XYZ_SIZE:
         raise ValueError("origin must contain exactly (x, y, z)")
     if any(isinstance(value, bool) for value in origin):
@@ -154,11 +225,15 @@ def _origin_tuple(origin: _StaticXYZ) -> tuple[float, float, float]:
     if jnp.issubdtype(origin_array.dtype, jnp.bool_):
         raise ValueError("origin values must not be booleans")
     try:
-        result: tuple[float, float, float] = tuple(
+        origin_values: Tuple[float, ...] = tuple(
             float(value) for value in origin
-        )  # type: ignore[assignment]
+        )
     except (TypeError, ValueError) as error:
         raise ValueError("origin values must be real numbers") from error
+    x: float = origin_values[0]
+    y: float = origin_values[1]
+    z: float = origin_values[2]
+    result: Tuple[float, float, float] = (x, y, z)
     if not all(math.isfinite(value) for value in result):
         raise ValueError("origin values must be finite")
     return result
@@ -166,19 +241,45 @@ def _origin_tuple(origin: _StaticXYZ) -> tuple[float, float, float]:
 
 def _band_limit_value(
     band_limit: scalar_num | None,
-    voxel_size: tuple[float, float, float],
+    voxel_size: Tuple[float, float, float],
 ) -> float:
-    """Validate or choose the common spherical Nyquist band limit."""
+    """PRIVATE: Validate or choose the common spherical Nyquist band limit.
+
+    Parameters
+    ----------
+    band_limit : scalar_num | None
+        Spherical cutoff in cycles per Angstrom, or ``None`` to use the
+        common Nyquist limit. Default is ``None``.
+    voxel_size : Tuple[float, float, float]
+        Physical ``(dx, dy, dz)`` spacing in Angstroms.
+
+    Returns
+    -------
+    value : float
+        Validated cutoff, or the common Nyquist limit when omitted.
+
+    Raises
+    ------
+    ValueError
+        If the cutoff is Boolean, non-finite, non-positive, or exceeds the
+        common Nyquist limit.
+
+    Notes
+    -----
+    The default is the smallest axis-wise Nyquist frequency, which defines a
+    sphere representable on every physical grid axis.
+    """
     common_nyquist: float = min(0.5 / spacing for spacing in voxel_size)
     if band_limit is None:
-        return common_nyquist
+        value: float = common_nyquist
+        return value
     band_limit_array: Num[Array, ""] = jnp.asarray(band_limit)
     if isinstance(band_limit, bool) or jnp.issubdtype(
         band_limit_array.dtype,
         jnp.bool_,
     ):
         raise ValueError("band_limit must be positive and finite")
-    value: float = float(band_limit)
+    value = float(band_limit)
     if not math.isfinite(value) or value <= 0.0:
         raise ValueError("band_limit must be positive and finite")
     if value > common_nyquist * (1.0 + 1e-12):
@@ -191,7 +292,25 @@ def _band_limit_value(
 def _checked_atomic_numbers(
     atomic_numbers: Array,
 ) -> Int[Array, " N"]:
-    """Reject non-integral or out-of-table atomic numbers under tracing."""
+    """PRIVATE: Reject invalid atomic numbers under tracing.
+
+    Parameters
+    ----------
+    atomic_numbers : Array
+        One-dimensional atomic-number values.
+
+    Returns
+    -------
+    result : Int[Array, " N"]
+        Validated atomic numbers stored as signed 32-bit integers.
+
+    Raises
+    ------
+    ValueError
+        If the array is not one-dimensional, is Boolean, or is complex.
+    equinox.EquinoxRuntimeError
+        If a traced value is non-finite, non-integral, or outside ``[1, 103]``.
+    """
     raw_numbers: Array = jnp.asarray(atomic_numbers)
     if raw_numbers.ndim != 1:
         raise ValueError("atomic_numbers must have shape (N,)")
@@ -224,7 +343,25 @@ def _checked_atomic_numbers(
 def _checked_positions(
     positions: Num[Array, "N 3"],
 ) -> Float[Array, "N 3"]:
-    """Coerce xyz atom positions and attach a traced finite-value check."""
+    """PRIVATE: Coerce xyz atom positions and attach a finite-value check.
+
+    Parameters
+    ----------
+    positions : Num[Array, "N 3"]
+        Cartesian atom positions in Angstroms.
+
+    Returns
+    -------
+    checked : Float[Array, "N 3"]
+        Binary64 positions with the traced finite-value check attached.
+
+    Raises
+    ------
+    ValueError
+        If positions are complex or do not have shape ``(N, 3)``.
+    equinox.EquinoxRuntimeError
+        If a traced coordinate is non-finite.
+    """
     raw_positions: Num[Array, "..."] = jnp.asarray(positions)
     if jnp.issubdtype(raw_positions.dtype, jnp.complexfloating):
         raise ValueError("positions must be real Cartesian coordinates")
@@ -243,7 +380,25 @@ def _checked_positions(
 
 
 def _checked_single_atomic_number(atom_no: scalar_int) -> Int[Array, ""]:
-    """Validate one scalar atomic number without clipping traced values."""
+    """PRIVATE: Validate one atomic number without clipping traced values.
+
+    Parameters
+    ----------
+    atom_no : scalar_int
+        Candidate one-based atomic number.
+
+    Returns
+    -------
+    result : Int[Array, ""]
+        Validated scalar atomic number.
+
+    Raises
+    ------
+    ValueError
+        If ``atom_no`` is not scalar or has an invalid structural dtype.
+    equinox.EquinoxRuntimeError
+        If a traced value is non-finite, non-integral, or outside ``[1, 103]``.
+    """
     raw_number: Num[Array, ""] = jnp.asarray(atom_no)
     if raw_number.shape != ():
         raise ValueError("atom_no must be a scalar")
@@ -253,15 +408,39 @@ def _checked_single_atomic_number(atom_no: scalar_int) -> Int[Array, ""]:
 
 
 def _reciprocal_grid(
-    voxel_size: tuple[float, float, float],
-    grid_shape: tuple[int, int, int],
-) -> tuple[
+    voxel_size: Tuple[float, float, float],
+    grid_shape: Tuple[int, int, int],
+) -> Tuple[
     Float[Array, "nz ny nx"],
     Float[Array, "nz ny nx"],
     Float[Array, "nz ny nx"],
     Float[Array, "nz ny nx"],
 ]:
-    """Return Cartesian DFT frequencies and their magnitude in cycles/Å."""
+    """PRIVATE: Return Cartesian DFT frequencies and their magnitude.
+
+    Parameters
+    ----------
+    voxel_size : Tuple[float, float, float]
+        Physical ``(dx, dy, dz)`` spacing in Angstroms.
+    grid_shape : Tuple[int, int, int]
+        Storage shape ``(nz, ny, nx)``.
+
+    Returns
+    -------
+    gx : Float[Array, "nz ny nx"]
+        X frequency in cycles per Angstrom.
+    gy : Float[Array, "nz ny nx"]
+        Y frequency in cycles per Angstrom.
+    gz : Float[Array, "nz ny nx"]
+        Z frequency in cycles per Angstrom.
+    magnitude : Float[Array, "nz ny nx"]
+        Cartesian frequency magnitude in cycles per Angstrom.
+
+    Notes
+    -----
+    ``fftfreq`` defines cycles per Angstrom here; callers multiply the
+    magnitude by ``2 * pi`` before evaluating angular-frequency form factors.
+    """
     dx: float
     dy: float
     dz: float
@@ -278,7 +457,7 @@ def _reciprocal_grid(
     gx: Float[Array, "nz ny nx"]
     gz, gy, gx = jnp.meshgrid(gz_1d, gy_1d, gx_1d, indexing="ij")
     magnitude: Float[Array, "nz ny nx"] = jnp.sqrt(gx * gx + gy * gy + gz * gz)
-    result: tuple[
+    result: Tuple[
         Float[Array, "nz ny nx"],
         Float[Array, "nz ny nx"],
         Float[Array, "nz ny nx"],
@@ -290,13 +469,51 @@ def _reciprocal_grid(
 def _potential_from_atoms(
     atomic_numbers: Array,
     positions: Num[Array, "N 3"],
-    voxel_size: tuple[float, float, float],
-    grid_shape: tuple[int, int, int],
-    origin: tuple[float, float, float],
+    voxel_size: Tuple[float, float, float],
+    grid_shape: Tuple[int, int, int],
+    origin: Tuple[float, float, float],
     band_limit: float,
     parameterization: str,
 ) -> Float[Array, "nz ny nx"]:
-    """Evaluate the periodic Fourier series for an atomic superposition."""
+    """PRIVATE: Evaluate the periodic Fourier series for all atoms.
+
+    Parameters
+    ----------
+    atomic_numbers : Array
+        One-dimensional atomic numbers.
+    positions : Num[Array, "N 3"]
+        Cartesian atom positions in Angstroms.
+    voxel_size : Tuple[float, float, float]
+        Physical ``(dx, dy, dz)`` spacing in Angstroms.
+    grid_shape : Tuple[int, int, int]
+        Storage shape ``(nz, ny, nx)``.
+    origin : Tuple[float, float, float]
+        Physical ``(x, y, z)`` origin in Angstroms.
+    band_limit : float
+        Spherical cutoff in cycles per Angstrom.
+    parameterization : str
+        Independent-atom form-factor parameterization.
+
+    Returns
+    -------
+    volume : Float[Array, "nz ny nx"]
+        Periodic electrostatic potential in volts.
+
+    Raises
+    ------
+    ValueError
+        If the atomic-number and position arrays have different lengths or
+        fail structural validation.
+    equinox.EquinoxRuntimeError
+        If traced atom data fails value validation.
+
+    Notes
+    -----
+    Each atom contributes
+    ``C_MB * f_Z(2 pi |g|) * exp(-2 pi i g . (r - origin))`` inside the strict
+    spherical spectral mask. The inverse transform normalization is applied
+    by the caller after accumulation.
+    """
     checked_numbers: Int[Array, " N"] = _checked_atomic_numbers(atomic_numbers)
     checked_positions: Float[Array, "N 3"] = _checked_positions(positions)
     if checked_numbers.shape[0] != checked_positions.shape[0]:
@@ -320,9 +537,25 @@ def _potential_from_atoms(
 
     def _add_atom(
         coefficients: jax.Array,
-        atom: tuple[Int[Array, ""], Float[Array, " 3"]],
-    ) -> tuple[jax.Array, None]:
-        """Accumulate one continuously translated atomic Fourier field."""
+        atom: Tuple[Int[Array, ""], Float[Array, " 3"]],
+    ) -> Tuple[jax.Array, None]:
+        """PRIVATE: Accumulate one translated atomic Fourier field.
+
+        Parameters
+        ----------
+        coefficients : jax.Array
+            Running complex Fourier coefficients in volt-Angstrom cubed.
+        atom : Tuple[Int[Array, ""], Float[Array, " 3"]]
+            Atomic number and physical xyz position in Angstroms.
+
+        Returns
+        -------
+        updated_coefficients : jax.Array
+            Fourier coefficients in volt-Angstrom cubed with the atom
+            contribution added.
+        auxiliary : None
+            No stacked scan output.
+        """
         atomic_number: Int[Array, ""]
         position: Float[Array, " 3"]
         atomic_number, position = atom
@@ -341,7 +574,9 @@ def _potential_from_atoms(
         atom_coefficients: jax.Array = (
             MOTT_BETHE_VOLT_ANGSTROM_SQ * form_factor * spectral_mask * phase
         )
-        result: tuple[jax.Array, None] = coefficients + atom_coefficients, None
+        updated_coefficients: jax.Array = coefficients + atom_coefficients
+        auxiliary: None = None
+        result: Tuple[jax.Array, None] = updated_coefficients, auxiliary
         return result
 
     fourier_amplitudes: jax.Array
@@ -414,9 +649,9 @@ def single_atom_potential_3d(
     retained, preserving the physical IAM vacuum reference and its nonzero
     discrete mean.
     """
-    voxel_xyz: tuple[float, float, float] = _voxel_size_tuple(voxel_size)
-    shape_zyx: tuple[int, int, int] = _grid_shape_tuple(grid_shape)
-    origin_xyz: tuple[float, float, float] = _origin_tuple(origin)
+    voxel_xyz: Tuple[float, float, float] = _voxel_size_tuple(voxel_size)
+    shape_zyx: Tuple[int, int, int] = _grid_shape_tuple(grid_shape)
+    origin_xyz: Tuple[float, float, float] = _origin_tuple(origin)
     cutoff: float = _band_limit_value(band_limit, voxel_xyz)
     checked_number: Int[Array, ""] = _checked_single_atomic_number(atom_no)
 
@@ -425,7 +660,7 @@ def single_atom_potential_3d(
         ny: int
         nx: int
         nz, ny, nx = shape_zyx
-        box_xyz: tuple[float, float, float] = (
+        box_xyz: Tuple[float, float, float] = (
             nx * voxel_xyz[0],
             ny * voxel_xyz[1],
             nz * voxel_xyz[2],
@@ -461,10 +696,30 @@ def single_atom_potential_3d(
 
 def _crystal_arrays(
     crystal: _CrystalInput,
-) -> tuple[Float[Array, "N 3"], Array]:
-    """Extract xyz positions and atomic numbers from either carrier."""
+) -> Tuple[Float[Array, "N 3"], Array]:
+    """PRIVATE: Extract xyz positions and atomic numbers from either carrier.
+
+    Parameters
+    ----------
+    crystal : _CrystalInput
+        Crystal carrier containing Cartesian atom data.
+
+    Returns
+    -------
+    positions : Float[Array, "N 3"]
+        Cartesian xyz positions in Angstroms.
+    atomic_numbers : Array
+        Atomic numbers aligned with ``positions``.
+
+    Raises
+    ------
+    ValueError
+        If ``CrystalStructure.cart_positions`` does not have shape ``(N, 4)``.
+    TypeError
+        If ``crystal`` is not a supported carrier.
+    """
     if isinstance(crystal, CrystalData):
-        result: tuple[Float[Array, "N 3"], Array] = (
+        result: Tuple[Float[Array, "N 3"], Array] = (
             crystal.positions,
             crystal.atomic_numbers,
         )
@@ -476,7 +731,7 @@ def _crystal_arrays(
             or cartesian.shape[1] != _POSITION_COLUMNS
         ):
             raise ValueError("crystal.cart_positions must have shape (N, 4)")
-        result: tuple[Float[Array, "N 3"], Array] = (
+        result: Tuple[Float[Array, "N 3"], Array] = (
             cartesian[:, :3].astype(jnp.float64),
             cartesian[:, 3],
         )
@@ -486,9 +741,30 @@ def _crystal_arrays(
 
 def _infer_grid_geometry(
     crystal: _CrystalInput,
-    voxel_size: tuple[float, float, float],
-) -> tuple[tuple[int, int, int], tuple[float, float, float]]:
-    """Infer a cell-preserving orthogonal grid and actual voxel spacing."""
+    voxel_size: Tuple[float, float, float],
+) -> Tuple[Tuple[int, int, int], Tuple[float, float, float]]:
+    """PRIVATE: Infer an orthogonal grid and its actual voxel spacing.
+
+    Parameters
+    ----------
+    crystal : _CrystalInput
+        Crystal carrier with cell geometry.
+    voxel_size : Tuple[float, float, float]
+        Requested maximum ``(dx, dy, dz)`` spacing in Angstroms.
+
+    Returns
+    -------
+    grid_shape : Tuple[int, int, int]
+        Cell-preserving storage shape ``(nz, ny, nx)``.
+    actual_voxel_size : Tuple[float, float, float]
+        Actual physical ``(dx, dy, dz)`` spacing in Angstroms.
+
+    Raises
+    ------
+    ValueError
+        If cell geometry is absent, non-orthogonal, non-axis-aligned, or
+        contains a non-positive or non-finite length.
+    """
     if isinstance(crystal, CrystalStructure):
         angles = tuple(float(value) for value in crystal.cell_angles)
         if not all(
@@ -497,7 +773,7 @@ def _infer_grid_geometry(
             raise ValueError(
                 "automatic grid inference requires an orthogonal crystal cell"
             )
-        lengths_xyz: tuple[float, float, float] = tuple(
+        lengths_xyz: Tuple[float, float, float] = tuple(
             float(value) for value in crystal.cell_lengths
         )  # type: ignore[assignment]
     else:
@@ -523,12 +799,12 @@ def _infer_grid_geometry(
     nx: int = math.ceil(lengths_xyz[0] / voxel_size[0])
     ny: int = math.ceil(lengths_xyz[1] / voxel_size[1])
     nz: int = math.ceil(lengths_xyz[2] / voxel_size[2])
-    actual_voxel_size: tuple[float, float, float] = (
+    actual_voxel_size: Tuple[float, float, float] = (
         lengths_xyz[0] / nx,
         lengths_xyz[1] / ny,
         lengths_xyz[2] / nz,
     )
-    result: tuple[tuple[int, int, int], tuple[float, float, float]] = (
+    result: Tuple[Tuple[int, int, int], Tuple[float, float, float]] = (
         (nz, ny, nx),
         actual_voxel_size,
     )
@@ -592,11 +868,11 @@ def crystal_potential_volume(
     """
     if parameterization not in {"lobato", "kirkland"}:
         raise ValueError("parameterization must be 'lobato' or 'kirkland'")
-    requested_voxel_xyz: tuple[float, float, float] = _voxel_size_tuple(
+    requested_voxel_xyz: Tuple[float, float, float] = _voxel_size_tuple(
         voxel_size
     )
-    shape_zyx: tuple[int, int, int]
-    voxel_xyz: tuple[float, float, float]
+    shape_zyx: Tuple[int, int, int]
+    voxel_xyz: Tuple[float, float, float]
     if grid_shape is None:
         shape_zyx, voxel_xyz = _infer_grid_geometry(
             crystal,
@@ -605,7 +881,7 @@ def crystal_potential_volume(
     else:
         shape_zyx = _grid_shape_tuple(grid_shape)
         voxel_xyz = requested_voxel_xyz
-    origin_xyz: tuple[float, float, float] = _origin_tuple(origin)
+    origin_xyz: Tuple[float, float, float] = _origin_tuple(origin)
     cutoff: float = _band_limit_value(band_limit, voxel_xyz)
     positions: Float[Array, "N 3"]
     atomic_numbers: Array
@@ -624,7 +900,7 @@ def crystal_potential_volume(
     ny: int
     nx: int
     nz, ny, nx = shape_zyx
-    box_xyz: tuple[float, float, float] = (
+    box_xyz: Tuple[float, float, float] = (
         nx * voxel_xyz[0],
         ny * voxel_xyz[1],
         nz * voxel_xyz[2],

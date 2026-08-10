@@ -17,6 +17,7 @@ tridiagonalisation against independently known small systems.
 
 import jax
 import jax.numpy as jnp
+from beartype.typing import Tuple
 
 from ptyrodactyl.jacobian import (
     conjugate_gradient,
@@ -99,9 +100,9 @@ def test_gauss_newton_retains_newly_converged_update() -> None:
         prediction: jax.Array = 2.0 * params
         return prediction
 
-    def solve(params: jax.Array) -> tuple[jax.Array, GNState]:
+    def solve(params: jax.Array) -> Tuple[jax.Array, GNState]:
         """Solve the fixed one-dimensional linear inverse problem."""
-        solve_result: tuple[jax.Array, GNState] = gauss_newton_solve(
+        solve_result: Tuple[jax.Array, GNState] = gauss_newton_solve(
             forward_fn,
             params,
             jnp.array([2.0]),
@@ -142,9 +143,9 @@ def test_levenberg_marquardt_retains_first_converged_update() -> None:
 
     damping_init = 1e-3
 
-    def solve(params: jax.Array) -> tuple[jax.Array, LMState]:
+    def solve(params: jax.Array) -> Tuple[jax.Array, LMState]:
         """Solve the fixed damped one-dimensional inverse problem."""
-        solve_result: tuple[jax.Array, LMState] = levenberg_marquardt_solve(
+        solve_result: Tuple[jax.Array, LMState] = levenberg_marquardt_solve(
             forward_fn,
             params,
             jnp.array([2.0]),
@@ -239,8 +240,8 @@ def test_lanczos_matches_diagonal_operator_eager_and_jit() -> None:
 
     def run_lanczos(
         vector: jax.Array,
-    ) -> tuple[jax.Array, jax.Array]:
-        tridiagonal: tuple[jax.Array, jax.Array] = lanczos_tridiagonal(
+    ) -> Tuple[jax.Array, jax.Array]:
+        tridiagonal: Tuple[jax.Array, jax.Array] = lanczos_tridiagonal(
             diagonal_operator,
             vector,
             num_iterations=3,

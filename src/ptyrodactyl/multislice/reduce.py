@@ -20,7 +20,7 @@ Routine Listings
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Callable
+from beartype.typing import Callable, Tuple
 from jaxtyping import Array, Complex, Float, jaxtyped
 
 from ptyrodactyl.types import Distribution, ReductionMode
@@ -91,7 +91,7 @@ def apply_distribution(
 
 @jaxtyped(typechecker=beartype)
 def apply_distributions(
-    distributions: tuple[Distribution, ...],
+    distributions: Tuple[Distribution, ...],
     bound_amplitude_fn: Callable[
         [Float[Array, "D"]],
         Complex[Array, "H W"],
@@ -107,7 +107,7 @@ def apply_distributions(
 
     Parameters
     ----------
-    distributions : tuple[Distribution, ...]
+    distributions : Tuple[Distribution, ...]
         Weighted sample axes to reduce. Axis order defines the cursor
         concatenation order passed to ``bound_amplitude_fn``.
     bound_amplitude_fn : Callable[[Float[Array, "D"]], Complex[Array, "H W"]]
@@ -138,10 +138,10 @@ def apply_distributions(
     if len(distributions) == 0:
         raise ValueError("distributions must contain at least one axis")
 
-    sample_counts: tuple[int, ...] = tuple(
+    sample_counts: Tuple[int, ...] = tuple(
         distribution.samples.shape[0] for distribution in distributions
     )
-    sample_indices: tuple[Array, ...] = tuple(
+    sample_indices: Tuple[Array, ...] = tuple(
         jnp.arange(sample_count) for sample_count in sample_counts
     )
     index_grids: list[Array] = jnp.meshgrid(
@@ -206,8 +206,23 @@ def _weighted_sum_axis(
     weights: Array,
     axis: int,
 ) -> Array:
-    """Return a weighted sum over one sample axis."""
-    weight_shape: tuple[int, ...] = (
+    """PRIVATE: Return a weighted sum over one sample axis.
+
+    Parameters
+    ----------
+    values : Array
+        Values whose sample axis is reduced.
+    weights : Array
+        One-dimensional weights for the selected axis.
+    axis : int
+        Static axis index to reduce.
+
+    Returns
+    -------
+    summed_values : Array
+        Weighted sum with the selected axis removed.
+    """
+    weight_shape: Tuple[int, ...] = (
         (1,) * axis + (weights.shape[0],) + (1,) * (values.ndim - axis - 1)
     )
     weighted_values: Array = values * weights.reshape(weight_shape)

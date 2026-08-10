@@ -86,7 +86,27 @@ def _coerce_vector(
     name: str,
     length: int,
 ) -> Float[Array, " length"]:
-    """Convert one coefficient vector and reject a wrong static shape."""
+    """PRIVATE: Convert one coefficient vector and validate its shape.
+
+    Parameters
+    ----------
+    values : Float[Array, "..."]
+        Floating coefficient values to convert to binary64.
+    name : str
+        Field name included in the validation error.
+    length : int
+        Required static vector length.
+
+    Returns
+    -------
+    array : Float[Array, " length"]
+        Binary64 coefficient vector with the requested length.
+
+    Raises
+    ------
+    ValueError
+        If the converted array does not have shape ``(length,)``.
+    """
     array: Float[Array, " length"] = jnp.asarray(values, dtype=jnp.float64)
     if array.shape != (length,):
         raise ValueError(f"{name} must have shape ({length},)")
@@ -98,7 +118,25 @@ def _checked_finite(
     *,
     name: str,
 ) -> Float[Array, " length"]:
-    """Apply a traced finiteness check to one coefficient vector."""
+    """PRIVATE: Apply a traced finite-value check to one vector.
+
+    Parameters
+    ----------
+    values : Float[Array, " length"]
+        Coefficient vector to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    checked : Float[Array, " length"]
+        Input vector with a traced finite-value assertion.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any value is non-finite under compiled execution.
+    """
     checked: Float[Array, " length"] = eqx.error_if(
         values,
         jnp.any(~jnp.isfinite(values)),
@@ -112,7 +150,25 @@ def _checked_scales(
     *,
     name: str,
 ) -> Float[Array, " length"]:
-    """Apply traced finite and positive checks to physical scale values."""
+    """PRIVATE: Apply traced finite and positive checks to scale values.
+
+    Parameters
+    ----------
+    values : Float[Array, " length"]
+        Physical scale values to validate.
+    name : str
+        Field name included in the runtime error.
+
+    Returns
+    -------
+    result : Float[Array, " length"]
+        Scale vector with traced finite and strictly positive assertions.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any value is non-finite or non-positive under compiled execution.
+    """
     checked: Float[Array, " length"] = _checked_finite(values, name=name)
     result: Float[Array, " length"] = eqx.error_if(
         checked, jnp.any(checked <= 0), f"{name} must be strictly positive"

@@ -26,7 +26,17 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from jaxtyping import Array, Bool, Complex, Float, Int, jaxtyped
+from beartype.typing import Tuple
+from jaxtyping import (
+    Array,
+    Bool,
+    Complex128,
+    Float64,
+    Int,
+    Int32,
+    Int64,
+    jaxtyped,
+)
 
 from .custom_types import scalar_int
 
@@ -35,30 +45,65 @@ _SUPPORT_RANK: int = 2
 
 
 def _raise_if(condition: bool, message: str) -> None:
-    """Raise ``ValueError`` when a structural condition is true."""
+    """PRIVATE: Raise ``ValueError`` for a true structural condition.
+
+    Parameters
+    ----------
+    condition : bool
+        Whether the structural contract is invalid.
+    message : str
+        Error message for the rejected contract.
+
+    Raises
+    ------
+    ValueError
+        If ``condition`` is true.
+    """
     if condition:
         raise ValueError(message)
 
 
-def _contains_duplicates(indices: Int[Array, "n 3"]) -> Bool[Array, ""]:
-    """Return whether an integer support contains a repeated index."""
-    order: Int[Array, " n"] = jnp.lexsort(
+def _contains_duplicates(indices: Int64[Array, "n 3"]) -> Bool[Array, ""]:
+    """PRIVATE: Detect repeated indices in one integer support.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "n 3"]
+        Exact three-dimensional reciprocal indices.
+
+    Returns
+    -------
+    duplicate : Bool[Array, ""]
+        Whether at least one index occurs more than once.
+    """
+    order: Int64[Array, " n"] = jnp.lexsort(
         (indices[:, 2], indices[:, 1], indices[:, 0])
     )
-    sorted_indices: Int[Array, "n 3"] = indices[order]
+    sorted_indices: Int64[Array, "n 3"] = indices[order]
     duplicate: Bool[Array, ""] = jnp.any(
         jnp.all(sorted_indices[1:] == sorted_indices[:-1], axis=-1)
     )
     return duplicate
 
 
-def _is_sign_symmetric(indices: Int[Array, "n 3"]) -> Bool[Array, ""]:
-    """Return whether every index has its additive inverse."""
-    inverse_indices: Int[Array, "n 3"] = -indices
-    forward_order: Int[Array, " n"] = jnp.lexsort(
+def _is_sign_symmetric(indices: Int64[Array, "n 3"]) -> Bool[Array, ""]:
+    """PRIVATE: Check whether every index has its additive inverse.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "n 3"]
+        Exact three-dimensional reciprocal indices.
+
+    Returns
+    -------
+    symmetric : Bool[Array, ""]
+        Whether the support is invariant under sign reversal.
+    """
+    inverse_indices: Int64[Array, "n 3"] = -indices
+    forward_order: Int64[Array, " n"] = jnp.lexsort(
         (indices[:, 2], indices[:, 1], indices[:, 0])
     )
-    inverse_order: Int[Array, " n"] = jnp.lexsort(
+    inverse_order: Int64[Array, " n"] = jnp.lexsort(
         (
             inverse_indices[:, 2],
             inverse_indices[:, 1],
@@ -72,46 +117,97 @@ def _is_sign_symmetric(indices: Int[Array, "n 3"]) -> Bool[Array, ""]:
 
 
 def _residues(
-    indices: Int[Array, "... 3"],
-    work_shape: tuple[int, int, int],
-) -> Int[Array, "... 3"]:
-    """Reduce integer indices into the rectangular work-grid group."""
-    moduli: Int[Array, " 3"] = jnp.asarray(work_shape, dtype=indices.dtype)
-    residues: Int[Array, "... 3"] = jnp.mod(indices, moduli)
+    indices: Int64[Array, "... 3"],
+    work_shape: Tuple[int, int, int],
+) -> Int64[Array, "... 3"]:
+    """PRIVATE: Reduce integer indices into the work-grid quotient.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "... 3"]
+        Exact three-dimensional reciprocal indices.
+    work_shape : Tuple[int, int, int]
+        Rectangular quotient moduli in reciprocal-axis order.
+
+    Returns
+    -------
+    residues : Int64[Array, "... 3"]
+        Non-negative componentwise residues on the work grid.
+    """
+    moduli: Int64[Array, " 3"] = jnp.asarray(work_shape, dtype=indices.dtype)
+    residues: Int64[Array, "... 3"] = jnp.mod(indices, moduli)
     return residues
 
 
 def _flat_residues(
-    indices: Int[Array, "... 3"],
-    work_shape: tuple[int, int, int],
-) -> Int[Array, "..."]:
-    """Map exact indices to overflow-safe flat work-quotient keys."""
-    residues: Int[Array, "... 3"] = _residues(indices, work_shape)
-    flat: Int[Array, "..."] = (
+    indices: Int64[Array, "... 3"],
+    work_shape: Tuple[int, int, int],
+) -> Int64[Array, "..."]:
+    """PRIVATE: Map exact indices to flat work-quotient keys.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "... 3"]
+        Exact three-dimensional reciprocal indices.
+    work_shape : Tuple[int, int, int]
+        Rectangular quotient moduli in reciprocal-axis order.
+
+    Returns
+    -------
+    flat : Int64[Array, "..."]
+        Row-major flat keys for the componentwise residues.
+
+    Notes
+    -----
+    Validated work shapes keep the mixed-radix calculation within signed
+    64-bit range.
+    """
+    residues: Int64[Array, "... 3"] = _residues(indices, work_shape)
+    flat: Int64[Array, "..."] = (
         residues[..., 0] * work_shape[1] + residues[..., 1]
     ) * work_shape[2] + residues[..., 2]
     return flat
 
 
 def _all_members(
-    candidates: Int[Array, "... 3"],
-    support: Int[Array, "n 3"],
-    work_shape: tuple[int, int, int],
+    candidates: Int64[Array, "... 3"],
+    support: Int64[Array, "n 3"],
+    work_shape: Tuple[int, int, int],
 ) -> Bool[Array, ""]:
-    """Return whether every candidate occurs in the exact support."""
-    flat_candidates: Int[Array, "m 3"] = candidates.reshape(
+    """PRIVATE: Check whether every candidate occurs in the exact support.
+
+    Parameters
+    ----------
+    candidates : Int64[Array, "... 3"]
+        Exact reciprocal indices to locate.
+    support : Int64[Array, "n 3"]
+        Unique exact reciprocal indices admitted by the support.
+    work_shape : Tuple[int, int, int]
+        Rectangular quotient moduli in reciprocal-axis order.
+
+    Returns
+    -------
+    contained : Bool[Array, ""]
+        Whether every candidate has an exact support match.
+
+    Notes
+    -----
+    Quotient keys accelerate the lookup. The final coordinate comparison
+    prevents a modular collision from counting as membership.
+    """
+    flat_candidates: Int64[Array, "m 3"] = candidates.reshape(
         (-1, _SPACE_DIMENSIONS)
     )
-    candidate_keys: Int[Array, " m"] = _flat_residues(
+    candidate_keys: Int64[Array, " m"] = _flat_residues(
         flat_candidates, work_shape
     )
-    support_keys: Int[Array, " n"] = _flat_residues(support, work_shape)
-    order: Int[Array, " n"] = jnp.argsort(support_keys)
-    sorted_keys: Int[Array, " n"] = support_keys[order]
-    locations: Int[Array, " m"] = jnp.searchsorted(
+    support_keys: Int64[Array, " n"] = _flat_residues(support, work_shape)
+    order: Int64[Array, " n"] = jnp.argsort(support_keys)
+    sorted_keys: Int64[Array, " n"] = support_keys[order]
+    locations: Int32[Array, " m"] = jnp.searchsorted(
         sorted_keys, candidate_keys, side="left"
     )
-    clipped: Int[Array, " m"] = jnp.clip(locations, 0, support.shape[0] - 1)
+    clipped: Int32[Array, " m"] = jnp.clip(locations, 0, support.shape[0] - 1)
     key_matches: Bool[Array, " m"] = (locations < support.shape[0]) & (
         sorted_keys[clipped] == candidate_keys
     )
@@ -123,25 +219,58 @@ def _all_members(
 
 
 def _quotient_is_injective(
-    indices: Int[Array, "n 3"],
-    work_shape: tuple[int, int, int],
+    indices: Int64[Array, "n 3"],
+    work_shape: Tuple[int, int, int],
 ) -> Bool[Array, ""]:
-    """Return whether the work quotient is injective on one support."""
-    keys: Int[Array, " n"] = _flat_residues(indices, work_shape)
-    sorted_keys: Int[Array, " n"] = jnp.sort(keys)
+    """PRIVATE: Check work-quotient injectivity on one support.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "n 3"]
+        Exact reciprocal indices in one support.
+    work_shape : Tuple[int, int, int]
+        Rectangular quotient moduli in reciprocal-axis order.
+
+    Returns
+    -------
+    injective : Bool[Array, ""]
+        Whether distinct exact indices have distinct quotient keys.
+    """
+    keys: Int64[Array, " n"] = _flat_residues(indices, work_shape)
+    sorted_keys: Int64[Array, " n"] = jnp.sort(keys)
     injective: Bool[Array, ""] = ~jnp.any(sorted_keys[1:] == sorted_keys[:-1])
     return injective
 
 
 def _restricted_product_has_no_alias(
-    state_indices: Int[Array, "n 3"],
-    multiplier_indices: Int[Array, "p 3"],
-    work_shape: tuple[int, int, int],
+    state_indices: Int64[Array, "n 3"],
+    multiplier_indices: Int64[Array, "p 3"],
+    work_shape: Tuple[int, int, int],
 ) -> Bool[Array, ""]:
-    """Return whether restricted products satisfy the RM-S2 criterion."""
-    state_keys: Int[Array, " n"] = _flat_residues(state_indices, work_shape)
-    order: Int[Array, " n"] = jnp.argsort(state_keys)
-    sorted_keys: Int[Array, " n"] = state_keys[order]
+    """PRIVATE: Check the RM-S2 restricted-product no-alias criterion.
+
+    Parameters
+    ----------
+    state_indices : Int64[Array, "n 3"]
+        Exact retained-state indices.
+    multiplier_indices : Int64[Array, "p 3"]
+        Exact multiplier indices added to every retained-state index.
+    work_shape : Tuple[int, int, int]
+        Rectangular quotient moduli in reciprocal-axis order.
+
+    Returns
+    -------
+    no_alias : Bool[Array, ""]
+        Whether every quotient collision is also an exact state match.
+
+    Notes
+    -----
+    The loop checks each restricted product without materializing the full
+    pair grid.
+    """
+    state_keys: Int64[Array, " n"] = _flat_residues(state_indices, work_shape)
+    order: Int64[Array, " n"] = jnp.argsort(state_keys)
+    sorted_keys: Int64[Array, " n"] = state_keys[order]
     multiplier_count: int = multiplier_indices.shape[0]
     product_count: int = state_indices.shape[0] * multiplier_count
 
@@ -152,17 +281,17 @@ def _restricted_product_has_no_alias(
         """Accumulate the restricted no-alias predicate without a pair grid."""
         state_position: scalar_int = flat_position // multiplier_count
         multiplier_position: scalar_int = flat_position % multiplier_count
-        product: Int[Array, " 3"] = (
+        product: Int64[Array, " 3"] = (
             state_indices[state_position]
             + multiplier_indices[multiplier_position]
         )
-        product_key: Int[Array, ""] = _flat_residues(
+        product_key: Int64[Array, ""] = _flat_residues(
             product[None, :], work_shape
         )[0]
-        location: Int[Array, ""] = jnp.searchsorted(
+        location: Int32[Array, ""] = jnp.searchsorted(
             sorted_keys, product_key, side="left"
         )
-        clipped: Int[Array, ""] = jnp.clip(
+        clipped: Int32[Array, ""] = jnp.clip(
             location, 0, state_indices.shape[0] - 1
         )
         collision: Bool[Array, ""] = (location < state_indices.shape[0]) & (
@@ -184,16 +313,40 @@ def _restricted_product_has_no_alias(
 
 
 def _all_binary_products_are_members(
-    left_indices: Int[Array, "n 3"],
-    right_indices: Int[Array, "p 3"],
-    support: Int[Array, "w 3"],
-    work_shape: tuple[int, int, int],
+    left_indices: Int64[Array, "n 3"],
+    right_indices: Int64[Array, "p 3"],
+    support: Int64[Array, "w 3"],
+    work_shape: Tuple[int, int, int],
     right_sign: int,
 ) -> Bool[Array, ""]:
-    """Check a binary support inclusion with bounded working memory."""
-    support_keys: Int[Array, " w"] = _flat_residues(support, work_shape)
-    order: Int[Array, " w"] = jnp.argsort(support_keys)
-    sorted_keys: Int[Array, " w"] = support_keys[order]
+    """PRIVATE: Check binary support inclusion with bounded memory.
+
+    Parameters
+    ----------
+    left_indices : Int64[Array, "n 3"]
+        Exact indices forming the left product operand.
+    right_indices : Int64[Array, "p 3"]
+        Exact indices forming the right product operand.
+    support : Int64[Array, "w 3"]
+        Exact support that must contain every product index.
+    work_shape : Tuple[int, int, int]
+        Rectangular quotient moduli in reciprocal-axis order.
+    right_sign : int
+        Sign applied to every right index before addition.
+
+    Returns
+    -------
+    contained : Bool[Array, ""]
+        Whether each signed binary product occurs exactly in ``support``.
+
+    Notes
+    -----
+    The loop checks products individually to avoid allocating the full pair
+    grid.
+    """
+    support_keys: Int64[Array, " w"] = _flat_residues(support, work_shape)
+    order: Int64[Array, " w"] = jnp.argsort(support_keys)
+    sorted_keys: Int64[Array, " w"] = support_keys[order]
     right_count: int = right_indices.shape[0]
     product_count: int = left_indices.shape[0] * right_count
 
@@ -204,17 +357,17 @@ def _all_binary_products_are_members(
         """Accumulate exact membership without materializing all products."""
         left_position: scalar_int = flat_position // right_count
         right_position: scalar_int = flat_position % right_count
-        candidate: Int[Array, " 3"] = (
+        candidate: Int64[Array, " 3"] = (
             left_indices[left_position]
             + right_sign * right_indices[right_position]
         )
-        candidate_key: Int[Array, ""] = _flat_residues(
+        candidate_key: Int64[Array, ""] = _flat_residues(
             candidate[None, :], work_shape
         )[0]
-        location: Int[Array, ""] = jnp.searchsorted(
+        location: Int32[Array, ""] = jnp.searchsorted(
             sorted_keys, candidate_key, side="left"
         )
-        clipped: Int[Array, ""] = jnp.clip(location, 0, support.shape[0] - 1)
+        clipped: Int32[Array, ""] = jnp.clip(location, 0, support.shape[0] - 1)
         exact_match: Bool[Array, ""] = (
             (location < support.shape[0])
             & (sorted_keys[clipped] == candidate_key)
@@ -233,19 +386,35 @@ def _all_binary_products_are_members(
 
 
 def _cosine_shell_coefficients(
-    indices: Int[Array, "q 3"],
-) -> Complex[Array, " q"]:
-    """Return analytic coefficients of the bounded cosine-shell profile."""
-    axis_coefficients: Float[Array, "q 3"] = jnp.where(
+    indices: Int64[Array, "q 3"],
+) -> Complex128[Array, " q"]:
+    r"""PRIVATE: Return coefficients of the bounded cosine-shell profile.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "q 3"]
+        Exact absorber-support indices.
+
+    Returns
+    -------
+    coefficients : Complex128[Array, " q"]
+        Analytic complex128 Fourier coefficients at ``indices``.
+
+    Notes
+    -----
+    The profile is :math:`1-\prod_j\cos^2(\pi x_j/L_j)`. Coefficients outside
+    the tensor shell ``{-1, 0, 1}^3`` are zero.
+    """
+    axis_coefficients: Float64[Array, "q 3"] = jnp.where(
         indices == 0,
         0.5,
         jnp.where(jnp.abs(indices) == 1, 0.25, 0.0),
     )
-    interior_coefficients: Float[Array, " q"] = jnp.prod(
+    interior_coefficients: Float64[Array, " q"] = jnp.prod(
         axis_coefficients, axis=-1
     )
     zero_mode: Bool[Array, " q"] = jnp.all(indices == 0, axis=-1)
-    coefficients: Complex[Array, " q"] = jnp.where(
+    coefficients: Complex128[Array, " q"] = jnp.where(
         zero_mode,
         1.0 - interior_coefficients,
         -interior_coefficients,
@@ -254,13 +423,26 @@ def _cosine_shell_coefficients(
 
 
 def _has_complete_cosine_shell_support(
-    indices: Int[Array, "q 3"],
-    work_shape: tuple[int, int, int],
+    indices: Int64[Array, "q 3"],
+    work_shape: Tuple[int, int, int],
 ) -> Bool[Array, ""]:
-    """Return whether all 27 analytic shell modes are represented."""
-    axis: Int[Array, " 3"] = jnp.asarray((-1, 0, 1), dtype=jnp.int64)
+    """PRIVATE: Check whether all 27 cosine-shell modes are represented.
+
+    Parameters
+    ----------
+    indices : Int64[Array, "q 3"]
+        Exact absorber-support indices.
+    work_shape : Tuple[int, int, int]
+        Rectangular quotient moduli in reciprocal-axis order.
+
+    Returns
+    -------
+    complete : Bool[Array, ""]
+        Whether ``indices`` contains every mode in ``{-1, 0, 1}^3``.
+    """
+    axis: Int64[Array, " 3"] = jnp.asarray((-1, 0, 1), dtype=jnp.int64)
     mesh = jnp.meshgrid(axis, axis, axis, indexing="ij")
-    required: Int[Array, "27 3"] = jnp.stack(mesh, axis=-1).reshape((27, 3))
+    required: Int64[Array, "27 3"] = jnp.stack(mesh, axis=-1).reshape((27, 3))
     complete: Bool[Array, ""] = _all_members(required, indices, work_shape)
     return complete
 
@@ -272,15 +454,15 @@ class GalerkinProductSupport(eqx.Module):
 
     Attributes
     ----------
-    state_indices : Int[Array, "n 3"]
+    state_indices : Int64[Array, "n 3"]
         Exact integer reciprocal indices in the retained state support.
-    interaction_indices : Int[Array, "p 3"]
+    interaction_indices : Int64[Array, "p 3"]
         Exact integer reciprocal indices in the real-interaction support.
-    absorber_indices : Int[Array, "q 3"]
+    absorber_indices : Int64[Array, "q 3"]
         Exact integer reciprocal indices in the absorber support.
-    work_indices : Int[Array, "w 3"]
+    work_indices : Int64[Array, "w 3"]
         Exact integer reciprocal indices in the product work support.
-    work_shape : tuple[int, int, int]
+    work_shape : Tuple[int, int, int]
         Static rectangular work-grid shape. This value affects tracing.
 
     See Also
@@ -296,11 +478,11 @@ class GalerkinProductSupport(eqx.Module):
     multiplier products.
     """
 
-    state_indices: Int[Array, "n 3"]
-    interaction_indices: Int[Array, "p 3"]
-    absorber_indices: Int[Array, "q 3"]
-    work_indices: Int[Array, "w 3"]
-    work_shape: tuple[int, int, int] = eqx.field(static=True)
+    state_indices: Int64[Array, "n 3"]
+    interaction_indices: Int64[Array, "p 3"]
+    absorber_indices: Int64[Array, "q 3"]
+    work_indices: Int64[Array, "w 3"]
+    work_shape: Tuple[int, int, int] = eqx.field(static=True)
 
 
 @jaxtyped(typechecker=beartype)
@@ -309,7 +491,7 @@ def create_galerkin_product_support(
     interaction_indices: Int[Array, "..."],
     absorber_indices: Int[Array, "..."],
     work_indices: Int[Array, "..."],
-    work_shape: tuple[int, int, int],
+    work_shape: Tuple[int, int, int],
 ) -> GalerkinProductSupport:
     """Create validated supports for fixed scalar Galerkin products.
 
@@ -331,7 +513,7 @@ def create_galerkin_product_support(
         Exact absorber reciprocal indices with shape ``(q, 3)``.
     work_indices : Int[Array, "..."]
         Exact product-work reciprocal indices with shape ``(w, 3)``.
-    work_shape : tuple[int, int, int]
+    work_shape : Tuple[int, int, int]
         Static positive rectangular work-grid shape. Changing it retraces.
 
     Returns
@@ -363,16 +545,18 @@ def create_galerkin_product_support(
             "work_shape product must fit in signed 64-bit indices"
         )
 
-    state_array: Int[Array, "n 3"] = jnp.asarray(
+    state_array: Int64[Array, "n 3"] = jnp.asarray(
         state_indices, dtype=jnp.int64
     )
-    interaction_array: Int[Array, "p 3"] = jnp.asarray(
+    interaction_array: Int64[Array, "p 3"] = jnp.asarray(
         interaction_indices, dtype=jnp.int64
     )
-    absorber_array: Int[Array, "q 3"] = jnp.asarray(
+    absorber_array: Int64[Array, "q 3"] = jnp.asarray(
         absorber_indices, dtype=jnp.int64
     )
-    work_array: Int[Array, "w 3"] = jnp.asarray(work_indices, dtype=jnp.int64)
+    work_array: Int64[Array, "w 3"] = jnp.asarray(
+        work_indices, dtype=jnp.int64
+    )
 
     for values, name in (
         (state_array, "state_indices"),
@@ -404,14 +588,14 @@ def create_galerkin_product_support(
         interaction_array == minimum_integer
     ) | jnp.any(absorber_array == minimum_integer)
 
-    checked_state: Int[Array, "n 3"] = eqx.error_if(
+    checked_state: Int64[Array, "n 3"] = eqx.error_if(
         state_array,
         unsafe_index
         | _contains_duplicates(state_array)
         | ~_quotient_is_injective(state_array, work_shape),
         "state support must be unique in the work quotient",
     )
-    checked_interaction: Int[Array, "p 3"] = eqx.error_if(
+    checked_interaction: Int64[Array, "p 3"] = eqx.error_if(
         interaction_array,
         unsafe_index
         | _contains_duplicates(interaction_array)
@@ -425,7 +609,7 @@ def create_galerkin_product_support(
         ),
         "interaction support must be unique, sign-symmetric, and no-alias",
     )
-    checked_absorber: Int[Array, "q 3"] = eqx.error_if(
+    checked_absorber: Int64[Array, "q 3"] = eqx.error_if(
         absorber_array,
         unsafe_index
         | _contains_duplicates(absorber_array)
@@ -446,7 +630,7 @@ def create_galerkin_product_support(
         ),
         "absorber support must contain K_u-K_u and satisfy symmetry/no-alias",
     )
-    checked_work: Int[Array, "w 3"] = eqx.error_if(
+    checked_work: Int64[Array, "w 3"] = eqx.error_if(
         work_array,
         unsafe_index
         | _contains_duplicates(work_array)

@@ -48,7 +48,19 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 from beartype import beartype
-from jaxtyping import Array, Bool, Complex, Float, Int, jaxtyped
+from beartype.typing import Tuple
+from jaxtyping import (
+    Array,
+    Bool,
+    Complex,
+    Complex128,
+    Float,
+    Float64,
+    Int,
+    Int32,
+    Int64,
+    jaxtyped,
+)
 
 from ptyrodactyl._numeric import (
     has_lost_subtraction,
@@ -91,8 +103,8 @@ class _CGLSState(NamedTuple):
     direction_scale_ratio: Float[Array, ""]
     residual_norm: Float[Array, ""]
     recurrence_residual_norm: Float[Array, ""]
-    iterations: Int[Array, ""]
-    operator_applications: Int[Array, ""]
+    iterations: Int32[Array, ""]
+    operator_applications: Int32[Array, ""]
     converged: Bool[Array, ""]
     breakdown: Bool[Array, ""]
 
@@ -109,8 +121,8 @@ class _LSQRState(NamedTuple):
     rho_bar: Float[Array, ""]
     phi_bar: Float[Array, ""]
     recurrence_residual_norm: Float[Array, ""]
-    iterations: Int[Array, ""]
-    operator_applications: Int[Array, ""]
+    iterations: Int32[Array, ""]
+    operator_applications: Int32[Array, ""]
     converged: Bool[Array, ""]
     breakdown: Bool[Array, ""]
 
@@ -125,7 +137,24 @@ class _SolverInputs(NamedTuple):
 
 
 def _complex_norm(vector: Complex[Array, "n"]) -> Float[Array, ""]:
-    """Return the Euclidean norm induced by the SC-1 coefficient metric."""
+    """PRIVATE: Compute the norm induced by the SC-1 coefficient metric.
+
+    Parameters
+    ----------
+    vector : Complex[Array, "n"]
+        Complex coefficients in one fixed state ordering.
+
+    Returns
+    -------
+    norm : Float[Array, ""]
+        Scale-safe Euclidean coefficient norm.
+
+    Notes
+    -----
+    The SC-1 coefficient metric is the standard complex Euclidean metric.
+    Scaling by the largest magnitude limits intermediate overflow and
+    underflow.
+    """
     magnitudes: Float[Array, " n"] = jnp.abs(vector)
     scale: Float[Array, ""] = jnp.max(magnitudes)
     safe_scale: Float[Array, ""] = jnp.where(scale > 0.0, scale, 1.0)
@@ -147,7 +176,31 @@ def _sparse_action(
     vector: Complex[Array, "input_size"],
     output_size: int,
 ) -> Complex[Array, "output_size"]:
-    """Apply one frozen COO map by gather and scatter-add."""
+    """PRIVATE: Apply one frozen COO map by gather and scatter-add.
+
+    Parameters
+    ----------
+    rows : Int[Array, "nnz"]
+        COO output row for each stored entry.
+    columns : Int[Array, "nnz"]
+        COO input column for each stored entry.
+    values : Complex[Array, "nnz"]
+        COO values in the shared entry order.
+    vector : Complex[Array, "input_size"]
+        Input coefficient vector.
+    output_size : int
+        Static output-vector length.
+
+    Returns
+    -------
+    result : Complex[Array, "output_size"]
+        Sparse map action in output-row order.
+
+    Notes
+    -----
+    Repeated rows accumulate through scatter-add. Stored zeros and duplicate
+    entries therefore retain ordinary COO semantics.
+    """
     dtype: jnp.dtype = jnp.result_type(values.dtype, vector.dtype)
     output: Complex[Array, "output_size"] = jnp.zeros(
         (output_size,), dtype=dtype
@@ -165,7 +218,31 @@ def _sparse_adjoint_action(
     vector: Complex[Array, "output_size"],
     input_size: int,
 ) -> Complex[Array, "input_size"]:
-    """Apply the actual conjugate transpose of one frozen COO map."""
+    """PRIVATE: Apply the conjugate transpose of one frozen COO map.
+
+    Parameters
+    ----------
+    rows : Int[Array, "nnz"]
+        COO output row for each forward-map entry.
+    columns : Int[Array, "nnz"]
+        COO input column for each forward-map entry.
+    values : Complex[Array, "nnz"]
+        COO values in the shared entry order.
+    vector : Complex[Array, "output_size"]
+        Vector in the forward map's output space.
+    input_size : int
+        Static forward-input vector length.
+
+    Returns
+    -------
+    result : Complex[Array, "input_size"]
+        Conjugate-transpose action in forward-input order.
+
+    Notes
+    -----
+    The operation conjugates every stored value and exchanges COO row and
+    column roles.
+    """
     dtype: jnp.dtype = jnp.result_type(values.dtype, vector.dtype)
     output: Complex[Array, "input_size"] = jnp.zeros(
         (input_size,), dtype=dtype
@@ -180,7 +257,25 @@ def _interaction_action(
     operator: GalerkinOperator,
     field: Complex[Array, "n"],
 ) -> Complex[Array, "n"]:
-    """Apply the frozen sparse interaction realization."""
+    """PRIVATE: Apply the frozen sparse interaction realization.
+
+    Parameters
+    ----------
+    operator : GalerkinOperator
+        Frozen algebraic operator with an interaction COO map.
+    field : Complex[Array, "n"]
+        Retained-state coefficient vector.
+
+    Returns
+    -------
+    interaction : Complex[Array, "n"]
+        Forward sparse interaction action.
+
+    Notes
+    -----
+    This helper applies only the interaction term, without its target-equation
+    sign.
+    """
     state_size: int = operator.free_diagonal.shape[0]
     interaction: Complex[Array, "n"] = _sparse_action(
         operator.interaction_rows,
@@ -196,7 +291,24 @@ def _interaction_adjoint_action(
     operator: GalerkinOperator,
     field: Complex[Array, "n"],
 ) -> Complex[Array, "n"]:
-    """Apply the actual adjoint of the sparse interaction realization."""
+    """PRIVATE: Apply the sparse interaction realization's actual adjoint.
+
+    Parameters
+    ----------
+    operator : GalerkinOperator
+        Frozen algebraic operator with an interaction COO map.
+    field : Complex[Array, "n"]
+        Retained-state coefficient vector.
+
+    Returns
+    -------
+    interaction : Complex[Array, "n"]
+        Conjugate-transpose sparse interaction action.
+
+    Notes
+    -----
+    No Hermiticity assumption replaces the stored conjugate-transpose action.
+    """
     state_size: int = operator.free_diagonal.shape[0]
     interaction: Complex[Array, "n"] = _sparse_adjoint_action(
         operator.interaction_rows,
@@ -212,7 +324,25 @@ def _absorber_action(
     operator: GalerkinOperator,
     field: Complex[Array, "n"],
 ) -> Complex[Array, "n"]:
-    """Apply the positive-semidefinite absorber Gramian G*G."""
+    """PRIVATE: Apply the positive-semidefinite absorber Gramian ``G*G``.
+
+    Parameters
+    ----------
+    operator : GalerkinOperator
+        Frozen operator containing one sparse absorber factor ``G``.
+    field : Complex[Array, "n"]
+        Retained-state coefficient vector.
+
+    Returns
+    -------
+    absorber : Complex[Array, "n"]
+        Positive-semidefinite Gramian action in state order.
+
+    Notes
+    -----
+    The helper applies ``G`` followed by its actual conjugate transpose. It
+    does not materialize the dense Gramian.
+    """
     factor_field: Complex[Array, "factor_size"] = _sparse_action(
         operator.absorber_factor_rows,
         operator.absorber_factor_columns,
@@ -314,7 +444,25 @@ def _checked_action_vector(
     values: Complex[Array, "n"],
     name: str,
 ) -> Complex[Array, "n"]:
-    """Reject non-finite and nonzero-subnormal action vectors."""
+    """PRIVATE: Reject non-finite and nonzero-subnormal action vectors.
+
+    Parameters
+    ----------
+    values : Complex[Array, "n"]
+        Candidate vector produced or consumed by an operator action.
+    name : str
+        Vector name used in the traced rejection message.
+
+    Returns
+    -------
+    checked : Complex[Array, "n"]
+        Vector with traced finite and normal-range checks attached.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If any component is non-finite or nonzero subnormal.
+    """
     checked: Complex[Array, "n"] = eqx.error_if(
         values,
         jnp.any(~jnp.isfinite(values)) | has_subnormal_components(values),
@@ -328,7 +476,32 @@ def _checked_residual_difference(
     action: Complex[Array, "n"],
     name: str,
 ) -> Complex[Array, "n"]:
-    """Subtract one action and reject a flushed nonzero component."""
+    """PRIVATE: Subtract one action and reject a flushed component.
+
+    Parameters
+    ----------
+    source : Complex[Array, "n"]
+        Original-system source coefficients.
+    action : Complex[Array, "n"]
+        Independently evaluated operator action.
+    name : str
+        Residual name used in traced rejection messages.
+
+    Returns
+    -------
+    residual : Complex[Array, "n"]
+        Checked difference ``source - action``.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If the residual is invalid or subtraction loses a nonzero component.
+
+    Notes
+    -----
+    An optimization barrier preserves an independently rounded subtraction
+    boundary for the lost-component check.
+    """
     rounded_source, rounded_action = jax.lax.optimization_barrier(
         (source, action)
     )
@@ -381,7 +554,7 @@ def apply_galerkin_operator(
         raise ValueError("field length must match the operator state size")
     checked_field: Complex[Array, "n"] = _checked_action_vector(field, "field")
     if isinstance(operator, GalerkinTargetManifest):
-        raw_applied_field: Complex[Array, "n"] = apply_galerkin_target(
+        raw_applied_field: Complex128[Array, "n"] = apply_galerkin_target(
             operator,
             checked_field,
         )
@@ -445,9 +618,11 @@ def apply_galerkin_adjoint(
         raise ValueError("field length must match the operator state size")
     checked_field: Complex[Array, "n"] = _checked_action_vector(field, "field")
     if isinstance(operator, GalerkinTargetManifest):
-        raw_applied_field: Complex[Array, "n"] = apply_galerkin_target_adjoint(
-            operator,
-            checked_field,
+        raw_applied_field: Complex128[Array, "n"] = (
+            apply_galerkin_target_adjoint(
+                operator,
+                checked_field,
+            )
         )
     else:
         free_action: Complex[Array, "n"] = (
@@ -474,7 +649,25 @@ def _independent_forward_action(
     operator: GalerkinOperator,
     field: Complex[Array, "n"],
 ) -> Complex[Array, "n"]:
-    """Re-evaluate the forward action outside the Krylov recurrence."""
+    """PRIVATE: Re-evaluate the forward action outside Krylov recurrence.
+
+    Parameters
+    ----------
+    operator : GalerkinOperator
+        Frozen sparse algebraic operator.
+    field : Complex[Array, "n"]
+        Retained-state coefficient vector.
+
+    Returns
+    -------
+    action : Complex[Array, "n"]
+        Fresh forward action ``D u - R u - i epsilon_CAP G*G u``.
+
+    Notes
+    -----
+    This implementation expands the sparse terms directly instead of calling
+    the production forward-action wrapper.
+    """
     state_size: int = operator.free_diagonal.shape[0]
     interaction: Complex[Array, "n"] = _sparse_action(
         operator.interaction_rows,
@@ -509,7 +702,25 @@ def _independent_adjoint_action(
     operator: GalerkinOperator,
     field: Complex[Array, "n"],
 ) -> Complex[Array, "n"]:
-    """Re-evaluate the actual adjoint outside the Krylov recurrence."""
+    """PRIVATE: Re-evaluate the actual adjoint outside Krylov recurrence.
+
+    Parameters
+    ----------
+    operator : GalerkinOperator
+        Frozen sparse algebraic operator.
+    field : Complex[Array, "n"]
+        Retained-state coefficient vector.
+
+    Returns
+    -------
+    action : Complex[Array, "n"]
+        Fresh adjoint action ``D u - R* u + i epsilon_CAP G*G u``.
+
+    Notes
+    -----
+    The interaction uses its stored conjugate transpose. The absorber sign is
+    reversed from the forward action.
+    """
     state_size: int = operator.free_diagonal.shape[0]
     interaction: Complex[Array, "n"] = _sparse_adjoint_action(
         operator.interaction_rows,
@@ -545,7 +756,7 @@ def evaluate_galerkin_residual(
     operator: _GalerkinSystem,
     field: Complex[Array, "n"],
     source: Complex[Array, "n"],
-) -> tuple[Complex[Array, "n"], Float[Array, ""]]:
+) -> Tuple[Complex[Array, "n"], Float[Array, ""]]:
     """Evaluate a fresh forward-system algebraic residual.
 
     :see: :class:`~.test_engine.TestMatrixFreeGalerkinEngine`
@@ -590,8 +801,8 @@ def evaluate_galerkin_residual(
                 operator, checked_field, checked_source
             )
         )
-        residual: Complex[Array, "n"] = physical_residual.residual
-        residual_norm: Float[Array, ""] = physical_residual.residual_norm
+        residual: Complex128[Array, "n"] = physical_residual.residual
+        residual_norm: Float64[Array, ""] = physical_residual.residual_norm
     else:
         action: Complex[Array, "n"] = _independent_forward_action(
             operator,
@@ -601,7 +812,7 @@ def evaluate_galerkin_residual(
             checked_source, action, "residual"
         )
         residual_norm = _complex_norm(residual)
-    result: tuple[Complex[Array, "n"], Float[Array, ""]] = (
+    result: Tuple[Complex[Array, "n"], Float[Array, ""]] = (
         residual,
         residual_norm,
     )
@@ -613,7 +824,7 @@ def evaluate_galerkin_adjoint_residual(
     operator: _GalerkinSystem,
     field: Complex[Array, "n"],
     source: Complex[Array, "n"],
-) -> tuple[Complex[Array, "n"], Float[Array, ""]]:
+) -> Tuple[Complex[Array, "n"], Float[Array, ""]]:
     """Evaluate a fresh adjoint-system algebraic residual.
 
     :see: :class:`~.test_engine.TestMatrixFreeGalerkinEngine`
@@ -658,8 +869,8 @@ def evaluate_galerkin_adjoint_residual(
                 checked_source,
             )
         )
-        residual: Complex[Array, "n"] = physical_residual.residual
-        residual_norm: Float[Array, ""] = physical_residual.residual_norm
+        residual: Complex128[Array, "n"] = physical_residual.residual
+        residual_norm: Float64[Array, ""] = physical_residual.residual_norm
     else:
         action: Complex[Array, "n"] = _independent_adjoint_action(
             operator,
@@ -669,7 +880,7 @@ def evaluate_galerkin_adjoint_residual(
             checked_source, action, "adjoint residual"
         )
         residual_norm = _complex_norm(residual)
-    result: tuple[Complex[Array, "n"], Float[Array, ""]] = (
+    result: Tuple[Complex[Array, "n"], Float[Array, ""]] = (
         residual,
         residual_norm,
     )
@@ -682,24 +893,56 @@ def _solver_original_residual(
     source: Complex[Array, "n"],
     *,
     adjoint: bool,
-) -> tuple[Complex[Array, "n"], Float[Array, ""]]:
-    """Recompute a scalable original-system residual outside recurrence."""
+) -> Tuple[Complex[Array, "n"], Float[Array, ""]]:
+    """PRIVATE: Recompute a scalable residual outside solver recurrence.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed-support algebraic or manifested target.
+    field : Complex[Array, "n"]
+        Candidate retained-state solution.
+    source : Complex[Array, "n"]
+        Original-system source coefficients.
+    adjoint : bool
+        If true, evaluate the actual adjoint original system.
+
+    Returns
+    -------
+    residual : Complex[Array, "n"]
+        Fresh original-system residual.
+    residual_norm : Float[Array, ""]
+        Scale-safe Euclidean norm of ``residual``.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If an action or residual is non-finite, subnormal, or numerically lost.
+
+    Notes
+    -----
+    Manifested targets use the production action with an independently rounded
+    subtraction. Sparse algebraic targets use the independent residual APIs.
+    """
     if isinstance(operator, GalerkinTargetManifest):
         if adjoint:
-            action: Complex[Array, "n"] = apply_galerkin_adjoint(
+            target_action: Complex128[Array, "n"] = apply_galerkin_adjoint(
                 operator,
                 field,
             )
         else:
-            action = apply_galerkin_operator(operator, field)
-        residual: Complex[Array, "n"] = _checked_residual_difference(
-            source, action, "solver residual"
+            target_action = apply_galerkin_operator(operator, field)
+        target_residual: Complex128[Array, "n"] = _checked_residual_difference(
+            source, target_action, "solver residual"
         )
-        residual_norm: Float[Array, ""] = _complex_norm(residual)
-        result: tuple[Complex[Array, "n"], Float[Array, ""]] = (
-            residual,
-            residual_norm,
+        target_residual_norm: Float64[Array, ""] = _complex_norm(
+            target_residual
         )
+        target_result: Tuple[Complex128[Array, "n"], Float64[Array, ""]] = (
+            target_residual,
+            target_residual_norm,
+        )
+        result: Tuple[Complex[Array, "n"], Float[Array, ""]] = target_result
     elif adjoint:
         result = evaluate_galerkin_adjoint_residual(operator, field, source)
     else:
@@ -715,7 +958,43 @@ def _checked_solver_inputs(
     relative_tolerance: scalar_float,
     absolute_tolerance: scalar_float,
 ) -> _SolverInputs:
-    """Validate solver structure and return a residual stopping threshold."""
+    """PRIVATE: Validate solver inputs and derive a residual threshold.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed-support algebraic or manifested target.
+    source : Complex[Array, "n"]
+        Original-system source coefficients.
+    initial_field : Complex[Array, "n"] | None
+        Optional initial state. ``None`` selects the zero vector.
+    max_iterations : scalar_int
+        Positive Krylov iteration limit.
+    relative_tolerance : scalar_float
+        Non-negative relative residual tolerance.
+    absolute_tolerance : scalar_float
+        Non-negative absolute residual tolerance.
+
+    Returns
+    -------
+    result : _SolverInputs
+        Checked source, initial state, iteration limit, and fresh-residual
+        stopping threshold.
+
+    Raises
+    ------
+    ValueError
+        If a rank, shape, Boolean iteration limit, or scalar structure is
+        invalid.
+    equinox.EquinoxRuntimeError
+        If a value is invalid during traced execution or the threshold is not
+        finite.
+
+    Notes
+    -----
+    The threshold is ``absolute_tolerance + relative_tolerance * ||source||``.
+    Solver acceptance later uses a fresh original-system residual.
+    """
     if isinstance(max_iterations, bool):
         raise ValueError("max_iterations must not be boolean")
     state_size: int = operator.free_diagonal.shape[0]
@@ -782,13 +1061,33 @@ def _solve_status(
     converged: Bool[Array, ""],
     breakdown: Bool[Array, ""],
     residual_mismatch: Bool[Array, ""],
-) -> Int[Array, ""]:
-    """Encode one dynamic Krylov termination status."""
+) -> Int64[Array, ""]:
+    """PRIVATE: Encode one dynamic Krylov termination status.
+
+    Parameters
+    ----------
+    converged : Bool[Array, ""]
+        Whether the fresh physical residual meets its threshold.
+    breakdown : Bool[Array, ""]
+        Whether the Krylov recurrence encountered a breakdown.
+    residual_mismatch : Bool[Array, ""]
+        Whether recurrence convergence disagrees with the fresh residual.
+
+    Returns
+    -------
+    status : Int64[Array, ""]
+        Integer code from :class:`GalerkinSolveStatus`.
+
+    Notes
+    -----
+    Convergence has highest precedence, followed by breakdown and residual
+    mismatch. The remaining outcome is maximum iterations.
+    """
     converged_code: int = int(GalerkinSolveStatus.CONVERGED)
     max_iterations_code: int = int(GalerkinSolveStatus.MAX_ITERATIONS)
     breakdown_code: int = int(GalerkinSolveStatus.BREAKDOWN)
     residual_mismatch_code: int = int(GalerkinSolveStatus.RESIDUAL_MISMATCH)
-    status: Int[Array, ""] = jnp.where(
+    status: Int64[Array, ""] = jnp.where(
         converged,
         converged_code,
         jnp.where(
@@ -812,7 +1111,36 @@ def _finalize_cgls_result(
     *,
     adjoint: bool,
 ) -> GalerkinSolveResult:
-    """Recompute final CGLS residuals and construct the result carrier."""
+    """PRIVATE: Recompute final CGLS residuals and construct the result.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed target used by the completed recurrence.
+    source : Complex[Array, "n"]
+        Original-system source coefficients.
+    state : _CGLSState
+        Final CGLS recurrence state.
+    stopping_threshold : Float[Array, ""]
+        Fresh original-residual acceptance threshold.
+    adjoint : bool
+        If true, finalize a solve of the actual adjoint system.
+
+    Returns
+    -------
+    result : GalerkinSolveResult
+        Field, fresh residual diagnostics, counts, and termination status.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If fresh forward, adjoint, or residual evaluation is invalid.
+
+    Notes
+    -----
+    Fresh residual acceptance overrides recurrence-only convergence. The
+    result remains algebraic and carries no outward residual certificate.
+    """
     if adjoint:
         residual, residual_norm = evaluate_galerkin_adjoint_residual(
             operator, state.field, source
@@ -830,7 +1158,7 @@ def _finalize_cgls_result(
         ~state.breakdown
     )
     residual_mismatch: Bool[Array, ""] = state.converged & (~converged)
-    status: Int[Array, ""] = _solve_status(
+    status: Int64[Array, ""] = _solve_status(
         converged, state.breakdown, residual_mismatch
     )
     result: GalerkinSolveResult = create_galerkin_solve_result(
@@ -861,7 +1189,42 @@ def _cgls_core(  # noqa: PLR0915
     *,
     adjoint: bool,
 ) -> GalerkinSolveResult:
-    """Run CGLS against either the forward or adjoint original system."""
+    """PRIVATE: Run CGLS against a forward or adjoint original system.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed-support target that supplies the ``H/H*`` action pair.
+    source : Complex[Array, "n"]
+        Original-system source coefficients.
+    initial_field : Complex[Array, "n"] | None
+        Optional initial state. ``None`` selects the zero vector.
+    max_iterations : scalar_int
+        Positive CGLS iteration limit.
+    relative_tolerance : scalar_float
+        Non-negative relative residual tolerance.
+    absolute_tolerance : scalar_float
+        Non-negative absolute residual tolerance.
+    adjoint : bool
+        If true, solve the actual adjoint system.
+
+    Returns
+    -------
+    result : GalerkinSolveResult
+        Final field, fresh residual diagnostics, counts, and typed status.
+
+    Raises
+    ------
+    ValueError
+        If a static rank, shape, or scalar structure is invalid.
+    equinox.EquinoxRuntimeError
+        If a traced input, operator action, or residual is invalid.
+
+    Notes
+    -----
+    CGLS applies ``H`` and the actual ``H*`` without forming ``H*H``. It
+    normalizes residual directions and accepts only a fresh residual check.
+    """
     inputs: _SolverInputs = _checked_solver_inputs(
         operator,
         source,
@@ -1155,7 +1518,34 @@ def _finalize_lsqr_result(
     state: _LSQRState,
     stopping_threshold: Float[Array, ""],
 ) -> GalerkinSolveResult:
-    """Recompute final LSQR residuals and construct the result carrier."""
+    """PRIVATE: Recompute final LSQR residuals and construct the result.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed target used by the completed recurrence.
+    source : Complex[Array, "n"]
+        Original-system source coefficients.
+    state : _LSQRState
+        Final LSQR recurrence state.
+    stopping_threshold : Float[Array, ""]
+        Fresh original-residual acceptance threshold.
+
+    Returns
+    -------
+    result : GalerkinSolveResult
+        Field, fresh residual diagnostics, counts, and termination status.
+
+    Raises
+    ------
+    equinox.EquinoxRuntimeError
+        If fresh forward, adjoint, or residual evaluation is invalid.
+
+    Notes
+    -----
+    Fresh residual acceptance overrides recurrence-only convergence. The
+    result remains algebraic and carries no outward residual certificate.
+    """
     residual, residual_norm = evaluate_galerkin_residual(
         operator, state.field, source
     )
@@ -1167,7 +1557,7 @@ def _finalize_lsqr_result(
         ~state.breakdown
     )
     residual_mismatch: Bool[Array, ""] = state.converged & (~converged)
-    status: Int[Array, ""] = _solve_status(
+    status: Int64[Array, ""] = _solve_status(
         converged, state.breakdown, residual_mismatch
     )
     result: GalerkinSolveResult = create_galerkin_solve_result(
@@ -1196,7 +1586,40 @@ def _lsqr_core(  # noqa: PLR0915
     relative_tolerance: scalar_float,
     absolute_tolerance: scalar_float,
 ) -> GalerkinSolveResult:
-    """Run LSQR with fresh original-system residual stopping."""
+    """PRIVATE: Run LSQR with fresh original-system residual stopping.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed-support target that supplies the ``H/H*`` action pair.
+    source : Complex[Array, "n"]
+        Original-system source coefficients.
+    initial_field : Complex[Array, "n"] | None
+        Optional initial state. ``None`` selects the zero vector.
+    max_iterations : scalar_int
+        Positive LSQR iteration limit.
+    relative_tolerance : scalar_float
+        Non-negative relative residual tolerance.
+    absolute_tolerance : scalar_float
+        Non-negative absolute residual tolerance.
+
+    Returns
+    -------
+    result : GalerkinSolveResult
+        Final field, fresh residual diagnostics, counts, and typed status.
+
+    Raises
+    ------
+    ValueError
+        If a static rank, shape, or scalar structure is invalid.
+    equinox.EquinoxRuntimeError
+        If a traced input, operator action, or residual is invalid.
+
+    Notes
+    -----
+    LSQR uses the actual ``H/H*`` pair. It reports its recurrence residual
+    separately and accepts only a fresh original-system residual check.
+    """
     inputs: _SolverInputs = _checked_solver_inputs(
         operator,
         source,
@@ -1439,7 +1862,38 @@ def _implicit_galerkin_solve_impl(
     relative_tolerance: scalar_float,
     absolute_tolerance: scalar_float,
 ) -> Complex[Array, "n"]:
-    """Evaluate the primal fixed-support root without recursive VJP use."""
+    """PRIVATE: Evaluate the primal root without recursive VJP use.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed-support differentiable target.
+    source : Complex[Array, "n"]
+        Differentiable finite-system source coefficients.
+    max_iterations : scalar_int
+        Positive CGLS iteration limit.
+    relative_tolerance : scalar_float
+        Non-negative relative residual tolerance.
+    absolute_tolerance : scalar_float
+        Non-negative absolute residual tolerance.
+
+    Returns
+    -------
+    field : Complex[Array, "n"]
+        Converged fixed-support root.
+
+    Raises
+    ------
+    ValueError
+        If a static solver input is invalid.
+    equinox.EquinoxRuntimeError
+        If a traced input is invalid or the primal solve does not converge.
+
+    Notes
+    -----
+    Calling the CGLS core directly prevents the custom VJP rule from invoking
+    itself while evaluating the primal root.
+    """
     result: GalerkinSolveResult = _cgls_core(
         operator,
         source,
@@ -1522,9 +1976,9 @@ def _implicit_galerkin_solve_fwd(
     max_iterations: scalar_int,
     relative_tolerance: scalar_float,
     absolute_tolerance: scalar_float,
-) -> tuple[
+) -> Tuple[
     Complex[Array, "n"],
-    tuple[
+    Tuple[
         _GalerkinSystem,
         Complex[Array, "n"],
         Int[Array, ""],
@@ -1532,7 +1986,40 @@ def _implicit_galerkin_solve_fwd(
         Float[Array, ""],
     ],
 ]:
-    """Save the converged root and fixed data, but no Krylov trajectory."""
+    """PRIVATE: Save the converged root and fixed data without trajectory.
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed-support differentiable target.
+    source : Complex[Array, "n"]
+        Differentiable finite-system source coefficients.
+    max_iterations : scalar_int
+        Positive CGLS iteration limit.
+    relative_tolerance : scalar_float
+        Non-negative relative residual tolerance.
+    absolute_tolerance : scalar_float
+        Non-negative absolute residual tolerance.
+
+    Returns
+    -------
+    field : Complex[Array, "n"]
+        Converged fixed-support root.
+    residual : Tuple[_GalerkinSystem, Complex[Array, "n"], Int[Array, ""], Float[Array, ""], Float[Array, ""]]
+        Custom-VJP residual containing the operator, root, and solver controls.
+
+    Raises
+    ------
+    ValueError
+        If a static solver input is invalid.
+    equinox.EquinoxRuntimeError
+        If a traced input is invalid or the primal solve does not converge.
+
+    Notes
+    -----
+    The custom-VJP residual deliberately excludes every Krylov trajectory
+    vector.
+    """  # noqa: E501
     field: Complex[Array, "n"] = _implicit_galerkin_solve_impl(
         operator,
         source,
@@ -1540,7 +2027,7 @@ def _implicit_galerkin_solve_fwd(
         relative_tolerance,
         absolute_tolerance,
     )
-    residual: tuple[
+    residual: Tuple[
         _GalerkinSystem,
         Complex[Array, "n"],
         Int[Array, ""],
@@ -1553,9 +2040,9 @@ def _implicit_galerkin_solve_fwd(
         jnp.asarray(relative_tolerance),
         jnp.asarray(absolute_tolerance),
     )
-    result: tuple[
+    result: Tuple[
         Complex[Array, "n"],
-        tuple[
+        Tuple[
             _GalerkinSystem,
             Complex[Array, "n"],
             Int[Array, ""],
@@ -1567,7 +2054,7 @@ def _implicit_galerkin_solve_fwd(
 
 
 def _implicit_galerkin_solve_bwd(
-    residual: tuple[
+    residual: Tuple[
         _GalerkinSystem,
         Complex[Array, "n"],
         Int[Array, ""],
@@ -1575,8 +2062,42 @@ def _implicit_galerkin_solve_bwd(
         Float[Array, ""],
     ],
     output_cotangent: Complex[Array, "n"],
-) -> tuple[_GalerkinSystem, Complex[Array, "n"], None, None, None]:
-    """Solve the SC-1 adjoint and pull it back through operator parameters."""
+) -> Tuple[_GalerkinSystem, Complex[Array, "n"], None, None, None]:
+    """PRIVATE: Solve the SC-1 adjoint and pull back operator parameters.
+
+    Parameters
+    ----------
+    residual : Tuple[_GalerkinSystem, Complex[Array, "n"], Int[Array, ""], Float[Array, ""], Float[Array, ""]]
+        Saved operator, primal root, and solver controls from the forward rule.
+    output_cotangent : Complex[Array, "n"]
+        Cotangent of the converged field under JAX's complex convention.
+
+    Returns
+    -------
+    operator_cotangent : _GalerkinSystem
+        Pulled-back cotangent for differentiable operator leaves.
+    source_cotangent : Complex[Array, "n"]
+        Source cotangent from the converged adjoint root.
+    max_iterations_cotangent : None
+        No cotangent for the discrete iteration limit.
+    relative_tolerance_cotangent : None
+        No cotangent for the solver relative tolerance.
+    absolute_tolerance_cotangent : None
+        No cotangent for the solver absolute tolerance.
+
+    Raises
+    ------
+    ValueError
+        If a static adjoint-solver input is invalid.
+    equinox.EquinoxRuntimeError
+        If the adjoint solve is invalid or does not converge.
+
+    Notes
+    -----
+    The rule solves ``H* lambda = grad_u L`` and differentiates the forward
+    action at the saved primal state. It does not differentiate solver
+    controls or a Krylov trajectory.
+    """  # noqa: E501
     operator, field, max_iterations, relative_tolerance, absolute_tolerance = (
         residual
     )
@@ -1608,7 +2129,7 @@ def _implicit_galerkin_solve_bwd(
         -jnp.conj(adjoint_field)
     )[0]
     source_cotangent: Complex[Array, "n"] = jnp.conj(adjoint_field)
-    cotangents: tuple[
+    cotangents: Tuple[
         _GalerkinSystem,
         Complex[Array, "n"],
         None,

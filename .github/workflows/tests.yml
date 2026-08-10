@@ -67,6 +67,12 @@ jobs:
           MPLCONFIGDIR: /tmp/ptyrodactyl-mpl
         run: uv run --frozen pytest -q -n 0
 
+      - name: Install pandoc for nbsphinx
+        if: matrix.python-version == '3.13'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pandoc
+
       - name: Build documentation with warnings as errors
         if: matrix.python-version == '3.13'
         run: >-

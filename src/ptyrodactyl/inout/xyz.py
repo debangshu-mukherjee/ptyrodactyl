@@ -39,17 +39,17 @@ _ATOMS_PATH: Path = (
 def _load_atomic_numbers(
     json_path: Optional[Path] = _ATOMS_PATH,
 ) -> Dict[str, int]:
-    """Load atomic number mapping from JSON file in manifest folder.
+    """PRIVATE: Load the atomic-number mapping from its JSON asset.
 
     Parameters
     ----------
-    json_path : Path, optional
-        Custom path to JSON file, defaults to module path.
+    json_path : Optional[Path]
+        Custom JSON path. Default: the bundled atomic-number asset.
 
     Returns
     -------
-    Dict[str, int]
-        Dictionary mapping atomic symbols to atomic numbers.
+    atomic_data : Dict[str, int]
+        Mapping from atomic symbols to atomic numbers.
 
     Raises
     ------
@@ -125,18 +125,18 @@ def atomic_symbol(symbol_string: str) -> scalar_int:
 
 @beartype
 def _parse_xyz_metadata(line: str) -> Dict[str, Any]:
-    """Extract metadata from the XYZ comment line.
+    """PRIVATE: Extract metadata from one XYZ comment line.
 
     Parameters
     ----------
     line : str
-        Second line of the XYZ file (comment/metadata).
+        Second XYZ line containing optional comment metadata.
 
     Returns
     -------
-    Dict[str, Any]
-        Parsed metadata with optional keys: lattice,
-        stress, energy, properties.
+    metadata : Dict[str, Any]
+        Parsed metadata with optional ``lattice``, ``stress``, ``energy``,
+        and ``properties`` keys.
 
     Raises
     ------
@@ -296,7 +296,7 @@ def parse_xyz(file_path: Union[str, Path]) -> CrystalData:
 
 @beartype
 def _extract_elements_from_comment(comment: str) -> List[str]:
-    """Extract element symbols from POSCAR comment line.
+    """PRIVATE: Extract element symbols from one POSCAR comment line.
 
     Attempts to find element symbols in the comment line for VASP 4
     format files where symbols are not on a dedicated line.

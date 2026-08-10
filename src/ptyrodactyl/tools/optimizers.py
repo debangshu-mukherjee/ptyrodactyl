@@ -100,7 +100,7 @@ class LRSchedulerState(NamedTuple):
 
 SchedulerFn = Callable[
     [LRSchedulerState],
-    tuple[float | Float[Array, " "], LRSchedulerState],
+    Tuple[float | Float[Array, " "], LRSchedulerState],
 ]
 
 
@@ -158,7 +158,7 @@ def create_cosine_scheduler(
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float | Float[Array, " "], LRSchedulerState]:
+    ) -> Tuple[float | Float[Array, " "], LRSchedulerState]:
         """Apply cosine annealing to the learning rate.
 
         Parameters
@@ -181,7 +181,7 @@ def create_cosine_scheduler(
         new_state = LRSchedulerState(
             step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
         )
-        result: tuple[float | Float[Array, " "], LRSchedulerState] = (
+        result: Tuple[float | Float[Array, " "], LRSchedulerState] = (
             lr,
             new_state,
         )
@@ -234,7 +234,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float | Float[Array, " "], LRSchedulerState]:
+    ) -> Tuple[float | Float[Array, " "], LRSchedulerState]:
         """Apply step decay to the learning rate.
 
         Parameters
@@ -254,7 +254,7 @@ def create_step_scheduler(step_size: int, gamma: float = 0.1) -> SchedulerFn:
         new_state = LRSchedulerState(
             step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
         )
-        result: tuple[float | Float[Array, " "], LRSchedulerState] = (
+        result: Tuple[float | Float[Array, " "], LRSchedulerState] = (
             lr,
             new_state,
         )
@@ -325,7 +325,7 @@ def create_warmup_cosine_scheduler(
     @jax.jit
     def scheduler_fn(
         state: LRSchedulerState,
-    ) -> tuple[float | Float[Array, " "], LRSchedulerState]:
+    ) -> Tuple[float | Float[Array, " "], LRSchedulerState]:
         """Apply warmup then cosine decay to the learning rate.
 
         Parameters
@@ -361,7 +361,7 @@ def create_warmup_cosine_scheduler(
         new_state = LRSchedulerState(
             step=state.step + 1, learning_rate=lr, initial_lr=state.initial_lr
         )
-        result: tuple[float | Float[Array, " "], LRSchedulerState] = (
+        result: Tuple[float | Float[Array, " "], LRSchedulerState] = (
             lr,
             new_state,
         )
@@ -506,21 +506,21 @@ def wirtinger_grad(
 
         Returns
         -------
-        wirt_grad : Complex[Array, " ..."] or tuple
+        wirt_grad : Union[Complex[Array, " ..."], Tuple[Complex[Array, " ..."], ...]]
             Wirtinger gradient(s) for the selected arguments.
-        """
+        """  # noqa: E501
 
-        def split_complex(args: tuple[Any, ...]) -> tuple[Any, ...]:
+        def split_complex(args: Tuple[Any, ...]) -> Tuple[Any, ...]:
             """Split complex args into real and imaginary parts.
 
             Parameters
             ----------
-            args : tuple
+            args : Tuple[Any, ...]
                 Original positional arguments.
 
             Returns
             -------
-            split : tuple
+            split : Tuple[Any, ...]
                 Real parts followed by imaginary parts.
             """
             split = tuple(
@@ -529,31 +529,31 @@ def wirtinger_grad(
                 jnp.imag(arg) if jnp.iscomplexobj(arg) else jnp.zeros_like(arg)
                 for arg in args
             )
-            result: tuple[Any, ...] = split
+            result: Tuple[Any, ...] = split
             return result
 
         def combine_complex(
-            r: tuple[Any, ...], i: tuple[Any, ...]
-        ) -> tuple[Any, ...]:
+            r: Tuple[Any, ...], i: Tuple[Any, ...]
+        ) -> Tuple[Any, ...]:
             """Recombine real and imaginary tuples.
 
             Parameters
             ----------
-            r : tuple
+            r : Tuple[Any, ...]
                 Real parts of each argument.
-            i : tuple
+            i : Tuple[Any, ...]
                 Imaginary parts of each argument.
 
             Returns
             -------
-            combined : tuple
+            combined : Tuple[Any, ...]
                 Complex (or real) arguments.
             """
             combined = tuple(
                 rr + 1j * ii if jnp.iscomplexobj(arg) else rr
                 for rr, ii, arg in zip(r, i, args, strict=False)
             )
-            result: tuple[Any, ...] = combined
+            result: Tuple[Any, ...] = combined
             return result
 
         split_args = split_complex(args)
@@ -878,8 +878,19 @@ def complex_rmsprop(
     return optimizer_step
 
 
-def _init_optimizer_state(shape: tuple[int, ...]) -> OptimizerState:
-    """Initialise optimizer state with zero moments and step count."""
+def _init_optimizer_state(shape: Tuple[int, ...]) -> OptimizerState:
+    """PRIVATE: Initialise optimizer state with zero moments and step.
+
+    Parameters
+    ----------
+    shape : Tuple[int, ...]
+        Shape of both optimizer moment arrays.
+
+    Returns
+    -------
+    result : OptimizerState
+        Optimizer state with zero moments and a zero step count.
+    """
     state = OptimizerState(
         m=jnp.zeros(shape), v=jnp.zeros(shape), step=jnp.array(0)
     )
@@ -888,14 +899,14 @@ def _init_optimizer_state(shape: tuple[int, ...]) -> OptimizerState:
 
 
 @jaxtyped(typechecker=beartype)
-def init_adam(shape: tuple) -> OptimizerState:
+def init_adam(shape: Tuple[int, ...]) -> OptimizerState:
     """Initialise Adam optimizer state.
 
     :see: :mod:`~.test_optimizers`
 
     Parameters
     ----------
-    shape : tuple
+    shape : Tuple[int, ...]
         Shape of the parameters to be optimised.
 
     Returns
@@ -909,14 +920,14 @@ def init_adam(shape: tuple) -> OptimizerState:
 
 
 @jaxtyped(typechecker=beartype)
-def init_adagrad(shape: tuple) -> OptimizerState:
+def init_adagrad(shape: Tuple[int, ...]) -> OptimizerState:
     """Initialise Adagrad optimizer state.
 
     :see: :mod:`~.test_optimizers`
 
     Parameters
     ----------
-    shape : tuple
+    shape : Tuple[int, ...]
         Shape of the parameters to be optimised.
 
     Returns
@@ -929,14 +940,14 @@ def init_adagrad(shape: tuple) -> OptimizerState:
 
 
 @jaxtyped(typechecker=beartype)
-def init_rmsprop(shape: tuple) -> OptimizerState:
+def init_rmsprop(shape: Tuple[int, ...]) -> OptimizerState:
     """Initialise RMSprop optimizer state.
 
     :see: :mod:`~.test_optimizers`
 
     Parameters
     ----------
-    shape : tuple
+    shape : Tuple[int, ...]
         Shape of the parameters to be optimised.
 
     Returns
@@ -957,7 +968,7 @@ def adam_update(
     beta1: float = 0.9,
     beta2: float = 0.999,
     eps: float = 1e-8,
-) -> tuple[Complex[Array, " ..."], OptimizerState]:
+) -> Tuple[Complex[Array, " ..."], OptimizerState]:
     """Update parameters using Adam with Wirtinger derivatives.
 
     :see: :mod:`~.test_optimizers`
@@ -1003,7 +1014,7 @@ def adam_update(
         params, grads, (m, v, step), learning_rate, beta1, beta2, eps
     )
     new_state = OptimizerState(m=new_m, v=new_v, step=new_step)
-    optimizer_step: tuple[Complex[Array, " ..."], OptimizerState] = (
+    optimizer_step: Tuple[Complex[Array, " ..."], OptimizerState] = (
         new_params,
         new_state,
     )
@@ -1017,7 +1028,7 @@ def adagrad_update(
     state: OptimizerState,
     learning_rate: float = 0.01,
     eps: float = 1e-8,
-) -> tuple[Complex[Array, " ..."], OptimizerState]:
+) -> Tuple[Complex[Array, " ..."], OptimizerState]:
     """Update parameters using Adagrad with Wirtinger derivatives.
 
     :see: :mod:`~.test_optimizers`
@@ -1058,7 +1069,7 @@ def adagrad_update(
     m, v, step = state
     new_params, new_v = complex_adagrad(params, grads, v, learning_rate, eps)
     new_state = OptimizerState(m=m, v=new_v, step=step + 1)
-    optimizer_step: tuple[Complex[Array, " ..."], OptimizerState] = (
+    optimizer_step: Tuple[Complex[Array, " ..."], OptimizerState] = (
         new_params,
         new_state,
     )
@@ -1073,7 +1084,7 @@ def rmsprop_update(
     learning_rate: float = 0.001,
     decay_rate: float = 0.9,
     eps: float = 1e-8,
-) -> tuple[Complex[Array, " ..."], OptimizerState]:
+) -> Tuple[Complex[Array, " ..."], OptimizerState]:
     """Update parameters using RMSprop with Wirtinger derivatives.
 
     :see: :mod:`~.test_optimizers`
@@ -1119,7 +1130,7 @@ def rmsprop_update(
         params, grads, v, learning_rate, decay_rate, eps
     )
     new_state = OptimizerState(m=m, v=new_v, step=step + 1)
-    optimizer_step: tuple[Complex[Array, " ..."], OptimizerState] = (
+    optimizer_step: Tuple[Complex[Array, " ..."], OptimizerState] = (
         new_params,
         new_state,
     )

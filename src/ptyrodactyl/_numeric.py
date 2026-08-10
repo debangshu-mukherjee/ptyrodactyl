@@ -1,14 +1,35 @@
 """Dependency-neutral internal floating-point range predicates."""
 
 import jax.numpy as jnp
+from beartype.typing import Tuple
 from jax import Array, lax
 from jaxtyping import Bool
 
 
 def _real_masks(
     values: Array,
-) -> tuple[Bool[Array, "..."], Bool[Array, "..."]]:
-    """Return exact nonzero and subnormal masks for one real array."""
+) -> Tuple[Bool[Array, "..."], Bool[Array, "..."]]:
+    """PRIVATE: Return exact nonzero and subnormal masks for one real array.
+
+    Parameters
+    ----------
+    values : Array
+        Real values to classify from their IEEE component bits.
+
+    Returns
+    -------
+    nonzero : Bool[Array, "..."]
+        Exact nonzero-component mask. Unsupported floating dtypes use
+        comparisons instead of component bits.
+    subnormal : Bool[Array, "..."]
+        Nonzero subnormal-component mask. Unsupported floating dtypes report
+        no subnormal values.
+
+    Notes
+    -----
+    The bit masks ignore the sign bit. Exact positive and negative zero are
+    therefore both classified as zero.
+    """
     if values.dtype == jnp.float64:
         bits = lax.bitcast_convert_type(values, jnp.uint64)
         exponent_mask = jnp.asarray(0x7FF0000000000000, dtype=jnp.uint64)
@@ -20,20 +41,18 @@ def _real_masks(
         fraction_mask = jnp.asarray(0x007FFFFF, dtype=jnp.uint32)
         magnitude_mask = jnp.asarray(0x7FFFFFFF, dtype=jnp.uint32)
     else:
-        nonzero_fallback: Bool[Array, "..."] = values != 0
-        subnormal_fallback: Bool[Array, "..."] = jnp.zeros_like(
-            values, dtype=jnp.bool_
+        nonzero: Bool[Array, "..."] = values != 0
+        subnormal: Bool[Array, "..."] = jnp.zeros_like(values, dtype=jnp.bool_)
+        result: Tuple[Bool[Array, "..."], Bool[Array, "..."]] = (
+            nonzero,
+            subnormal,
         )
-        fallback: tuple[Bool[Array, "..."], Bool[Array, "..."]] = (
-            nonzero_fallback,
-            subnormal_fallback,
-        )
-        return fallback
+        return result
     nonzero: Bool[Array, "..."] = jnp.bitwise_and(bits, magnitude_mask) != 0
     subnormal: Bool[Array, "..."] = (
         jnp.bitwise_and(bits, exponent_mask) == 0
     ) & (jnp.bitwise_and(bits, fraction_mask) != 0)
-    result: tuple[Bool[Array, "..."], Bool[Array, "..."]] = (
+    result: Tuple[Bool[Array, "..."], Bool[Array, "..."]] = (
         nonzero,
         subnormal,
     )
@@ -41,7 +60,18 @@ def _real_masks(
 
 
 def _real_has_subnormal(values: Array) -> Bool[Array, ""]:
-    """Detect nonzero IEEE subnormal components without FP comparisons."""
+    """PRIVATE: Detect nonzero IEEE subnormal components bitwise.
+
+    Parameters
+    ----------
+    values : Array
+        Real array whose components are inspected.
+
+    Returns
+    -------
+    result : Bool[Array, ""]
+        Whether at least one component is a nonzero IEEE subnormal value.
+    """
     _, subnormal = _real_masks(values)
     result: Bool[Array, ""] = jnp.any(subnormal)
     return result
@@ -70,7 +100,27 @@ def _real_has_lost_subtraction(
     right: Array,
     difference: Array,
 ) -> Bool[Array, ""]:
-    """Detect an unequal real pair whose rounded difference became zero."""
+    """PRIVATE: Detect unequal real values whose difference became zero.
+
+    Parameters
+    ----------
+    left : Array
+        Left operands of the subtraction.
+    right : Array
+        Right operands of the subtraction.
+    difference : Array
+        Rounded values produced by ``left - right``.
+
+    Returns
+    -------
+    lost : Bool[Array, ""]
+        Whether any unequal operand pair produced an exact zero difference.
+
+    Notes
+    -----
+    Signed zeros compare as one zero value. Unsupported floating dtypes use
+    floating-point comparisons instead of bit inspection.
+    """
     if left.dtype == jnp.float64:
         left_bits = lax.bitcast_convert_type(left, jnp.uint64)
         right_bits = lax.bitcast_convert_type(right, jnp.uint64)
@@ -82,10 +132,8 @@ def _real_has_lost_subtraction(
         difference_bits = lax.bitcast_convert_type(difference, jnp.uint32)
         magnitude_mask = jnp.asarray(0x7FFFFFFF, dtype=jnp.uint32)
     else:
-        lost_fallback: Bool[Array, ""] = jnp.any(
-            (difference == 0) & (left != right)
-        )
-        return lost_fallback
+        lost: Bool[Array, ""] = jnp.any((difference == 0) & (left != right))
+        return lost
     left_magnitude = jnp.bitwise_and(left_bits, magnitude_mask)
     right_magnitude = jnp.bitwise_and(right_bits, magnitude_mask)
     difference_magnitude = jnp.bitwise_and(difference_bits, magnitude_mask)

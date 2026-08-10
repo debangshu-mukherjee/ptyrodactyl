@@ -9,6 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
+from beartype.typing import Tuple
 from equinox import EquinoxRuntimeError
 
 from ptyrodactyl.types import (
@@ -18,14 +19,14 @@ from ptyrodactyl.types import (
     create_lobato_parameters,
 )
 
-_TRACED_ERROR_TYPES: tuple[type[Exception], ...] = (
+_TRACED_ERROR_TYPES: Tuple[type[Exception], ...] = (
     EquinoxRuntimeError,
     jax.errors.JaxRuntimeError,
     ValueError,
 )
 
 
-def _lobato_inputs() -> tuple[jax.Array, jax.Array]:
+def _lobato_inputs() -> Tuple[jax.Array, jax.Array]:
     """Return nontrivial valid Lobato coefficients."""
     amplitudes = jnp.array(
         [1.0, -0.25, 0.125, -0.0625, 0.03125],
@@ -35,7 +36,7 @@ def _lobato_inputs() -> tuple[jax.Array, jax.Array]:
     return amplitudes, scales
 
 
-def _kirkland_inputs() -> tuple[jax.Array, ...]:
+def _kirkland_inputs() -> Tuple[jax.Array, ...]:
     """Return nontrivial valid Kirkland coefficients."""
     return (
         jnp.array([0.1, 0.2, 0.3], dtype=jnp.float64),
@@ -67,7 +68,7 @@ def test_factories_create_float64_equinox_pytrees_under_jit() -> None:
 
 @pytest.mark.parametrize("bad_shape", [(4,), (6,), (1, 5)])
 def test_lobato_factory_rejects_wrong_static_shapes(
-    bad_shape: tuple[int, ...],
+    bad_shape: Tuple[int, ...],
 ) -> None:
     """Both Lobato vectors must have exactly five entries."""
     amplitudes, scales = _lobato_inputs()

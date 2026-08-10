@@ -34,7 +34,7 @@ import jax
 import jax.flatten_util
 import jax.numpy as jnp
 from beartype import beartype
-from beartype.typing import Callable
+from beartype.typing import Callable, Tuple
 from jax import lax
 from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray, PyTree, jaxtyped
 
@@ -66,7 +66,7 @@ def conjugate_gradient(
     x0: PyTree,
     max_iterations: int = 100,
     tolerance: float = 1e-6,
-) -> tuple[PyTree, Int[Array, ""]]:
+) -> Tuple[PyTree, Int[Array, ""]]:
     r"""Solve A x = b via conjugate gradient.
 
     Extended Summary
@@ -136,7 +136,7 @@ def conjugate_gradient(
     def cg_step(
         state: CGState,
         _: None,
-    ) -> tuple[CGState, None]:
+    ) -> Tuple[CGState, None]:
         """Execute one CG iteration."""
         a_times_p: PyTree = linear_operator(state.p)
         p_dot_ap: Float[Array, ""] = _tree_dot(state.p, a_times_p)
@@ -168,7 +168,7 @@ def conjugate_gradient(
             r_dot_r=r_dot_r_out,
             iteration=iteration_out,
         )
-        result: tuple[CGState, None] = new_state, None
+        result: Tuple[CGState, None] = new_state, None
         return result
 
     final_state, _ = lax.scan(
@@ -176,7 +176,7 @@ def conjugate_gradient(
     )
     solution: PyTree = final_state.x
     iterations: Int[Array, ""] = final_state.iteration
-    solve_result: tuple[PyTree, Int[Array, ""]] = solution, iterations
+    solve_result: Tuple[PyTree, Int[Array, ""]] = solution, iterations
     return solve_result
 
 
@@ -187,7 +187,7 @@ def gauss_newton_step(
     data: Float[Array, "..."],
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
-) -> tuple[PyTree, Float[Array, ""]]:
+) -> Tuple[PyTree, Float[Array, ""]]:
     r"""Compute a single Gauss-Newton update step.
 
     Extended Summary
@@ -260,7 +260,7 @@ def gauss_newton_step(
     new_residual: Float[Array, "..."] = new_prediction - data
     residual_norm: Float[Array, ""] = jnp.sqrt(jnp.sum(new_residual**2))
 
-    step_result: tuple[PyTree, Float[Array, ""]] = new_params, residual_norm
+    step_result: Tuple[PyTree, Float[Array, ""]] = new_params, residual_norm
     return step_result
 
 
@@ -273,7 +273,7 @@ def gauss_newton_solve(
     tolerance: float = 1e-8,
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
-) -> tuple[PyTree, GNState]:
+) -> Tuple[PyTree, GNState]:
     """Solve nonlinear least-squares via iterated Gauss-Newton.
 
     :see: :mod:`~.test_solvers`
@@ -333,20 +333,20 @@ def gauss_newton_solve(
     def gn_iteration(
         state: GNState,
         _: None,
-    ) -> tuple[GNState, None]:
+    ) -> Tuple[GNState, None]:
         """Execute one GN iteration with convergence check."""
 
-        def freeze_update() -> tuple[PyTree, Float[Array, ""]]:
+        def freeze_update() -> Tuple[PyTree, Float[Array, ""]]:
             """Retain an incoming state that is already converged."""
-            frozen_update: tuple[PyTree, Float[Array, ""]] = (
+            frozen_update: Tuple[PyTree, Float[Array, ""]] = (
                 state.params,
                 state.residual_norm,
             )
             return frozen_update
 
-        def compute_update() -> tuple[PyTree, Float[Array, ""]]:
+        def compute_update() -> Tuple[PyTree, Float[Array, ""]]:
             """Compute one active Gauss-Newton update."""
-            active_update: tuple[PyTree, Float[Array, ""]] = gauss_newton_step(
+            active_update: Tuple[PyTree, Float[Array, ""]] = gauss_newton_step(
                 forward_fn,
                 state.params,
                 data,
@@ -373,14 +373,14 @@ def gauss_newton_solve(
             residual_norm=norm_out,
             iteration=iteration_out,
         )
-        result: tuple[GNState, None] = new_state, None
+        result: Tuple[GNState, None] = new_state, None
         return result
 
     final_state, _ = lax.scan(
         gn_iteration, initial_state, None, length=max_iterations
     )
     params_final: PyTree = final_state.params
-    solve_result: tuple[PyTree, GNState] = params_final, final_state
+    solve_result: Tuple[PyTree, GNState] = params_final, final_state
     return solve_result
 
 
@@ -392,7 +392,7 @@ def levenberg_marquardt_step(
     damping: Float[Array, ""],
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
-) -> tuple[PyTree, Float[Array, ""], Float[Array, ""]]:
+) -> Tuple[PyTree, Float[Array, ""], Float[Array, ""]]:
     r"""Compute a single Levenberg-Marquardt update step.
 
     Extended Summary
@@ -513,7 +513,7 @@ def levenberg_marquardt_step(
         lambda: jnp.sqrt(residual_norm_current),
     )
 
-    step_result: tuple[PyTree, Float[Array, ""], Float[Array, ""]] = (
+    step_result: Tuple[PyTree, Float[Array, ""], Float[Array, ""]] = (
         new_params,
         new_residual_norm,
         new_damping,
@@ -531,7 +531,7 @@ def levenberg_marquardt_solve(
     damping_init: float = 1e-3,
     cg_max_iterations: int = 50,
     cg_tolerance: float = 1e-6,
-) -> tuple[PyTree, LMState]:
+) -> Tuple[PyTree, LMState]:
     """Solve nonlinear least-squares via Levenberg-Marquardt.
 
     Extended Summary
@@ -599,29 +599,29 @@ def levenberg_marquardt_solve(
     def lm_iteration(
         state: LMState,
         _: None,
-    ) -> tuple[LMState, None]:
+    ) -> Tuple[LMState, None]:
         """Execute one LM iteration with convergence check."""
 
-        def freeze_update() -> tuple[
+        def freeze_update() -> Tuple[
             PyTree,
             Float[Array, ""],
             Float[Array, ""],
         ]:
             """Retain an incoming state that is already converged."""
-            frozen_update: tuple[
+            frozen_update: Tuple[
                 PyTree,
                 Float[Array, ""],
                 Float[Array, ""],
             ] = (state.params, state.residual_norm, state.damping)
             return frozen_update
 
-        def compute_update() -> tuple[
+        def compute_update() -> Tuple[
             PyTree,
             Float[Array, ""],
             Float[Array, ""],
         ]:
             """Compute one active Levenberg-Marquardt update."""
-            active_update: tuple[
+            active_update: Tuple[
                 PyTree,
                 Float[Array, ""],
                 Float[Array, ""],
@@ -655,14 +655,14 @@ def levenberg_marquardt_solve(
             damping=damping_out,
             iteration=iteration_out,
         )
-        result: tuple[LMState, None] = new_state, None
+        result: Tuple[LMState, None] = new_state, None
         return result
 
     final_state, _ = lax.scan(
         lm_iteration, initial_state, None, length=max_iterations
     )
     params_final: PyTree = final_state.params
-    solve_result: tuple[PyTree, LMState] = params_final, final_state
+    solve_result: Tuple[PyTree, LMState] = params_final, final_state
     return solve_result
 
 
@@ -671,7 +671,7 @@ def lanczos_tridiagonal(
     linear_operator: Callable[[Float[Array, "n"]], Float[Array, "n"]],
     initial_vector: Float[Array, "n"],
     num_iterations: int,
-) -> tuple[Float[Array, "k"], Float[Array, "k-1"]]:
+) -> Tuple[Float[Array, "k"], Float[Array, "k-1"]]:
     """Compute the Lanczos tridiagonalisation of a symmetric operator.
 
     Extended Summary
@@ -734,7 +734,7 @@ def lanczos_tridiagonal(
     def lanczos_step(
         state: LanczosState,
         _: None,
-    ) -> tuple[LanczosState, None]:
+    ) -> Tuple[LanczosState, None]:
         """Execute one Lanczos iteration."""
         w: Float[Array, "n"] = linear_operator(state.v_curr)
         alpha_i: Float[Array, ""] = jnp.dot(w, state.v_curr)
@@ -765,7 +765,7 @@ def lanczos_tridiagonal(
             beta=new_beta,
             iteration=state.iteration + 1,
         )
-        result: tuple[LanczosState, None] = new_state, None
+        result: Tuple[LanczosState, None] = new_state, None
         return result
 
     final_state, _ = lax.scan(lanczos_step, initial_state, None, length=k)
@@ -773,7 +773,7 @@ def lanczos_tridiagonal(
     alpha: Float[Array, "k"] = final_state.alpha
     beta: Float[Array, "k-1"] = final_state.beta[:-1]
 
-    tridiagonal: tuple[Float[Array, "k"], Float[Array, "k-1"]] = alpha, beta
+    tridiagonal: Tuple[Float[Array, "k"], Float[Array, "k-1"]] = alpha, beta
     return tridiagonal
 
 

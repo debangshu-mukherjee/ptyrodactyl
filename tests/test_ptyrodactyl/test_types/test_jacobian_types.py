@@ -21,7 +21,7 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 import pytest
-from beartype.typing import Any
+from beartype.typing import Any, Dict, Tuple
 from jaxtyping import Array, Float
 
 from ptyrodactyl.types import (
@@ -45,7 +45,7 @@ from ptyrodactyl.types import (
 )
 
 
-def _ptycho_inputs(rng_key: jax.Array) -> dict[str, Any]:
+def _ptycho_inputs(rng_key: jax.Array) -> Dict[str, Any]:
     """Build deterministic valid ptychography inputs.
 
     Parameters
@@ -55,7 +55,7 @@ def _ptycho_inputs(rng_key: jax.Array) -> dict[str, Any]:
 
     Returns
     -------
-    inputs : dict[str, Any]
+    inputs : Dict[str, Any]
         Keyword arguments accepted by ``create_ptycho_params``.
     """
     wave_real_key, wave_imag_key, position_key, phase_key = jax.random.split(
@@ -65,7 +65,7 @@ def _ptycho_inputs(rng_key: jax.Array) -> dict[str, Any]:
     exit_wave: Array = jax.random.normal(
         wave_real_key, (4, 5), dtype=jnp.float64
     ) + 1j * jax.random.normal(wave_imag_key, (4, 5), dtype=jnp.float64)
-    inputs: dict[str, Any] = {
+    inputs: Dict[str, Any] = {
         "exit_wave": exit_wave,
         "zernike_coeffs": jnp.array([0.0, 0.1, -0.2], dtype=jnp.float64),
         "aperture_mrad": jnp.array(20.0, dtype=jnp.float64),
@@ -89,8 +89,8 @@ def _ptycho_inputs(rng_key: jax.Array) -> dict[str, Any]:
 
 
 def _parameter_blocks(
-    inputs: dict[str, Any],
-) -> tuple[
+    inputs: Dict[str, Any],
+) -> Tuple[
     ExitWaveParams,
     AberrationParams,
     GeometryParams,
@@ -101,12 +101,12 @@ def _parameter_blocks(
 
     Parameters
     ----------
-    inputs : dict[str, Any]
+    inputs : Dict[str, Any]
         Valid ptychography inputs.
 
     Returns
     -------
-    blocks : tuple[ExitWaveParams, AberrationParams, GeometryParams, \
+    blocks : Tuple[ExitWaveParams, AberrationParams, GeometryParams, \
 PositionParams, ProbeModeParams]
         Individual parameter blocks in ``PtychoParams`` field order.
     """
@@ -126,7 +126,7 @@ PositionParams, ProbeModeParams]
         inputs["mode_weights"],
         inputs["mode_phases"],
     )
-    blocks: tuple[
+    blocks: Tuple[
         ExitWaveParams,
         AberrationParams,
         GeometryParams,
@@ -139,7 +139,7 @@ PositionParams, ProbeModeParams]
 def _carrier_case(
     case_name: str,
     rng_key: jax.Array,
-) -> tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]:
+) -> Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int]:
     """Return constructor data for one carrier case.
 
     Parameters
@@ -151,12 +151,12 @@ def _carrier_case(
 
     Returns
     -------
-    case : tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]
+    case : Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int]
         Carrier class, positional arguments, keyword arguments, and
         expected dynamic leaf count.
     """
-    inputs: dict[str, Any] = _ptycho_inputs(rng_key)
-    blocks: tuple[
+    inputs: Dict[str, Any] = _ptycho_inputs(rng_key)
+    blocks: Tuple[
         ExitWaveParams,
         AberrationParams,
         GeometryParams,
@@ -168,8 +168,8 @@ def _carrier_case(
     zeros: Float[Array, " n"] = jnp.zeros(4, dtype=jnp.float64)
     alpha_beta: Float[Array, " k"] = jnp.zeros(3, dtype=jnp.float64)
 
-    cases: dict[
-        str, tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int]
+    cases: Dict[
+        str, Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int]
     ]
     cases = {
         "exit_wave": (
@@ -305,7 +305,7 @@ def _carrier_case(
             5,
         ),
     }
-    case: tuple[type[eqx.Module], tuple[Any, ...], dict[str, Any], int] = (
+    case: Tuple[type[eqx.Module], Tuple[Any, ...], Dict[str, Any], int] = (
         cases[case_name]
     )
     return case
@@ -443,7 +443,7 @@ class TestCreatePtychoParams:
         The comparison intentionally checks leaves so field ordering and
         scalar conversion behavior stay pinned.
         """
-        inputs: dict[str, Any] = _ptycho_inputs(rng_key)
+        inputs: Dict[str, Any] = _ptycho_inputs(rng_key)
         expected_blocks = _parameter_blocks(inputs)
         params: PtychoParams = create_ptycho_params(**inputs)
 
@@ -471,7 +471,7 @@ class TestCreatePtychoParams:
         The factory follows the two-tier validation pattern by using a
         plain Python ``ValueError`` for this check.
         """
-        inputs: dict[str, Any] = _ptycho_inputs(rng_key)
+        inputs: Dict[str, Any] = _ptycho_inputs(rng_key)
         inputs["exit_wave"] = jnp.ones((4,), dtype=jnp.complex128)
 
         with pytest.raises(ValueError, match="exit_wave must be 2D"):
@@ -494,7 +494,7 @@ class TestCreatePtychoParams:
         ``block_until_ready`` forces any deferred Equinox runtime error to
         materialize before the assertion exits.
         """
-        inputs: dict[str, Any] = _ptycho_inputs(rng_key)
+        inputs: Dict[str, Any] = _ptycho_inputs(rng_key)
         inputs["mode_weights"] = jnp.array([1.2, -0.2], dtype=jnp.float64)
 
         with pytest.raises(Exception, match="mode_weights"):
@@ -527,7 +527,7 @@ class TestCreateSolverStates:
         residual_norm = jnp.array(1.0, dtype=jnp.float64)
         params = {"vector": vector}
 
-        actual_states: tuple[eqx.Module, ...] = (
+        actual_states: Tuple[eqx.Module, ...] = (
             create_fisher_state(matrix, iteration),
             create_cg_state(
                 zeros,
@@ -551,7 +551,7 @@ class TestCreateSolverStates:
                 iteration,
             ),
         )
-        expected_states: tuple[eqx.Module, ...] = (
+        expected_states: Tuple[eqx.Module, ...] = (
             FisherState(matrix, iteration),
             CGState(zeros, vector, vector, residual_norm, iteration),
             GNState(params, residual_norm, iteration),
@@ -582,7 +582,7 @@ class TestCreateSolverStates:
         residual_norm = jnp.array(1.0, dtype=jnp.float64)
         params = {"vector": vector}
 
-        states: tuple[eqx.Module, ...] = (
+        states: Tuple[eqx.Module, ...] = (
             jax.jit(create_fisher_state)(matrix, iteration),
             jax.jit(create_cg_state)(
                 zeros,
@@ -606,7 +606,7 @@ class TestCreateSolverStates:
                 iteration,
             ),
         )
-        ready_states: tuple[eqx.Module, ...] = jax.block_until_ready(states)
+        ready_states: Tuple[eqx.Module, ...] = jax.block_until_ready(states)
 
         chex.assert_tree_all_finite(ready_states)
 
@@ -761,13 +761,13 @@ class TestJacobianStateScans:
 
         def run_scan(
             initial_state: GNState,
-        ) -> tuple[GNState, Float[Array, " steps"]]:
+        ) -> Tuple[GNState, Float[Array, " steps"]]:
             """Run a fixed-length GNState scan."""
 
             def step(
                 state: GNState,
                 _: None,
-            ) -> tuple[GNState, Float[Array, ""]]:
+            ) -> Tuple[GNState, Float[Array, ""]]:
                 """Advance one GNState scan step."""
                 new_state: GNState = GNState(
                     params=state.params + 1.0,
@@ -819,13 +819,13 @@ class TestJacobianStateScans:
 
         def run_scan(
             initial_state: CGState,
-        ) -> tuple[CGState, Float[Array, " steps"]]:
+        ) -> Tuple[CGState, Float[Array, " steps"]]:
             """Run a fixed-length CGState scan."""
 
             def step(
                 state: CGState,
                 _: None,
-            ) -> tuple[CGState, Float[Array, ""]]:
+            ) -> Tuple[CGState, Float[Array, ""]]:
                 """Advance one CGState scan step."""
                 new_r: Float[Array, " n"] = state.r * 0.5
                 new_p: Float[Array, " n"] = state.p + new_r

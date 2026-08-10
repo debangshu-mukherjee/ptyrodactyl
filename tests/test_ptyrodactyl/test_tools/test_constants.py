@@ -15,6 +15,7 @@ reappearance of that class of bug must fail loudly here.
 :see: :func:`ptyrodactyl.tools.relativistic_wavelength_ang`
 """
 
+import jax
 import jax.numpy as jnp
 import pytest
 
@@ -138,6 +139,19 @@ class TestHelmholtzCoupling:
         sigma_h = helmholtz_coupling(100.0)
         assert sigma_h.shape == ()
         assert sigma_h.dtype == jnp.float64
+
+    def test_float32_input_has_float64_eager_and_compiled_output(self) -> None:
+        """Canonicalize a lower-width boundary value to the declared dtype."""
+        voltage = jnp.asarray(200.0, dtype=jnp.float32)
+
+        eager = helmholtz_coupling(voltage)
+        compiled = jax.jit(helmholtz_coupling)(voltage)
+
+        assert eager.dtype == jnp.float64
+        assert compiled.dtype == jnp.float64
+        assert helmholtz_coupling.__annotations__["return"].dtypes == (
+            "float64",
+        )
 
 
 def test_buggy_name_removed() -> None:

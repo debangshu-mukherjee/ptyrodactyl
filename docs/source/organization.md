@@ -51,10 +51,13 @@ src/ptyrodactyl/
 1. Array computation is JAX-first and supports `jax.jit`, `jax.grad`, and
    `jax.vmap` where the public contract promises them.
 2. Public array functions use jaxtyping and runtime checking.
-3. Carriers are constructed through `ptyrodactyl.types.create_*` functions.
-4. Coherent/incoherent averaging is represented by an explicit `Distribution`
+3. Canonical carrier fields and post-conversion arrays use width-qualified
+   jaxtyping dtypes. Coercing inputs and dtype-polymorphic kernels use broad
+   dtype families.
+4. Carriers are constructed through `ptyrodactyl.types.create_*` functions.
+5. Coherent/incoherent averaging is represented by an explicit `Distribution`
    and reduced after the complex amplitude kernel.
-5. Symbols are exported from one owning subpackage; removed `ptyrodactyl.simul`
+6. Symbols are exported from one owning subpackage; removed `ptyrodactyl.simul`
    and `ptyrodactyl.tools.make_*` paths have no compatibility aliases.
-6. Filesystem and third-party file-format access belongs in
+7. Filesystem and third-party file-format access belongs in
    `ptyrodactyl.inout`, outside differentiable JAX kernels.

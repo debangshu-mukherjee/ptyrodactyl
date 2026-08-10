@@ -2,10 +2,10 @@
 
 Extended Summary
 ----------------
-The tests fix one three-mode SC-1 support. They assemble the dense target,
-realified Jacobian, and centered differences directly from copied
-coefficients without using production actions as an oracle. The base
-right-hand side traverses the exact finite matched-source injection.
+The tests build one canonical tilted target through
+``Potential3D -> checked acquisition -> create_galerkin_target``.  Independent
+NumPy DFT, dense-matrix, realified-Jacobian, rotation-chart, and centered-step
+oracles never call a production action or private manifest factory.
 """
 
 from typing import NamedTuple
@@ -16,75 +16,26 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from jaxtyping import Complex, Float, Int
+from beartype.typing import Tuple
+from jaxtyping import Complex, Float, Int, TypeCheckError
 from numpy.typing import NDArray
 
 from ptyrodactyl.born import (
+    create_galerkin_target,
     create_matched_galerkin_source,
     galerkin_state_jvp,
     galerkin_state_vjp,
 )
-from ptyrodactyl.tools import helmholtz_coupling
-from ptyrodactyl.types import (
-    GalerkinSource,
-    GalerkinTargetManifest,
-    create_galerkin_product_support,
-    create_galerkin_target_manifest,
+from ptyrodactyl.types import GalerkinSource, GalerkinTargetManifest
+from tests._galerkin_target_fixture import (
+    TARGET_CAP_SCALE,
+    TARGET_VOLTAGE_KV,
+    checked_acquisition,
+    periodic_target_potential,
+    target_support,
 )
 
-_STATE_INDICES: Int[NDArray, "3 3"] = np.array(
-    [[-1, 0, 0], [0, 0, 0], [1, 0, 0]],
-    dtype=np.int32,
-)
-_INTERACTION_INDICES: Int[NDArray, "3 3"] = np.array(
-    [[-1, 0, 0], [0, 0, 0], [1, 0, 0]],
-    dtype=np.int32,
-)
-_ABSORBER_INDICES: Int[NDArray, "29 3"] = np.array(
-    [
-        [first, second, third]
-        for first in range(-1, 2)
-        for second in range(-1, 2)
-        for third in range(-1, 2)
-    ]
-    + [[-2, 0, 0], [2, 0, 0]],
-    dtype=np.int32,
-)
-_WORK_INDICES: Int[NDArray, "63 3"] = np.array(
-    [
-        [first, second, third]
-        for first in range(-3, 4)
-        for second in range(-1, 2)
-        for third in range(-1, 2)
-    ],
-    dtype=np.int32,
-)
-_BOX_LENGTHS: Float[NDArray, "3"] = np.array(
-    [5.0, 6.0, 7.0],
-    dtype=np.float64,
-)
-_CARRIER: Float[NDArray, "3"] = np.array(
-    [0.31, -0.18, 250.5320619523448],
-    dtype=np.float64,
-)
-_VOLTAGE_KV = 200.0
-_WAVENUMBER = 250.53231840641544
-_CAP_SCALE = 0.23
-_INTERACTION: Complex[NDArray, "3"] = np.array(
-    [0.045 - 0.025j, 0.22 + 0.0j, 0.045 + 0.025j],
-    dtype=np.complex128,
-)
-_ABSORBER_AXIS_COEFFICIENTS = np.where(
-    _ABSORBER_INDICES == 0,
-    0.5,
-    np.where(np.abs(_ABSORBER_INDICES) == 1, 0.25, 0.0),
-)
-_ABSORBER_INTERIOR = np.prod(_ABSORBER_AXIS_COEFFICIENTS, axis=-1)
-_ABSORBER: Complex[NDArray, "29"] = np.where(
-    np.all(_ABSORBER_INDICES == 0, axis=-1),
-    1.0 - _ABSORBER_INTERIOR,
-    -_ABSORBER_INTERIOR,
-).astype(np.complex128)
+_CARRIER_DIRECTION: Tuple[float, float, float] = (1.0, -0.018, 0.031)
 _SOURCE: Complex[NDArray, "3"] = np.array(
     [0.8 + 0.2j, -0.25 + 0.35j, 0.12 - 0.18j],
     dtype=np.complex128,
@@ -101,107 +52,38 @@ _SOLVER_ARGUMENTS = {
 
 
 class _Direction(NamedTuple):
-    """Store one real coordinate direction in the fixed target chart."""
+    """Store one real coordinate direction in the physical local chart."""
 
     name: str
-    carrier: Float[NDArray, "3"]
-    interaction: Complex[NDArray, "3"]
+    rotation: Float[NDArray, "3"]
+    volume: Float[NDArray, "3 3 5"]
     source: Complex[NDArray, "3"]
 
 
-def _directions() -> tuple[_Direction, ...]:
-    """Build carrier, Hermitian-interaction, and complex-source directions."""
-    zero_carrier = np.zeros(3, dtype=np.float64)
-    zero_interaction = np.zeros(3, dtype=np.complex128)
-    zero_source = np.zeros(3, dtype=np.complex128)
-    directions: list[_Direction] = [
-        _Direction(
-            "carrier_x",
-            np.array([1.0, 0.0, -_CARRIER[0] / _CARRIER[2]]),
-            zero_interaction.copy(),
-            zero_source.copy(),
-        ),
-        _Direction(
-            "interaction_zero_real",
-            zero_carrier.copy(),
-            np.array([0.0, 1.0, 0.0], dtype=np.complex128),
-            zero_source.copy(),
-        ),
-        _Direction(
-            "interaction_pair_real",
-            zero_carrier.copy(),
-            np.array([1.0, 0.0, 1.0], dtype=np.complex128),
-            zero_source.copy(),
-        ),
-        _Direction(
-            "interaction_pair_imaginary",
-            zero_carrier.copy(),
-            np.array([-1.0j, 0.0, 1.0j], dtype=np.complex128),
-            zero_source.copy(),
-        ),
-    ]
-    for index in range(_SOURCE.size):
-        real_source = zero_source.copy()
-        real_source[index] = 1.0
-        imaginary_source = zero_source.copy()
-        imaginary_source[index] = 1.0j
-        directions.extend(
-            [
-                _Direction(
-                    f"source_{index}_real",
-                    zero_carrier.copy(),
-                    zero_interaction.copy(),
-                    real_source,
-                ),
-                _Direction(
-                    f"source_{index}_imaginary",
-                    zero_carrier.copy(),
-                    zero_interaction.copy(),
-                    imaginary_source,
-                ),
-            ]
-        )
-    result: tuple[_Direction, ...] = tuple(directions)
-    return result
-
-
-_DIRECTIONS = _directions()
-
-
-def _create_target(
-    carrier: Float[NDArray, "3"] | Float[jax.Array, "3"] = _CARRIER,
-    interaction: Complex[NDArray, "3"]
-    | Complex[jax.Array, "3"] = _INTERACTION,
-) -> GalerkinTargetManifest:
-    """Create the production target from the fixed independent fixture."""
-    support = create_galerkin_product_support(
-        state_indices=jnp.asarray(_STATE_INDICES),
-        interaction_indices=jnp.asarray(_INTERACTION_INDICES),
-        absorber_indices=jnp.asarray(_ABSORBER_INDICES),
-        work_indices=jnp.asarray(_WORK_INDICES),
-        work_shape=(7, 3, 3),
+def _create_target() -> GalerkinTargetManifest:
+    """Create the canonical production target through the sole public path."""
+    potential = periodic_target_potential()
+    eligibility = checked_acquisition(
+        target_support(),
+        potential.box_size,
+        carrier_direction=_CARRIER_DIRECTION,
     )
-    target = create_galerkin_target_manifest(
-        support=support,
-        preterminal_indices=jnp.asarray(_STATE_INDICES),
-        voltage_coefficients=(
-            jnp.asarray(interaction)
-            / helmholtz_coupling(jnp.asarray(_VOLTAGE_KV))
-        ),
-        carrier=jnp.asarray(carrier),
-        box_lengths=jnp.asarray(_BOX_LENGTHS),
-        accelerating_voltage_kv=jnp.asarray(_VOLTAGE_KV),
-        cap_scale=jnp.asarray(_CAP_SCALE),
-        target_name="fixed-three-mode-derivative-target",
+    target: GalerkinTargetManifest = create_galerkin_target(
+        potential,
+        eligibility,
+        accelerating_voltage_kv=TARGET_VOLTAGE_KV,
+        cap_scale=TARGET_CAP_SCALE,
+        target_name="tilted-voxel-derivative-target",
     )
     return target
 
 
 def _coefficient_matrix(
+    state_indices: Int[NDArray, "n 3"],
     support_indices: Int[NDArray, "p 3"],
     coefficients: Complex[NDArray, "p"],
-) -> Complex[NDArray, "3 3"]:
-    """Assemble a multiplier matrix directly from coefficient differences."""
+) -> Complex[NDArray, "n n"]:
+    """Assemble a multiplier directly from exact index differences."""
     coefficient_map = {
         tuple(int(component) for component in index): coefficient
         for index, coefficient in zip(
@@ -217,35 +99,106 @@ def _coefficient_matrix(
                     tuple(int(value) for value in row - column),
                     0.0j,
                 )
-                for column in _STATE_INDICES
+                for column in state_indices
             ]
-            for row in _STATE_INDICES
+            for row in state_indices
         ],
         dtype=np.complex128,
     )
     return matrix
 
 
-def _dense_operator(
-    carrier: Float[NDArray, "3"],
-    interaction: Complex[NDArray, "3"],
-) -> Complex[NDArray, "3 3"]:
-    """Assemble the tiny SC-1 target without production action helpers."""
-    reciprocal_frequencies = _STATE_INDICES / _BOX_LENGTHS[None, :]
-    shifted = carrier[None, :] + 2.0 * np.pi * reciprocal_frequencies
-    free_diagonal = np.sum(shifted**2, axis=-1) - _WAVENUMBER**2
-    interaction_matrix = _coefficient_matrix(
-        _INTERACTION_INDICES,
-        interaction,
+def _vc1_coefficients(
+    target: GalerkinTargetManifest,
+    volume: Float[NDArray, "3 3 5"],
+) -> Complex[NDArray, "3"]:
+    """Evaluate the ordered VC-1 DFT independently with NumPy."""
+    indices = np.asarray(target.support.interaction_indices, dtype=np.int64)
+    full = np.fft.fftn(volume) / volume.size
+    nz, ny, nx = volume.shape
+    residues = np.mod(indices, np.array([nx, ny, nz], dtype=np.int64))
+    selected = full[residues[:, 2], residues[:, 1], residues[:, 0]]
+    box = np.asarray(target.potential.box_size, dtype=np.float64)
+    origin = np.asarray(target.potential.origin, dtype=np.float64)
+    phase = np.exp(-2.0j * np.pi * ((indices / box[None, :]) @ origin))
+    raw = selected * phase
+
+    index_to_position = {
+        tuple(int(component) for component in index): position
+        for position, index in enumerate(indices)
+    }
+    pair_positions = np.array(
+        [
+            index_to_position[tuple(int(-value) for value in index)]
+            for index in indices
+        ],
+        dtype=np.int64,
     )
-    absorber_matrix = _coefficient_matrix(
-        _ABSORBER_INDICES,
-        _ABSORBER,
+    pair_average = 0.5 * (raw + np.conj(raw[pair_positions]))
+    canonical = np.array(
+        [
+            (first > 0)
+            or (first == 0 and (second > 0 or (second == 0 and third >= 0)))
+            for first, second, third in indices
+        ],
+        dtype=np.bool_,
+    )
+    coefficients = np.where(
+        canonical,
+        pair_average,
+        np.conj(pair_average[pair_positions]),
+    )
+    return coefficients
+
+
+def _absorber_coefficients(
+    target: GalerkinTargetManifest,
+) -> Complex[NDArray, "q"]:
+    """Evaluate the analytic cosine-shell coefficients independently."""
+    indices = np.asarray(target.support.absorber_indices, dtype=np.int64)
+    axis = np.where(
+        indices == 0,
+        0.5,
+        np.where(np.abs(indices) == 1, 0.25, 0.0),
+    )
+    interior = np.prod(axis, axis=-1)
+    coefficients = np.where(
+        np.all(indices == 0, axis=-1),
+        1.0 - interior,
+        -interior,
+    ).astype(np.complex128)
+    return coefficients
+
+
+def _dense_operator(
+    target: GalerkinTargetManifest,
+    volume: Float[NDArray, "3 3 5"],
+    carrier: Float[NDArray, "3"],
+) -> Complex[NDArray, "3 3"]:
+    """Assemble SC-1 independently from physical voxel/carrier parameters."""
+    state = np.asarray(target.support.state_indices, dtype=np.int64)
+    box = np.asarray(target.box_lengths, dtype=np.float64)
+    reciprocal_frequencies = state / box[None, :]
+    shifted = carrier[None, :] + 2.0 * np.pi * reciprocal_frequencies
+    free_diagonal = np.sum(shifted**2, axis=-1) - float(target.wavenumber) ** 2
+    voltage_coefficients = _vc1_coefficients(target, volume)
+    interaction_coefficients = (
+        float(target.interaction_coupling) * voltage_coefficients
+    )
+    interaction = _coefficient_matrix(
+        state,
+        np.asarray(target.support.interaction_indices),
+        interaction_coefficients,
+    )
+    absorber = _coefficient_matrix(
+        state,
+        np.asarray(target.support.absorber_indices),
+        _absorber_coefficients(target),
     )
     operator = (
         np.diag(free_diagonal)
-        - interaction_matrix
-        - 1j * _CAP_SCALE * absorber_matrix
+        - interaction
+        - 1.0j * float(target.cap_scale) * absorber
     )
     return operator
 
@@ -253,38 +206,135 @@ def _dense_operator(
 def _create_conforming_source(
     target: GalerkinTargetManifest,
 ) -> GalerkinSource:
-    """Represent the copied right-hand side by exact matched injection."""
-    reciprocal_frequencies = _STATE_INDICES / _BOX_LENGTHS[None, :]
-    shifted = _CARRIER[None, :] + 2.0 * np.pi * reciprocal_frequencies
-    free_diagonal = np.sum(shifted**2, axis=-1) - _WAVENUMBER**2
-    absorber_matrix = _coefficient_matrix(
-        _ABSORBER_INDICES,
-        _ABSORBER,
+    """Represent the copied right-hand side by production matched injection."""
+    state = np.asarray(target.support.state_indices, dtype=np.int64)
+    absorber = _coefficient_matrix(
+        state,
+        np.asarray(target.support.absorber_indices),
+        _absorber_coefficients(target),
     )
-    free_target = np.diag(free_diagonal) - 1j * _CAP_SCALE * absorber_matrix
+    free_target = np.diag(np.asarray(target.free_diagonal)) - (
+        1.0j * float(target.cap_scale) * absorber
+    )
     incident_field = np.linalg.solve(free_target, _SOURCE)
-    source = create_matched_galerkin_source(
+    source: GalerkinSource = create_matched_galerkin_source(
         target,
         jnp.asarray(incident_field),
     )
     return source
 
 
-def _directional_dense_tangent(
+def _volume_directions(
+    shape: Tuple[int, int, int],
+) -> Tuple[Float[NDArray, "3 3 5"], ...]:
+    """Return real voxel directions spanning all retained VC-1 coordinates."""
+    nz, ny, nx = shape
+    x = np.arange(nx, dtype=np.float64)
+    ones = np.ones(shape, dtype=np.float64)
+    cosine = np.broadcast_to(
+        np.cos(2.0 * np.pi * x / nx),
+        (nz, ny, nx),
+    ).copy()
+    sine = np.broadcast_to(
+        np.sin(2.0 * np.pi * x / nx),
+        (nz, ny, nx),
+    ).copy()
+    return ones, cosine, sine
+
+
+def _directions(target: GalerkinTargetManifest) -> Tuple[_Direction, ...]:
+    """Build two sphere rotations, three voxel modes, and complex sources."""
+    nz: int
+    ny: int
+    nx: int
+    nz, ny, nx = target.potential.volume.shape
+    shape: Tuple[int, int, int] = (nz, ny, nx)
+    zero_rotation = np.zeros(3, dtype=np.float64)
+    zero_volume = np.zeros(shape, dtype=np.float64)
+    zero_source = np.zeros(3, dtype=np.complex128)
+    directions: list[_Direction] = [
+        _Direction(
+            "carrier_rotation_y",
+            np.array([0.0, 1.0, 0.0], dtype=np.float64),
+            zero_volume.copy(),
+            zero_source.copy(),
+        ),
+        _Direction(
+            "carrier_rotation_z",
+            np.array([0.0, 0.0, 1.0], dtype=np.float64),
+            zero_volume.copy(),
+            zero_source.copy(),
+        ),
+    ]
+    for name, volume in zip(
+        ("volume_dc", "volume_cosine", "volume_sine"),
+        _volume_directions(shape),
+        strict=True,
+    ):
+        directions.append(
+            _Direction(
+                name,
+                zero_rotation.copy(),
+                volume,
+                zero_source.copy(),
+            )
+        )
+    for index in range(_SOURCE.size):
+        real_source = zero_source.copy()
+        real_source[index] = 1.0
+        imaginary_source = zero_source.copy()
+        imaginary_source[index] = 1.0j
+        directions.extend(
+            (
+                _Direction(
+                    f"source_{index}_real",
+                    zero_rotation.copy(),
+                    zero_volume.copy(),
+                    real_source,
+                ),
+                _Direction(
+                    f"source_{index}_imaginary",
+                    zero_rotation.copy(),
+                    zero_volume.copy(),
+                    imaginary_source,
+                ),
+            )
+        )
+    return tuple(directions)
+
+
+def _carrier_tangent(
+    target: GalerkinTargetManifest,
     direction: _Direction,
-    field: Complex[NDArray, "3"],
-    operator: Complex[NDArray, "3 3"],
+) -> Float[NDArray, "3"]:
+    """Pull one infinitesimal rotation into the carrier tangent plane."""
+    tangent = np.cross(direction.rotation, np.asarray(target.carrier))
+    return tangent
+
+
+def _directional_dense_tangent(
+    target: GalerkinTargetManifest,
+    source: Complex[NDArray, "3"],
+    direction: _Direction,
 ) -> Complex[NDArray, "3"]:
     """Solve one independently assembled implicit tangent equation."""
-    reciprocal_frequencies = _STATE_INDICES / _BOX_LENGTHS[None, :]
-    shifted = _CARRIER[None, :] + 2.0 * np.pi * reciprocal_frequencies
+    base_volume = np.asarray(target.potential.volume)
+    base_carrier = np.asarray(target.carrier)
+    operator = _dense_operator(target, base_volume, base_carrier)
+    field = np.linalg.solve(operator, source)
+    state = np.asarray(target.support.state_indices, dtype=np.int64)
+    reciprocal_frequencies = state / np.asarray(target.box_lengths)[None, :]
+    shifted = base_carrier[None, :] + 2.0 * np.pi * reciprocal_frequencies
+    carrier_tangent = _carrier_tangent(target, direction)
     diagonal_tangent = 2.0 * np.sum(
-        shifted * direction.carrier[None, :],
+        shifted * carrier_tangent[None, :],
         axis=-1,
     )
+    voltage_tangent = _vc1_coefficients(target, direction.volume)
     interaction_tangent = _coefficient_matrix(
-        _INTERACTION_INDICES,
-        direction.interaction,
+        state,
+        np.asarray(target.support.interaction_indices),
+        float(target.interaction_coupling) * voltage_tangent,
     )
     operator_tangent = np.diag(diagonal_tangent) - interaction_tangent
     tangent_source = direction.source - operator_tangent @ field
@@ -296,112 +346,188 @@ def _realify_vector(
     values: Complex[NDArray, "3"],
 ) -> Float[NDArray, "6"]:
     """Map one complex state to the frozen block-ordered real chart."""
-    realified = np.concatenate((values.real, values.imag))
-    return realified
+    return np.concatenate((values.real, values.imag))
 
 
-def _dense_realified_jacobian() -> Float[NDArray, "6 parameters"]:
+def _dense_realified_jacobian(
+    target: GalerkinTargetManifest,
+    source: Complex[NDArray, "3"],
+    directions: Tuple[_Direction, ...],
+) -> Float[NDArray, "6 parameters"]:
     """Assemble every tangent column without production differentiation."""
-    operator = _dense_operator(_CARRIER, _INTERACTION)
-    field = np.linalg.solve(operator, _SOURCE)
     columns = [
-        _realify_vector(_directional_dense_tangent(direction, field, operator))
-        for direction in _DIRECTIONS
+        _realify_vector(_directional_dense_tangent(target, source, direction))
+        for direction in directions
     ]
-    jacobian = np.column_stack(columns)
-    return jacobian
+    return np.column_stack(columns)
+
+
+def _rotation_matrix(rotation_vector: Float[NDArray, "3"]) -> np.ndarray:
+    """Evaluate Rodrigues' map for one nonzero finite-difference rotation."""
+    angle = float(np.linalg.norm(rotation_vector))
+    if angle == 0.0:
+        return np.eye(3, dtype=np.float64)
+    axis = rotation_vector / angle
+    x, y, z = axis
+    cross = np.array(
+        [[0.0, -z, y], [z, 0.0, -x], [-y, x, 0.0]],
+        dtype=np.float64,
+    )
+    return (
+        np.eye(3, dtype=np.float64)
+        + np.sin(angle) * cross
+        + (1.0 - np.cos(angle)) * (cross @ cross)
+    )
+
+
+def _aggregate_direction(
+    directions: Tuple[_Direction, ...],
+    weights: Float[NDArray, "parameters"],
+) -> _Direction:
+    """Combine all chart families into one directional perturbation."""
+    rotation = sum(
+        (
+            weight * direction.rotation
+            for weight, direction in zip(weights, directions, strict=True)
+        ),
+        np.zeros(3, dtype=np.float64),
+    )
+    volume = sum(
+        (
+            weight * direction.volume
+            for weight, direction in zip(weights, directions, strict=True)
+        ),
+        np.zeros_like(directions[0].volume),
+    )
+    source = sum(
+        (
+            weight * direction.source
+            for weight, direction in zip(weights, directions, strict=True)
+        ),
+        np.zeros(3, dtype=np.complex128),
+    )
+    return _Direction("aggregate", rotation, volume, source)
 
 
 def _parameterized_dense_field(
+    target: GalerkinTargetManifest,
+    source: Complex[NDArray, "3"],
+    directions: Tuple[_Direction, ...],
     parameters: Float[NDArray, "parameters"],
 ) -> Complex[NDArray, "3"]:
-    """Evaluate an independent dense solve in the declared real chart."""
-    carrier = _CARRIER.copy()
-    carrier[0] += parameters[0]
-    carrier[2] = np.sqrt(_WAVENUMBER**2 - carrier[0] ** 2 - carrier[1] ** 2)
-    interaction = _INTERACTION.copy()
-    source = _SOURCE.copy()
-    for parameter, direction in zip(
-        parameters[1:],
-        _DIRECTIONS[1:],
-        strict=True,
-    ):
-        interaction += parameter * direction.interaction
-        source += parameter * direction.source
-    field = np.linalg.solve(_dense_operator(carrier, interaction), source)
+    """Evaluate an independent dense root on the rotation/voxel chart."""
+    aggregate = _aggregate_direction(directions, parameters)
+    volume = np.asarray(target.potential.volume) + aggregate.volume
+    carrier = _rotation_matrix(aggregate.rotation) @ np.asarray(target.carrier)
+    candidate_source = source + aggregate.source
+    field = np.linalg.solve(
+        _dense_operator(target, volume, carrier),
+        candidate_source,
+    )
     return field
 
 
-def _mixed_direction() -> Float[NDArray, "parameters"]:
-    """Return one nonzero direction spanning every admitted leaf family."""
-    direction = np.array(
-        [0.08, -0.04, 0.03, -0.05, 0.02, -0.01, 0.04, 0.03, -0.02, 0.01],
+def _mixed_weights(size: int) -> Float[NDArray, "parameters"]:
+    """Return a nonzero direction spanning every admitted parameter family."""
+    template = np.array(
+        [
+            0.08,
+            -0.04,
+            0.03,
+            -0.05,
+            0.02,
+            -0.01,
+            0.04,
+            0.03,
+            -0.02,
+            0.01,
+            -0.03,
+        ],
         dtype=np.float64,
     )
-    return direction
+    if size != template.size:
+        raise ValueError("direction fixture size changed")
+    return template
 
 
 class TestGalerkinDerivatives:
-    """Verify the fixed-support production derivative harness.
+    """Verify the canonical voxel/carrier/source derivative seam.
 
     :see: :func:`ptyrodactyl.born.galerkin_state_jvp`
     :see: :func:`ptyrodactyl.born.galerkin_state_vjp`
     """
 
-    def test_jvp_matches_dense_realified_jacobian_eager_and_jit(self) -> None:
-        """Match all carrier, interaction, and complex-source columns."""
+    def test_jvp_matches_dense_realified_jacobian_jit_and_vmap(self) -> None:
+        """Match all rotation, voxel, and complex-source tangent columns."""
         target = _create_target()
         source = _create_conforming_source(target).total_source
-        carrier_tangents = jnp.asarray(
-            np.stack([direction.carrier for direction in _DIRECTIONS])
+        source_host = np.asarray(source)
+        directions = _directions(target)
+        volume_tangents = jnp.asarray(
+            np.stack([direction.volume for direction in directions])
         )
-        interaction_tangents = jnp.asarray(
-            np.stack([direction.interaction for direction in _DIRECTIONS])
+        carrier_tangents = jnp.asarray(
+            np.stack(
+                [
+                    _carrier_tangent(target, direction)
+                    for direction in directions
+                ]
+            )
         )
         source_tangents = jnp.asarray(
-            np.stack([direction.source for direction in _DIRECTIONS])
+            np.stack([direction.source for direction in directions])
         )
 
         def all_tangents(
+            candidate_volume_tangents: Float[jax.Array, "parameters 3 3 5"],
             candidate_carrier_tangents: Float[jax.Array, "parameters 3"],
-            candidate_interaction_tangents: Complex[jax.Array, "parameters 3"],
             candidate_source_tangents: Complex[jax.Array, "parameters 3"],
-        ) -> tuple[
+        ) -> Tuple[
             Complex[jax.Array, "parameters 3"],
             Complex[jax.Array, "parameters 3"],
         ]:
-            """Vectorize the public JVP over real coordinate directions."""
+            """Vectorize the public JVP over physical chart directions."""
             fields, field_tangents = jax.vmap(
-                lambda carrier_tangent, interaction_tangent, source_tangent: (
+                lambda volume_tangent, carrier_tangent, source_tangent: (
                     galerkin_state_jvp(
                         target,
                         source,
+                        volume_tangent,
                         carrier_tangent,
-                        interaction_tangent,
                         source_tangent,
                         **_SOLVER_ARGUMENTS,
                     )
                 )
             )(
+                candidate_volume_tangents,
                 candidate_carrier_tangents,
-                candidate_interaction_tangents,
                 candidate_source_tangents,
             )
             return fields, field_tangents
 
         eager_fields, eager_tangents = all_tangents(
+            volume_tangents,
             carrier_tangents,
-            interaction_tangents,
             source_tangents,
         )
         compiled_fields, compiled_tangents = jax.jit(all_tangents)(
+            volume_tangents,
             carrier_tangents,
-            interaction_tangents,
             source_tangents,
         )
-        dense_operator = _dense_operator(_CARRIER, _INTERACTION)
-        dense_field = np.linalg.solve(dense_operator, _SOURCE)
-        dense_jacobian = _dense_realified_jacobian()
+        dense_field = np.linalg.solve(
+            _dense_operator(
+                target,
+                np.asarray(target.potential.volume),
+                np.asarray(target.carrier),
+            ),
+            source_host,
+        )
+        dense_jacobian = _dense_realified_jacobian(
+            target,
+            source_host,
+            directions,
+        )
         production_jacobian = np.column_stack(
             [
                 _realify_vector(np.asarray(tangent))
@@ -418,8 +544,8 @@ class TestGalerkinDerivatives:
         np.testing.assert_allclose(
             production_jacobian,
             dense_jacobian,
-            rtol=4e-9,
-            atol=4e-10,
+            rtol=5e-9,
+            atol=5e-10,
         )
         chex.assert_trees_all_close(
             compiled_fields,
@@ -433,61 +559,49 @@ class TestGalerkinDerivatives:
             rtol=2e-10,
             atol=2e-11,
         )
+        assert eager_fields.dtype == jnp.complex128
+        assert eager_tangents.dtype == jnp.complex128
         column_norms = np.linalg.norm(production_jacobian, axis=0)
-        assert np.all(column_norms > 1e-5)
+        assert np.all(column_norms > 1e-7)
 
-    def test_jvp_matches_independent_centered_step_sweep(self) -> None:
-        """Show second-order centered convergence for one mixed direction."""
-        direction_weights = _mixed_direction()
-        carrier_tangent = sum(
-            (
-                weight * direction.carrier
-                for weight, direction in zip(
-                    direction_weights,
-                    _DIRECTIONS,
-                    strict=True,
-                )
-            ),
-            np.zeros(3, dtype=np.float64),
-        )
-        interaction_tangent = sum(
-            (
-                weight * direction.interaction
-                for weight, direction in zip(
-                    direction_weights,
-                    _DIRECTIONS,
-                    strict=True,
-                )
-            ),
-            np.zeros(3, dtype=np.complex128),
-        )
-        source_tangent = sum(
-            (
-                weight * direction.source
-                for weight, direction in zip(
-                    direction_weights,
-                    _DIRECTIONS,
-                    strict=True,
-                )
-            ),
-            np.zeros(3, dtype=np.complex128),
-        )
+    def test_jvp_matches_independent_centered_rotation_voxel_sweep(
+        self,
+    ) -> None:
+        """Show centered convergence for one mixed physical direction."""
         target = _create_target()
         source = _create_conforming_source(target).total_source
+        source_host = np.asarray(source)
+        directions = _directions(target)
+        weights = _mixed_weights(len(directions))
+        aggregate = _aggregate_direction(directions, weights)
+        carrier_tangent = np.cross(
+            aggregate.rotation,
+            np.asarray(target.carrier),
+        )
         _, production_tangent = galerkin_state_jvp(
             target,
             source,
+            jnp.asarray(aggregate.volume),
             jnp.asarray(carrier_tangent),
-            jnp.asarray(interaction_tangent),
-            jnp.asarray(source_tangent),
+            jnp.asarray(aggregate.source),
             **_SOLVER_ARGUMENTS,
         )
-        steps = (2e-2, 1e-2, 5e-3, 2.5e-3, 1.25e-3)
+        steps = (2e-1, 1e-1, 5e-2, 2.5e-2, 1.25e-2)
         differences = np.stack(
             [
                 (
-                    _parameterized_dense_field(step * direction_weights)
-                    - _parameterized_dense_field(-step * direction_weights)
+                    _parameterized_dense_field(
+                        target,
+                        source_host,
+                        directions,
+                        step * weights,
+                    )
+                    - _parameterized_dense_field(
+                        target,
+                        source_host,
+                        directions,
+                        -step * weights,
+                    )
                 )
                 / (2.0 * step)
                 for step in steps
@@ -501,106 +615,119 @@ class TestGalerkinDerivatives:
         np.testing.assert_allclose(
             production_tangent,
             differences[-1],
-            rtol=2e-7,
-            atol=2e-9,
+            rtol=4e-7,
+            atol=3e-9,
         )
         np.testing.assert_allclose(
-            errors[1:] / errors[:-1],
+            errors[1:4] / errors[:3],
             0.25,
-            rtol=8e-2,
-            atol=2e-3,
+            rtol=1e-1,
+            atol=3e-3,
         )
 
     def test_vjp_matches_dense_transpose_and_centered_differences(
         self,
     ) -> None:
-        """Match the custom adjoint in eager, JIT, dense, and FD paths.
-
-        The three leading error ratios select the observed second-order
-        pre-roundoff region. Smaller steps must continue reducing the error.
-        """
+        """Match the physical VJP in eager, JIT, dense, and FD paths."""
         target = _create_target()
         source = _create_conforming_source(target).total_source
+        source_host = np.asarray(source)
+        directions = _directions(target)
         output_cotangent = jnp.asarray(_OUTPUT_COTANGENT)
 
         def pullback(
             candidate_output_cotangent: Complex[jax.Array, "3"],
-        ) -> tuple[
+        ) -> Tuple[
             Complex[jax.Array, "3"],
+            Float[jax.Array, "3 3 5"],
             Float[jax.Array, "3"],
             Complex[jax.Array, "3"],
-            Complex[jax.Array, "3"],
         ]:
-            """Evaluate the public VJP for one state cotangent."""
-            result = galerkin_state_vjp(
+            """Evaluate the public physical VJP for one state cotangent."""
+            return galerkin_state_vjp(
                 target,
                 source,
                 candidate_output_cotangent,
                 **_SOLVER_ARGUMENTS,
             )
-            return result
 
         eager = pullback(output_cotangent)
         compiled = jax.jit(pullback)(output_cotangent)
-        field, carrier_cotangent, interaction_cotangent, source_cotangent = (
+        field, volume_metric_cotangent, carrier_cotangent, source_cotangent = (
             eager
         )
         dense_field = np.linalg.solve(
-            _dense_operator(_CARRIER, _INTERACTION),
-            _SOURCE,
+            _dense_operator(
+                target,
+                np.asarray(target.potential.volume),
+                np.asarray(target.carrier),
+            ),
+            source_host,
         )
-        dense_jacobian = _dense_realified_jacobian()
+        dense_jacobian = _dense_realified_jacobian(
+            target,
+            source_host,
+            directions,
+        )
         output_real_covector = np.concatenate(
             (_OUTPUT_COTANGENT.real, -_OUTPUT_COTANGENT.imag)
         )
         dense_pullback = dense_jacobian.T @ output_real_covector
+        voxel_volume = np.prod(np.asarray(target.potential.box_size)) / (
+            target.potential.volume.size
+        )
         production_pullback = np.array(
             [
-                np.sum(np.asarray(carrier_cotangent) * direction.carrier)
-                + np.real(
-                    np.sum(
-                        np.asarray(interaction_cotangent)
-                        * direction.interaction
-                    )
+                voxel_volume
+                * np.sum(
+                    np.asarray(volume_metric_cotangent) * direction.volume
+                )
+                + np.sum(
+                    np.asarray(carrier_cotangent)
+                    * _carrier_tangent(target, direction)
                 )
                 + np.real(
                     np.sum(np.asarray(source_cotangent) * direction.source)
                 )
-                for direction in _DIRECTIONS
+                for direction in directions
             ]
         )
 
-        np.testing.assert_allclose(
-            field,
-            dense_field,
-            rtol=3e-10,
-            atol=3e-11,
-        )
+        np.testing.assert_allclose(field, dense_field, rtol=3e-10, atol=3e-11)
         np.testing.assert_allclose(
             production_pullback,
             dense_pullback,
-            rtol=5e-9,
-            atol=5e-10,
+            rtol=6e-9,
+            atol=6e-10,
         )
-        chex.assert_trees_all_close(
-            compiled,
-            eager,
-            rtol=2e-10,
-            atol=2e-11,
+        chex.assert_trees_all_close(compiled, eager, rtol=2e-10, atol=2e-11)
+        assert field.dtype == jnp.complex128
+        assert volume_metric_cotangent.dtype == jnp.float64
+        assert carrier_cotangent.dtype == jnp.float64
+        assert source_cotangent.dtype == jnp.complex128
+        np.testing.assert_allclose(
+            np.vdot(np.asarray(target.carrier), np.asarray(carrier_cotangent)),
+            0.0,
+            rtol=0.0,
+            atol=2e-12,
         )
 
         def dense_loss(parameters: Float[NDArray, "parameters"]) -> float:
             """Contract an independent dense state with the JAX cotangent."""
-            candidate_field = _parameterized_dense_field(parameters)
-            loss = float(np.real(np.sum(_OUTPUT_COTANGENT * candidate_field)))
-            return loss
+            candidate_field = _parameterized_dense_field(
+                target,
+                source_host,
+                directions,
+                parameters,
+            )
+            return float(np.real(np.sum(_OUTPUT_COTANGENT * candidate_field)))
 
-        steps = (2e-3, 1e-3, 5e-4, 2.5e-4, 1.25e-4, 6.25e-5)
-        zero = np.zeros(len(_DIRECTIONS), dtype=np.float64)
+        steps = (2e-3, 1e-3, 5e-4)
+        zero = np.zeros(len(directions), dtype=np.float64)
         finite_gradients = []
         for step in steps:
-            gradient = np.zeros(len(_DIRECTIONS), dtype=np.float64)
-            for index in range(len(_DIRECTIONS)):
+            gradient = np.zeros(len(directions), dtype=np.float64)
+            for index in range(len(directions)):
                 offset = zero.copy()
                 offset[index] = step
                 gradient[index] = (
@@ -616,29 +743,145 @@ class TestGalerkinDerivatives:
         np.testing.assert_allclose(
             production_pullback,
             finite_gradient_array[-1],
-            rtol=5e-7,
+            rtol=8e-7,
             atol=3e-9,
         )
         np.testing.assert_allclose(
-            errors[1:4] / errors[:3],
+            errors[1:] / errors[:-1],
             0.25,
-            rtol=2e-2,
-            atol=1e-3,
+            rtol=2e-3,
+            atol=2e-4,
         )
-        assert np.all(np.diff(errors) < 0.0)
 
-    def test_jvp_rejects_directions_outside_the_fixed_chart(self) -> None:
-        """Reject shape, off-shell, and non-Hermitian directions."""
+    def test_volume_vjp_uses_physical_voxel_metric_dot_pairing(self) -> None:
+        """Distinguish the returned physical gradient from JAX's raw one."""
         target = _create_target()
         source = _create_conforming_source(target).total_source
+        directions = _directions(target)
+        weights = _mixed_weights(len(directions))
+        aggregate = _aggregate_direction(directions, weights)
+        carrier_tangent = np.cross(
+            aggregate.rotation,
+            np.asarray(target.carrier),
+        )
+        _, field_tangent = galerkin_state_jvp(
+            target,
+            source,
+            jnp.asarray(aggregate.volume),
+            jnp.asarray(carrier_tangent),
+            jnp.asarray(aggregate.source),
+            **_SOLVER_ARGUMENTS,
+        )
+        _, volume_metric_cotangent, carrier_cotangent, source_cotangent = (
+            galerkin_state_vjp(
+                target,
+                source,
+                jnp.asarray(_OUTPUT_COTANGENT),
+                **_SOLVER_ARGUMENTS,
+            )
+        )
+        voxel_volume = np.prod(np.asarray(target.potential.box_size)) / (
+            target.potential.volume.size
+        )
+        state_pairing = np.real(
+            np.sum(_OUTPUT_COTANGENT * np.asarray(field_tangent))
+        )
+        parameter_pairing = (
+            voxel_volume
+            * np.sum(np.asarray(volume_metric_cotangent) * aggregate.volume)
+            + np.sum(np.asarray(carrier_cotangent) * carrier_tangent)
+            + np.real(np.sum(np.asarray(source_cotangent) * aggregate.source))
+        )
 
-        with pytest.raises(ValueError, match="carrier_tangent"):
+        np.testing.assert_allclose(
+            parameter_pairing,
+            state_pairing,
+            rtol=6e-9,
+            atol=6e-10,
+        )
+
+    def test_rotation_chart_preserves_carrier_sphere(self) -> None:
+        """Use a genuine two-direction rotation chart on the carrier sphere."""
+        target = _create_target()
+        carrier = np.asarray(target.carrier)
+        directions = _directions(target)[:2]
+
+        for direction in directions:
+            tangent = _carrier_tangent(target, direction)
+            rotated = _rotation_matrix(0.17 * direction.rotation) @ carrier
+            np.testing.assert_allclose(
+                np.vdot(carrier, tangent),
+                0.0,
+                atol=1e-12,
+            )
+            np.testing.assert_allclose(
+                np.linalg.norm(rotated),
+                np.linalg.norm(carrier),
+                rtol=2e-15,
+                atol=2e-13,
+            )
+
+    def test_derivative_harness_rejects_wrong_width_arrays(self) -> None:
+        """Require the fixed binary64 physical chart."""
+        target = _create_target()
+        source = _create_conforming_source(target).total_source
+        volume_tangent = jnp.zeros_like(target.potential.volume)
+        carrier_tangent = jnp.zeros_like(target.carrier)
+        source_tangent = jnp.zeros_like(source)
+
+        wrong_jvp_arguments = (
+            (
+                source.astype(jnp.complex64),
+                volume_tangent,
+                carrier_tangent,
+                source_tangent,
+            ),
+            (
+                source,
+                volume_tangent.astype(jnp.float32),
+                carrier_tangent,
+                source_tangent,
+            ),
+            (
+                source,
+                volume_tangent,
+                carrier_tangent.astype(jnp.float32),
+                source_tangent,
+            ),
+            (
+                source,
+                volume_tangent,
+                carrier_tangent,
+                source_tangent.astype(jnp.complex64),
+            ),
+        )
+        for arguments in wrong_jvp_arguments:
+            with pytest.raises(TypeCheckError):
+                galerkin_state_jvp(target, *arguments, **_SOLVER_ARGUMENTS)
+
+        with pytest.raises(TypeCheckError):
+            galerkin_state_vjp(
+                target,
+                source,
+                jnp.asarray(_OUTPUT_COTANGENT, dtype=jnp.complex64),
+                **_SOLVER_ARGUMENTS,
+            )
+
+    def test_jvp_rejects_directions_outside_the_fixed_chart(self) -> None:
+        """Reject wrong voxel shape, radial carrier, and non-finite source."""
+        target = _create_target()
+        source = _create_conforming_source(target).total_source
+        zero_volume = jnp.zeros_like(target.potential.volume)
+        zero_carrier = jnp.zeros_like(target.carrier)
+        zero_source = jnp.zeros_like(source)
+
+        with pytest.raises(ValueError, match="potential_volume_tangent"):
             galerkin_state_jvp(
                 target,
                 source,
-                jnp.zeros(2),
-                jnp.zeros(3, dtype=jnp.complex128),
-                jnp.zeros(3, dtype=jnp.complex128),
+                jnp.zeros((3, 3, 4), dtype=jnp.float64),
+                zero_carrier,
+                zero_source,
             )
 
         with pytest.raises(
@@ -652,9 +895,9 @@ class TestGalerkinDerivatives:
             radial_result = galerkin_state_jvp(
                 target,
                 source,
+                zero_volume,
                 target.carrier,
-                jnp.zeros(3, dtype=jnp.complex128),
-                jnp.zeros(3, dtype=jnp.complex128),
+                zero_source,
             )
             jax.block_until_ready(radial_result[1])
 
@@ -664,13 +907,14 @@ class TestGalerkinDerivatives:
                 jax.errors.JaxRuntimeError,
                 ValueError,
             ),
-            match="must be finite and Hermitian",
+            match="source_tangent must be finite",
         ):
+            nonfinite_source = zero_source.at[0].set(jnp.inf + 0.0j)
             result = galerkin_state_jvp(
                 target,
                 source,
-                jnp.zeros(3),
-                jnp.asarray([0.0j, 0.0j, 1.0j]),
-                jnp.zeros(3, dtype=jnp.complex128),
+                zero_volume,
+                zero_carrier,
+                nonfinite_source,
             )
             jax.block_until_ready(result[1])

@@ -41,6 +41,13 @@ from beartype.typing import Dict
 from jaxtyping import Shaped
 from numpy.typing import NDArray
 
+# Python permits a process-wide decimal integer conversion limit as low as
+# 640 digits.  Every integer with at most 2,048 bits has at most 617 decimal
+# digits, so the historical decimal payload remains safe below this fixed,
+# version-independent boundary.  Larger integers use power-of-two conversion,
+# which is exempt from that interpreter limit.
+_MAXIMUM_DECIMAL_INTEGER_BITS: int = 2048
+
 
 def host_array(value: jax.Array) -> Shaped[NDArray, "..."]:
     """Transfer one JAX array to a read-only host NumPy value.
@@ -114,7 +121,9 @@ def stored_value_payload(value: object) -> object:  # noqa: PLR0911
     field while deliberately excluding read-only convenience properties.
     Exact array bytes include dtype and shape. Static floating-point metadata
     uses hexadecimal notation so signed zero and every binary value remain
-    distinct.
+    distinct. Large static integers use a signed hexadecimal tag so digest
+    construction is independent of Python's process-wide decimal conversion
+    limit; ordinary small-integer payloads retain their historical tag.
     """
     if isinstance(value, jax.Array | np.ndarray | np.generic):
         payload: object = {"array": array_payload(jnp.asarray(value))}
@@ -147,7 +156,11 @@ def stored_value_payload(value: object) -> object:  # noqa: PLR0911
         payload: object = {"bool": value}
         return payload
     if isinstance(value, int):
-        payload: object = {"int": str(value)}
+        if value.bit_length() <= _MAXIMUM_DECIMAL_INTEGER_BITS:
+            payload = {"int": str(value)}
+        else:
+            sign = "-" if value < 0 else ""
+            payload = {"int_hex": f"{sign}{abs(value):x}"}
         return payload
     if isinstance(value, float):
         payload: object = {"float_hex": value.hex()}

@@ -2,11 +2,10 @@ r"""Apply and solve a fixed-support scalar Galerkin system.
 
 Extended Summary
 ----------------
-This module applies either a frozen algebraic Galerkin realization or the
-canonical manifested SC-1 target without assembling the dense operator. The
-manifested path uses endpoint-safe Fourier products for its interaction and
-absorber. The forward and adjoint actions are distinct, and CGLS and LSQR
-stop on a directly recomputed original-system residual.
+This module applies a frozen algebraic Galerkin realization, a canonical
+manifested SC-1 target, or a prepared ``LOCAL_CELL_LVT1`` target without
+assembling the dense operator. The forward and adjoint actions are distinct,
+and CGLS and LSQR stop on a directly recomputed original-system residual.
 
 The returned residual is an algebraic floating-point diagnostic.  It is not
 an outward residual enclosure or an RM-S6-I state certificate.  The implicit
@@ -19,6 +18,8 @@ Routine Listings
     Apply the matrix-free adjoint Galerkin operator.
 :func:`apply_galerkin_operator`
     Apply the matrix-free forward Galerkin operator.
+:func:`cgls_adjoint_solve`
+    Solve an actual adjoint Galerkin system with CGLS and a fresh residual.
 :func:`cgls_solve`
     Solve a Galerkin system with CGLS and a fresh residual.
 :func:`evaluate_galerkin_adjoint_residual`
@@ -38,6 +39,11 @@ The coefficient inner product is ``Re(sum(conj(x) * y))``. Reciprocal
 frequencies use cycles per Angstrom, while the carrier and wavenumber use
 radians per Angstrom.  Support-changing derivatives are outside this module's
 fixed reference chart.
+
+Callers must cross the local-cell trust boundary exactly once through
+``prepare_local_cell_galerkin_target`` and supply its result to this engine.
+Raw same-type storage is not authenticated or distinguishable here; actions
+and solvers deliberately do not replay proof storage inside JAX transforms.
 """
 
 from __future__ import annotations
@@ -68,6 +74,7 @@ from ptyrodactyl._tools import (
 )
 from ptyrodactyl.types import (
     GalerkinCertificateReason,
+    GalerkinLocalCellTargetManifest,
     GalerkinOperator,
     GalerkinPhysicalResidual,
     GalerkinSolveMethod,
@@ -79,6 +86,10 @@ from ptyrodactyl.types import (
     scalar_int,
 )
 
+from .local_cell_system import (
+    apply_local_cell_galerkin_target,
+    apply_local_cell_galerkin_target_adjoint,
+)
 from .system import (
     apply_galerkin_target,
     apply_galerkin_target_adjoint,
@@ -89,7 +100,9 @@ from .system import (
 _FREQUENCY_RANK: int = 2
 _SPACE_DIMENSIONS: int = 3
 
-type _GalerkinSystem = GalerkinOperator | GalerkinTargetManifest
+type _GalerkinSystem = (
+    GalerkinOperator | GalerkinTargetManifest | GalerkinLocalCellTargetManifest
+)
 
 
 class _CGLSState(NamedTuple):
@@ -533,8 +546,9 @@ def apply_galerkin_operator(
 
     Parameters
     ----------
-    operator : GalerkinOperator | GalerkinTargetManifest
-        Frozen algebraic realization or canonical manifested SC-1 target.
+    operator : _GalerkinSystem
+        Frozen algebraic realization, canonical manifested SC-1 target, or
+        prepared LOCAL_CELL_LVT1 target.
     field : Complex[Array, "n"]
         State coefficients in the frozen support ordering.
 
@@ -553,8 +567,12 @@ def apply_galerkin_operator(
     if field.shape[0] != operator.free_diagonal.shape[0]:
         raise ValueError("field length must match the operator state size")
     checked_field: Complex[Array, "n"] = _checked_action_vector(field, "field")
-    if isinstance(operator, GalerkinTargetManifest):
-        raw_applied_field: Complex128[Array, "n"] = apply_galerkin_target(
+    if isinstance(operator, GalerkinLocalCellTargetManifest):
+        raw_applied_field: Complex128[Array, "n"] = (
+            apply_local_cell_galerkin_target(operator, checked_field)
+        )
+    elif isinstance(operator, GalerkinTargetManifest):
+        raw_applied_field = apply_galerkin_target(
             operator,
             checked_field,
         )
@@ -590,8 +608,9 @@ def apply_galerkin_adjoint(
 
     Parameters
     ----------
-    operator : GalerkinOperator | GalerkinTargetManifest
-        Frozen algebraic realization or canonical manifested SC-1 target.
+    operator : _GalerkinSystem
+        Frozen algebraic realization, canonical manifested SC-1 target, or
+        prepared LOCAL_CELL_LVT1 target.
     field : Complex[Array, "n"]
         Adjoint-state coefficients in the frozen support ordering.
 
@@ -617,12 +636,17 @@ def apply_galerkin_adjoint(
     if field.shape[0] != operator.free_diagonal.shape[0]:
         raise ValueError("field length must match the operator state size")
     checked_field: Complex[Array, "n"] = _checked_action_vector(field, "field")
-    if isinstance(operator, GalerkinTargetManifest):
+    if isinstance(operator, GalerkinLocalCellTargetManifest):
         raw_applied_field: Complex128[Array, "n"] = (
-            apply_galerkin_target_adjoint(
+            apply_local_cell_galerkin_target_adjoint(
                 operator,
                 checked_field,
             )
+        )
+    elif isinstance(operator, GalerkinTargetManifest):
+        raw_applied_field = apply_galerkin_target_adjoint(
+            operator,
+            checked_field,
         )
     else:
         free_action: Complex[Array, "n"] = (
@@ -763,8 +787,9 @@ def evaluate_galerkin_residual(
 
     Parameters
     ----------
-    operator : GalerkinOperator | GalerkinTargetManifest
-        Frozen algebraic realization or canonical manifested SC-1 target.
+    operator : _GalerkinSystem
+        Frozen algebraic realization, canonical manifested SC-1 target, or
+        prepared LOCAL_CELL_LVT1 target.
     field : Complex[Array, "n"]
         Submitted state coefficients.
     source : Complex[Array, "n"]
@@ -784,10 +809,12 @@ def evaluate_galerkin_residual(
 
     Notes
     -----
-    This function does not reuse a Krylov recurrence. The manifested branch
-    uses direct coefficient contraction instead of the production FFT action.
-    Neither floating-point diagnostic supplies an outward rounding enclosure;
-    per-result stability invocation is a separate host-side check.
+    This function does not reuse a Krylov recurrence. The local branch uses
+    its explicit frozen L3/L4 action, the legacy manifested branch uses direct
+    coefficient contraction instead of its production FFT action, and the raw
+    algebraic branch uses independent COO contraction. Neither floating-point
+    diagnostic supplies an outward rounding enclosure; per-result stability
+    invocation is a separate host-side check.
     """
     if field.shape != source.shape:
         raise ValueError("field and source must have the same shape")
@@ -795,14 +822,22 @@ def evaluate_galerkin_residual(
     checked_source: Complex[Array, "n"] = _checked_action_vector(
         source, "source"
     )
-    if isinstance(operator, GalerkinTargetManifest):
+    if isinstance(operator, GalerkinLocalCellTargetManifest):
+        local_action: Complex128[Array, "n"] = (
+            apply_local_cell_galerkin_target(operator, checked_field)
+        )
+        residual: Complex128[Array, "n"] = _checked_residual_difference(
+            checked_source, local_action, "residual"
+        )
+        residual_norm: Float64[Array, ""] = _complex_norm(residual)
+    elif isinstance(operator, GalerkinTargetManifest):
         physical_residual: GalerkinPhysicalResidual = (
             evaluate_physical_galerkin_residual(
                 operator, checked_field, checked_source
             )
         )
-        residual: Complex128[Array, "n"] = physical_residual.residual
-        residual_norm: Float64[Array, ""] = physical_residual.residual_norm
+        residual = physical_residual.residual
+        residual_norm = physical_residual.residual_norm
     else:
         action: Complex[Array, "n"] = _independent_forward_action(
             operator,
@@ -831,8 +866,9 @@ def evaluate_galerkin_adjoint_residual(
 
     Parameters
     ----------
-    operator : GalerkinOperator | GalerkinTargetManifest
-        Frozen algebraic realization or canonical manifested SC-1 target.
+    operator : _GalerkinSystem
+        Frozen algebraic realization, canonical manifested SC-1 target, or
+        prepared LOCAL_CELL_LVT1 target.
     field : Complex[Array, "n"]
         Submitted adjoint-state coefficients.
     source : Complex[Array, "n"]
@@ -852,8 +888,11 @@ def evaluate_galerkin_adjoint_residual(
 
     Notes
     -----
-    This algebraic diagnostic is independent of the CGLS/LSQR recurrence but
-    is not an outward adjoint-residual certificate.
+    This algebraic diagnostic is independent of the CGLS/LSQR recurrence. The
+    local branch uses its explicit frozen L3/L4 formal adjoint, the legacy
+    manifested branch uses its physical adjoint residual, and the raw branch
+    uses independent COO contraction. It is not an outward adjoint-residual
+    certificate.
     """
     if field.shape != source.shape:
         raise ValueError("field and source must have the same shape")
@@ -861,7 +900,18 @@ def evaluate_galerkin_adjoint_residual(
     checked_source: Complex[Array, "n"] = _checked_action_vector(
         source, "source"
     )
-    if isinstance(operator, GalerkinTargetManifest):
+    if isinstance(operator, GalerkinLocalCellTargetManifest):
+        local_action: Complex128[Array, "n"] = (
+            apply_local_cell_galerkin_target_adjoint(
+                operator,
+                checked_field,
+            )
+        )
+        residual: Complex128[Array, "n"] = _checked_residual_difference(
+            checked_source, local_action, "adjoint residual"
+        )
+        residual_norm: Float64[Array, ""] = _complex_norm(residual)
+    elif isinstance(operator, GalerkinTargetManifest):
         physical_residual: GalerkinPhysicalResidual = (
             evaluate_physical_galerkin_adjoint_residual(
                 operator,
@@ -869,8 +919,8 @@ def evaluate_galerkin_adjoint_residual(
                 checked_source,
             )
         )
-        residual: Complex128[Array, "n"] = physical_residual.residual
-        residual_norm: Float64[Array, ""] = physical_residual.residual_norm
+        residual = physical_residual.residual
+        residual_norm = physical_residual.residual_norm
     else:
         action: Complex[Array, "n"] = _independent_adjoint_action(
             operator,
@@ -924,14 +974,13 @@ def _solver_original_residual(
     Manifested targets use the production action with an independently rounded
     subtraction. Sparse algebraic targets use the independent residual APIs.
     """
-    if isinstance(operator, GalerkinTargetManifest):
+    if isinstance(operator, GalerkinLocalCellTargetManifest):
         if adjoint:
-            target_action: Complex128[Array, "n"] = apply_galerkin_adjoint(
-                operator,
-                field,
+            target_action: Complex128[Array, "n"] = (
+                apply_local_cell_galerkin_target_adjoint(operator, field)
             )
         else:
-            target_action = apply_galerkin_operator(operator, field)
+            target_action = apply_local_cell_galerkin_target(operator, field)
         target_residual: Complex128[Array, "n"] = _checked_residual_difference(
             source, target_action, "solver residual"
         )
@@ -943,6 +992,23 @@ def _solver_original_residual(
             target_residual_norm,
         )
         result: Tuple[Complex[Array, "n"], Float[Array, ""]] = target_result
+    elif isinstance(operator, GalerkinTargetManifest):
+        if adjoint:
+            target_action = apply_galerkin_adjoint(
+                operator,
+                field,
+            )
+        else:
+            target_action = apply_galerkin_operator(operator, field)
+        target_residual = _checked_residual_difference(
+            source, target_action, "solver residual"
+        )
+        target_residual_norm = _complex_norm(target_residual)
+        target_result = (
+            target_residual,
+            target_residual_norm,
+        )
+        result = target_result
     elif adjoint:
         result = evaluate_galerkin_adjoint_residual(operator, field, source)
     else:
@@ -1448,6 +1514,65 @@ def _cgls_core(  # noqa: PLR0915
 
 
 @jaxtyped(typechecker=beartype)
+def cgls_adjoint_solve(
+    operator: _GalerkinSystem,
+    source: Complex[Array, "n"],
+    initial_field: Complex[Array, "n"] | None = None,
+    max_iterations: scalar_int = 100,
+    relative_tolerance: scalar_float = 1e-10,
+    absolute_tolerance: scalar_float = 0.0,
+) -> GalerkinSolveResult:
+    """Solve an actual adjoint Galerkin system with CGLS and a fresh residual.
+
+    :see: :class:`~.test_engine.TestMatrixFreeGalerkinEngine`
+
+    Parameters
+    ----------
+    operator : _GalerkinSystem
+        Fixed target supplying the ``H/H*`` action pair.
+    source : Complex[Array, "n"]
+        Right-hand side of ``H* field = source``.
+    initial_field : Complex[Array, "n"] | None
+        Initial state. ``None`` selects zero. Default is ``None``.
+    max_iterations : scalar_int
+        Positive CGLS iteration limit. Default is 100.
+    relative_tolerance : scalar_float
+        Non-negative relative residual tolerance. Default is ``1e-10``.
+    absolute_tolerance : scalar_float
+        Non-negative absolute residual tolerance. Default is zero.
+
+    Returns
+    -------
+    result : GalerkinSolveResult
+        Field, freshly recomputed ``source - H* field`` residual, work counts,
+        and typed status. The result is not an outward state certificate.
+
+    Raises
+    ------
+    ValueError
+        If a static input rank, shape, or scalar structure is invalid.
+    equinox.EquinoxRuntimeError
+        If an input, action, or residual is invalid during traced execution.
+
+    Notes
+    -----
+    This is the retained-record counterpart of the adjoint solve used by the
+    implicit custom VJP. Convergence is accepted only after independently
+    recomputing the residual of the actual adjoint original system.
+    """
+    result: GalerkinSolveResult = _cgls_core(
+        operator,
+        source,
+        initial_field,
+        max_iterations,
+        relative_tolerance,
+        absolute_tolerance,
+        adjoint=True,
+    )
+    return result
+
+
+@jaxtyped(typechecker=beartype)
 def cgls_solve(
     operator: _GalerkinSystem,
     source: Complex[Array, "n"],
@@ -1462,8 +1587,9 @@ def cgls_solve(
 
     Parameters
     ----------
-    operator : GalerkinOperator | GalerkinTargetManifest
-        Frozen algebraic realization or canonical manifested SC-1 target.
+    operator : _GalerkinSystem
+        Frozen algebraic realization, canonical manifested SC-1 target, or
+        prepared LOCAL_CELL_LVT1 target.
     source : Complex[Array, "n"]
         Original finite-system right-hand side.
     initial_field : Complex[Array, "n"] | None
@@ -1807,8 +1933,9 @@ def lsqr_solve(
 
     Parameters
     ----------
-    operator : GalerkinOperator | GalerkinTargetManifest
-        Frozen algebraic realization or canonical manifested SC-1 target.
+    operator : _GalerkinSystem
+        Frozen algebraic realization, canonical manifested SC-1 target, or
+        prepared LOCAL_CELL_LVT1 target.
     source : Complex[Array, "n"]
         Original finite-system right-hand side.
     initial_field : Complex[Array, "n"] | None
@@ -1926,8 +2053,9 @@ def implicit_galerkin_solve(
 
     Parameters
     ----------
-    operator : GalerkinOperator | GalerkinTargetManifest
-        Fixed-support differentiable algebraic or manifested realization.
+    operator : _GalerkinSystem
+        Fixed-support differentiable algebraic, manifested SC-1, or prepared
+        LOCAL_CELL_LVT1 realization.
     source : Complex[Array, "n"]
         Differentiable finite-system source coefficients.
     max_iterations : scalar_int
@@ -2154,6 +2282,7 @@ implicit_galerkin_solve.defvjp(
 __all__: list[str] = [
     "apply_galerkin_adjoint",
     "apply_galerkin_operator",
+    "cgls_adjoint_solve",
     "cgls_solve",
     "evaluate_galerkin_adjoint_residual",
     "evaluate_galerkin_residual",

@@ -9,6 +9,11 @@ the code, but plan state does not belong in runtime names. Follow the current
 authorized plan when a change is plan-driven. Follow this guide for every new
 or changed code surface.
 
+The current conformance backlog is recorded in the
+[contributing-policy violation report](https://github.com/debangshu-mukherjee/ptyrodactyl-plans/blob/main/verification/cross_checks/contributing_policy_violations.md).
+That report is an inventory, not a waiver. New code must not add policy debt,
+and an owning change must repair the violations that it touches.
+
 ## Core Principle: Invertible Modularity
 
 Ptyrodactyl composes electron-scattering forward models from differentiable
@@ -45,6 +50,10 @@ A premature reduction can preserve a forward image while destroying one
 inverse seam. Review every non-differentiable operation and every reduction
 with that failure mode in mind.
 
+The review must justify each hard operation, early reduction, and custom
+derivative. State the affected inverse seam and the evidence that remains
+valid after the operation.
+
 ## Development Setup
 
 ### Prerequisites
@@ -57,9 +66,9 @@ with that failure mode in mind.
 - A CUDA-capable GPU is optional. CPU execution is the reference development
   path.
 
-JAX 0.11 requires Python 3.12 or newer. Do not test a JAX 0.11 change only in
-an old Python 3.11 environment. The supported Python matrix is 3.12, 3.13, and
-3.14.
+The supported Python matrix is 3.12, 3.13, and 3.14. Treat the dependency
+ranges in `pyproject.toml` and the tested lock file as authoritative. Do not
+document an unlanded JAX or jaxtyping upgrade as the current contract.
 
 ### Installation
 
@@ -87,6 +96,12 @@ Use the lock file for normal development and CI-like checks:
 ```bash
 uv lock --check
 uv run --frozen python -c "import ptyrodactyl; print(ptyrodactyl.__version__)"
+```
+
+Install the repository hooks once per clone:
+
+```bash
+uv run pre-commit install
 ```
 
 ### Import-time environment contract
@@ -196,11 +211,11 @@ def positive_scale(
     return scaled
 ```
 
-### JAX 0.11 and jaxtyping 0.3 lessons
+### JAX and jaxtyping integration lessons
 
-JAX 0.11 and jaxtyping 0.3.11 are compatible for dtype and shape
-annotations. Do not add a dependency cap to avoid an invalid decorator stack.
-Fix the stack.
+Compatibility follows the declared dependency ranges and the tested lock.
+Do not add a dependency cap to avoid an invalid decorator stack. Fix the
+stack and verify the supported dependency range in a fresh wheel environment.
 
 Runtime type checking must wrap the original Python function. The JAX
 transformation then wraps that checked function. Write the JAX decorator
@@ -219,10 +234,13 @@ def transmission(
 For static arguments, use the direct JAX decorator factory:
 
 ```python
+from beartype.typing import Tuple
+
+
 @jax.jit(static_argnames=("grid_shape",))
 @jaxtyped(typechecker=beartype)
 def build_grid(
-    grid_shape: tuple[int, int, int],
+    grid_shape: Tuple[int, int, int],
     spacing: Float[Array, ""],
 ) -> Float[Array, "Nx Ny Nz"]:
     """..."""
@@ -243,8 +261,8 @@ function, not a JAX `PjitFunction`. A wrong order can fail during import when
 jaxtyping inspects `__globals__`. The AST guard in
 `tests/test_ptyrodactyl/test_package_structure.py` rejects the reversed stack.
 
-JAX 0.11 also makes the uninitialized contract of `jnp.empty` observable. Do
-not assume that `jnp.empty` contains zeros or any deterministic value. Use
+The uninitialized contract of `jnp.empty` is observable. Do not assume that
+`jnp.empty` contains zeros or any deterministic value. Use
 `jnp.zeros` when zero initialization matters. Use `jnp.full` when another
 initial value matters. Use `jnp.empty` only when every element is definitely
 written before any read, and test that property. The production source should
@@ -262,6 +280,18 @@ The fresh check is described under Packaging.
   declared by the project over a new local implementation.
 - Do not add a numerical dependency only because another repository uses it.
   Add dependencies in the owning, reviewed environment change.
+- Select a solver by its mathematical and evidence contract. Use Optax for
+  standard first-order updates. Reuse a declared library solver when it
+  exposes the required residual, adjoint, failure, and differentiation
+  semantics.
+- Keep a custom solver only when Ptyrodactyl needs a contract that a declared
+  library does not expose. Examples include outward evidence, exact action
+  accounting, or a fail-closed status. State that reason in the docstring and
+  tests. Adding Optimistix or Lineax requires an owning dependency and API
+  change; another repository's solver stack is not sufficient justification.
+- Reserve `jax.custom_jvp` and `jax.custom_vjp` for a derived rule or an
+  unsupported primitive. Document the mathematical rule and test its primal,
+  tangent, and adjoint behavior independently.
 - Require `jax.grad` to agree with a central finite difference for every new
   differentiable primitive. Check real and imaginary directions separately
   when a complex field is optimized.
@@ -309,7 +339,9 @@ def weighted_probe(
 Apply these rules:
 
 - Annotate every parameter and return value.
-- Annotate important intermediate arrays and every returned variable.
+- Annotate every intermediate assignment whose target can carry an
+  annotation. This includes arrays, scalars, carriers, tuples, and values used
+  in returned results. Loop targets and context-manager bindings are exempt.
 - Assign before returning. Bind the result to a type-annotated name, then
   return that name.
 - Use descriptive dimension names. Examples include
@@ -359,6 +391,16 @@ def accumulate_counts(
 Do not alias `numpy.ndarray` as `NDArray`. Do not use a bare `NDArray`, which
 leaves its scalar type variable unbound.
 
+Do not use NumPy's `NDArray[np.float64]` parameterization. Always combine
+`NDArray` with a jaxtyping dtype and shape. Apply this rule to nested types,
+locals, tests, and return annotations.
+
+Do not introduce a direct `jax.tree_util.PyTreeDef` annotation. Before a new
+consumer needs that type, add a typed `PyTreeDef` surface to
+`ptyrodactyl.types` that binds the real runtime class and supports static
+analysis. Consumers then import that one owning name. The violation report
+records the existing direct use that still needs this owning migration.
+
 ### Imports and ownership
 
 New and touched cross-subpackage imports use the public owning subpackage. For
@@ -378,6 +420,19 @@ for private communication inside one subpackage.
 Do not add renamed ptyrodactyl imports in new or touched code. Standard
 ecosystem aliases such as `jnp`, `np`, `eqx`, and `plt` remain valid. Migrate
 an existing project alias only when the change owns all affected call sites.
+
+### Constants, schemas, and package resources
+
+Put a shared immutable physical constant in `ptyrodactyl.types.constants` and
+re-export it through `ptyrodactyl.types`. Keep a leaf-local algorithm constant
+with its owning implementation when no other package consumes it. Do not
+create a second spelling for one shared constant.
+
+Keep mutable registries and caches with the runtime service that owns their
+lifecycle. They are not constants. Keep authenticated external tables and
+schemas beside their owning loader. Store a checksum, units, conventions, and
+provenance with each committed resource. Do not transcribe an external table
+into Python literals only to call it a constant.
 
 ### Custom types and PyTrees
 
@@ -518,14 +573,20 @@ break their audit trail. New scientific tests and APIs use domain terms.
 
 ### Numpydoc and technical prose
 
+The reader must understand a docstring's inputs, outputs, behavior,
+approximations, and failure modes without opening the function body. A missing
+answer is a documentation defect.
+
 Docstrings use the NumPy/numpydoc convention. Ruff enforces the configured
 docstring rules. `pyproject.toml` contains the current pydoclint settings; do
 not weaken a correct jaxtyping annotation merely to satisfy a parser.
 
-Write repository prose in Simplified Technical English:
+Write repository prose in Simplified Technical English. Treat the sentence
+limits below as maxima for new and touched prose, except when an indivisible
+code literal, equation, citation, or URL makes the limit impractical:
 
-- Keep instructions to 20 words when practical.
-- Keep descriptions to 25 words when practical.
+- Keep instructions at or below 20 words.
+- Keep descriptions at or below 25 words.
 - Use active voice and identify the actor.
 - Use present tense for descriptions and the imperative for instructions.
 - Use one term for one concept.
@@ -541,13 +602,16 @@ These rules apply to docstrings, Markdown, and notebook Markdown cells.
 Every public module contains:
 
 1. a one-line summary;
-2. an `Extended Summary` when the module needs more context;
+2. an `Extended Summary`;
 3. a `Routine Listings` section for every public symbol;
 4. `Notes` or `References` when required by the physics.
 
 A package `__init__.py` also lists its public submodules in its extended
 summary. Keep submodules alphabetical. Group Routine Listings as classes,
 functions, then objects. Sort each group alphabetically.
+
+Copy each submodule's one-line summary verbatim into the package submodule
+list.
 
 Use `:class:` for carriers and classes, `:func:` for functions, `:obj:` for
 aliases and constants, and `:mod:` for submodules.
@@ -562,6 +626,24 @@ List every public symbol in four synchronized locations:
 Copy the symbol's summary verbatim into both Routine Listings. Export each
 symbol from exactly one owning leaf module and one owning subpackage. The
 package-structure tests enforce this contract on the migrated surfaces.
+
+Declare each export list after the module's last definition as an annotated
+literal:
+
+```python
+__all__: list[str] = [
+    "Potential3D",
+    "create_potential_3d",
+]
+```
+
+Group and sort this list in the same class, function, then object order as the
+Routine Listings. Do not construct `__all__` dynamically.
+
+A `_`-prefixed module starts its module docstring with
+`PRIVATE: <imperative sentence>`. Keep that module out of every public
+subpackage listing. A private package can define an explicit internal seam,
+as `_tools` does, but the top-level public package does not re-export it.
 
 When a symbol moves, update every consumer and delete the old export in the
 same change. Do not add a forwarding alias, compatibility module, or
@@ -584,8 +666,9 @@ do not apply:
 10. `See Also`;
 11. `Examples`.
 
-Use an imperative summary that fits on one line. Copy that summary verbatim
-to both Routine Listings.
+Use an imperative summary that fits on one line and ends in a period. Copy
+that summary verbatim to both Routine Listings. The extended summary states
+the regime and domain of validity for an approximation.
 
 Document every parameter in signature order. Copy the annotated type. State
 units and defaults. Mark a static argument and explain that changing it causes
@@ -593,12 +676,19 @@ retracing.
 
 Name every returned value after the annotated local variable returned by the
 body. For a tuple, document each element in order. Document every explicit
-`ValueError`. Document traced runtime rejection as the relevant Equinox or JAX
-runtime error when that detail helps callers.
+exception and the condition that raises it. Document traced runtime rejection
+as the relevant Equinox or JAX runtime error. Do not document automatic
+beartype or jaxtyping rejection.
 
-Use `Implementation Logic` for multi-step algorithms. Keep the steps aligned
-with the code. Use `Notes` for a direct formula and for approximation,
-boundary, normalization, gauge, and differentiability limits.
+Use `Implementation Logic` for multi-step algorithms. Number the steps, name
+the operation, and explain why it is required. Quote a short body expression
+when it makes the contract unambiguous; do not reproduce the whole function.
+Keep the steps aligned with the code. Use `Notes` for a direct formula and for
+approximation, boundary, normalization, gauge, and differentiability limits.
+Identify the differentiated parameters, guard behavior, and any known
+zero-gradient plateau when these facts affect callers. Keep `See Also`
+descriptions consistent with the target summaries. Make examples
+deterministic, inexpensive, and CPU-safe.
 
 Give every public object a `:see:` reference to its test class or test module.
 Give the test a back-reference to the object. Land both sides together.
@@ -665,9 +755,19 @@ and import sorting. Follow these additional rules:
 - Keep imports at module scope unless an optional dependency or a documented
   cycle requires a local import.
 - Use no star imports.
-- Keep `__all__` a literal list so the structure tests can inspect it.
+- Keep `__all__` an annotated literal list at the end of the module so the
+  structure tests can inspect it.
 - Preserve user-visible exceptions and messages when a change does not own an
   API break.
+
+Keep each new production leaf at or below 1000 lines. Test modules and
+`__init__.py` files are exempt because they mirror source surfaces and export
+metadata. A single cohesive function can cross the boundary; do not add
+another top-level definition after that overflow. When an existing leaf is
+already over the limit, do not increase its architectural scope. An owning
+change must split it along a physical or structural boundary before adding a
+new public object. Move all consumers under the zero-legacy policy and record
+the split in `CHANGELOG.md`.
 
 ## Testing
 
@@ -719,6 +819,11 @@ A stored output from ptyrodactyl is a regression capture, not an independent
 physics oracle. Use it to prove unchanged behavior for the same
 parameterization. Pair it with physics evidence when correctness is at issue.
 
+Give every committed binary or generated reference artifact a manifest. The
+manifest records its SHA-256 digest, dtype, shape, units, conventions,
+provenance, and generator environment. Load array artifacts with pickling
+disabled. A test verifies the digest before it trusts the payload.
+
 Keep external generators and heavyweight reference implementations outside
 the runtime package and normal test environment unless their dependency is
 explicitly declared. Commit immutable data, hashes, conventions, and
@@ -743,6 +848,10 @@ For each changed numerical primitive, test the applicable properties:
 - rejection of invalid traced values;
 - translation, periodicity, additivity, symmetry, or gauge behavior;
 - convergence under the discretization the function introduces.
+
+Parameterize convention-sensitive cases such as signs, phases, axis order,
+units, and mode order. Use Hypothesis for randomized invariants only after an
+owning environment change declares that dependency.
 
 Prefer `chex.assert_shape`, `chex.assert_tree_all_finite`, and
 `chex.assert_trees_all_close` for arrays and PyTrees. NumPy's testing helpers
@@ -772,22 +881,31 @@ Python scalar.
 
 ### Test documentation
 
-Treat a test docstring as a compact specification. State what property the
-test proves and how it proves it. Include units, parameterization, and
-tolerances. Add bidirectional `:see:` references on migrated documentation
+Treat each test module, class, and function as first-class source. A test
+module has a summary and an extended summary of its coverage. A
+`Test<Symbol>` class names the public symbol and the case families. A test
+function uses an imperative summary, then states what property it proves and
+how it proves it. Include units, parameterization, transformations, evidence,
+and tolerances. Add bidirectional `:see:` references on migrated documentation
 surfaces.
 
 Keep private helpers local and `_`-prefixed. Move a helper into shared test
-support only after more than one module needs it.
+support only after more than one module needs it. Give every private test
+helper a complete `PRIVATE:` numpydoc contract with `Parameters`, `Returns`,
+`Raises`, and `Notes` or `Implementation Logic` where they apply. Verify its
+behavior through a public caller instead of importing a production-private
+function into a test.
 
 ### Test type annotations and the annotation pre-flight
 
 Annotate every test function signature. Test functions return `None`.
 Annotate fixture and parametrized arguments with the same jaxtyping
 specifications as source code. Decorate array-typed helpers defined inside
-tests with `@jaxtyped(typechecker=beartype)`. Body locals may stay
-unannotated. Ruff does not enforce test annotations; keep them present and
-correct in every new or touched test.
+tests with `@jaxtyped(typechecker=beartype)`. Annotate intermediate
+assignments under the same rule as production code. Apply assign-before-return
+to test helpers. The target contract covers the complete test tree; until its
+migration finishes, every new or touched test must not add annotation or
+documentation debt.
 
 `pytest` runs an annotation gate before it collects one test. The gate is
 `tests/_preflight_types.py`. It imports every module in `ptyrodactyl` and
@@ -853,10 +971,27 @@ intended behavior change and update its provenance in the same review.
 
 ## Tutorial Notebooks
 
-The current tutorial tree contains committed `.ipynb` notebooks. Keep
-explanations, motivation, units, and physics in Markdown cells. Keep code cells
-small and reproducible. Remove outputs before committing unless an owning
-documentation change explicitly requires rendered output.
+The canonical tutorial format is a committed `.ipynb` notebook under
+`tutorials/`. Do not commit checkpoint directories, plain-script tutorial
+copies, or local reimplementations of Ptyrodactyl physics. A tutorial calls the
+public API. If the required capability is missing, add and verify it in
+`src/ptyrodactyl` first.
+
+Open each notebook with a descriptive title and a short abstract. Use sections
+that let a reader navigate by headings. Write for an electron-microscopy
+graduate student or researcher who does not need to know JAX internals.
+Explain why each model, approximation, and parameter is selected. Record input
+provenance and every assumption that connects the input to the conclusion.
+
+Put explanations, motivation, units, and physics in Markdown cells. Put one
+actionable step in each short code cell. Show a plot, scalar with units, or
+small array preview immediately after a material calculation. Remove notebook
+outputs before committing unless an owning documentation change explicitly
+defines and verifies a rendered-output workflow.
+
+Execute the notebook locally from a fresh kernel before clearing its outputs.
+The current repository does not publish executed Markdown exports, so do not
+claim that a cleared notebook has an automated execution certificate.
 
 The repository does not yet declare Jupytext or provide paired percent
 scripts. Do not claim that notebooks are paired until the tooling and pairs
@@ -874,6 +1009,7 @@ uv lock --check
 uv run --frozen ruff check pyproject.toml src tests
 uv run --frozen ruff format --check src tests
 uv run --frozen ty check
+uv run --frozen pre-commit run --all-files
 git diff --check
 MPLCONFIGDIR=/tmp/ptyrodactyl-mpl uv run --frozen pytest -q -n 0
 ```
@@ -903,12 +1039,17 @@ uv run pre-commit install
 The hooks complement the explicit commands above; they do not replace the
 full test suite or the documentation build.
 
+The `loc-badge` hook generates `.github/badges/loc.json`. Do not edit that
+file manually. Regenerate it through the hook and review the resulting diff.
+
 ### PR description and review
 
 Use a descriptive branch name, such as `feature/lobato-volume` or
 `fix/projected-potential-gradient`.
 
-Write an imperative commit subject. In the PR description, state:
+Write an imperative commit subject. Give a nontrivial commit a short body with
+bullets for the implementation, tests, documentation, and evidence. In the PR
+description, state:
 
 - the behavior and boundary changed;
 - the scientific or software reason;
@@ -919,6 +1060,30 @@ Write an imperative commit subject. In the PR description, state:
 
 Differentiability is an acceptance criterion. A change that breaks a touched
 gradient seam has failed even if its forward regression tests pass.
+
+Before merge, confirm that CI passes, review approval exists, documentation is
+current, and the branch has no unresolved merge conflict.
+
+## Adding or Changing a Feature
+
+Use this sequence for a new feature or a material behavior change:
+
+1. Identify the scientific use case, owning package, pinned conventions, and
+   independent evidence before implementation.
+2. Design the public signature, carrier, units, differentiable parameters,
+   static structure, and failure contract.
+3. Put shared carriers and `create_*` factories in `ptyrodactyl.types`. Put
+   the operation in its owning physical package.
+4. Update the leaf and subpackage Routine Listings and `__all__` values in the
+   same change. Add no compatibility path.
+5. Mirror the source module in `tests/test_ptyrodactyl`. Add independent-value,
+   eager/JIT, dtype, rejection, and finite-difference tests as applicable.
+6. Update API documentation, a tutorial when the user workflow changes, and
+   `CHANGELOG.md` for a behavior or public-surface change.
+
+Discuss a broad dependency, package-boundary, schema, or public-API change in
+an issue before implementation. A local refactor with no changed contract does
+not require an issue.
 
 ## API Evolution: Zero Legacy
 
@@ -937,13 +1102,26 @@ owning change and include migration notes.
 
 ## Packaging and Fresh-Environment Validation
 
-`pyproject.toml` is the source of truth for package metadata and the CalVer
-version. The build backend is `uv_build`. Use uv for builds and publication.
+`pyproject.toml` is the single source of truth for package metadata and the
+CalVer version. PEP 440 can normalize zero-padded CalVer components in built
+artifacts. The build backend is `uv_build`. Use uv for builds and publication.
 
 ```bash
 uv build
 uv publish
 ```
+
+Do not use `setuptools`, `python -m build`, `twine`, or another parallel
+release path. Before a release:
+
+1. Update the version and `CHANGELOG.md` in the release commit.
+2. Run Ruff, `ty`, pre-commit, the full CPU suite, and strict documentation.
+3. Build an sdist and wheel from a clean tree.
+4. Inspect both artifacts for the complete package, resources, and `py.typed`.
+5. Verify the wheel metadata and MIT license expression.
+6. Run the fresh-environment scientific smoke test below. Rebuild a wheel from
+   the sdist when package-data rules changed.
+7. Tag the release commit as `v<version>` and publish with `uv publish`.
 
 Do not use an editable checkout as the only packaging test. A wheel can omit
 coefficient tables, `py.typed` markers, or other package data even when source
@@ -979,8 +1157,8 @@ public form-factor or forward-model path, not only `import ptyrodactyl`.
 Confirm these properties:
 
 - Python is in the supported 3.12--3.14 range;
-- JAX 0.11 and jaxtyping 0.3.11 import together when they are the current
-  unconstrained resolution;
+- the resolved JAX and jaxtyping versions satisfy `pyproject.toml` and import
+  together;
 - the top-level x64 setup takes effect;
 - packaged Lobato and Kirkland assets load with the expected shapes;
 - one JIT-compiled, runtime-typechecked public function executes;

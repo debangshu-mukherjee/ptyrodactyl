@@ -12,14 +12,16 @@ Routine Listings
 ----------------
 :func:`apply_local_cell_potential_metric_adjoint`
     Apply the rounded callable's adjoint in the physical cell metric.
+:func:`enclose_local_cell_tail`
+    Enclose the complete LVT.9 Fourier tail from authenticated evidence.
 :func:`realize_local_cell_galerkin_potential`
     Realize a periodic local-cell voltage field on one interaction support.
 
 Notes
 -----
-This first LVT-1 slice provides rounded coefficients with conservative
-stopped triangle evidence. Direct host coefficient certification and the
-LVT.9 tail enclosure are separate later actions.
+The rounded coefficient and adjoint paths remain transform compatible. The
+LVT.9 action is an explicit stopped host boundary because it replay-
+authenticates DIRECT LVT.13 evidence before exact-rational subtraction.
 """
 
 import math
@@ -28,6 +30,7 @@ from fractions import Fraction
 import equinox as eqx
 import jax
 import jax.numpy as jnp
+import numpy as np
 from beartype import beartype
 from beartype.typing import Tuple
 from jaxtyping import (
@@ -42,23 +45,44 @@ from jaxtyping import (
 
 from ptyrodactyl._tools import (
     RealInterval,
+    fraction_from_float,
+    fraction_lower_float,
+    fraction_upper_float,
     interval_add,
     point_interval,
+    sha256,
+    sqrt_fraction_upper,
+    stored_value_payload,
 )
 from ptyrodactyl.types import (
     GalerkinAcquisitionSupportResult,
     GalerkinAcquisitionSupportStatus,
+    GalerkinLocalCellCertificateFailure,
     GalerkinLocalCellPotentialRealization,
+    GalerkinLocalCellTailEnclosure,
+    GalerkinLocalCellTailFailure,
     GalerkinProductSupport,
     GalerkinVoxelTargetRoute,
     LocalCellPotential3D,
     _create_local_cell_realization,
+    _make_local_cell_tail_enclosure,
     create_local_cell_potential_3d,
 )
 
 from .acquisition import check_galerkin_acquisition_support
 
+_LOCAL_CELL_RANK: int = 3
 _RECIPROCAL_INDEX_RANK = 2
+_TAIL_ARITHMETIC: str = (
+    "replay-authenticated DIRECT LVT.13 binary64 rectangles; exact Fraction "
+    "cell energy and rectangle modulus squares; exact outward LVT.9 "
+    "subtraction; nonnegative theorem intersection; verified rational square "
+    "roots; outward binary64 endpoints"
+)
+_TAIL_DIGEST_DOMAIN: str = "ptyrodactyl.local_cell.lvt9_tail_enclosure.v1"
+_TAIL_EXACT_TARGET: str = (
+    "LVT.9 complete box-L2 Fourier tail outside ordered requested I_chi"
+)
 
 
 def _canonical_checked_acquisition_support(
@@ -1015,7 +1039,495 @@ def apply_local_cell_potential_metric_adjoint(
     return voxel_gradient
 
 
+def _rational_square_interval(
+    lower: Fraction,
+    upper: Fraction,
+) -> Tuple[Fraction, Fraction]:
+    """PRIVATE: Return the exact image of one rational interval under square.
+
+    Parameters
+    ----------
+    lower : Fraction
+        Finite rational lower endpoint.
+    upper : Fraction
+        Finite rational upper endpoint.
+
+    Returns
+    -------
+    squared_lower : Fraction
+        Exact lower endpoint of the squared interval hull.
+    squared_upper : Fraction
+        Exact upper endpoint of the squared interval hull.
+
+    Raises
+    ------
+    ValueError
+        If the submitted endpoints cross.
+    """
+    if lower > upper:
+        raise ValueError("rational interval endpoints must not cross")
+    lower_square: Fraction = lower * lower
+    upper_square: Fraction = upper * upper
+    squared_lower: Fraction = (
+        Fraction(0) if lower <= 0 <= upper else min(lower_square, upper_square)
+    )
+    squared_upper: Fraction = max(lower_square, upper_square)
+    result: Tuple[Fraction, Fraction] = (squared_lower, squared_upper)
+    return result
+
+
+def _outward_lvt9_subtraction(
+    cell_energy: Fraction,
+    retained_energy_lower: Fraction,
+    retained_energy_upper: Fraction,
+) -> Tuple[Fraction, Fraction, bool]:
+    """PRIVATE: Subtract retained energy before nonnegative intersection.
+
+    Parameters
+    ----------
+    cell_energy : Fraction
+        Exact ``DeltaV * sum(phi_n**2)``.
+    retained_energy_lower : Fraction
+        Exact rational lower bound for ``|Omega| * sum_K |c_m|**2``.
+    retained_energy_upper : Fraction
+        Exact rational upper bound for the same retained energy.
+
+    Returns
+    -------
+    squared_tail_lower : Fraction
+        Nonnegative lower endpoint after theorem intersection.
+    squared_tail_upper : Fraction
+        Nonnegative upper endpoint, or zero on contradiction.
+    parseval_consistent : bool
+        Whether the raw upper endpoint is nonnegative.
+
+    Raises
+    ------
+    ValueError
+        If cell energy is negative or the retained interval is invalid.
+
+    Notes
+    -----
+    The raw lower endpoint is allowed to be negative because independently
+    widened coefficient rectangles can overestimate retained energy. Only
+    after exact subtraction is it intersected with the proved nonnegative
+    range. A negative raw upper endpoint is not clipped; it fails closed.
+    """
+    if cell_energy < 0:
+        raise ValueError("cell energy must be nonnegative")
+    if (
+        retained_energy_lower < 0
+        or retained_energy_lower > retained_energy_upper
+    ):
+        raise ValueError(
+            "retained-energy interval must be ordered and nonnegative"
+        )
+    raw_lower: Fraction = cell_energy - retained_energy_upper
+    raw_upper: Fraction = cell_energy - retained_energy_lower
+    parseval_consistent: bool = raw_upper >= 0
+    if raw_upper < 0:
+        squared_tail_lower: Fraction = Fraction(0)
+        squared_tail_upper: Fraction = Fraction(0)
+    else:
+        squared_tail_lower = max(Fraction(0), raw_lower)
+        squared_tail_upper = raw_upper
+    result: Tuple[Fraction, Fraction, bool] = (
+        squared_tail_lower,
+        squared_tail_upper,
+        parseval_consistent,
+    )
+    return result
+
+
+def _tail_enclosure_digest(
+    parent_certificate_digest: str,
+    squared_lower: float,
+    squared_upper: float,
+    norm_lower: float,
+    norm_upper: float,
+    *,
+    finite_enclosure: bool,
+    failure: GalerkinLocalCellTailFailure,
+    parent_certificate_failure: GalerkinLocalCellCertificateFailure,
+) -> str:
+    """PRIVATE: Bind one complete LVT.9 child evidence payload.
+
+    Parameters
+    ----------
+    parent_certificate_digest : str
+        Replay-authenticated DIRECT LVT.13 parent identity.
+    squared_lower : float
+        Stored squared-tail lower endpoint.
+    squared_upper : float
+        Stored squared-tail upper endpoint.
+    norm_lower : float
+        Stored tail-norm lower endpoint.
+    norm_upper : float
+        Stored tail-norm upper endpoint.
+    finite_enclosure : bool
+        Whether every endpoint is finite.
+    failure : GalerkinLocalCellTailFailure
+        Typed LVT.9 outcome.
+    parent_certificate_failure : GalerkinLocalCellCertificateFailure
+        Exact typed outcome propagated from the parent.
+
+    Returns
+    -------
+    digest : str
+        Lowercase SHA-256 identity of the complete child evidence.
+    """
+    digest: str = sha256(
+        {
+            "domain": _TAIL_DIGEST_DOMAIN,
+            "target_route": GalerkinVoxelTargetRoute.LOCAL_CELL_LVT1.value,
+            "parent_certificate_digest": parent_certificate_digest,
+            "exact_target": _TAIL_EXACT_TARGET,
+            "arithmetic": _TAIL_ARITHMETIC,
+            "finite_enclosure": stored_value_payload(
+                np.asarray(finite_enclosure, dtype=np.bool_)
+            ),
+            "failure": failure.value,
+            "parent_certificate_failure": parent_certificate_failure.value,
+            "squared_tail_lower_bound": stored_value_payload(
+                np.asarray(squared_lower, dtype=np.float64)
+            ),
+            "squared_tail_upper_bound": stored_value_payload(
+                np.asarray(squared_upper, dtype=np.float64)
+            ),
+            "tail_l2_lower_bound": stored_value_payload(
+                np.asarray(norm_lower, dtype=np.float64)
+            ),
+            "tail_l2_upper_bound": stored_value_payload(
+                np.asarray(norm_upper, dtype=np.float64)
+            ),
+        }
+    )
+    return digest
+
+
+def _make_tail_attempt(
+    realization: GalerkinLocalCellPotentialRealization,
+    squared_lower: float,
+    squared_upper: float,
+    norm_lower: float,
+    norm_upper: float,
+    *,
+    failure: GalerkinLocalCellTailFailure,
+    parent_certificate_failure: GalerkinLocalCellCertificateFailure,
+) -> GalerkinLocalCellTailEnclosure:
+    """PRIVATE: Digest and store one already-derived LVT.9 attempt.
+
+    Parameters
+    ----------
+    realization : GalerkinLocalCellPotentialRealization
+        Replay-authenticated DIRECT LVT.13 parent.
+    squared_lower : float
+        Squared-tail lower endpoint.
+    squared_upper : float
+        Squared-tail upper endpoint.
+    norm_lower : float
+        Tail-norm lower endpoint.
+    norm_upper : float
+        Tail-norm upper endpoint.
+    failure : GalerkinLocalCellTailFailure
+        Typed outcome.
+    parent_certificate_failure : GalerkinLocalCellCertificateFailure
+        Exact typed parent outcome.
+
+    Returns
+    -------
+    enclosure : GalerkinLocalCellTailEnclosure
+        Bound child evidence carrier.
+
+    Raises
+    ------
+    ValueError
+        If the parent has no DIRECT LVT.13 certificate.
+    """
+    certificate = realization.coefficient_certificate
+    if certificate is None:
+        raise ValueError("tail enclosure requires DIRECT LVT.13")
+    finite: bool = failure is GalerkinLocalCellTailFailure.NONE
+    digest: str = _tail_enclosure_digest(
+        certificate.certificate_digest,
+        squared_lower,
+        squared_upper,
+        norm_lower,
+        norm_upper,
+        finite_enclosure=finite,
+        failure=failure,
+        parent_certificate_failure=parent_certificate_failure,
+    )
+    enclosure: GalerkinLocalCellTailEnclosure = (
+        _make_local_cell_tail_enclosure(
+            realization,
+            jnp.asarray(squared_lower, dtype=jnp.float64),
+            jnp.asarray(squared_upper, dtype=jnp.float64),
+            jnp.asarray(norm_lower, dtype=jnp.float64),
+            jnp.asarray(norm_upper, dtype=jnp.float64),
+            jnp.asarray(finite, dtype=jnp.bool_),
+            failure=failure,
+            parent_certificate_failure=parent_certificate_failure,
+            exact_target=_TAIL_EXACT_TARGET,
+            arithmetic=_TAIL_ARITHMETIC,
+            parent_certificate_digest=certificate.certificate_digest,
+            tail_enclosure_digest=digest,
+        )
+    )
+    return enclosure
+
+
+def _nonfinite_tail_attempt(
+    realization: GalerkinLocalCellPotentialRealization,
+    *,
+    failure: GalerkinLocalCellTailFailure,
+    parent_certificate_failure: GalerkinLocalCellCertificateFailure,
+) -> GalerkinLocalCellTailEnclosure:
+    """PRIVATE: Store one typed ``[0, +inf]`` LVT.9 noncertificate.
+
+    Parameters
+    ----------
+    realization : GalerkinLocalCellPotentialRealization
+        Replay-authenticated DIRECT LVT.13 parent.
+    failure : GalerkinLocalCellTailFailure
+        Typed nonfinite LVT.9 outcome.
+    parent_certificate_failure : GalerkinLocalCellCertificateFailure
+        Exact typed outcome propagated from the parent.
+
+    Returns
+    -------
+    enclosure : GalerkinLocalCellTailEnclosure
+        Bound child evidence with two explicit ``[0, +inf]`` intervals.
+    """
+    enclosure: GalerkinLocalCellTailEnclosure = _make_tail_attempt(
+        realization,
+        0.0,
+        math.inf,
+        0.0,
+        math.inf,
+        failure=failure,
+        parent_certificate_failure=parent_certificate_failure,
+    )
+    return enclosure
+
+
+@jaxtyped(typechecker=beartype)
+def enclose_local_cell_tail(
+    realization: GalerkinLocalCellPotentialRealization,
+) -> GalerkinLocalCellTailEnclosure:
+    r"""Enclose the complete LVT.9 Fourier tail from authenticated evidence.
+
+    :see: :class:`~.test_local_cell.TestLocalCellTailEnclosure`
+
+    Implementation Logic
+    --------------------
+    1. Replay-authenticate the submitted DIRECT LVT.13 realization.
+    2. Form ``DeltaV * sum(phi_n**2)`` exactly from stored dyadic values.
+    3. Square every authenticated exact-coefficient rectangle and sum both
+       members of every retained signed pair exactly.
+    4. Subtract outward, then intersect only the lower endpoint with the
+       proved nonnegative range and enclose both square roots.
+    5. Bind the four endpoints and typed outcome to the parent certificate.
+
+    Parameters
+    ----------
+    realization : GalerkinLocalCellPotentialRealization
+        Concrete DIRECT LVT.13 realization. Its host certificate is replayed;
+        fallback coefficient errors are never used as tail evidence.
+
+    Returns
+    -------
+    enclosure : GalerkinLocalCellTailEnclosure
+        Squared-tail and tail-norm intervals. An authenticated typed parent
+        noncertificate propagates as two explicit ``[0, +inf]`` intervals.
+
+    Raises
+    ------
+    ValueError
+        If inputs are traced, parent binding or replay fails, or stored exact
+        dtypes and shapes are noncanonical.
+    equinox.EquinoxRuntimeError
+        If independent parent reconstruction or carrier validation fails.
+
+    Notes
+    -----
+    ``K`` is exactly the unique ordered interaction support bound by the
+    parent certificate. Producer bandwidth, sampled Nyquist residues, work
+    support, and LVT.15 operator compression do not enter this potential-tail
+    identity. The diagnostic ``cell_size`` is not a geometry owner.
+    """
+    from .local_cell_certification import (  # noqa: PLC0415
+        _authenticate_local_cell_certificate,
+    )
+
+    canonical: GalerkinLocalCellPotentialRealization = (
+        _authenticate_local_cell_certificate(realization)
+    )
+    certificate = canonical.coefficient_certificate
+    if certificate is None:
+        raise ValueError("tail enclosure requires DIRECT LVT.13")
+    parent_failure: GalerkinLocalCellCertificateFailure = certificate.failure
+    finite_array = np.asarray(jax.device_get(certificate.finite_certificate))
+    if finite_array.dtype != np.dtype(np.bool_) or finite_array.shape != ():
+        raise ValueError("finite_certificate must be an exact bool scalar")
+    if not bool(finite_array):
+        enclosure: GalerkinLocalCellTailEnclosure = _nonfinite_tail_attempt(
+            canonical,
+            failure=(
+                GalerkinLocalCellTailFailure.PARENT_CERTIFICATE_NOT_FINITE
+            ),
+            parent_certificate_failure=parent_failure,
+        )
+        return enclosure  # noqa: RET504
+    if parent_failure is not GalerkinLocalCellCertificateFailure.NONE:
+        raise ValueError("finite parent certificate must have failure NONE")
+
+    local_potential: LocalCellPotential3D = canonical.local_potential
+    cell_values = np.asarray(jax.device_get(local_potential.cell_values))
+    if (
+        cell_values.dtype != np.dtype(np.float64)
+        or cell_values.ndim != _LOCAL_CELL_RANK
+    ):
+        raise ValueError(
+            "local cell values must have exact float64 3D storage"
+        )
+    box_volume: Fraction = Fraction(1)
+    for length in local_potential.box_size:
+        box_volume *= fraction_from_float(length)
+    cell_energy_sum: Fraction = sum(
+        (
+            fraction_from_float(float(value))
+            * fraction_from_float(float(value))
+            for value in cell_values.flat
+        ),
+        start=Fraction(0),
+    )
+    cell_energy: Fraction = box_volume * cell_energy_sum / cell_values.size
+
+    endpoint_arrays = tuple(
+        np.asarray(jax.device_get(value))
+        for value in (
+            certificate.exact_coefficient_real_lower_bounds,
+            certificate.exact_coefficient_real_upper_bounds,
+            certificate.exact_coefficient_imag_lower_bounds,
+            certificate.exact_coefficient_imag_upper_bounds,
+        )
+    )
+    expected_shape = canonical.voltage_coefficients.shape
+    if any(
+        value.dtype != np.dtype(np.float64)
+        or value.shape != expected_shape
+        or np.any(~np.isfinite(value))
+        for value in endpoint_arrays
+    ):
+        raise ValueError(
+            "finite tail evidence requires finite float64 coefficient "
+            "rectangles"
+        )
+    real_lower, real_upper, imag_lower, imag_upper = endpoint_arrays
+    retained_lower: Fraction = Fraction(0)
+    retained_upper: Fraction = Fraction(0)
+    for submitted in zip(
+        real_lower,
+        real_upper,
+        imag_lower,
+        imag_upper,
+        strict=True,
+    ):
+        real_square = _rational_square_interval(
+            fraction_from_float(float(submitted[0])),
+            fraction_from_float(float(submitted[1])),
+        )
+        imag_square = _rational_square_interval(
+            fraction_from_float(float(submitted[2])),
+            fraction_from_float(float(submitted[3])),
+        )
+        retained_lower += real_square[0] + imag_square[0]
+        retained_upper += real_square[1] + imag_square[1]
+    retained_lower *= box_volume
+    retained_upper *= box_volume
+    (
+        squared_lower_fraction,
+        squared_upper_fraction,
+        parseval_consistent,
+    ) = _outward_lvt9_subtraction(
+        cell_energy,
+        retained_lower,
+        retained_upper,
+    )
+    if not parseval_consistent:
+        enclosure: GalerkinLocalCellTailEnclosure = _nonfinite_tail_attempt(
+            canonical,
+            failure=GalerkinLocalCellTailFailure.PARSEVAL_CONTRADICTION,
+            parent_certificate_failure=parent_failure,
+        )
+        return enclosure  # noqa: RET504
+    norm_lower_fraction: Fraction = Fraction(0)
+    if squared_lower_fraction > 0:
+        norm_lower_fraction = squared_lower_fraction / sqrt_fraction_upper(
+            squared_lower_fraction
+        )
+    norm_upper_fraction: Fraction = sqrt_fraction_upper(squared_upper_fraction)
+    squared_lower = fraction_lower_float(squared_lower_fraction)
+    squared_upper = fraction_upper_float(squared_upper_fraction)
+    norm_lower = fraction_lower_float(norm_lower_fraction)
+    norm_upper = fraction_upper_float(norm_upper_fraction)
+    if not all(
+        math.isfinite(value)
+        for value in (squared_lower, squared_upper, norm_lower, norm_upper)
+    ):
+        enclosure = _nonfinite_tail_attempt(
+            canonical,
+            failure=GalerkinLocalCellTailFailure.ARITHMETIC_RANGE_FAILURE,
+            parent_certificate_failure=parent_failure,
+        )
+        return enclosure  # noqa: RET504
+    enclosure = _make_tail_attempt(
+        canonical,
+        squared_lower,
+        squared_upper,
+        norm_lower,
+        norm_upper,
+        failure=GalerkinLocalCellTailFailure.NONE,
+        parent_certificate_failure=parent_failure,
+    )
+    return enclosure  # noqa: RET504
+
+
+def _authenticate_local_cell_tail(
+    enclosure: GalerkinLocalCellTailEnclosure,
+) -> GalerkinLocalCellTailEnclosure:
+    """PRIVATE: Replay and exact-compare one complete LVT.9 carrier.
+
+    Parameters
+    ----------
+    enclosure : GalerkinLocalCellTailEnclosure
+        Submitted forgeable LVT.9 evidence storage.
+
+    Returns
+    -------
+    canonical : GalerkinLocalCellTailEnclosure
+        Fresh host replay with exact stored-value identity.
+
+    Raises
+    ------
+    ValueError
+        If any parent, endpoint, typed outcome, or digest field differs.
+    equinox.EquinoxRuntimeError
+        If parent replay or carrier validation fails.
+    """
+    canonical: GalerkinLocalCellTailEnclosure = enclose_local_cell_tail(
+        enclosure.realization
+    )
+    if stored_value_payload(canonical) != stored_value_payload(enclosure):
+        raise ValueError(
+            "local-cell tail enclosure does not match host replay"
+        )
+    return canonical
+
+
 __all__: list[str] = [
     "apply_local_cell_potential_metric_adjoint",
+    "enclose_local_cell_tail",
     "realize_local_cell_galerkin_potential",
 ]

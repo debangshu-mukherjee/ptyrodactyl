@@ -150,3 +150,18 @@ def test_static_binary_floats_use_exact_hexadecimal_tags() -> None:
     assert isinstance(numpy_scalar, dict)
     assert "array" in numpy_scalar
     assert numpy_scalar != negative_zero
+
+
+def test_large_static_integers_bypass_decimal_conversion_limits() -> None:
+    """Bind huge exact integers without process-wide decimal-limit settings."""
+    positive = (1 << 68_047) + 0x12345
+    negative = -positive
+
+    positive_payload = stored_value_payload(positive)
+    negative_payload = stored_value_payload(negative)
+    assert positive_payload == {"int_hex": f"{positive:x}"}
+    assert negative_payload == {"int_hex": f"-{positive:x}"}
+    assert sha256({"value": positive_payload}) != sha256(
+        {"value": negative_payload}
+    )
+    assert stored_value_payload(7) == {"int": "7"}

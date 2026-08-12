@@ -14,8 +14,16 @@ Routine Listings
 ----------------
 :class:`GalerkinCoordinateCauchyCurrent`
     Store one bounded selected-sector coordinate-current diagnostic.
+:class:`GalerkinCurrentOperatorCertificate`
+    Store uniform selected-sector LVT.55a operator evidence.
+:class:`GalerkinCurrentOperatorFailure`
+    Enumerate fail-closed uniform current-operator predicate bits.
 :class:`GalerkinDetectorFailure`
     Store the unavailable detector-contract reasons.
+:class:`GalerkinTerminalCurrentActionEnclosure`
+    Store one per-call frozen-current action enclosure.
+:class:`GalerkinTerminalCurrentActionFailure`
+    Enumerate fail-closed per-call current-action predicate bits.
 :class:`GalerkinTerminalCurrentFailure`
     Enumerate fail-closed coordinate-current predicate bits.
 :class:`GalerkinTerminalCurrentRoute`
@@ -26,10 +34,16 @@ Routine Listings
     Store the unavailable physical vacuum-branch reason.
 :func:`create_galerkin_coordinate_cauchy_current`
     Create a validated bounded selected-sector current diagnostic.
+:func:`create_galerkin_current_operator_certificate`
+    Create validated uniform selected-sector current-operator evidence.
+:func:`create_galerkin_terminal_current_action_enclosure`
+    Create one validated per-call frozen-current action enclosure.
 
 Notes
 -----
-The bounded evidence certifies an exact submitted-state current only over
+The transform-compatible diagnostic is provisional until its owning host
+preparer reconstructs the nested target and exact-replays its whole payload.
+Once authenticated, it certifies an exact submitted-state current only over
 complete retained normal-frequency fibers whose transverse indices belong to
 the acquisition's selected ``K_d`` set.  It excludes every other transverse
 fiber in ``K_u`` and therefore is not automatically a total full-plane
@@ -126,6 +140,58 @@ class GalerkinTerminalCurrentFailure(IntFlag):
     NONFINITE_CURRENT_EVIDENCE = 1 << 3
 
 
+class GalerkinCurrentOperatorFailure(IntFlag):
+    """Enumerate fail-closed uniform current-operator predicate bits.
+
+    :see: :class:`~.test_terminal_types.TestCurrentOperatorTypes`
+
+    Attributes
+    ----------
+    NONE : int
+        Every implemented LVT.55a operator predicate passed.
+    CURRENT_DIAGNOSTIC_INELIGIBLE : int
+        The nested submitted-state current diagnostic is ineligible.
+    FIXED_LINEAR_CERTIFICATE_INELIGIBLE : int
+        The parent target lacks finite RM-S2 fixed-linear evidence.
+    ARITHMETIC_ENVIRONMENT_UNSUPPORTED : int
+        The required normal binary64 arithmetic probes failed.
+    NONFINITE_OPERATOR_EVIDENCE : int
+        One uniform trace, normal, current, or action-route bound is nonfinite.
+    CURRENT_NORMALIZATION_UNENCLOSED : int
+        The physical number-current scale lacks a positive finite enclosure.
+    """
+
+    NONE = 0
+    CURRENT_DIAGNOSTIC_INELIGIBLE = 1 << 0
+    FIXED_LINEAR_CERTIFICATE_INELIGIBLE = 1 << 1
+    ARITHMETIC_ENVIRONMENT_UNSUPPORTED = 1 << 2
+    NONFINITE_OPERATOR_EVIDENCE = 1 << 3
+    CURRENT_NORMALIZATION_UNENCLOSED = 1 << 4
+
+
+class GalerkinTerminalCurrentActionFailure(IntFlag):
+    """Enumerate fail-closed per-call current-action predicate bits.
+
+    :see: :class:`~.test_terminal_types.TestCurrentOperatorTypes`
+
+    Attributes
+    ----------
+    NONE : int
+        The submitted action has a finite frozen-matrix enclosure.
+    OPERATOR_INELIGIBLE : int
+        The parent uniform current-operator certificate is ineligible.
+    ARITHMETIC_ENVIRONMENT_UNSUPPORTED : int
+        The required normal binary64 arithmetic probes failed.
+    NONFINITE_ACTION_EVIDENCE : int
+        The rounded action, interval, or norm bound is nonfinite.
+    """
+
+    NONE = 0
+    OPERATOR_INELIGIBLE = 1 << 0
+    ARITHMETIC_ENVIRONMENT_UNSUPPORTED = 1 << 1
+    NONFINITE_ACTION_EVIDENCE = 1 << 2
+
+
 class GalerkinTerminalCurrentRoute(str, Enum):
     """Store the coordinate-current enclosure route.
 
@@ -188,20 +254,25 @@ class GalerkinCoordinateCauchyCurrent(eqx.Module):
         Exact stored binary64 state used by this diagnostic.
     trace_coefficients : Complex128[Array, " t"]
         Matrix-free coordinate field trace ``T u`` in transverse-plane
-        orthonormal coefficients.
+        orthonormal coefficients with inverse square-root Angstrom units.
     normal_derivative_coefficients : Complex128[Array, " t"]
-        Oriented physical normal-derivative trace ``N u``.
+        Oriented physical normal-derivative trace ``N u`` with inverse
+        three-halves Angstrom units.
     current_action : Complex128[Array, " n"]
         Hermitian reduced-current action ``F u`` with
-        ``F=(T* N-N* T)/(2i)``.
+        ``F=(T* N-N* T)/(2i)`` in inverse-square Angstroms.
     reduced_current : Float64[Array, ""]
-        Rounded quadratic diagnostic ``Re(<u,F u>)``.
+        Rounded quadratic diagnostic ``Re(<u,F u>)`` in inverse-square
+        Angstroms.
     exact_reduced_current_lower_bound : Float64[Array, ""]
-        Inclusive lower endpoint for the exact normalized-carrier current.
+        Inclusive lower endpoint for the exact normalized-carrier current in
+        inverse-square Angstroms.
     exact_reduced_current_upper_bound : Float64[Array, ""]
-        Inclusive upper endpoint for the exact normalized-carrier current.
+        Inclusive upper endpoint for the exact normalized-carrier current in
+        inverse-square Angstroms.
     reduced_current_error_upper_bound : Float64[Array, ""]
-        Outward distance bound from the rounded current to the exact interval.
+        Outward distance bound from the rounded current to the exact interval
+        in inverse-square Angstroms.
     arithmetic_environment_supported : Bool[Array, ""]
         Whether every load-bearing normal arithmetic probe passed.
     gradual_underflow_supported : Bool[Array, ""]
@@ -235,11 +306,15 @@ class GalerkinCoordinateCauchyCurrent(eqx.Module):
 
     Notes
     -----
-    ``current_diagnostic_eligible`` certifies only the submitted-state scalar
-    enclosure over acquisition-selected ``K_d`` fibers.  It does not certify
-    equality with a total full-plane current or a uniform operator/action
-    error bound for the rounded ``current_action``.  The two separately named
-    downstream eligibility fields are deliberately false.
+    ``current_diagnostic_eligible`` is provisional transform-compatible
+    evidence for the submitted-state scalar enclosure over
+    acquisition-selected ``K_d`` fibers.  A scientific consumer must first
+    host-reconstruct the nested target and exact-replay the whole diagnostic;
+    raw public-carrier possession is non-authoritative.  Even after that
+    preparation it does not certify equality with a total full-plane current
+    or a uniform operator/action error bound for the rounded
+    ``current_action``.  The two separately named downstream eligibility
+    fields are deliberately false.
     """
 
     target: GalerkinTargetManifest
@@ -266,6 +341,94 @@ class GalerkinCoordinateCauchyCurrent(eqx.Module):
     coefficient_metrics: str = eqx.field(static=True)
     current_target: str = eqx.field(static=True)
     eligibility_scope: str = eqx.field(static=True)
+
+
+class GalerkinCurrentOperatorCertificate(eqx.Module):
+    """Store uniform selected-sector LVT.55a operator evidence.
+
+    :see: :class:`~.test_terminal_types.TestCurrentOperatorTypes`
+
+    The carrier is the second, strictly stronger level of the RM-S4 terminal
+    ladder.  It nests one accepted submitted-state diagnostic, binds the
+    frozen dyadic ``T`` and ``N`` coefficient rows used by the rounded action,
+    and stores independent uniform LVT.55a4--LVT.55a5 enclosures.  It also
+    encloses the physical ``C_j`` normalization.  It has no vacuum-branch or
+    detector eligibility field.  Its public fields are a storage record, not
+    an authentication boundary: every scientific consumer must replay the
+    canonical producer and reject any payload mismatch before using it.  A
+    true ``current_operator_eligible`` stores uniform route capability only;
+    each submitted-field result additionally requires that call's action
+    enclosure ``finite_certificate``.  Trace coefficients have inverse
+    square-root Angstrom units, normal coefficients inverse three-halves
+    Angstrom units, and every current-operator error has inverse-square
+    Angstrom units.  ``number_current_scale`` has square Angstroms per second,
+    so its product with the current quadratic has inverse seconds.
+    """
+
+    diagnostic: GalerkinCoordinateCauchyCurrent
+    trace_frozen_coefficients: Complex128[Array, " n"]
+    normal_frozen_coefficients: Complex128[Array, " n"]
+    trace_coefficient_error_bounds: Float64[Array, " n"]
+    normal_coefficient_error_bounds: Float64[Array, " n"]
+    exact_trace_operator_norm_upper_bound: Float64[Array, ""]
+    exact_normal_operator_norm_upper_bound: Float64[Array, ""]
+    trace_operator_error_upper_bound: Float64[Array, ""]
+    normal_operator_error_upper_bound: Float64[Array, ""]
+    current_operator_error_upper_bound: Float64[Array, ""]
+    number_current_scale: Float64[Array, ""]
+    exact_number_current_scale_lower_bound: Float64[Array, ""]
+    exact_number_current_scale_upper_bound: Float64[Array, ""]
+    number_current_scale_error_upper_bound: Float64[Array, ""]
+    terminal_plane_coordinate: Float64[Array, ""]
+    arithmetic_environment_supported: Bool[Array, ""]
+    gradual_underflow_supported: Bool[Array, ""]
+    current_operator_eligible: Bool[Array, ""]
+    current_operator_failure_mask: Int64[Array, ""]
+    current_scope: GalerkinTerminalCurrentScope = eqx.field(static=True)
+    route: GalerkinTerminalCurrentRoute = eqx.field(static=True)
+    coefficient_metrics: str = eqx.field(static=True)
+    fixed_linear_target: str = eqx.field(static=True)
+    per_call_action_route: str = eqx.field(static=True)
+    current_normalization: str = eqx.field(static=True)
+    eligibility_scope: str = eqx.field(static=True)
+
+
+class GalerkinTerminalCurrentActionEnclosure(eqx.Module):
+    """Store one per-call frozen-current action enclosure.
+
+    :see: :class:`~.test_terminal_types.TestCurrentOperatorTypes`
+
+    The component rectangles enclose the exact-real action of the frozen
+    dyadic current matrix.  ``action_error_bound`` is the Euclidean distance
+    from the rounded public action to that matrix action for this submitted
+    field.  It is distinct from the uniform exact-target operator difference
+    stored by :class:`GalerkinCurrentOperatorCertificate`.  Public instances
+    are storage records: only the owning terminal encloser's canonical replay
+    establishes scientific evidence; the exported representation factory is
+    not an authentication boundary.
+
+    The action rectangles, component errors, and aggregate error have
+    inverse-square Angstrom units for dimensionless normalized state
+    coefficients.
+    """
+
+    certificate: GalerkinCurrentOperatorCertificate
+    submitted_field: Complex128[Array, " n"]
+    production_action: Complex128[Array, " n"]
+    algebraic_action_real_lower_bounds: Float64[Array, " n"]
+    algebraic_action_real_upper_bounds: Float64[Array, " n"]
+    algebraic_action_imag_lower_bounds: Float64[Array, " n"]
+    algebraic_action_imag_upper_bounds: Float64[Array, " n"]
+    component_error_bounds: Float64[Array, " n"]
+    action_error_bound: Float64[Array, ""]
+    arithmetic_environment_supported: Bool[Array, ""]
+    gradual_underflow_supported: Bool[Array, ""]
+    finite_certificate: Bool[Array, ""]
+    failure_mask: Int64[Array, ""]
+    route: GalerkinTerminalCurrentRoute = eqx.field(static=True)
+    exact_action_target: str = eqx.field(static=True)
+    coefficient_norm: str = eqx.field(static=True)
+    error_scope: str = eqx.field(static=True)
 
 
 @jaxtyped(typechecker=beartype)
@@ -543,12 +706,459 @@ def create_galerkin_coordinate_cauchy_current(  # noqa: PLR0913
     return diagnostic
 
 
+@jaxtyped(typechecker=beartype)
+def create_galerkin_current_operator_certificate(  # noqa: PLR0913,PLR0915
+    diagnostic: GalerkinCoordinateCauchyCurrent,
+    trace_frozen_coefficients: Complex[Array, "..."],
+    normal_frozen_coefficients: Complex[Array, "..."],
+    trace_coefficient_error_bounds: Float[Array, "..."],
+    normal_coefficient_error_bounds: Float[Array, "..."],
+    exact_trace_operator_norm_upper_bound: Float[Array, ""],
+    exact_normal_operator_norm_upper_bound: Float[Array, ""],
+    trace_operator_error_upper_bound: Float[Array, ""],
+    normal_operator_error_upper_bound: Float[Array, ""],
+    current_operator_error_upper_bound: Float[Array, ""],
+    number_current_scale: Float[Array, ""],
+    exact_number_current_scale_lower_bound: Float[Array, ""],
+    exact_number_current_scale_upper_bound: Float[Array, ""],
+    number_current_scale_error_upper_bound: Float[Array, ""],
+    terminal_plane_coordinate: Float[Array, ""],
+    arithmetic_environment_supported: Bool[Array, ""],
+    gradual_underflow_supported: Bool[Array, ""],
+    current_operator_failure_mask: Int[Array, ""],
+    *,
+    current_scope: GalerkinTerminalCurrentScope,
+    route: GalerkinTerminalCurrentRoute,
+    coefficient_metrics: str,
+    fixed_linear_target: str,
+    per_call_action_route: str,
+    current_normalization: str,
+    eligibility_scope: str,
+) -> GalerkinCurrentOperatorCertificate:
+    """Create validated uniform selected-sector current-operator evidence.
+
+    :see: :class:`~.test_terminal_types.TestCurrentOperatorTypes`
+
+    The eligibility bit is factory-derived from the exact typed failure mask;
+    callers cannot supply it independently.  This bounded first route fixes
+    ``xi=0`` and the acquisition-selected fiber scope.  It certifies neither a
+    vacuum branch nor a detector.
+
+    Returns
+    -------
+    certificate : GalerkinCurrentOperatorCertificate
+        Structurally validated public storage record.
+    """
+    state_size: int = diagnostic.target.support.state_indices.shape[0]
+    trace_coefficients: Complex128[Array, " n"] = jnp.asarray(
+        trace_frozen_coefficients, dtype=jnp.complex128
+    )
+    normal_coefficients: Complex128[Array, " n"] = jnp.asarray(
+        normal_frozen_coefficients, dtype=jnp.complex128
+    )
+    trace_errors: Float64[Array, " n"] = jnp.asarray(
+        trace_coefficient_error_bounds, dtype=jnp.float64
+    )
+    normal_errors: Float64[Array, " n"] = jnp.asarray(
+        normal_coefficient_error_bounds, dtype=jnp.float64
+    )
+    for values, name in (
+        (trace_coefficients, "trace_frozen_coefficients"),
+        (normal_coefficients, "normal_frozen_coefficients"),
+        (trace_errors, "trace_coefficient_error_bounds"),
+        (normal_errors, "normal_coefficient_error_bounds"),
+    ):
+        _raise_if(values.ndim != 1, f"{name} must be 1D")
+        _raise_if(values.shape[0] != state_size, f"{name} must match K_u")
+
+    trace_norm: Float64[Array, ""] = jnp.asarray(
+        exact_trace_operator_norm_upper_bound, dtype=jnp.float64
+    )
+    normal_norm: Float64[Array, ""] = jnp.asarray(
+        exact_normal_operator_norm_upper_bound, dtype=jnp.float64
+    )
+    trace_error: Float64[Array, ""] = jnp.asarray(
+        trace_operator_error_upper_bound, dtype=jnp.float64
+    )
+    normal_error: Float64[Array, ""] = jnp.asarray(
+        normal_operator_error_upper_bound, dtype=jnp.float64
+    )
+    current_error: Float64[Array, ""] = jnp.asarray(
+        current_operator_error_upper_bound, dtype=jnp.float64
+    )
+    current_scale: Float64[Array, ""] = jnp.asarray(
+        number_current_scale, dtype=jnp.float64
+    )
+    scale_lower: Float64[Array, ""] = jnp.asarray(
+        exact_number_current_scale_lower_bound, dtype=jnp.float64
+    )
+    scale_upper: Float64[Array, ""] = jnp.asarray(
+        exact_number_current_scale_upper_bound, dtype=jnp.float64
+    )
+    scale_error: Float64[Array, ""] = jnp.asarray(
+        number_current_scale_error_upper_bound, dtype=jnp.float64
+    )
+    plane: Float64[Array, ""] = jnp.asarray(
+        terminal_plane_coordinate, dtype=jnp.float64
+    )
+    arithmetic_supported: Bool[Array, ""] = jnp.asarray(
+        arithmetic_environment_supported
+    )
+    gradual_supported: Bool[Array, ""] = jnp.asarray(
+        gradual_underflow_supported
+    )
+    failure_mask: Int64[Array, ""] = jnp.asarray(
+        current_operator_failure_mask, dtype=jnp.int64
+    )
+    for value, name in (
+        (trace_norm, "exact_trace_operator_norm_upper_bound"),
+        (normal_norm, "exact_normal_operator_norm_upper_bound"),
+        (trace_error, "trace_operator_error_upper_bound"),
+        (normal_error, "normal_operator_error_upper_bound"),
+        (current_error, "current_operator_error_upper_bound"),
+        (current_scale, "number_current_scale"),
+        (scale_lower, "exact_number_current_scale_lower_bound"),
+        (scale_upper, "exact_number_current_scale_upper_bound"),
+        (scale_error, "number_current_scale_error_upper_bound"),
+        (plane, "terminal_plane_coordinate"),
+        (arithmetic_supported, "arithmetic_environment_supported"),
+        (gradual_supported, "gradual_underflow_supported"),
+        (failure_mask, "current_operator_failure_mask"),
+    ):
+        _raise_if(value.shape != (), f"{name} must be a scalar")
+
+    _raise_if(
+        current_scope
+        is not GalerkinTerminalCurrentScope.SELECTED_ACQUISITION_FIBER_SECTOR,
+        "bounded current-operator route requires selected K_d fiber scope",
+    )
+    _raise_if(
+        current_scope is not diagnostic.current_scope,
+        "current_scope must match the nested diagnostic",
+    )
+    _raise_if(
+        route
+        is not (GalerkinTerminalCurrentRoute.FTZ_SAFE_EXACT_CARRIER_CAUCHY),
+        "current-operator route must match the coordinate-current route",
+    )
+    for declaration, name in (
+        (coefficient_metrics, "coefficient_metrics"),
+        (fixed_linear_target, "fixed_linear_target"),
+        (per_call_action_route, "per_call_action_route"),
+        (current_normalization, "current_normalization"),
+        (eligibility_scope, "eligibility_scope"),
+    ):
+        _raise_if(not declaration.strip(), f"{name} must be nonempty")
+
+    nonnegative_bounds: Bool[Array, ""] = (
+        jnp.all(trace_errors >= 0.0)
+        & jnp.all(normal_errors >= 0.0)
+        & (trace_norm >= 0.0)
+        & (normal_norm >= 0.0)
+        & (trace_error >= 0.0)
+        & (normal_error >= 0.0)
+        & (current_error >= 0.0)
+    )
+    finite_operator_evidence: Bool[Array, ""] = (
+        jnp.all(jnp.isfinite(trace_coefficients))
+        & jnp.all(jnp.isfinite(normal_coefficients))
+        & jnp.all(jnp.isfinite(trace_errors))
+        & jnp.all(jnp.isfinite(normal_errors))
+        & jnp.isfinite(trace_norm)
+        & jnp.isfinite(normal_norm)
+        & jnp.isfinite(trace_error)
+        & jnp.isfinite(normal_error)
+        & jnp.isfinite(current_error)
+        & jnp.isfinite(plane)
+        & (plane == 0.0)
+        & nonnegative_bounds
+    )
+    scale_distance: Float64[Array, ""] = jnp.maximum(
+        jnp.abs(current_scale - scale_lower),
+        jnp.abs(current_scale - scale_upper),
+    )
+    normalization_enclosed: Bool[Array, ""] = (
+        jnp.isfinite(current_scale)
+        & jnp.isfinite(scale_lower)
+        & jnp.isfinite(scale_upper)
+        & jnp.isfinite(scale_error)
+        & (current_scale > 0.0)
+        & (scale_lower > 0.0)
+        & (scale_lower <= scale_upper)
+        & (scale_error >= scale_distance)
+    )
+    diagnostic_eligible: Bool[Array, ""] = (
+        diagnostic.current_diagnostic_eligible
+    )
+    fixed_linear_eligible: Bool[Array, ""] = (
+        diagnostic.target.fixed_linear_error_ledger.finite_certificate
+    )
+    zero: Int64[Array, ""] = jnp.asarray(
+        int(GalerkinCurrentOperatorFailure.NONE), dtype=jnp.int64
+    )
+    expected_mask: Int64[Array, ""] = zero
+    for passed, reason in (
+        (
+            diagnostic_eligible,
+            GalerkinCurrentOperatorFailure.CURRENT_DIAGNOSTIC_INELIGIBLE,
+        ),
+        (
+            fixed_linear_eligible,
+            GalerkinCurrentOperatorFailure.FIXED_LINEAR_CERTIFICATE_INELIGIBLE,
+        ),
+        (
+            arithmetic_supported,
+            GalerkinCurrentOperatorFailure.ARITHMETIC_ENVIRONMENT_UNSUPPORTED,
+        ),
+        (
+            finite_operator_evidence,
+            GalerkinCurrentOperatorFailure.NONFINITE_OPERATOR_EVIDENCE,
+        ),
+        (
+            normalization_enclosed,
+            GalerkinCurrentOperatorFailure.CURRENT_NORMALIZATION_UNENCLOSED,
+        ),
+    ):
+        expected_mask = jnp.bitwise_or(
+            expected_mask,
+            jnp.where(passed, zero, int(reason)),
+        )
+    checked_failure: Int64[Array, ""] = eqx.error_if(
+        failure_mask,
+        failure_mask != expected_mask,
+        "current-operator failure mask must equal reconstructed predicates",
+    )
+    eligible: Bool[Array, ""] = checked_failure == int(
+        GalerkinCurrentOperatorFailure.NONE
+    )
+    certificate: GalerkinCurrentOperatorCertificate = (
+        GalerkinCurrentOperatorCertificate(
+            diagnostic=diagnostic,
+            trace_frozen_coefficients=trace_coefficients,
+            normal_frozen_coefficients=normal_coefficients,
+            trace_coefficient_error_bounds=trace_errors,
+            normal_coefficient_error_bounds=normal_errors,
+            exact_trace_operator_norm_upper_bound=trace_norm,
+            exact_normal_operator_norm_upper_bound=normal_norm,
+            trace_operator_error_upper_bound=trace_error,
+            normal_operator_error_upper_bound=normal_error,
+            current_operator_error_upper_bound=current_error,
+            number_current_scale=current_scale,
+            exact_number_current_scale_lower_bound=scale_lower,
+            exact_number_current_scale_upper_bound=scale_upper,
+            number_current_scale_error_upper_bound=scale_error,
+            terminal_plane_coordinate=plane,
+            arithmetic_environment_supported=arithmetic_supported,
+            gradual_underflow_supported=gradual_supported,
+            current_operator_eligible=eligible,
+            current_operator_failure_mask=checked_failure,
+            current_scope=current_scope,
+            route=route,
+            coefficient_metrics=coefficient_metrics.strip(),
+            fixed_linear_target=fixed_linear_target.strip(),
+            per_call_action_route=per_call_action_route.strip(),
+            current_normalization=current_normalization.strip(),
+            eligibility_scope=eligibility_scope.strip(),
+        )
+    )
+    return certificate
+
+
+@jaxtyped(typechecker=beartype)
+def create_galerkin_terminal_current_action_enclosure(  # noqa: PLR0913,PLR0915
+    certificate: GalerkinCurrentOperatorCertificate,
+    submitted_field: Complex[Array, "..."],
+    production_action: Complex[Array, "..."],
+    algebraic_action_real_lower_bounds: Float[Array, "..."],
+    algebraic_action_real_upper_bounds: Float[Array, "..."],
+    algebraic_action_imag_lower_bounds: Float[Array, "..."],
+    algebraic_action_imag_upper_bounds: Float[Array, "..."],
+    component_error_bounds: Float[Array, "..."],
+    action_error_bound: Float[Array, ""],
+    arithmetic_environment_supported: Bool[Array, ""],
+    gradual_underflow_supported: Bool[Array, ""],
+    failure_mask: Int[Array, ""],
+    *,
+    route: GalerkinTerminalCurrentRoute,
+    exact_action_target: str,
+    coefficient_norm: str,
+    error_scope: str,
+) -> GalerkinTerminalCurrentActionEnclosure:
+    """Create one validated per-call frozen-current action enclosure.
+
+    :see: :class:`~.test_terminal_types.TestCurrentOperatorTypes`
+
+    This factory checks representation invariants only.  The canonical
+    terminal producer computes the load-bearing aggregate norm with shared
+    FTZ-safe interval arithmetic, and every scientific consumer must replay
+    that producer rather than trusting a public carrier by possession.
+
+    Returns
+    -------
+    enclosure : GalerkinTerminalCurrentActionEnclosure
+        Structurally validated public storage record.
+    """
+    state_size: int = (
+        certificate.diagnostic.target.support.state_indices.shape[0]
+    )
+    field: Complex128[Array, " n"] = jnp.asarray(
+        submitted_field, dtype=jnp.complex128
+    )
+    action: Complex128[Array, " n"] = jnp.asarray(
+        production_action, dtype=jnp.complex128
+    )
+    real_lower: Float64[Array, " n"] = jnp.asarray(
+        algebraic_action_real_lower_bounds, dtype=jnp.float64
+    )
+    real_upper: Float64[Array, " n"] = jnp.asarray(
+        algebraic_action_real_upper_bounds, dtype=jnp.float64
+    )
+    imag_lower: Float64[Array, " n"] = jnp.asarray(
+        algebraic_action_imag_lower_bounds, dtype=jnp.float64
+    )
+    imag_upper: Float64[Array, " n"] = jnp.asarray(
+        algebraic_action_imag_upper_bounds, dtype=jnp.float64
+    )
+    component_errors: Float64[Array, " n"] = jnp.asarray(
+        component_error_bounds, dtype=jnp.float64
+    )
+    for values, name in (
+        (field, "submitted_field"),
+        (action, "production_action"),
+        (real_lower, "algebraic_action_real_lower_bounds"),
+        (real_upper, "algebraic_action_real_upper_bounds"),
+        (imag_lower, "algebraic_action_imag_lower_bounds"),
+        (imag_upper, "algebraic_action_imag_upper_bounds"),
+        (component_errors, "component_error_bounds"),
+    ):
+        _raise_if(values.ndim != 1, f"{name} must be 1D")
+        _raise_if(values.shape[0] != state_size, f"{name} must match K_u")
+    error: Float64[Array, ""] = jnp.asarray(
+        action_error_bound, dtype=jnp.float64
+    )
+    arithmetic_supported: Bool[Array, ""] = jnp.asarray(
+        arithmetic_environment_supported
+    )
+    gradual_supported: Bool[Array, ""] = jnp.asarray(
+        gradual_underflow_supported
+    )
+    submitted_failure: Int64[Array, ""] = jnp.asarray(
+        failure_mask, dtype=jnp.int64
+    )
+    for value, name in (
+        (error, "action_error_bound"),
+        (arithmetic_supported, "arithmetic_environment_supported"),
+        (gradual_supported, "gradual_underflow_supported"),
+        (submitted_failure, "failure_mask"),
+    ):
+        _raise_if(value.shape != (), f"{name} must be a scalar")
+    _raise_if(route is not certificate.route, "route must match certificate")
+    for declaration, name in (
+        (exact_action_target, "exact_action_target"),
+        (coefficient_norm, "coefficient_norm"),
+        (error_scope, "error_scope"),
+    ):
+        _raise_if(not declaration.strip(), f"{name} must be nonempty")
+
+    ordered: Bool[Array, ""] = jnp.all(
+        (real_lower <= real_upper) & (imag_lower <= imag_upper)
+    )
+    finite_evidence: Bool[Array, ""] = (
+        jnp.all(jnp.isfinite(field))
+        & jnp.all(jnp.isfinite(action))
+        & jnp.all(jnp.isfinite(real_lower))
+        & jnp.all(jnp.isfinite(real_upper))
+        & jnp.all(jnp.isfinite(imag_lower))
+        & jnp.all(jnp.isfinite(imag_upper))
+        & jnp.all(jnp.isfinite(component_errors))
+        & jnp.isfinite(error)
+        & jnp.all(component_errors >= 0.0)
+        & (error >= 0.0)
+        & ordered
+    )
+    real_distance: Float64[Array, " n"] = jnp.maximum(
+        jnp.abs(jnp.real(action) - real_lower),
+        jnp.abs(jnp.real(action) - real_upper),
+    )
+    imag_distance: Float64[Array, " n"] = jnp.maximum(
+        jnp.abs(jnp.imag(action) - imag_lower),
+        jnp.abs(jnp.imag(action) - imag_upper),
+    )
+    component_coverage: Bool[Array, ""] = jnp.all(
+        component_errors >= jnp.hypot(real_distance, imag_distance)
+    )
+    component_floor_coverage: Bool[Array, ""] = error >= jnp.max(
+        component_errors
+    )
+    finite_evidence = (
+        finite_evidence & component_coverage & component_floor_coverage
+    )
+    zero: Int64[Array, ""] = jnp.asarray(
+        int(GalerkinTerminalCurrentActionFailure.NONE), dtype=jnp.int64
+    )
+    expected_mask: Int64[Array, ""] = zero
+    for passed, reason in (
+        (
+            certificate.current_operator_eligible,
+            GalerkinTerminalCurrentActionFailure.OPERATOR_INELIGIBLE,
+        ),
+        (
+            arithmetic_supported,
+            GalerkinTerminalCurrentActionFailure.ARITHMETIC_ENVIRONMENT_UNSUPPORTED,
+        ),
+        (
+            finite_evidence,
+            GalerkinTerminalCurrentActionFailure.NONFINITE_ACTION_EVIDENCE,
+        ),
+    ):
+        expected_mask = jnp.bitwise_or(
+            expected_mask,
+            jnp.where(passed, zero, int(reason)),
+        )
+    checked_failure: Int64[Array, ""] = eqx.error_if(
+        submitted_failure,
+        submitted_failure != expected_mask,
+        "current-action failure mask must equal reconstructed predicates",
+    )
+    finite_certificate: Bool[Array, ""] = checked_failure == int(
+        GalerkinTerminalCurrentActionFailure.NONE
+    )
+    enclosure: GalerkinTerminalCurrentActionEnclosure = (
+        GalerkinTerminalCurrentActionEnclosure(
+            certificate=certificate,
+            submitted_field=field,
+            production_action=action,
+            algebraic_action_real_lower_bounds=real_lower,
+            algebraic_action_real_upper_bounds=real_upper,
+            algebraic_action_imag_lower_bounds=imag_lower,
+            algebraic_action_imag_upper_bounds=imag_upper,
+            component_error_bounds=component_errors,
+            action_error_bound=error,
+            arithmetic_environment_supported=arithmetic_supported,
+            gradual_underflow_supported=gradual_supported,
+            finite_certificate=finite_certificate,
+            failure_mask=checked_failure,
+            route=route,
+            exact_action_target=exact_action_target.strip(),
+            coefficient_norm=coefficient_norm.strip(),
+            error_scope=error_scope.strip(),
+        )
+    )
+    return enclosure
+
+
 __all__: list[str] = [
     "GalerkinCoordinateCauchyCurrent",
+    "GalerkinCurrentOperatorCertificate",
+    "GalerkinCurrentOperatorFailure",
     "GalerkinDetectorFailure",
+    "GalerkinTerminalCurrentActionEnclosure",
+    "GalerkinTerminalCurrentActionFailure",
     "GalerkinTerminalCurrentFailure",
     "GalerkinTerminalCurrentRoute",
     "GalerkinTerminalCurrentScope",
     "GalerkinVacuumBranchFailure",
     "create_galerkin_coordinate_cauchy_current",
+    "create_galerkin_current_operator_certificate",
+    "create_galerkin_terminal_current_action_enclosure",
 ]

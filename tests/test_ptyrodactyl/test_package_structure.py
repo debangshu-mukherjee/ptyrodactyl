@@ -28,10 +28,13 @@ _PUBLIC_PACKAGES = (
 _ROUTINE_KIND_ORDER = {"class": 0, "func": 1, "obj": 2}
 _INTERNAL_TOOL_LEAVES: Tuple[str, ...] = (
     "canonical_digest",
+    "censored_poisson_differential_interval",
+    "entire_interval",
     "host_interval",
     "interval",
     "numeric",
     "physics",
+    "poisson_interval",
 )
 _PRIVATE_FUNCTION_SECTION_ORDER = {
     "Extended Summary": 0,
@@ -1037,7 +1040,7 @@ def test_removed_convergent_born_namespace_is_absent() -> None:
 
 
 def test_private_tools_owns_exact_internal_infrastructure_leaves() -> None:
-    """Require _tools to own only its five internal leaves and type marker."""
+    """Require _tools to own only its seven internal leaves and type marker."""
     assert find_spec("ptyrodactyl._tools") is not None
     tools_path = _module_path("ptyrodactyl._tools").parent
     expected_files = {"__init__.py", "py.typed"}

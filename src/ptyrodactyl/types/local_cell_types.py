@@ -17,6 +17,10 @@ Routine Listings
     Store the outward local-cell coefficient-error route.
 :class:`GalerkinLocalCellPotentialRealization`
     Store one LVT-1 local-cell coefficient realization.
+:class:`GalerkinLocalCellTailEnclosure`
+    Store one authenticated LVT.9 full Fourier-tail enclosure.
+:class:`GalerkinLocalCellTailFailure`
+    Store the outcome of one LVT.9 enclosure attempt.
 :class:`GalerkinVoxelTargetRoute`
     Store the disjoint voxel finite-target interpretation.
 :class:`LocalCellPotential3D`
@@ -278,6 +282,31 @@ TestLocalCellCoefficientCertificateTypes`
     HOST_ARITHMETIC_UNSUPPORTED = "host_arithmetic_unsupported"
     WORK_BUDGET_EXCEEDED = "work_budget_exceeded"
     ROOT_ENCLOSURE_FAILURE = "root_enclosure_failure"
+    ARITHMETIC_RANGE_FAILURE = "arithmetic_range_failure"
+
+
+class GalerkinLocalCellTailFailure(str, Enum):
+    """Store the outcome of one LVT.9 enclosure attempt.
+
+    :see: :class:`GalerkinLocalCellTailEnclosure`
+    :see: :class:`~.test_local_cell_types.TestLocalCellTailEnclosureTypes`
+
+    Attributes
+    ----------
+    NONE : str
+        The authenticated LVT.13 parent produced a finite LVT.9 enclosure.
+    PARENT_CERTIFICATE_NOT_FINITE : str
+        The replay-authenticated LVT.13 parent is a typed noncertificate.
+    PARSEVAL_CONTRADICTION : str
+        The retained-energy lower bound exceeds the exact cell energy.
+    ARITHMETIC_RANGE_FAILURE : str
+        A finite exact rational endpoint is not representable by finite
+        outward binary64 evidence.
+    """
+
+    NONE = "none"
+    PARENT_CERTIFICATE_NOT_FINITE = "parent_certificate_not_finite"
+    PARSEVAL_CONTRADICTION = "parseval_contradiction"
     ARITHMETIC_RANGE_FAILURE = "arithmetic_range_failure"
 
 
@@ -1085,11 +1114,248 @@ def _create_direct_local_cell_realization(
     return refined
 
 
+class GalerkinLocalCellTailEnclosure(eqx.Module):
+    """Store one authenticated LVT.9 full Fourier-tail enclosure.
+
+    :see: :class:`~.test_local_cell_types.TestLocalCellTailEnclosureTypes`
+
+    Attributes
+    ----------
+    realization : GalerkinLocalCellPotentialRealization
+        Replay-authenticated DIRECT LVT.13 parent realization.
+    squared_tail_lower_bound : Float64[Array, ""]
+        Outward lower endpoint for the squared box-L2 tail norm.
+    squared_tail_upper_bound : Float64[Array, ""]
+        Outward upper endpoint for the squared box-L2 tail norm.
+    tail_l2_lower_bound : Float64[Array, ""]
+        Outward lower endpoint for the box-L2 tail norm.
+    tail_l2_upper_bound : Float64[Array, ""]
+        Outward upper endpoint for the box-L2 tail norm.
+    finite_enclosure : Bool[Array, ""]
+        Whether all four LVT.9 endpoints are finite.
+    failure : GalerkinLocalCellTailFailure
+        Static typed tail-enclosure outcome.
+    parent_certificate_failure : GalerkinLocalCellCertificateFailure
+        Exact typed outcome propagated from the authenticated parent.
+    exact_target : str
+        Static LVT.9 target declaration.
+    arithmetic : str
+        Static exact-rational and outward-conversion declaration.
+    parent_certificate_digest : str
+        Authenticated DIRECT LVT.13 parent identity.
+    tail_enclosure_digest : str
+        Complete child evidence identity.
+
+    Notes
+    -----
+    A parent noncertificate or tail arithmetic failure is represented by both
+    intervals ``[0, +inf]``. This public carrier is forgeable storage;
+    scientific consumers must replay the private LVT.9 authenticator.
+    """
+
+    realization: GalerkinLocalCellPotentialRealization
+    squared_tail_lower_bound: Float64[Array, ""]
+    squared_tail_upper_bound: Float64[Array, ""]
+    tail_l2_lower_bound: Float64[Array, ""]
+    tail_l2_upper_bound: Float64[Array, ""]
+    finite_enclosure: Bool[Array, ""]
+    failure: GalerkinLocalCellTailFailure = eqx.field(static=True)
+    parent_certificate_failure: GalerkinLocalCellCertificateFailure = (
+        eqx.field(static=True)
+    )
+    exact_target: str = eqx.field(static=True)
+    arithmetic: str = eqx.field(static=True)
+    parent_certificate_digest: str = eqx.field(static=True)
+    tail_enclosure_digest: str = eqx.field(static=True)
+
+
+@jaxtyped(typechecker=beartype)
+def _make_local_cell_tail_enclosure(  # noqa: PLR0913
+    realization: GalerkinLocalCellPotentialRealization,
+    squared_tail_lower_bound: Float[Array, ""],
+    squared_tail_upper_bound: Float[Array, ""],
+    tail_l2_lower_bound: Float[Array, ""],
+    tail_l2_upper_bound: Float[Array, ""],
+    finite_enclosure: Bool[Array, ""],
+    *,
+    failure: GalerkinLocalCellTailFailure,
+    parent_certificate_failure: GalerkinLocalCellCertificateFailure,
+    exact_target: str,
+    arithmetic: str,
+    parent_certificate_digest: str,
+    tail_enclosure_digest: str,
+) -> GalerkinLocalCellTailEnclosure:
+    """PRIVATE: Jointly validate and store one LVT.9 enclosure attempt.
+
+    Parameters
+    ----------
+    realization : GalerkinLocalCellPotentialRealization
+        Replay-authenticated DIRECT LVT.13 parent realization.
+    squared_tail_lower_bound : Float[Array, ""]
+        Submitted squared-tail lower endpoint.
+    squared_tail_upper_bound : Float[Array, ""]
+        Submitted squared-tail upper endpoint.
+    tail_l2_lower_bound : Float[Array, ""]
+        Submitted tail-norm lower endpoint.
+    tail_l2_upper_bound : Float[Array, ""]
+        Submitted tail-norm upper endpoint.
+    finite_enclosure : Bool[Array, ""]
+        Whether all submitted endpoints are finite.
+    failure : GalerkinLocalCellTailFailure
+        Typed tail-enclosure outcome.
+    parent_certificate_failure : GalerkinLocalCellCertificateFailure
+        Typed outcome of the authenticated parent.
+    exact_target : str
+        Nonempty LVT.9 target declaration.
+    arithmetic : str
+        Nonempty arithmetic declaration.
+    parent_certificate_digest : str
+        Authenticated DIRECT LVT.13 parent identity.
+    tail_enclosure_digest : str
+        Complete child evidence identity.
+
+    Returns
+    -------
+    enclosure : GalerkinLocalCellTailEnclosure
+        Structurally checked LVT.9 evidence storage.
+
+    Raises
+    ------
+    ValueError
+        If parent binding, declarations, scalar shapes, or digests are
+        invalid.
+    equinox.EquinoxRuntimeError
+        If numeric endpoints contradict the typed outcome.
+    """
+    squared_lower: Float64[Array, ""] = jnp.asarray(
+        squared_tail_lower_bound,
+        dtype=jnp.float64,
+    )
+    squared_upper: Float64[Array, ""] = jnp.asarray(
+        squared_tail_upper_bound,
+        dtype=jnp.float64,
+    )
+    norm_lower: Float64[Array, ""] = jnp.asarray(
+        tail_l2_lower_bound,
+        dtype=jnp.float64,
+    )
+    norm_upper: Float64[Array, ""] = jnp.asarray(
+        tail_l2_upper_bound,
+        dtype=jnp.float64,
+    )
+    finite: Bool[Array, ""] = jnp.asarray(
+        finite_enclosure,
+        dtype=jnp.bool_,
+    )
+    scalar_fields = (
+        squared_lower,
+        squared_upper,
+        norm_lower,
+        norm_upper,
+        finite,
+    )
+    _raise_if(
+        any(value.shape != () for value in scalar_fields),
+        "local-cell tail fields must be scalars",
+    )
+    _raise_if(not exact_target.strip(), "exact_target must be nonempty")
+    _raise_if(not arithmetic.strip(), "arithmetic must be nonempty")
+    for value, name in (
+        (parent_certificate_digest, "parent_certificate_digest"),
+        (tail_enclosure_digest, "tail_enclosure_digest"),
+    ):
+        _raise_if(
+            not isinstance(value, str)
+            or len(value) != _SHA256_HEX_LENGTH
+            or value != value.lower()
+            or any(character not in "0123456789abcdef" for character in value),
+            f"{name} must be a lowercase SHA-256 digest",
+        )
+    certificate = realization.coefficient_certificate
+    if certificate is None:
+        raise ValueError("tail enclosure requires DIRECT LVT.13")
+    _raise_if(
+        certificate.certificate_digest != parent_certificate_digest,
+        "tail parent digest must match the realization certificate",
+    )
+    _raise_if(
+        certificate.failure is not parent_certificate_failure,
+        "tail parent failure must match the realization certificate",
+    )
+
+    failure_is_none: bool = failure is GalerkinLocalCellTailFailure.NONE
+    parent_is_none: bool = (
+        parent_certificate_failure is GalerkinLocalCellCertificateFailure.NONE
+    )
+    parent_relation_invalid: bool = (
+        (failure is GalerkinLocalCellTailFailure.NONE and not parent_is_none)
+        or (
+            failure
+            is GalerkinLocalCellTailFailure.PARENT_CERTIFICATE_NOT_FINITE
+            and parent_is_none
+        )
+        or (
+            failure
+            not in (
+                GalerkinLocalCellTailFailure.NONE,
+                GalerkinLocalCellTailFailure.PARENT_CERTIFICATE_NOT_FINITE,
+            )
+            and not parent_is_none
+        )
+    )
+    invalid: Bool[Array, ""] = (
+        jnp.isnan(squared_lower)
+        | jnp.isnan(squared_upper)
+        | jnp.isnan(norm_lower)
+        | jnp.isnan(norm_upper)
+        | (squared_lower < 0.0)
+        | (norm_lower < 0.0)
+        | (squared_lower > squared_upper)
+        | (norm_lower > norm_upper)
+        | (finite != failure_is_none)
+        | parent_relation_invalid
+    )
+    success_invalid: Bool[Array, ""] = finite & (
+        (~jnp.isfinite(squared_lower))
+        | (~jnp.isfinite(squared_upper))
+        | (~jnp.isfinite(norm_lower))
+        | (~jnp.isfinite(norm_upper))
+    )
+    failure_invalid: Bool[Array, ""] = (~finite) & (
+        (squared_lower != 0.0)
+        | (~jnp.isposinf(squared_upper))
+        | (norm_lower != 0.0)
+        | (~jnp.isposinf(norm_upper))
+    )
+    checked_squared_lower: Float64[Array, ""] = eqx.error_if(
+        squared_lower,
+        invalid | success_invalid | failure_invalid,
+        "local-cell tail fields contradict their typed outcome",
+    )
+    enclosure: GalerkinLocalCellTailEnclosure = GalerkinLocalCellTailEnclosure(
+        realization=realization,
+        squared_tail_lower_bound=checked_squared_lower,
+        squared_tail_upper_bound=squared_upper,
+        tail_l2_lower_bound=norm_lower,
+        tail_l2_upper_bound=norm_upper,
+        finite_enclosure=finite,
+        failure=failure,
+        parent_certificate_failure=parent_certificate_failure,
+        exact_target=exact_target.strip(),
+        arithmetic=arithmetic.strip(),
+        parent_certificate_digest=parent_certificate_digest,
+        tail_enclosure_digest=tail_enclosure_digest,
+    )
+    return enclosure
+
+
 __all__: list[str] = [
     "GalerkinLocalCellCertificateFailure",
     "GalerkinLocalCellCoefficientCertificate",
     "GalerkinLocalCellErrorRoute",
     "GalerkinLocalCellPotentialRealization",
+    "GalerkinLocalCellTailEnclosure",
+    "GalerkinLocalCellTailFailure",
     "GalerkinVoxelTargetRoute",
     "LocalCellPotential3D",
     "create_local_cell_potential_3d",

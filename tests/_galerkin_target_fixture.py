@@ -91,6 +91,7 @@ def checked_acquisition(
     *,
     voltage_kv: float = TARGET_VOLTAGE_KV,
     terminal_axis: int = 0,
+    terminal_side: GalerkinTerminalSide = GalerkinTerminalSide.POSITIVE,
     carrier_direction: Tuple[float, float, float] | None = None,
     projected_offset: Tuple[float, float, float] | None = None,
     backward_disposition: GalerkinBackwardDisposition = (
@@ -166,7 +167,7 @@ def checked_acquisition(
             dtype=jnp.float64,
         ),
         terminal_axis=terminal_axis,
-        terminal_side=GalerkinTerminalSide.POSITIVE,
+        terminal_side=terminal_side,
         carrier_id="fixture-carrier-0",
         carrier_ownership=(
             GalerkinCarrierOwnership.INDEPENDENT_SINGLE_CARRIER

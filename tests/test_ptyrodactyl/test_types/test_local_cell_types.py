@@ -27,6 +27,8 @@ from ptyrodactyl.types.local_cell_types import (
     GalerkinLocalCellCoefficientCertificate,
     GalerkinLocalCellErrorRoute,
     GalerkinLocalCellPotentialRealization,
+    GalerkinLocalCellTailEnclosure,
+    GalerkinLocalCellTailFailure,
     GalerkinVoxelTargetRoute,
     LocalCellPotential3D,
     create_local_cell_potential_3d,
@@ -316,3 +318,36 @@ GalerkinLocalCellCoefficientCertificate`
             module.__all__
         )
         assert not hasattr(module, "create_local_cell_coefficient_certificate")
+
+
+class TestLocalCellTailEnclosureTypes:
+    """Freeze the separate LVT.9 evidence carrier and failure vocabulary.
+
+    :see: :class:`ptyrodactyl.types.GalerkinLocalCellTailEnclosure`
+    :see: :class:`ptyrodactyl.types.GalerkinLocalCellTailFailure`
+    """
+
+    def test_tail_failure_values_and_interval_dtypes_are_stable(self) -> None:
+        """Keep finite, parent-failed, and local-failed outcomes distinct."""
+        assert GalerkinLocalCellTailFailure.NONE.value == "none"
+        assert (
+            GalerkinLocalCellTailFailure.PARENT_CERTIFICATE_NOT_FINITE.value
+            == "parent_certificate_not_finite"
+        )
+        assert (
+            GalerkinLocalCellTailFailure.PARSEVAL_CONTRADICTION.value
+            == "parseval_contradiction"
+        )
+        annotations = GalerkinLocalCellTailEnclosure.__annotations__
+        assert annotations["squared_tail_lower_bound"].dtypes == ("float64",)
+        assert annotations["squared_tail_upper_bound"].dtypes == ("float64",)
+        assert annotations["tail_l2_lower_bound"].dtypes == ("float64",)
+        assert annotations["tail_l2_upper_bound"].dtypes == ("float64",)
+        assert annotations["finite_enclosure"].dtypes == ("bool", "bool_")
+
+    def test_no_public_raw_tail_factory_exists(self) -> None:
+        """Reserve LVT.9 semantic minting for the authenticated host action."""
+        module = importlib.import_module("ptyrodactyl.types.local_cell_types")
+
+        assert "create_local_cell_tail_enclosure" not in module.__all__
+        assert not hasattr(module, "create_local_cell_tail_enclosure")

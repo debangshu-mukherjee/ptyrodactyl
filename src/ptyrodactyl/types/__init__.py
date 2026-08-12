@@ -7,6 +7,8 @@ aliases and physical constants used throughout ptyrodactyl.
 
 The submodules are organized as follows:
 
+- :mod:`absorber_types`
+    Axial local-cell CAP profile, coefficient, and floor evidence.
 - :mod:`acquisition_types`
     Checked scalar Galerkin acquisition-support carriers.
 - :mod:`action_error_types`
@@ -33,8 +35,28 @@ The submodules are organized as follows:
     Jacobian parameter and solver-state carriers.
 - :mod:`local_cell_interaction_types`
     Exact local-cell compression and fixed interaction-core carriers.
+- :mod:`local_cell_target_types`
+    Solver-ready local-cell target and disjoint fixed-linear ledger carriers.
 - :mod:`local_cell_types`
     Disjoint periodic local-cell potential and realization carriers.
+- :mod:`local_detector_types`
+    Local positive-port, passive-pixel, detector, and likelihood evidence.
+- :mod:`local_projection_types`
+    Exact local projection-defect Gram, measurement, and state-lift carriers.
+- :mod:`local_represented_source_types`
+    Disjoint represented local-source and direct action-evidence carriers.
+- :mod:`local_source_types`
+    Disjoint LVT.20 local additional-source carriers and direct evidence.
+- :mod:`local_stability_types`
+    Bounded local represented-source stability proof and result carriers.
+- :mod:`local_terminal_types`
+    Authenticated local coordinate-terminal current carriers.
+- :mod:`local_vacuum_propagation_types`
+    Exact local vacuum-root and homogeneous propagator evidence carriers.
+- :mod:`local_vacuum_terminal_types`
+    Composed local vacuum-terminal continuation evidence carriers.
+- :mod:`local_zero_slab_types`
+    Exact LVT.21--LVT.22 local zero-slab evidence carriers.
 - :mod:`potential_types`
     Three-dimensional scalar-potential carrier and factory.
 - :mod:`realization_error_types`
@@ -86,6 +108,20 @@ Routine Listings
     Store the finite operator direction being enclosed.
 :class:`GalerkinActionErrorRoute`
     Store the admitted per-call action enclosure route.
+:class:`GalerkinAxialCapCoefficientCertificate`
+    Store replayable LVT.24 rectangles and the LVT.31 transfer.
+:class:`GalerkinAxialCapCoefficientFailure`
+    Enumerate typed LVT.24/LVT.26/LVT.31 noncertificate outcomes.
+:class:`GalerkinAxialCapExactFloorFailure`
+    Enumerate typed support-only exact LVT.29a proof outcomes.
+:class:`GalerkinAxialCapFloorProof`
+    Store independently eligible exact-target and realized CAP floors.
+:class:`GalerkinAxialCapRealizedFloorFailure`
+    Enumerate typed coefficient-dependent realized-floor outcomes.
+:class:`GalerkinAxialCapRealizedFloorRoute`
+    Select one mutually exclusive physical realized-floor route.
+:class:`GalerkinAxialCellAbsorber`
+    Store one axis-only LVT.23 profile and frozen LVT.24 approximant.
 :class:`GalerkinBackwardDisposition`
     Store the declared treatment of the backward sector.
 :class:`GalerkinCarrierOverlapDisposition`
@@ -98,6 +134,10 @@ Routine Listings
     Store the reason that a Galerkin result lacks certification.
 :class:`GalerkinCoordinateCauchyCurrent`
     Store one bounded selected-sector coordinate-current diagnostic.
+:class:`GalerkinCurrentOperatorCertificate`
+    Store uniform selected-sector LVT.55a operator evidence.
+:class:`GalerkinCurrentOperatorFailure`
+    Enumerate fail-closed uniform current-operator predicate bits.
 :class:`GalerkinDetectorFailure`
     Store the unavailable detector-contract reasons.
 :class:`GalerkinDirectionDisposition`
@@ -108,6 +148,14 @@ Routine Listings
     Store the admitted exact absorber and CAP realization route.
 :class:`GalerkinFixedLinearErrorLedger`
     Store componentwise RM-S2 S2.27--S2.43 evidence.
+:class:`GalerkinLocalAdditionalSource`
+    Store one rounded ZERO or complex LOCAL_CELL LVT.20a--LVT.20c map.
+:class:`GalerkinLocalAdditionalSourceCertificate`
+    Store direct rectangles and the LVT.20e source-norm transfer.
+:class:`GalerkinLocalAdditionalSourceCertificateFailure`
+    Store one typed direct LVT.20c certificate outcome.
+:class:`GalerkinLocalAdditionalSourceRoute`
+    Select one exact LVT.20a additional-source carrier.
 :class:`GalerkinLocalCellCertificateFailure`
     Store the outcome of one direct local-cell certificate attempt.
 :class:`GalerkinLocalCellCoefficientCertificate`
@@ -118,10 +166,138 @@ Routine Listings
     Store the outward local-cell coefficient-error route.
 :class:`GalerkinLocalCellExactCompression`
     Store authenticated LVT.14--LVT.18 exact-compression evidence.
+:class:`GalerkinLocalCellFixedLinearErrorLedger`
+    Store the disjoint fixed-linear LVT-1 error composition.
 :class:`GalerkinLocalCellInteractionCore`
     Store one non-solver-ready fixed LVT interaction action core.
 :class:`GalerkinLocalCellPotentialRealization`
     Store one LVT-1 local-cell coefficient realization.
+:class:`GalerkinLocalCellTailEnclosure`
+    Store one authenticated LVT.9 full Fourier-tail enclosure.
+:class:`GalerkinLocalCellTailFailure`
+    Store the outcome of one LVT.9 enclosure attempt.
+:class:`GalerkinLocalCellTargetManifest`
+    Store one completed solver-ready ``LOCAL_CELL_LVT1`` target.
+:class:`GalerkinLocalCensoredPoissonDetector`
+    Store one fixed nonnegative pre-gain censored-count detector map.
+:class:`GalerkinLocalCensoredPoissonDetectorInputManifest`
+    Bind primitive detector inputs and nested pixel manifests.
+:class:`GalerkinLocalCensoredPoissonLikelihood`
+    Store one pre-gain censored-Poisson likelihood enclosure.
+:class:`GalerkinLocalComplexRectangles`
+    Store componentwise outward complex rectangles on ordered ``I_u``.
+:class:`GalerkinLocalCoordinateCauchyCurrent`
+    Store one exact-target submitted-state scoped current enclosure.
+:class:`GalerkinLocalCurrentOperatorCertificate`
+    Store uniform local coordinate ``T/N/F`` evidence.
+:class:`GalerkinLocalCurrentOperatorFailure`
+    Enumerate typed uniform current-operator outcomes.
+:class:`GalerkinLocalDetectorCoordinateConvention`
+    Select one RM-S4 coordinate and amplitude normalization pair.
+:class:`GalerkinLocalDetectorFailure`
+    Enumerate simultaneous local detector noncertificate outcomes.
+:class:`GalerkinLocalDetectorHelperCall`
+    Name one channel-specific censored-Poisson helper invocation.
+:class:`GalerkinLocalDetectorHelperFailureEvidence`
+    Store one replayable channel-specific helper failure.
+:class:`GalerkinLocalDetectorLikelihoodStage`
+    Fix the stochastic law before deterministic gain and offset.
+:class:`GalerkinLocalDetectorProductionStage`
+    Name every stopped-evidence production-point stage.
+:class:`GalerkinLocalDetectorRationalInterval`
+    Store one exact rational detector interval.
+:class:`GalerkinLocalDetectorRealProductionTrace`
+    Bind one rounded real production point to its exact raw enclosure.
+:class:`GalerkinLocalDetectorWorkTranscript`
+    Store bounded exact detector-composition work evidence.
+:class:`GalerkinLocalPassivePixelForms`
+    Store one mode's positive and passive diagonal ideal-pixel forms.
+:class:`GalerkinLocalPassivePixelInputManifest`
+    Bind independent upstream replay policy and primitive pixel inputs.
+:class:`GalerkinLocalPositivePortBranchDisposition`
+    Record each classified fiber's retained and excluded branch treatment.
+:class:`GalerkinLocalPositivePortCertificate`
+    Store one projected outward positive-port certificate.
+:class:`GalerkinLocalPositivePortRoute`
+    Select one explicit positive-port branch-disposition route.
+:class:`GalerkinLocalProjectionDefectCertificate`
+    Store replayable LVT.34--LVT.40 and LVT.55c--LVT.55e evidence.
+:class:`GalerkinLocalProjectionDefectFailure`
+    Enumerate simultaneous structural, policy, and arithmetic outcomes.
+:class:`GalerkinLocalRepresentedSource`
+    Bind incident modes, algebraic actions, and both authenticated parents.
+:class:`GalerkinLocalRepresentedSourceActions`
+    Store the seven frozen ``D/B/R/S/M/T/C`` algebraic vectors.
+:class:`GalerkinLocalRepresentedSourceCertificate`
+    Store direct exact-target action rectangles and disjoint error bounds.
+:class:`GalerkinLocalRepresentedSourceFailure`
+    Store one typed represented-source or direct-certificate outcome.
+:class:`GalerkinLocalRepresentedSourceKind`
+    Select one plane or coherent-focused represented incident construction.
+:class:`GalerkinLocalRepresentedSourceModes`
+    Store phase, exact-shell, branch, and reduced-flux evidence.
+:class:`GalerkinLocalSourceAxis`
+    Select the positive coordinate-aligned source normal.
+:class:`GalerkinLocalSourcePhaseConvention`
+    Select the sole admitted physical-wavevector phase convention.
+:class:`GalerkinLocalStabilityDisposition`
+    Distinguish operational success, finite-radius fallback, and rejection.
+:class:`GalerkinLocalStabilityFailure`
+    Store one typed bounded-checker outcome.
+:class:`GalerkinLocalStabilityProof`
+    Store exact rational transcripts and outward binary64 reports.
+:class:`GalerkinLocalStabilityResult`
+    Nest the complete source certificate, solve result, and checked proof.
+:class:`GalerkinLocalStabilityRoute`
+    Select the exact axial-CAP-floor route.
+:class:`GalerkinLocalTerminalActionFailure`
+    Enumerate typed per-call frozen-action outcomes.
+:class:`GalerkinLocalTerminalComplexRectangles`
+    Store componentwise complex rectangles.
+:class:`GalerkinLocalTerminalCurrentActionEnclosure`
+    Store one exact-real frozen-matrix action enclosure.
+:class:`GalerkinLocalTerminalCurrentFailure`
+    Enumerate typed exact-target current-diagnostic outcomes.
+:class:`GalerkinLocalTerminalScope`
+    Select the complete transverse-fiber scope.
+:class:`GalerkinLocalVacuumBranchEvidence`
+    Store exact submitted-state Cauchy and branch mismatch evidence.
+:class:`GalerkinLocalVacuumCutBalance`
+    Store the independent reduced-current and defect-work cross-check.
+:class:`GalerkinLocalVacuumHalfSpaceDisposition`
+    Classify exact-zero, nonzero, or unresolved excluded branch content.
+:class:`GalerkinLocalVacuumPropagationError`
+    Report a typed branch or formal-witness failure.
+:class:`GalerkinLocalVacuumPropagationFailure`
+    Enumerate failures outside exact entire-helper resources.
+:class:`GalerkinLocalVacuumPropagator`
+    Store one replayable homogeneous 2x2 Cauchy propagator enclosure.
+:class:`GalerkinLocalVacuumRationalInterval`
+    Store one exact rational real interval.
+:class:`GalerkinLocalVacuumReference`
+    Select the sole canonical local vacuum-reference declaration.
+:class:`GalerkinLocalVacuumRootCertificate`
+    Store one strict replayable LVT.39 root classification.
+:class:`GalerkinLocalVacuumRootClass`
+    Distinguish propagating, evanescent, grazing, and unresolved roots.
+:class:`GalerkinLocalVacuumTerminalCertificate`
+    Store one composed LVT.39--LVT.56 local vacuum terminal certificate.
+:class:`GalerkinLocalVacuumTerminalDisposition`
+    Select one honest plane-defined or exact-native continuation claim.
+:class:`GalerkinLocalVacuumTerminalEntireEvidence`
+    Store exact phase and forced-integral helper resource evidence.
+:class:`GalerkinLocalVacuumTerminalFailure`
+    Enumerate simultaneous local vacuum-terminal noncertificate outcomes.
+:class:`GalerkinLocalVacuumWorkTranscript`
+    Store deterministic exact interval-operation work evidence.
+:class:`GalerkinLocalVacuumZeroWitness`
+    Store equality of two canonical formal algebraic normal forms.
+:class:`GalerkinLocalVacuumZeroWitnessRoute`
+    Distinguish exact-rational and symbolic normal-form equality.
+:class:`GalerkinLocalZeroSlabCertificate`
+    Store replayable LVT.21--LVT.22 geometry and predicate evidence.
+:class:`GalerkinLocalZeroSlabFailure`
+    Enumerate simultaneous fail-closed zero-slab predicate reasons.
 :class:`GalerkinOperator`
     Store one fixed complex-linear scalar Galerkin operator.
 :class:`GalerkinPhysicalResidual`
@@ -136,6 +312,8 @@ Routine Listings
     Store one VC-1 voxel-to-coefficient realization.
 :class:`GalerkinPotentialRealizationMethod`
     Store the exact finite-target realization method.
+:class:`GalerkinPreparedLocalCurrentOperator`
+    Mark a host-replayed operator for frozen transform actions.
 :class:`GalerkinProductSupport`
     Store independent supports for fixed scalar Galerkin products.
 :class:`GalerkinRepresentedSource`
@@ -186,6 +364,10 @@ Routine Listings
     Store one per-state RM-S2 production-action enclosure.
 :class:`GalerkinTargetManifest`
     Store one canonical SC-1 finite target manifest.
+:class:`GalerkinTerminalCurrentActionEnclosure`
+    Store one per-call frozen-current action enclosure.
+:class:`GalerkinTerminalCurrentActionFailure`
+    Enumerate fail-closed per-call current-action predicate bits.
 :class:`GalerkinTerminalCurrentFailure`
     Enumerate fail-closed coordinate-current predicate bits.
 :class:`GalerkinTerminalCurrentRoute`
@@ -268,6 +450,8 @@ Routine Listings
     Create one structurally shaped acquisition submission.
 :func:`create_galerkin_coordinate_cauchy_current`
     Create a validated bounded selected-sector current diagnostic.
+:func:`create_galerkin_current_operator_certificate`
+    Create validated uniform selected-sector current-operator evidence.
 :func:`create_galerkin_fixed_linear_error_ledger`
     Create a structurally validated fixed-linear error ledger.
 :func:`create_galerkin_operator`
@@ -300,6 +484,8 @@ Routine Listings
     Create a validated per-result stability invocation.
 :func:`create_galerkin_target_action_enclosure`
     Create a structurally validated per-state action enclosure.
+:func:`create_galerkin_terminal_current_action_enclosure`
+    Create one validated per-call frozen-current action enclosure.
 :func:`create_gn_state`
     Create a validated Gauss-Newton iteration state.
 :func:`create_kirkland_parameters`
@@ -385,6 +571,24 @@ Routine Listings
 
 """
 
+from .absorber_types import (
+    GalerkinAxialCapCoefficientCertificate,
+    GalerkinAxialCapCoefficientFailure,
+    GalerkinAxialCapExactFloorFailure,
+    GalerkinAxialCapFloorProof,
+    GalerkinAxialCapRealizedFloorFailure,
+    GalerkinAxialCapRealizedFloorRoute,
+    GalerkinAxialCellAbsorber,
+)
+from .absorber_types import (
+    _make_axial_cap_coefficient_certificate as _make_axial_cap_coefficient_certificate,  # noqa: E501
+)
+from .absorber_types import (
+    _make_axial_cap_floor_proof as _make_axial_cap_floor_proof,
+)
+from .absorber_types import (
+    _make_axial_cell_absorber as _make_axial_cell_absorber,
+)
 from .acquisition_types import (
     GalerkinAcquisitionManifest,
     GalerkinAcquisitionSupportFailure,
@@ -505,6 +709,15 @@ from .galerkin_types import (
 from .galerkin_types import (
     _create_galerkin_target_manifest as _create_galerkin_target_manifest,
 )
+from .galerkin_types import (
+    _derive_algebraic_wavenumber as _derive_algebraic_wavenumber,
+)
+from .galerkin_types import (
+    _exact_target_direction_error_bounds as _exact_target_direction_error_bounds,  # noqa: E501
+)
+from .galerkin_types import (
+    _exact_target_full_offset_max as _exact_target_full_offset_max,
+)
 from .jacobian_types import (
     AberrationParams,
     CGState,
@@ -536,11 +749,23 @@ from .local_cell_interaction_types import (
 from .local_cell_interaction_types import (
     _make_local_cell_interaction_core as _make_local_cell_interaction_core,
 )
+from .local_cell_target_types import (
+    GalerkinLocalCellFixedLinearErrorLedger,
+    GalerkinLocalCellTargetManifest,
+)
+from .local_cell_target_types import (
+    _make_local_cell_fixed_linear_error_ledger as _make_local_cell_fixed_linear_error_ledger,  # noqa: E501
+)
+from .local_cell_target_types import (
+    _make_local_cell_target_manifest as _make_local_cell_target_manifest,
+)
 from .local_cell_types import (
     GalerkinLocalCellCertificateFailure,
     GalerkinLocalCellCoefficientCertificate,
     GalerkinLocalCellErrorRoute,
     GalerkinLocalCellPotentialRealization,
+    GalerkinLocalCellTailEnclosure,
+    GalerkinLocalCellTailFailure,
     GalerkinVoxelTargetRoute,
     LocalCellPotential3D,
     create_local_cell_potential_3d,
@@ -553,6 +778,119 @@ from .local_cell_types import (
 )
 from .local_cell_types import (
     _make_local_cell_certificate as _make_local_cell_certificate,
+)
+from .local_cell_types import (
+    _make_local_cell_tail_enclosure as _make_local_cell_tail_enclosure,
+)
+from .local_detector_types import (
+    GalerkinLocalCensoredPoissonDetector,
+    GalerkinLocalCensoredPoissonDetectorInputManifest,
+    GalerkinLocalCensoredPoissonLikelihood,
+    GalerkinLocalDetectorCoordinateConvention,
+    GalerkinLocalDetectorFailure,
+    GalerkinLocalDetectorHelperCall,
+    GalerkinLocalDetectorHelperFailureEvidence,
+    GalerkinLocalDetectorLikelihoodStage,
+    GalerkinLocalDetectorProductionStage,
+    GalerkinLocalDetectorRationalInterval,
+    GalerkinLocalDetectorRealProductionTrace,
+    GalerkinLocalDetectorWorkTranscript,
+    GalerkinLocalPassivePixelForms,
+    GalerkinLocalPassivePixelInputManifest,
+    GalerkinLocalPositivePortBranchDisposition,
+    GalerkinLocalPositivePortCertificate,
+    GalerkinLocalPositivePortRoute,
+)
+from .local_projection_types import (
+    GalerkinLocalProjectionDefectCertificate,
+    GalerkinLocalProjectionDefectFailure,
+)
+from .local_represented_source_types import (
+    GalerkinLocalComplexRectangles,
+    GalerkinLocalRepresentedSource,
+    GalerkinLocalRepresentedSourceActions,
+    GalerkinLocalRepresentedSourceCertificate,
+    GalerkinLocalRepresentedSourceFailure,
+    GalerkinLocalRepresentedSourceKind,
+    GalerkinLocalRepresentedSourceModes,
+    GalerkinLocalSourceAxis,
+    GalerkinLocalSourcePhaseConvention,
+)
+from .local_source_types import (
+    GalerkinLocalAdditionalSource,
+    GalerkinLocalAdditionalSourceCertificate,
+    GalerkinLocalAdditionalSourceCertificateFailure,
+    GalerkinLocalAdditionalSourceRoute,
+)
+from .local_source_types import (
+    _make_local_additional_source as _make_local_additional_source,
+)
+from .local_source_types import (
+    _make_local_additional_source_certificate as _make_local_additional_source_certificate,  # noqa: E501
+)
+from .local_stability_types import (
+    GalerkinLocalStabilityDisposition,
+    GalerkinLocalStabilityFailure,
+    GalerkinLocalStabilityProof,
+    GalerkinLocalStabilityResult,
+    GalerkinLocalStabilityRoute,
+)
+from .local_terminal_types import (
+    GalerkinLocalCoordinateCauchyCurrent,
+    GalerkinLocalCurrentOperatorCertificate,
+    GalerkinLocalCurrentOperatorFailure,
+    GalerkinLocalTerminalActionFailure,
+    GalerkinLocalTerminalComplexRectangles,
+    GalerkinLocalTerminalCurrentActionEnclosure,
+    GalerkinLocalTerminalCurrentFailure,
+    GalerkinLocalTerminalScope,
+    GalerkinPreparedLocalCurrentOperator,
+)
+from .local_terminal_types import (
+    _make_prepared_local_current_operator as _make_prepared_local_current_operator,  # noqa: E501
+)
+from .local_vacuum_propagation_types import (
+    GalerkinLocalVacuumPropagationError,
+    GalerkinLocalVacuumPropagationFailure,
+    GalerkinLocalVacuumPropagator,
+    GalerkinLocalVacuumRationalInterval,
+    GalerkinLocalVacuumRootCertificate,
+    GalerkinLocalVacuumRootClass,
+    GalerkinLocalVacuumWorkTranscript,
+    GalerkinLocalVacuumZeroWitness,
+    GalerkinLocalVacuumZeroWitnessRoute,
+)
+from .local_vacuum_terminal_types import (
+    GalerkinLocalVacuumBranchEvidence,
+    GalerkinLocalVacuumCutBalance,
+    GalerkinLocalVacuumHalfSpaceDisposition,
+    GalerkinLocalVacuumTerminalCertificate,
+    GalerkinLocalVacuumTerminalDisposition,
+    GalerkinLocalVacuumTerminalEntireEvidence,
+    GalerkinLocalVacuumTerminalFailure,
+)
+from .local_vacuum_terminal_types import (
+    _make_local_vacuum_branch_evidence as _make_local_vacuum_branch_evidence,
+)
+from .local_vacuum_terminal_types import (
+    _make_local_vacuum_cut_balance as _make_local_vacuum_cut_balance,
+)
+from .local_vacuum_terminal_types import (
+    _make_local_vacuum_terminal_certificate as _make_local_vacuum_terminal_certificate,  # noqa: E501
+)
+from .local_vacuum_terminal_types import (
+    _make_local_vacuum_terminal_entire_evidence as _make_local_vacuum_terminal_entire_evidence,  # noqa: E501
+)
+from .local_vacuum_terminal_types import (
+    _PlaneMismatchBounds as _PlaneMismatchBounds,
+)
+from .local_vacuum_terminal_types import (
+    _ProductionEvidence as _ProductionEvidence,
+)
+from .local_zero_slab_types import (
+    GalerkinLocalVacuumReference,
+    GalerkinLocalZeroSlabCertificate,
+    GalerkinLocalZeroSlabFailure,
 )
 from .potential_types import Potential3D, create_potential_3d
 from .realization_error_types import (
@@ -599,12 +937,18 @@ from .source_types import (
 )
 from .terminal_types import (
     GalerkinCoordinateCauchyCurrent,
+    GalerkinCurrentOperatorCertificate,
+    GalerkinCurrentOperatorFailure,
     GalerkinDetectorFailure,
+    GalerkinTerminalCurrentActionEnclosure,
+    GalerkinTerminalCurrentActionFailure,
     GalerkinTerminalCurrentFailure,
     GalerkinTerminalCurrentRoute,
     GalerkinTerminalCurrentScope,
     GalerkinVacuumBranchFailure,
     create_galerkin_coordinate_cauchy_current,
+    create_galerkin_current_operator_certificate,
+    create_galerkin_terminal_current_action_enclosure,
 )
 
 _create_direct_local_cell_realization = _create_direct_local
@@ -632,24 +976,101 @@ __all__: list[str] = [
     "GalerkinAcquisitionSupportStatus",
     "GalerkinActionDirection",
     "GalerkinActionErrorRoute",
+    "GalerkinAxialCapCoefficientCertificate",
+    "GalerkinAxialCapCoefficientFailure",
+    "GalerkinAxialCapExactFloorFailure",
+    "GalerkinAxialCapFloorProof",
+    "GalerkinAxialCapRealizedFloorFailure",
+    "GalerkinAxialCapRealizedFloorRoute",
+    "GalerkinAxialCellAbsorber",
     "GalerkinBackwardDisposition",
     "GalerkinCarrierOverlapDisposition",
     "GalerkinCarrierOwnership",
     "GalerkinCarrierTargetRoute",
     "GalerkinCertificateReason",
     "GalerkinCoordinateCauchyCurrent",
+    "GalerkinCurrentOperatorCertificate",
+    "GalerkinCurrentOperatorFailure",
     "GalerkinDetectorFailure",
     "GalerkinDirectionDisposition",
     "GalerkinEndpointConvention",
     "GalerkinFixedLinearAbsorberRoute",
     "GalerkinFixedLinearErrorLedger",
+    "GalerkinLocalAdditionalSource",
+    "GalerkinLocalAdditionalSourceCertificate",
+    "GalerkinLocalAdditionalSourceCertificateFailure",
+    "GalerkinLocalAdditionalSourceRoute",
     "GalerkinLocalCellCertificateFailure",
     "GalerkinLocalCellCoefficientCertificate",
     "GalerkinLocalCellCompressionFailure",
     "GalerkinLocalCellErrorRoute",
     "GalerkinLocalCellExactCompression",
+    "GalerkinLocalCellFixedLinearErrorLedger",
     "GalerkinLocalCellInteractionCore",
     "GalerkinLocalCellPotentialRealization",
+    "GalerkinLocalCellTailEnclosure",
+    "GalerkinLocalCellTailFailure",
+    "GalerkinLocalCellTargetManifest",
+    "GalerkinLocalCensoredPoissonDetector",
+    "GalerkinLocalCensoredPoissonDetectorInputManifest",
+    "GalerkinLocalCensoredPoissonLikelihood",
+    "GalerkinLocalComplexRectangles",
+    "GalerkinLocalCoordinateCauchyCurrent",
+    "GalerkinLocalCurrentOperatorCertificate",
+    "GalerkinLocalCurrentOperatorFailure",
+    "GalerkinLocalDetectorCoordinateConvention",
+    "GalerkinLocalDetectorFailure",
+    "GalerkinLocalDetectorHelperCall",
+    "GalerkinLocalDetectorHelperFailureEvidence",
+    "GalerkinLocalDetectorLikelihoodStage",
+    "GalerkinLocalDetectorProductionStage",
+    "GalerkinLocalDetectorRationalInterval",
+    "GalerkinLocalDetectorRealProductionTrace",
+    "GalerkinLocalDetectorWorkTranscript",
+    "GalerkinLocalPassivePixelForms",
+    "GalerkinLocalPassivePixelInputManifest",
+    "GalerkinLocalPositivePortBranchDisposition",
+    "GalerkinLocalPositivePortCertificate",
+    "GalerkinLocalPositivePortRoute",
+    "GalerkinLocalProjectionDefectCertificate",
+    "GalerkinLocalProjectionDefectFailure",
+    "GalerkinLocalRepresentedSource",
+    "GalerkinLocalRepresentedSourceActions",
+    "GalerkinLocalRepresentedSourceCertificate",
+    "GalerkinLocalRepresentedSourceFailure",
+    "GalerkinLocalRepresentedSourceKind",
+    "GalerkinLocalRepresentedSourceModes",
+    "GalerkinLocalSourceAxis",
+    "GalerkinLocalSourcePhaseConvention",
+    "GalerkinLocalStabilityDisposition",
+    "GalerkinLocalStabilityFailure",
+    "GalerkinLocalStabilityProof",
+    "GalerkinLocalStabilityResult",
+    "GalerkinLocalStabilityRoute",
+    "GalerkinLocalTerminalActionFailure",
+    "GalerkinLocalTerminalComplexRectangles",
+    "GalerkinLocalTerminalCurrentActionEnclosure",
+    "GalerkinLocalTerminalCurrentFailure",
+    "GalerkinLocalTerminalScope",
+    "GalerkinLocalVacuumBranchEvidence",
+    "GalerkinLocalVacuumCutBalance",
+    "GalerkinLocalVacuumHalfSpaceDisposition",
+    "GalerkinLocalVacuumPropagationError",
+    "GalerkinLocalVacuumPropagationFailure",
+    "GalerkinLocalVacuumPropagator",
+    "GalerkinLocalVacuumRationalInterval",
+    "GalerkinLocalVacuumReference",
+    "GalerkinLocalVacuumRootCertificate",
+    "GalerkinLocalVacuumRootClass",
+    "GalerkinLocalVacuumTerminalCertificate",
+    "GalerkinLocalVacuumTerminalDisposition",
+    "GalerkinLocalVacuumTerminalEntireEvidence",
+    "GalerkinLocalVacuumTerminalFailure",
+    "GalerkinLocalVacuumWorkTranscript",
+    "GalerkinLocalVacuumZeroWitness",
+    "GalerkinLocalVacuumZeroWitnessRoute",
+    "GalerkinLocalZeroSlabCertificate",
+    "GalerkinLocalZeroSlabFailure",
     "GalerkinOperator",
     "GalerkinPhysicalResidual",
     "GalerkinPotentialCertificateFailure",
@@ -657,6 +1078,7 @@ __all__: list[str] = [
     "GalerkinPotentialErrorRoute",
     "GalerkinPotentialRealization",
     "GalerkinPotentialRealizationMethod",
+    "GalerkinPreparedLocalCurrentOperator",
     "GalerkinProductSupport",
     "GalerkinRepresentedSource",
     "GalerkinRepresentedSourceKind",
@@ -682,6 +1104,8 @@ __all__: list[str] = [
     "GalerkinStoredShellRoute",
     "GalerkinTargetActionEnclosure",
     "GalerkinTargetManifest",
+    "GalerkinTerminalCurrentActionEnclosure",
+    "GalerkinTerminalCurrentActionFailure",
     "GalerkinTerminalCurrentFailure",
     "GalerkinTerminalCurrentRoute",
     "GalerkinTerminalCurrentScope",
@@ -730,6 +1154,7 @@ __all__: list[str] = [
     "create_fisher_state",
     "create_galerkin_acquisition_manifest",
     "create_galerkin_coordinate_cauchy_current",
+    "create_galerkin_current_operator_certificate",
     "create_galerkin_fixed_linear_error_ledger",
     "create_galerkin_operator",
     "create_galerkin_physical_residual",
@@ -746,6 +1171,7 @@ __all__: list[str] = [
     "create_galerkin_stability_proof",
     "create_galerkin_stability_result",
     "create_galerkin_target_action_enclosure",
+    "create_galerkin_terminal_current_action_enclosure",
     "create_gn_state",
     "create_kirkland_parameters",
     "create_lanczos_state",

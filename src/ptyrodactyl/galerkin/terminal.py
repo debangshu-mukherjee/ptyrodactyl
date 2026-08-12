@@ -7,10 +7,10 @@ acquisition-selected ``K_d`` transverse-fiber sector of one canonical scalar
 target.  It applies the selected field trace ``T``, the oriented physical
 normal-derivative trace ``N``, their actual coefficient-metric adjoints, and
 the Hermitian reduced-current action
-``F u=(T* N-N* T)u/(2i)`` without assembling dense matrices.  A separate
-evidence path certifies only the submitted-state exact normalized-carrier
-current with shared FTZ-safe interval arithmetic; it does not certify a
-uniform exact operator or rounded-action error bound.
+``F u=(T* N-N* T)u/(2i)`` without assembling dense matrices.  The evidence
+ladder keeps the weaker submitted-state exact-current diagnostic separate
+from a uniform frozen-operator certificate and an independently replayed
+per-call frozen-action enclosure.
 
 Routine Listings
 ----------------
@@ -24,10 +24,16 @@ Routine Listings
     Apply the selected coordinate field trace.
 :func:`apply_galerkin_terminal_trace_adjoint`
     Apply the selected coefficient-metric field-trace adjoint.
+:func:`certify_galerkin_terminal_current_operator`
+    Certify the uniform frozen selected-sector current operator.
 :func:`enclose_galerkin_terminal_current`
     Enclose one submitted-state exact selected-fiber current.
+:func:`enclose_galerkin_terminal_current_action`
+    Enclose one frozen current action after certificate authentication.
 :func:`evaluate_galerkin_terminal_current`
     Evaluate the rounded selected-fiber current quadratic form.
+:func:`prepare_galerkin_terminal_current_diagnostic`
+    Host-authenticate one provisional coordinate-current diagnostic.
 
 Notes
 -----
@@ -65,20 +71,32 @@ from ptyrodactyl._tools import (
     interval_add,
     interval_divide_positive,
     interval_multiply,
+    interval_sqrt,
+    interval_square,
     interval_subtract,
     mathematical_pi_interval,
     point_interval,
 )
 from ptyrodactyl.types import (
+    C_LIGHT,
+    E_CHARGE,
+    HBAR,
+    M_E,
     GalerkinAcquisitionSupportStatus,
     GalerkinCoordinateCauchyCurrent,
+    GalerkinCurrentOperatorCertificate,
+    GalerkinCurrentOperatorFailure,
     GalerkinDetectorFailure,
     GalerkinTargetManifest,
+    GalerkinTerminalCurrentActionEnclosure,
+    GalerkinTerminalCurrentActionFailure,
     GalerkinTerminalCurrentFailure,
     GalerkinTerminalCurrentRoute,
     GalerkinTerminalSide,
     GalerkinVacuumBranchFailure,
     create_galerkin_coordinate_cauchy_current,
+    create_galerkin_current_operator_certificate,
+    create_galerkin_terminal_current_action_enclosure,
     scalar_int,
 )
 
@@ -89,6 +107,7 @@ from ._direct_interval import (
     _complex_point_interval,
     _ComplexInterval,
 )
+from .stability import _manifest_is_canonical
 
 _SPACE_DIMENSIONS: int = 3
 _TRANSVERSE_AXES: Tuple[Tuple[int, int], ...] = ((1, 2), (0, 2), (0, 1))
@@ -108,13 +127,45 @@ _CURRENT_TARGET: str = (
     "coefficients"
 )
 _ELIGIBILITY_SCOPE: str = (
-    "per-submitted-state RM-S4a exact selected-K_d-fiber-sector current "
-    "scalar enclosure; excludes unselected K_u transverse fibers and does "
-    "not claim total/full-plane current identity; the rounded Hermitian F "
-    "action has no uniform exact-operator/action-error certificate; excludes "
-    "a compact local vacuum slab, outgoing branch extraction, detector "
-    "pixels, absolute number-flux calibration, solver-to-observable "
-    "transfer, and continuum accuracy"
+    "provisional transform-compatible per-submitted-state RM-S4a exact "
+    "selected-K_d-fiber-sector current scalar enclosure; non-authoritative "
+    "until host canonical-target reconstruction and exact diagnostic replay; "
+    "excludes unselected K_u transverse fibers and does not claim "
+    "total/full-plane current identity; the rounded Hermitian F action has no "
+    "uniform exact-operator/action-error certificate; excludes a compact "
+    "local vacuum slab, outgoing branch extraction, detector pixels, "
+    "absolute number-flux calibration, solver-to-observable transfer, and "
+    "continuum accuracy"
+)
+_FIXED_LINEAR_TARGET: str = (
+    "exact selected-K_d coordinate T, oriented N, and Hermitian F at xi=0 "
+    "for the exact normalized SC-1 carrier, exact manifested box, and "
+    "mathematical pi"
+)
+_PER_CALL_ACTION_ROUTE: str = (
+    "FTZ-safe exact-real interval evaluation of the frozen dyadic T/N/F "
+    "matrix action, independently of the rounded public action"
+)
+_CURRENT_NORMALIZATION: str = (
+    "SC.35c C_j=hbar/m_*=hbar*c^2/(m_e*c^2+e*U0) converted from square "
+    "metres per second to square Angstroms per second"
+)
+_OPERATOR_ELIGIBILITY_SCOPE: str = (
+    "uniform RM-S4 LVT.55a2 selected-K_d-fiber-sector signed current "
+    "operator capability at xi=0; every scientific submitted-field result "
+    "additionally requires that call's action enclosure finite_certificate; "
+    "with independently replayed frozen per-call action enclosures; excludes "
+    "unselected K_u transverse fibers, total/full-plane identity, vacuum "
+    "branches, outgoing extraction, and detectors"
+)
+_ACTION_TARGET: str = (
+    "exact-real action of the stored frozen dyadic current matrix "
+    "Fhat=(That* Nhat-Nhat* That)/(2i) on the exact stored binary64 field"
+)
+_ACTION_ERROR_SCOPE: str = (
+    "per-call Euclidean coefficient error from rounded public action to the "
+    "exact-real frozen-matrix action; excludes the uniform frozen-to-exact "
+    "target operator error, state error, and continuum error"
 )
 _VACUUM_FAILURE: GalerkinVacuumBranchFailure = (
     GalerkinVacuumBranchFailure.NO_COMPACT_LOCAL_VACUUM_SLAB_CONTRACT
@@ -735,14 +786,15 @@ def _current_error_upper_bound(
     Parameters
     ----------
     rounded_current : Float64[Array, ""]
-        Rounded current quadratic in inverse Angstroms.
+        Rounded current quadratic in inverse-square Angstroms.
     exact_interval : RealInterval
-        Inclusive exact current interval in inverse Angstroms.
+        Inclusive exact current interval in inverse-square Angstroms.
 
     Returns
     -------
     upper : Float64[Array, ""]
-        Outward maximum absolute endpoint discrepancy.
+        Outward maximum absolute endpoint discrepancy in inverse-square
+        Angstroms.
     """
     difference: RealInterval = interval_subtract(
         point_interval(rounded_current), exact_interval
@@ -750,6 +802,571 @@ def _current_error_upper_bound(
     upper: Float64[Array, ""] = jnp.maximum(
         jnp.abs(difference[0]), jnp.abs(difference[1])
     )
+    return upper
+
+
+def _trace_normalization_interval(
+    target: GalerkinTargetManifest,
+) -> RealInterval:
+    """PRIVATE: Enclose the exact coordinate trace normalization.
+
+    Parameters
+    ----------
+    target : GalerkinTargetManifest
+        Canonical scalar target supplying the terminal-axis box length.
+
+    Returns
+    -------
+    interval : RealInterval
+        Outward interval for the inverse square root of that box length.
+    """
+    axis: int = target.acquisition.terminal_axis
+    root: RealInterval = interval_sqrt(
+        point_interval(target.box_lengths[axis])
+    )
+    one: Float64[Array, ""] = jnp.asarray(1.0, dtype=jnp.float64)
+    interval: RealInterval = interval_divide_positive(
+        point_interval(one), root
+    )
+    return interval
+
+
+def _distance_from_interval(
+    point: Float64[Array, "..."],
+    interval: RealInterval,
+) -> Float64[Array, "..."]:
+    """PRIVATE: Bound a stored real point's distance from an interval.
+
+    Parameters
+    ----------
+    point : Float64[Array, "..."]
+        Stored real point or array of points.
+    interval : RealInterval
+        Inclusive exact-real interval with shape broadcastable to ``point``.
+
+    Returns
+    -------
+    upper : Float64[Array, "..."]
+        Outward maximum absolute endpoint discrepancy.
+    """
+    difference: RealInterval = interval_subtract(
+        point_interval(point), interval
+    )
+    upper: Float64[Array, "..."] = jnp.maximum(
+        jnp.abs(difference[0]), jnp.abs(difference[1])
+    )
+    return upper
+
+
+def _fiber_operator_norm_upper(
+    target: GalerkinTargetManifest,
+    coefficient_magnitude_upper_bounds: Float64[Array, " n"],
+) -> Float64[Array, ""]:
+    """PRIVATE: Bound the maximum selected-fiber row Euclidean norm.
+
+    Parameters
+    ----------
+    target : GalerkinTargetManifest
+        Canonical scalar target defining selected terminal fibers.
+    coefficient_magnitude_upper_bounds : Float64[Array, " n"]
+        Per-state outward coefficient-magnitude bounds.
+
+    Returns
+    -------
+    upper : Float64[Array, ""]
+        Outward maximum selected-fiber row Euclidean norm.
+    """
+    rows, selected = _terminal_row_map(target)
+    terminal_size: int = target.acquisition.transverse_indices.shape[0]
+    zeros: Float64[Array, " t"] = jnp.zeros(
+        (terminal_size,), dtype=jnp.float64
+    )
+    initial: RealInterval = (zeros, zeros)
+
+    def add_coefficient(
+        index: scalar_int,
+        accumulator: RealInterval,
+    ) -> RealInterval:
+        """Accumulate one outward squared coefficient into its fiber."""
+        magnitude: Float64[Array, ""] = jnp.where(
+            selected[index], coefficient_magnitude_upper_bounds[index], 0.0
+        )
+        contribution: RealInterval = interval_square(point_interval(magnitude))
+        row: scalar_int = rows[index]
+        prior: RealInterval = (accumulator[0][row], accumulator[1][row])
+        updated: RealInterval = interval_add(prior, contribution)
+        result: RealInterval = (
+            accumulator[0].at[row].set(updated[0]),
+            accumulator[1].at[row].set(updated[1]),
+        )
+        return result
+
+    squared_norms: RealInterval = lax.fori_loop(
+        0,
+        coefficient_magnitude_upper_bounds.shape[0],
+        add_coefficient,
+        initial,
+    )
+    norm_intervals: RealInterval = interval_sqrt(squared_norms)
+    upper: Float64[Array, ""] = jnp.max(norm_intervals[1])
+    return upper
+
+
+def _frozen_terminal_coefficient_evidence(
+    target: GalerkinTargetManifest,
+) -> Tuple[
+    Complex128[Array, " n"],
+    Complex128[Array, " n"],
+    Float64[Array, " n"],
+    Float64[Array, " n"],
+    Float64[Array, " n"],
+    Float64[Array, " n"],
+]:
+    """PRIVATE: Build frozen T/N rows and exact-target error evidence.
+
+    Parameters
+    ----------
+    target : GalerkinTargetManifest
+        Canonical scalar target defining the selected terminal sector.
+
+    Returns
+    -------
+    trace_coefficients : Complex128[Array, " n"]
+        Frozen rounded trace coefficients in retained-state order.
+    normal_coefficients : Complex128[Array, " n"]
+        Frozen rounded oriented normal-derivative coefficients.
+    trace_errors : Float64[Array, " n"]
+        Per-state trace-coefficient error upper bounds.
+    normal_errors : Float64[Array, " n"]
+        Per-state normal-coefficient error upper bounds.
+    exact_trace_magnitudes : Float64[Array, " n"]
+        Per-state exact trace-coefficient magnitude upper bounds.
+    exact_normal_magnitudes : Float64[Array, " n"]
+        Per-state exact normal-coefficient magnitude upper bounds.
+    """
+    _, selected = _terminal_row_map(target)
+    trace_normalization: Float64[Array, ""] = _trace_normalization(target)
+    wavevectors: Float64[Array, " n"] = _rounded_oriented_normal_wavevectors(
+        target
+    )
+    trace_coefficients: Complex128[Array, " n"] = jnp.where(
+        selected,
+        jnp.asarray(trace_normalization, dtype=jnp.complex128),
+        0.0 + 0.0j,
+    )
+    normal_coefficients: Complex128[Array, " n"] = jnp.where(
+        selected,
+        1j * trace_normalization * wavevectors,
+        0.0 + 0.0j,
+    )
+
+    trace_interval_scalar: RealInterval = _trace_normalization_interval(target)
+    state_shape: Tuple[int, ...] = wavevectors.shape
+    trace_interval: RealInterval = (
+        jnp.broadcast_to(trace_interval_scalar[0], state_shape),
+        jnp.broadcast_to(trace_interval_scalar[1], state_shape),
+    )
+    exact_wavevectors: RealInterval = (
+        _exact_oriented_normal_wavevector_interval(target)
+    )
+    exact_normal: RealInterval = interval_multiply(
+        trace_interval, exact_wavevectors
+    )
+    trace_errors: Float64[Array, " n"] = jnp.where(
+        selected,
+        _distance_from_interval(jnp.real(trace_coefficients), trace_interval),
+        0.0,
+    )
+    normal_errors: Float64[Array, " n"] = jnp.where(
+        selected,
+        _distance_from_interval(jnp.imag(normal_coefficients), exact_normal),
+        0.0,
+    )
+    exact_trace_magnitudes: Float64[Array, " n"] = jnp.where(
+        selected,
+        jnp.maximum(jnp.abs(trace_interval[0]), jnp.abs(trace_interval[1])),
+        0.0,
+    )
+    exact_normal_magnitudes: Float64[Array, " n"] = jnp.where(
+        selected,
+        jnp.maximum(jnp.abs(exact_normal[0]), jnp.abs(exact_normal[1])),
+        0.0,
+    )
+    evidence: Tuple[
+        Complex128[Array, " n"],
+        Complex128[Array, " n"],
+        Float64[Array, " n"],
+        Float64[Array, " n"],
+        Float64[Array, " n"],
+        Float64[Array, " n"],
+    ] = (
+        trace_coefficients,
+        normal_coefficients,
+        trace_errors,
+        normal_errors,
+        exact_trace_magnitudes,
+        exact_normal_magnitudes,
+    )
+    return evidence
+
+
+def _current_operator_error_upper(
+    trace_error: Float64[Array, ""],
+    normal_error: Float64[Array, ""],
+    exact_trace_norm: Float64[Array, ""],
+    exact_normal_norm: Float64[Array, ""],
+) -> Float64[Array, ""]:
+    """PRIVATE: Evaluate the outward LVT.55a5 operator bound.
+
+    Parameters
+    ----------
+    trace_error : Float64[Array, ""]
+        Trace-operator error upper bound.
+    normal_error : Float64[Array, ""]
+        Normal-operator error upper bound.
+    exact_trace_norm : Float64[Array, ""]
+        Exact trace-operator norm upper bound.
+    exact_normal_norm : Float64[Array, ""]
+        Exact normal-operator norm upper bound.
+
+    Returns
+    -------
+    upper : Float64[Array, ""]
+        Outward current-operator error upper bound.
+    """
+    first: RealInterval = interval_multiply(
+        point_interval(trace_error), point_interval(exact_normal_norm)
+    )
+    trace_plus_error: RealInterval = interval_add(
+        point_interval(exact_trace_norm), point_interval(trace_error)
+    )
+    second: RealInterval = interval_multiply(
+        trace_plus_error, point_interval(normal_error)
+    )
+    upper: Float64[Array, ""] = interval_add(first, second)[1]
+    return upper
+
+
+def _number_current_scale_enclosure(
+    target: GalerkinTargetManifest,
+) -> Tuple[Float64[Array, ""], RealInterval, Float64[Array, ""]]:
+    """PRIVATE: Enclose SC.35c in square Angstroms per second.
+
+    Parameters
+    ----------
+    target : GalerkinTargetManifest
+        Canonical target supplying the accelerating voltage.
+
+    Returns
+    -------
+    stored : Float64[Array, ""]
+        Rounded SC.35c number-current scale.
+    exact_interval : RealInterval
+        Outward exact-real enclosure of the SC.35c scale.
+    error : Float64[Array, ""]
+        Outward distance of ``stored`` from ``exact_interval``.
+    """
+    one_thousand: Float64[Array, ""] = jnp.asarray(1000.0, dtype=jnp.float64)
+    angstrom_squared_per_square_metre: Float64[Array, ""] = jnp.asarray(
+        1.0e20, dtype=jnp.float64
+    )
+    mass: Float64[Array, ""] = jnp.asarray(M_E, dtype=jnp.float64)
+    charge: Float64[Array, ""] = jnp.asarray(E_CHARGE, dtype=jnp.float64)
+    speed: Float64[Array, ""] = jnp.asarray(C_LIGHT, dtype=jnp.float64)
+    hbar: Float64[Array, ""] = jnp.asarray(HBAR, dtype=jnp.float64)
+    voltage_kv: Float64[Array, ""] = target.accelerating_voltage_kv
+    voltage_volts: Float64[Array, ""] = voltage_kv * one_thousand
+    speed_squared: Float64[Array, ""] = speed * speed
+    denominator: Float64[Array, ""] = (
+        mass * speed_squared + charge * voltage_volts
+    )
+    stored: Float64[Array, ""] = (
+        hbar * speed_squared / denominator * angstrom_squared_per_square_metre
+    )
+
+    speed_squared_interval: RealInterval = interval_square(
+        point_interval(speed)
+    )
+    voltage_interval: RealInterval = interval_multiply(
+        point_interval(voltage_kv), point_interval(one_thousand)
+    )
+    rest_energy: RealInterval = interval_multiply(
+        point_interval(mass), speed_squared_interval
+    )
+    kinetic_energy: RealInterval = interval_multiply(
+        point_interval(charge), voltage_interval
+    )
+    exact_denominator: RealInterval = interval_add(rest_energy, kinetic_energy)
+    exact_numerator: RealInterval = interval_multiply(
+        point_interval(hbar), speed_squared_interval
+    )
+    si_interval: RealInterval = interval_divide_positive(
+        exact_numerator, exact_denominator
+    )
+    exact_interval: RealInterval = interval_multiply(
+        si_interval, point_interval(angstrom_squared_per_square_metre)
+    )
+    error: Float64[Array, ""] = _distance_from_interval(stored, exact_interval)
+    enclosure: Tuple[Float64[Array, ""], RealInterval, Float64[Array, ""]] = (
+        stored,
+        exact_interval,
+        error,
+    )
+    return enclosure
+
+
+def _authenticated_current_diagnostic(
+    diagnostic: GalerkinCoordinateCauchyCurrent,
+) -> GalerkinCoordinateCauchyCurrent:
+    """PRIVATE: Replay and authenticate a public current-diagnostic record.
+
+    Parameters
+    ----------
+    diagnostic : GalerkinCoordinateCauchyCurrent
+        Submitted provisional coordinate-current diagnostic.
+
+    Returns
+    -------
+    authenticated : GalerkinCoordinateCauchyCurrent
+        Canonically replayed diagnostic with authenticated stored values.
+
+    Raises
+    ------
+    ValueError
+        If the nested target fails canonical reconstruction.
+    """
+    if not _manifest_is_canonical(diagnostic.target):
+        raise ValueError(
+            "current diagnostic target failed canonical reconstruction"
+        )
+    canonical: GalerkinCoordinateCauchyCurrent = (
+        enclose_galerkin_terminal_current(
+            diagnostic.target, diagnostic.submitted_field
+        )
+    )
+    same_payload: Bool[Array, ""] = jnp.asarray(
+        eqx.tree_equal(diagnostic, canonical, typematch=True)
+    )
+    checked_current: Float64[Array, ""] = eqx.error_if(
+        canonical.reduced_current,
+        ~same_payload,
+        "current diagnostic failed canonical replay authentication",
+    )
+    authenticated: GalerkinCoordinateCauchyCurrent = eqx.tree_at(
+        lambda record: record.reduced_current,
+        canonical,
+        checked_current,
+    )
+    return authenticated
+
+
+def _frozen_current_action_interval(
+    certificate: GalerkinCurrentOperatorCertificate,
+    field: Complex128[Array, " n"],
+) -> _ComplexInterval:
+    """PRIVATE: Enclose the exact-real frozen dyadic F action.
+
+    Parameters
+    ----------
+    certificate : GalerkinCurrentOperatorCertificate
+        Authenticated frozen terminal-current operator evidence.
+    field : Complex128[Array, " n"]
+        Exact stored retained-state coefficients.
+
+    Returns
+    -------
+    selected_action : _ComplexInterval
+        Componentwise exact-real frozen-action rectangles.
+    """
+    target: GalerkinTargetManifest = certificate.diagnostic.target
+    rows, selected = _terminal_row_map(target)
+    terminal_size: int = target.acquisition.transverse_indices.shape[0]
+    zeros: Float64[Array, " t"] = jnp.zeros(
+        (terminal_size,), dtype=jnp.float64
+    )
+    initial: Tuple[_ComplexInterval, _ComplexInterval] = (
+        (zeros, zeros, zeros, zeros),
+        (zeros, zeros, zeros, zeros),
+    )
+
+    def add_state(
+        index: scalar_int,
+        accumulator: Tuple[_ComplexInterval, _ComplexInterval],
+    ) -> Tuple[_ComplexInterval, _ComplexInterval]:
+        """Accumulate one frozen trace and normal contribution."""
+        row: scalar_int = rows[index]
+        included: Bool[Array, ""] = selected[index]
+        value: _ComplexInterval = _complex_point_interval(field[index])
+        trace_coefficient: _ComplexInterval = _complex_point_interval(
+            certificate.trace_frozen_coefficients[index]
+        )
+        normal_coefficient: _ComplexInterval = _complex_point_interval(
+            certificate.normal_frozen_coefficients[index]
+        )
+        trace_value: _ComplexInterval = _complex_interval_multiply(
+            trace_coefficient, value
+        )
+        normal_value: _ComplexInterval = _complex_interval_multiply(
+            normal_coefficient, value
+        )
+        trace_value = (
+            jnp.where(included, trace_value[0], 0.0),
+            jnp.where(included, trace_value[1], 0.0),
+            jnp.where(included, trace_value[2], 0.0),
+            jnp.where(included, trace_value[3], 0.0),
+        )
+        normal_value = (
+            jnp.where(included, normal_value[0], 0.0),
+            jnp.where(included, normal_value[1], 0.0),
+            jnp.where(included, normal_value[2], 0.0),
+            jnp.where(included, normal_value[3], 0.0),
+        )
+        prior_trace: _ComplexInterval = (
+            accumulator[0][0][row],
+            accumulator[0][1][row],
+            accumulator[0][2][row],
+            accumulator[0][3][row],
+        )
+        prior_normal: _ComplexInterval = (
+            accumulator[1][0][row],
+            accumulator[1][1][row],
+            accumulator[1][2][row],
+            accumulator[1][3][row],
+        )
+        updated_trace: _ComplexInterval = _complex_interval_add(
+            prior_trace, trace_value
+        )
+        updated_normal: _ComplexInterval = _complex_interval_add(
+            prior_normal, normal_value
+        )
+        result: Tuple[_ComplexInterval, _ComplexInterval] = (
+            tuple(
+                component.at[row].set(updated)
+                for component, updated in zip(
+                    accumulator[0], updated_trace, strict=True
+                )
+            ),
+            tuple(
+                component.at[row].set(updated)
+                for component, updated in zip(
+                    accumulator[1], updated_normal, strict=True
+                )
+            ),
+        )
+        return result
+
+    trace_sum: _ComplexInterval
+    normal_sum: _ComplexInterval
+    trace_sum, normal_sum = lax.fori_loop(
+        0, field.shape[0], add_state, initial
+    )
+    trace_coefficients: _ComplexInterval = _complex_point_interval(
+        certificate.trace_frozen_coefficients
+    )
+    normal_coefficients: _ComplexInterval = _complex_point_interval(
+        certificate.normal_frozen_coefficients
+    )
+    gathered_trace: _ComplexInterval = tuple(
+        component[rows] for component in trace_sum
+    )
+    gathered_normal: _ComplexInterval = tuple(
+        component[rows] for component in normal_sum
+    )
+    trace_normal: _ComplexInterval = _complex_interval_multiply(
+        _complex_interval_conjugate(trace_coefficients), gathered_normal
+    )
+    normal_trace: _ComplexInterval = _complex_interval_multiply(
+        _complex_interval_conjugate(normal_coefficients), gathered_trace
+    )
+    negative_normal_trace: _ComplexInterval = (
+        -normal_trace[1],
+        -normal_trace[0],
+        -normal_trace[3],
+        -normal_trace[2],
+    )
+    difference: _ComplexInterval = _complex_interval_add(
+        trace_normal, negative_normal_trace
+    )
+    action: _ComplexInterval = _complex_interval_multiply(
+        difference,
+        _complex_point_interval(jnp.asarray(-0.5j, dtype=jnp.complex128)),
+    )
+    selected_action: _ComplexInterval = (
+        jnp.where(selected, action[0], 0.0),
+        jnp.where(selected, action[1], 0.0),
+        jnp.where(selected, action[2], 0.0),
+        jnp.where(selected, action[3], 0.0),
+    )
+    return selected_action
+
+
+def _complex_rectangle_error_bounds(
+    rounded: Complex128[Array, " n"],
+    exact: _ComplexInterval,
+) -> Float64[Array, " n"]:
+    """PRIVATE: Bound point-to-rectangle componentwise distances.
+
+    Parameters
+    ----------
+    rounded : Complex128[Array, " n"]
+        Rounded complex vector.
+    exact : _ComplexInterval
+        Componentwise exact-real complex rectangles.
+
+    Returns
+    -------
+    upper : Float64[Array, " n"]
+        Per-component outward Euclidean distance upper bounds.
+    """
+    real_distance: Float64[Array, " n"] = _distance_from_interval(
+        jnp.real(rounded), (exact[0], exact[1])
+    )
+    imag_distance: Float64[Array, " n"] = _distance_from_interval(
+        jnp.imag(rounded), (exact[2], exact[3])
+    )
+    squared: RealInterval = interval_add(
+        interval_square(point_interval(real_distance)),
+        interval_square(point_interval(imag_distance)),
+    )
+    upper: Float64[Array, " n"] = interval_sqrt(squared)[1]
+    return upper
+
+
+def _vector_l2_upper(
+    component_magnitude_upper_bounds: Float64[Array, " n"],
+) -> Float64[Array, ""]:
+    """PRIVATE: Bound one vector Euclidean norm outwardly.
+
+    Parameters
+    ----------
+    component_magnitude_upper_bounds : Float64[Array, " n"]
+        Per-component nonnegative magnitude upper bounds.
+
+    Returns
+    -------
+    upper : Float64[Array, ""]
+        Outward Euclidean norm upper bound.
+    """
+    zero: Float64[Array, ""] = jnp.asarray(0.0, dtype=jnp.float64)
+
+    def add_component(
+        index: scalar_int,
+        accumulator: RealInterval,
+    ) -> RealInterval:
+        """Accumulate one outward squared component bound."""
+        squared: RealInterval = interval_square(
+            point_interval(component_magnitude_upper_bounds[index])
+        )
+        updated: RealInterval = interval_add(accumulator, squared)
+        return updated
+
+    squared_norm: RealInterval = lax.fori_loop(
+        0,
+        component_magnitude_upper_bounds.shape[0],
+        add_component,
+        (zero, zero),
+    )
+    upper: Float64[Array, ""] = interval_sqrt(squared_norm)[1]
     return upper
 
 
@@ -973,7 +1590,7 @@ def evaluate_galerkin_terminal_current(
     Returns
     -------
     reduced_current : Float64[Array, ""]
-        Rounded ``Re(<u,F u>)`` in inverse Angstroms.
+        Rounded ``Re(<u,F u>)`` in inverse-square Angstroms.
 
     Raises
     ------
@@ -1159,12 +1776,410 @@ def enclose_galerkin_terminal_current(
     return diagnostic
 
 
+@jaxtyped(typechecker=beartype)
+def prepare_galerkin_terminal_current_diagnostic(
+    diagnostic: GalerkinCoordinateCauchyCurrent,
+) -> GalerkinCoordinateCauchyCurrent:
+    """Host-authenticate one provisional coordinate-current diagnostic.
+
+    :see: :class:`~.test_terminal.TestCurrentOperatorCertificate`
+
+    Parameters
+    ----------
+    diagnostic : GalerkinCoordinateCauchyCurrent
+        Provisional transform-compatible diagnostic to authenticate.
+
+    Returns
+    -------
+    authenticated : GalerkinCoordinateCauchyCurrent
+        Canonically reconstructed target and exact-replayed diagnostic.
+
+    Raises
+    ------
+    ValueError
+        If the nested target fails canonical host reconstruction.
+    equinox.EquinoxRuntimeError
+        If any diagnostic payload differs from canonical replay.
+
+    Notes
+    -----
+    :func:`enclose_galerkin_terminal_current` remains JIT-compatible and
+    produces provisional evidence.  This explicit non-JIT preparation step
+    establishes the target and record trust boundary required by every
+    stronger scientific consumer.
+    """
+    authenticated: GalerkinCoordinateCauchyCurrent = (
+        _authenticated_current_diagnostic(diagnostic)
+    )
+    return authenticated
+
+
+@jaxtyped(typechecker=beartype)
+def certify_galerkin_terminal_current_operator(
+    diagnostic: GalerkinCoordinateCauchyCurrent,
+) -> GalerkinCurrentOperatorCertificate:
+    """Certify the uniform frozen selected-sector current operator.
+
+    :see: :class:`~.test_terminal.TestCurrentOperatorCertificate`
+
+    Parameters
+    ----------
+    diagnostic : GalerkinCoordinateCauchyCurrent
+        Provisional weaker submitted-state diagnostic.  This function first
+        host-authenticates its target and payload, which then fix the selected
+        fiber scope, axis, side, and ``xi=0`` plane.
+
+    Returns
+    -------
+    certificate : GalerkinCurrentOperatorCertificate
+        Uniform LVT.55a4--LVT.55a5 frozen-operator evidence and enclosed
+        SC.35c number-current normalization.
+
+    Raises
+    ------
+    ValueError
+        If the nested target fails host-side canonical reconstruction.
+    equinox.EquinoxRuntimeError
+        If the public diagnostic payload fails canonical replay.
+
+    Notes
+    -----
+    The returned public carrier is storage, not proof by possession.  Every
+    scientific consumer must replay this host-side producer and compare the
+    complete payload before using it.  Canonical target reconstruction is a
+    deliberate non-JIT authentication boundary.  This first bounded route is
+    restricted to the acquisition-selected ``K_d`` fibers at ``xi=0`` and
+    makes no vacuum or detector claim.
+    """
+    authenticated_diagnostic: GalerkinCoordinateCauchyCurrent = (
+        prepare_galerkin_terminal_current_diagnostic(diagnostic)
+    )
+    target: GalerkinTargetManifest = authenticated_diagnostic.target
+    (
+        trace_coefficients,
+        normal_coefficients,
+        trace_coefficient_errors,
+        normal_coefficient_errors,
+        exact_trace_magnitudes,
+        exact_normal_magnitudes,
+    ) = _frozen_terminal_coefficient_evidence(target)
+    exact_trace_norm: Float64[Array, ""] = _fiber_operator_norm_upper(
+        target, exact_trace_magnitudes
+    )
+    exact_normal_norm: Float64[Array, ""] = _fiber_operator_norm_upper(
+        target, exact_normal_magnitudes
+    )
+    trace_error: Float64[Array, ""] = _fiber_operator_norm_upper(
+        target, trace_coefficient_errors
+    )
+    normal_error: Float64[Array, ""] = _fiber_operator_norm_upper(
+        target, normal_coefficient_errors
+    )
+    current_error: Float64[Array, ""] = _current_operator_error_upper(
+        trace_error,
+        normal_error,
+        exact_trace_norm,
+        exact_normal_norm,
+    )
+    current_scale: Float64[Array, ""]
+    exact_current_scale: RealInterval
+    current_scale_error: Float64[Array, ""]
+    current_scale, exact_current_scale, current_scale_error = (
+        _number_current_scale_enclosure(target)
+    )
+    probes = arithmetic_environment_probes()
+    arithmetic_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
+    gradual_supported: Bool[Array, ""] = probes[-1]
+    finite_operator_evidence: Bool[Array, ""] = (
+        jnp.all(jnp.isfinite(trace_coefficients))
+        & jnp.all(jnp.isfinite(normal_coefficients))
+        & jnp.all(jnp.isfinite(trace_coefficient_errors))
+        & jnp.all(jnp.isfinite(normal_coefficient_errors))
+        & jnp.isfinite(exact_trace_norm)
+        & jnp.isfinite(exact_normal_norm)
+        & jnp.isfinite(trace_error)
+        & jnp.isfinite(normal_error)
+        & jnp.isfinite(current_error)
+        & jnp.all(trace_coefficient_errors >= 0.0)
+        & jnp.all(normal_coefficient_errors >= 0.0)
+        & (exact_trace_norm >= 0.0)
+        & (exact_normal_norm >= 0.0)
+        & (trace_error >= 0.0)
+        & (normal_error >= 0.0)
+        & (current_error >= 0.0)
+    )
+    normalization_enclosed: Bool[Array, ""] = (
+        jnp.isfinite(current_scale)
+        & jnp.isfinite(exact_current_scale[0])
+        & jnp.isfinite(exact_current_scale[1])
+        & jnp.isfinite(current_scale_error)
+        & (current_scale > 0.0)
+        & (exact_current_scale[0] > 0.0)
+        & (exact_current_scale[0] <= exact_current_scale[1])
+        & (
+            current_scale_error
+            >= _distance_from_interval(current_scale, exact_current_scale)
+        )
+    )
+    zero: Int64[Array, ""] = jnp.asarray(
+        int(GalerkinCurrentOperatorFailure.NONE), dtype=jnp.int64
+    )
+    failure_mask: Int64[Array, ""] = zero
+    for passed, reason in (
+        (
+            authenticated_diagnostic.current_diagnostic_eligible,
+            GalerkinCurrentOperatorFailure.CURRENT_DIAGNOSTIC_INELIGIBLE,
+        ),
+        (
+            target.fixed_linear_error_ledger.finite_certificate,
+            GalerkinCurrentOperatorFailure.FIXED_LINEAR_CERTIFICATE_INELIGIBLE,
+        ),
+        (
+            arithmetic_supported,
+            GalerkinCurrentOperatorFailure.ARITHMETIC_ENVIRONMENT_UNSUPPORTED,
+        ),
+        (
+            finite_operator_evidence,
+            GalerkinCurrentOperatorFailure.NONFINITE_OPERATOR_EVIDENCE,
+        ),
+        (
+            normalization_enclosed,
+            GalerkinCurrentOperatorFailure.CURRENT_NORMALIZATION_UNENCLOSED,
+        ),
+    ):
+        failure_mask = jnp.bitwise_or(
+            failure_mask,
+            jnp.where(passed, zero, int(reason)),
+        )
+    stopped = jax.tree.map(
+        jax.lax.stop_gradient,
+        (
+            trace_coefficients,
+            normal_coefficients,
+            trace_coefficient_errors,
+            normal_coefficient_errors,
+            exact_trace_norm,
+            exact_normal_norm,
+            trace_error,
+            normal_error,
+            current_error,
+            current_scale,
+            exact_current_scale[0],
+            exact_current_scale[1],
+            current_scale_error,
+            arithmetic_supported,
+            gradual_supported,
+            failure_mask,
+        ),
+    )
+    certificate: GalerkinCurrentOperatorCertificate = (
+        create_galerkin_current_operator_certificate(
+            diagnostic=authenticated_diagnostic,
+            trace_frozen_coefficients=stopped[0],
+            normal_frozen_coefficients=stopped[1],
+            trace_coefficient_error_bounds=stopped[2],
+            normal_coefficient_error_bounds=stopped[3],
+            exact_trace_operator_norm_upper_bound=stopped[4],
+            exact_normal_operator_norm_upper_bound=stopped[5],
+            trace_operator_error_upper_bound=stopped[6],
+            normal_operator_error_upper_bound=stopped[7],
+            current_operator_error_upper_bound=stopped[8],
+            number_current_scale=stopped[9],
+            exact_number_current_scale_lower_bound=stopped[10],
+            exact_number_current_scale_upper_bound=stopped[11],
+            number_current_scale_error_upper_bound=stopped[12],
+            terminal_plane_coordinate=jnp.asarray(0.0, dtype=jnp.float64),
+            arithmetic_environment_supported=stopped[13],
+            gradual_underflow_supported=stopped[14],
+            current_operator_failure_mask=stopped[15],
+            current_scope=authenticated_diagnostic.current_scope,
+            route=_ROUTE,
+            coefficient_metrics=_COEFFICIENT_METRICS,
+            fixed_linear_target=_FIXED_LINEAR_TARGET,
+            per_call_action_route=_PER_CALL_ACTION_ROUTE,
+            current_normalization=_CURRENT_NORMALIZATION,
+            eligibility_scope=_OPERATOR_ELIGIBILITY_SCOPE,
+        )
+    )
+    return certificate
+
+
+def _authenticated_current_operator_certificate(
+    certificate: GalerkinCurrentOperatorCertificate,
+) -> GalerkinCurrentOperatorCertificate:
+    """PRIVATE: Replay and authenticate a public operator certificate.
+
+    Parameters
+    ----------
+    certificate : GalerkinCurrentOperatorCertificate
+        Submitted provisional frozen current-operator certificate.
+
+    Returns
+    -------
+    authenticated : GalerkinCurrentOperatorCertificate
+        Canonically replayed certificate with authenticated stored values.
+    """
+    canonical: GalerkinCurrentOperatorCertificate = (
+        certify_galerkin_terminal_current_operator(certificate.diagnostic)
+    )
+    same_payload: Bool[Array, ""] = jnp.asarray(
+        eqx.tree_equal(certificate, canonical, typematch=True)
+    )
+    checked_error: Float64[Array, ""] = eqx.error_if(
+        canonical.current_operator_error_upper_bound,
+        ~same_payload,
+        "current-operator certificate failed canonical replay authentication",
+    )
+    authenticated: GalerkinCurrentOperatorCertificate = eqx.tree_at(
+        lambda record: record.current_operator_error_upper_bound,
+        canonical,
+        checked_error,
+    )
+    return authenticated
+
+
+@jaxtyped(typechecker=beartype)
+def enclose_galerkin_terminal_current_action(
+    certificate: GalerkinCurrentOperatorCertificate,
+    field: Complex[Array, "..."],
+) -> GalerkinTerminalCurrentActionEnclosure:
+    """Enclose one frozen current action after certificate authentication.
+
+    :see: :class:`~.test_terminal.TestCurrentOperatorCertificate`
+
+    Parameters
+    ----------
+    certificate : GalerkinCurrentOperatorCertificate
+        Public storage record, authenticated by complete canonical replay
+        before any field action is evaluated.
+    field : Complex[Array, "..."]
+        Exact stored binary64 retained-state coefficients.
+
+    Returns
+    -------
+    enclosure : GalerkinTerminalCurrentActionEnclosure
+        Rounded public action, exact-real frozen-action rectangles, and an
+        outward Euclidean action-error bound.
+
+    Raises
+    ------
+    ValueError
+        If canonical target reconstruction fails or the state rank or length
+        is invalid.
+    equinox.EquinoxRuntimeError
+        If the certificate is forged or the submitted field is nonfinite.
+
+    Notes
+    -----
+    The action enclosure accounts only for arithmetic around the frozen
+    dyadic matrix.  The separate uniform frozen-to-exact target difference
+    remains in ``certificate.current_operator_error_upper_bound``.  Complete
+    public-certificate replay includes host-side target reconstruction, so
+    this authenticated evidence entry point is deliberately not JIT-able.
+    Scientific use requires both ``certificate.current_operator_eligible``
+    and this call's ``finite_certificate``; neither predicate substitutes for
+    the other.
+    """
+    authenticated: GalerkinCurrentOperatorCertificate = (
+        _authenticated_current_operator_certificate(certificate)
+    )
+    target: GalerkinTargetManifest = authenticated.diagnostic.target
+    checked_field: Complex128[Array, " n"] = _checked_state(
+        target, field, "field"
+    )
+    production_action: Complex128[Array, " n"] = _raw_current_action(
+        target, checked_field
+    )
+    exact_action: _ComplexInterval = _frozen_current_action_interval(
+        authenticated, checked_field
+    )
+    component_errors: Float64[Array, " n"] = _complex_rectangle_error_bounds(
+        production_action, exact_action
+    )
+    action_error: Float64[Array, ""] = _vector_l2_upper(component_errors)
+    probes = arithmetic_environment_probes()
+    arithmetic_supported: Bool[Array, ""] = all_normal_arithmetic_supported()
+    gradual_supported: Bool[Array, ""] = probes[-1]
+    finite_rectangles: Bool[Array, ""] = jnp.asarray(True)
+    for component in exact_action:
+        finite_rectangles = finite_rectangles & jnp.all(
+            jnp.isfinite(component)
+        )
+    finite_evidence: Bool[Array, ""] = (
+        jnp.all(jnp.isfinite(production_action))
+        & finite_rectangles
+        & jnp.all(jnp.isfinite(component_errors))
+        & jnp.isfinite(action_error)
+        & jnp.all(component_errors >= 0.0)
+        & (action_error >= 0.0)
+    )
+    zero: Int64[Array, ""] = jnp.asarray(
+        int(GalerkinTerminalCurrentActionFailure.NONE), dtype=jnp.int64
+    )
+    failure_mask: Int64[Array, ""] = zero
+    for passed, reason in (
+        (
+            authenticated.current_operator_eligible,
+            GalerkinTerminalCurrentActionFailure.OPERATOR_INELIGIBLE,
+        ),
+        (
+            arithmetic_supported,
+            GalerkinTerminalCurrentActionFailure.ARITHMETIC_ENVIRONMENT_UNSUPPORTED,
+        ),
+        (
+            finite_evidence,
+            GalerkinTerminalCurrentActionFailure.NONFINITE_ACTION_EVIDENCE,
+        ),
+    ):
+        failure_mask = jnp.bitwise_or(
+            failure_mask,
+            jnp.where(passed, zero, int(reason)),
+        )
+    stopped = jax.tree.map(
+        jax.lax.stop_gradient,
+        (
+            checked_field,
+            production_action,
+            exact_action,
+            component_errors,
+            action_error,
+            arithmetic_supported,
+            gradual_supported,
+            failure_mask,
+        ),
+    )
+    enclosure: GalerkinTerminalCurrentActionEnclosure = (
+        create_galerkin_terminal_current_action_enclosure(
+            certificate=authenticated,
+            submitted_field=stopped[0],
+            production_action=stopped[1],
+            algebraic_action_real_lower_bounds=stopped[2][0],
+            algebraic_action_real_upper_bounds=stopped[2][1],
+            algebraic_action_imag_lower_bounds=stopped[2][2],
+            algebraic_action_imag_upper_bounds=stopped[2][3],
+            component_error_bounds=stopped[3],
+            action_error_bound=stopped[4],
+            arithmetic_environment_supported=stopped[5],
+            gradual_underflow_supported=stopped[6],
+            failure_mask=stopped[7],
+            route=_ROUTE,
+            exact_action_target=_ACTION_TARGET,
+            coefficient_norm="Euclidean complex state-coefficient l2 norm",
+            error_scope=_ACTION_ERROR_SCOPE,
+        )
+    )
+    return enclosure
+
+
 __all__: list[str] = [
     "apply_galerkin_terminal_current",
     "apply_galerkin_terminal_normal_derivative",
     "apply_galerkin_terminal_normal_derivative_adjoint",
     "apply_galerkin_terminal_trace",
     "apply_galerkin_terminal_trace_adjoint",
+    "certify_galerkin_terminal_current_operator",
     "enclose_galerkin_terminal_current",
+    "enclose_galerkin_terminal_current_action",
     "evaluate_galerkin_terminal_current",
+    "prepare_galerkin_terminal_current_diagnostic",
 ]

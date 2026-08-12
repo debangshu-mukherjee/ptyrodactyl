@@ -24,6 +24,7 @@ from numpy.typing import NDArray
 from ptyrodactyl.galerkin import (
     apply_galerkin_adjoint,
     apply_galerkin_operator,
+    cgls_adjoint_solve,
     cgls_solve,
     evaluate_galerkin_adjoint_residual,
     evaluate_galerkin_residual,
@@ -464,6 +465,7 @@ class TestMatrixFreeGalerkinEngine:
     :see: :func:`ptyrodactyl.galerkin.apply_galerkin_adjoint`
     :see: :func:`ptyrodactyl.galerkin.evaluate_galerkin_residual`
     :see: :func:`ptyrodactyl.galerkin.evaluate_galerkin_adjoint_residual`
+    :see: :func:`ptyrodactyl.galerkin.cgls_adjoint_solve`
     :see: :func:`ptyrodactyl.galerkin.cgls_solve`
     :see: :func:`ptyrodactyl.galerkin.lsqr_solve`
     :see: :func:`ptyrodactyl.galerkin.implicit_galerkin_solve`
@@ -745,6 +747,62 @@ class TestMatrixFreeGalerkinEngine:
             assert result.iterations.dtype == jnp.int32
             assert result.operator_applications.dtype == jnp.int32
             assert result.status.dtype == jnp.int32
+
+    def test_adjoint_cgls_matches_nonnormal_dense_system_and_fresh_residual(
+        self,
+    ) -> None:
+        """Retain the actual H-star solve and independently fresh residual."""
+        operator = _create_operator()
+        dense_operator = _dense_operator()
+        source = np.asarray(_SOURCE)
+        expected = np.linalg.solve(dense_operator.conj().T, source)
+        forward_solution = np.linalg.solve(dense_operator, source)
+
+        result = cgls_adjoint_solve(
+            operator,
+            jnp.asarray(source),
+            max_iterations=64,
+            relative_tolerance=1e-12,
+            absolute_tolerance=1e-14,
+        )
+
+        assert result.status == GalerkinSolveStatus.CONVERGED
+        assert bool(result.converged)
+        assert result.method is GalerkinSolveMethod.CGLS
+        np.testing.assert_allclose(
+            result.field,
+            expected,
+            rtol=2e-10,
+            atol=2e-11,
+        )
+        assert not np.allclose(
+            expected,
+            forward_solution,
+            rtol=1e-6,
+            atol=1e-8,
+        )
+        expected_residual = source - dense_operator.conj().T @ np.asarray(
+            result.field
+        )
+        expected_normal_residual = dense_operator @ expected_residual
+        np.testing.assert_allclose(
+            result.residual,
+            expected_residual,
+            rtol=2e-12,
+            atol=2e-12,
+        )
+        np.testing.assert_allclose(
+            result.residual_norm,
+            np.linalg.norm(expected_residual),
+            rtol=2e-12,
+            atol=2e-12,
+        )
+        np.testing.assert_allclose(
+            result.normal_residual_norm,
+            np.linalg.norm(expected_normal_residual),
+            rtol=2e-12,
+            atol=2e-12,
+        )
 
     @pytest.mark.parametrize(
         "solver",

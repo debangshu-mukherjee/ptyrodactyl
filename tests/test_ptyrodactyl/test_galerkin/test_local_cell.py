@@ -9,6 +9,9 @@ the rounded callable's physical-metric adjoint, and JAX transformations.
 """
 
 import dataclasses
+import functools
+import math
+from fractions import Fraction
 
 import equinox as eqx
 import jax
@@ -19,19 +22,29 @@ from beartype.typing import Tuple
 from numpy.testing import assert_allclose
 
 from ptyrodactyl.galerkin.local_cell import (
+    _authenticate_local_cell_tail,
     _coefficient_error_bounds,
     _local_cell_coefficients_from_full_grid,
     _origin_cycle_fractions,
+    _outward_lvt9_subtraction,
     _physical_cell_volume,
+    _tail_enclosure_digest,
     apply_local_cell_potential_metric_adjoint,
+    enclose_local_cell_tail,
     realize_local_cell_galerkin_potential,
+)
+from ptyrodactyl.galerkin.local_cell_certification import (
+    certify_local_cell_galerkin_potential,
 )
 from ptyrodactyl.types.born_potential_types import (
     GalerkinProductSupport,
     create_galerkin_product_support,
 )
 from ptyrodactyl.types.local_cell_types import (
+    GalerkinLocalCellCertificateFailure,
     GalerkinLocalCellPotentialRealization,
+    GalerkinLocalCellTailEnclosure,
+    GalerkinLocalCellTailFailure,
     LocalCellPotential3D,
     create_local_cell_potential_3d,
 )
@@ -978,3 +991,223 @@ apply_local_cell_potential_metric_adjoint`
                 cotangent,
             )
             jax.block_until_ready(gradient)
+
+
+class TestLocalCellTailEnclosure:
+    """Verify authenticated outward LVT.9 full-tail evidence.
+
+    :see: :func:`ptyrodactyl.galerkin.enclose_local_cell_tail`
+    """
+
+    @staticmethod
+    @functools.lru_cache(maxsize=None)
+    def _certified_step(
+        *,
+        maximum_direct_terms: int = 4,
+    ) -> GalerkinLocalCellPotentialRealization:
+        """Certify a two-cell unit step on ``K = {-1, 0, 1}``."""
+        potential = _potential(
+            jnp.asarray([[[1.0, -1.0]]], dtype=jnp.float64),
+            cell_size=(1.0, 1.0, 1.0),
+            cell_center_origin=(0.0, 0.0, 0.0),
+        )
+        realization = _realize(
+            potential,
+            _support(((-1, 0, 0), (0, 0, 0), (1, 0, 0))),
+        )
+        certified: GalerkinLocalCellPotentialRealization = (
+            certify_local_cell_galerkin_potential(
+                realization,
+                maximum_direct_terms=maximum_direct_terms,
+            )
+        )
+        return certified
+
+    @staticmethod
+    @functools.lru_cache(maxsize=1)
+    def _enclosed_step() -> GalerkinLocalCellTailEnclosure:
+        """Build and cache the common finite LVT.9 regression carrier."""
+        enclosure: GalerkinLocalCellTailEnclosure = enclose_local_cell_tail(
+            TestLocalCellTailEnclosure._certified_step()
+        )
+        return enclosure
+
+    def test_two_cell_step_encloses_exact_infinite_parseval_tail(self) -> None:
+        r"""Enclose ``2 - 16 / pi**2`` and count both signed modes."""
+        enclosure = self._enclosed_step()
+        pi_digits = 314159265358979323846264338327950288419716939937510
+        pi_lower = Fraction(pi_digits, 10**50)
+        pi_upper = Fraction(pi_digits + 1, 10**50)
+        exact_squared_lower = Fraction(2) - Fraction(16) / (pi_lower**2)
+        exact_squared_upper = Fraction(2) - Fraction(16) / (pi_upper**2)
+        squared_lower = Fraction.from_float(
+            float(enclosure.squared_tail_lower_bound)
+        )
+        squared_upper = Fraction.from_float(
+            float(enclosure.squared_tail_upper_bound)
+        )
+        midpoint_norm = math.sqrt(
+            float((exact_squared_lower + exact_squared_upper) / 2)
+        )
+
+        assert isinstance(enclosure, GalerkinLocalCellTailEnclosure)
+        assert bool(enclosure.finite_enclosure)
+        assert enclosure.failure is GalerkinLocalCellTailFailure.NONE
+        assert enclosure.parent_certificate_failure is (
+            GalerkinLocalCellCertificateFailure.NONE
+        )
+        assert squared_lower <= exact_squared_lower
+        assert squared_upper >= exact_squared_upper
+        assert float(enclosure.tail_l2_lower_bound) <= midpoint_norm
+        assert float(enclosure.tail_l2_upper_bound) >= midpoint_norm
+        assert len(enclosure.parent_certificate_digest) == 64
+        assert len(enclosure.tail_enclosure_digest) == 64
+        replay = _authenticate_local_cell_tail(enclosure)
+        assert replay.tail_enclosure_digest == enclosure.tail_enclosure_digest
+
+    def test_constant_field_retaining_zero_has_exact_zero_tail(self) -> None:
+        """Return four exact zero endpoints for a globally constant field."""
+        potential = _potential(
+            jnp.full((2, 2, 2), 3.25, dtype=jnp.float64),
+            cell_size=(0.5, 0.75, 1.25),
+            cell_center_origin=(0.0, 0.0, 0.0),
+        )
+        realized = _realize(potential, _support(((0, 0, 0),)))
+        certified = certify_local_cell_galerkin_potential(
+            realized,
+            maximum_direct_terms=8,
+        )
+        enclosure = enclose_local_cell_tail(certified)
+
+        assert bool(enclosure.finite_enclosure)
+        assert enclosure.squared_tail_lower_bound == 0.0
+        assert enclosure.squared_tail_upper_bound == 0.0
+        assert enclosure.tail_l2_lower_bound == 0.0
+        assert enclosure.tail_l2_upper_bound == 0.0
+
+    def test_mean_zero_step_retaining_zero_has_exact_total_energy_tail(
+        self,
+    ) -> None:
+        """Enclose the independent exact-Fraction value two for ``K={0}``."""
+        potential = _potential(
+            jnp.asarray([[[1.0, -1.0]]], dtype=jnp.float64),
+            cell_size=(1.0, 1.0, 1.0),
+            cell_center_origin=(0.0, 0.0, 0.0),
+        )
+        realized = _realize(potential, _support(((0, 0, 0),)))
+        certified = certify_local_cell_galerkin_potential(
+            realized,
+            maximum_direct_terms=2,
+        )
+        enclosure = enclose_local_cell_tail(certified)
+        exact_squared = Fraction(2)
+
+        assert (
+            Fraction.from_float(float(enclosure.squared_tail_lower_bound))
+            <= exact_squared
+        )
+        assert (
+            Fraction.from_float(float(enclosure.squared_tail_upper_bound))
+            >= exact_squared
+        )
+        assert float(enclosure.tail_l2_lower_bound) <= math.sqrt(2.0)
+        assert float(enclosure.tail_l2_upper_bound) >= math.sqrt(2.0)
+
+    def test_triangle_route_is_not_tail_evidence(self) -> None:
+        """Reject stopped fallback errors before any LVT.9 arithmetic."""
+        potential = _potential(
+            jnp.asarray([[[1.0, -1.0]]], dtype=jnp.float64),
+            cell_size=(1.0, 1.0, 1.0),
+            cell_center_origin=(0.0, 0.0, 0.0),
+        )
+        triangle = _realize(potential, _support(((0, 0, 0),)))
+
+        with pytest.raises(ValueError, match="direct local-cell evidence"):
+            enclose_local_cell_tail(triangle)
+
+    def test_host_boundary_rejects_traced_realization(self) -> None:
+        """Keep certificate replay and exact Fraction arithmetic off traces."""
+        certified = self._certified_step()
+
+        with pytest.raises(ValueError, match="requires concrete host values"):
+            result = jax.jit(enclose_local_cell_tail)(certified)
+            jax.block_until_ready(result)
+
+    def test_parent_typed_noncertificate_propagates_unbounded_tail(
+        self,
+    ) -> None:
+        """Retain the parent's exact failure and never use fallback errors."""
+        failed_parent = self._certified_step(maximum_direct_terms=3)
+        parent_certificate = failed_parent.coefficient_certificate
+        assert parent_certificate is not None
+        enclosure = enclose_local_cell_tail(failed_parent)
+
+        assert parent_certificate.failure is (
+            GalerkinLocalCellCertificateFailure.WORK_BUDGET_EXCEEDED
+        )
+        assert not bool(enclosure.finite_enclosure)
+        assert enclosure.failure is (
+            GalerkinLocalCellTailFailure.PARENT_CERTIFICATE_NOT_FINITE
+        )
+        assert enclosure.parent_certificate_failure is (
+            GalerkinLocalCellCertificateFailure.WORK_BUDGET_EXCEEDED
+        )
+        assert enclosure.squared_tail_lower_bound == 0.0
+        assert jnp.isposinf(enclosure.squared_tail_upper_bound)
+        assert enclosure.tail_l2_lower_bound == 0.0
+        assert jnp.isposinf(enclosure.tail_l2_upper_bound)
+        _authenticate_local_cell_tail(enclosure)
+
+    def test_subtraction_intersects_only_after_exact_outward_difference(
+        self,
+    ) -> None:
+        """Account for a negative raw lower and reject a negative raw upper."""
+        interval = _outward_lvt9_subtraction(
+            Fraction(1),
+            Fraction(9, 10),
+            Fraction(11, 10),
+        )
+        contradiction = _outward_lvt9_subtraction(
+            Fraction(1),
+            Fraction(11, 10),
+            Fraction(6, 5),
+        )
+
+        assert interval == (Fraction(0), Fraction(1, 10), True)
+        assert contradiction == (Fraction(0), Fraction(0), False)
+
+    def test_replay_rejects_dynamic_and_static_tail_forgery(self) -> None:
+        """Treat public Equinox storage and its checksum as untrusted input."""
+        enclosure = self._enclosed_step()
+        forged_bound = eqx.tree_at(
+            lambda item: item.squared_tail_upper_bound,
+            enclosure,
+            enclosure.squared_tail_upper_bound + 1.0,
+        )
+        forged_digest = dataclasses.replace(
+            enclosure,
+            tail_enclosure_digest="0" * 64,
+        )
+        rehashed_digest = _tail_enclosure_digest(
+            forged_bound.parent_certificate_digest,
+            float(forged_bound.squared_tail_lower_bound),
+            float(forged_bound.squared_tail_upper_bound),
+            float(forged_bound.tail_l2_lower_bound),
+            float(forged_bound.tail_l2_upper_bound),
+            finite_enclosure=bool(forged_bound.finite_enclosure),
+            failure=forged_bound.failure,
+            parent_certificate_failure=(
+                forged_bound.parent_certificate_failure
+            ),
+        )
+        rehashed_bound = dataclasses.replace(
+            forged_bound,
+            tail_enclosure_digest=rehashed_digest,
+        )
+
+        with pytest.raises(ValueError, match="does not match host replay"):
+            _authenticate_local_cell_tail(forged_bound)
+        with pytest.raises(ValueError, match="does not match host replay"):
+            _authenticate_local_cell_tail(forged_digest)
+        with pytest.raises(ValueError, match="does not match host replay"):
+            _authenticate_local_cell_tail(rehashed_bound)

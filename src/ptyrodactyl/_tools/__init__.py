@@ -7,6 +7,10 @@ operator families. The submodules are organized as follows:
 
 - :mod:`canonical_digest`
     Canonical stored-value payloads and provenance digests.
+- :mod:`censored_poisson_differential_interval`
+    Exact-rational censored-Poisson differential enclosures.
+- :mod:`entire_interval`
+    Exact-rational bounded enclosures of elementary functions.
 - :mod:`host_interval`
     Exact-rational host interval arithmetic and outward conversion.
 - :mod:`interval`
@@ -15,6 +19,8 @@ operator families. The submodules are organized as follows:
     Dtype-preserving floating-point range predicates.
 - :mod:`physics`
     Canonically rounded scalar electron-physics formulas.
+- :mod:`poisson_interval`
+    Exact-rational censored-Poisson law enclosures.
 
 Unprefixed names form the package-internal shared seam. Underscored names
 remain leaf-local implementation details, and ``ptyrodactyl`` does not
@@ -22,6 +28,24 @@ re-export this private package.
 
 Routine Listings
 ----------------
+:class:`CensoredPoissonDifferentialError`
+    Report one typed bounded differential-enclosure failure.
+:class:`CensoredPoissonDifferentialFailure`
+    Enumerate disjoint local and nested enclosure failures.
+:class:`CensoredPoissonDifferentialWorkTranscript`
+    Store deterministic local and nested probability work evidence.
+:class:`CensoredPoissonEnclosureError`
+    Report one typed bounded censored-Poisson enclosure failure.
+:class:`CensoredPoissonEnclosureFailure`
+    Enumerate local, nested-kernel, and positivity failures.
+:class:`CensoredPoissonWorkTranscript`
+    Store deterministic censored-Poisson and nested-kernel work evidence.
+:class:`EntireEnclosureError`
+    Report one typed bounded entire-function enclosure failure.
+:class:`EntireEnclosureFailure`
+    Enumerate term, work, range, root, and rational-size failures.
+:class:`EntireWorkTranscript`
+    Store deterministic exact-kernel resource evidence.
 :class:`RootEnclosureError`
     Identify an internal failure to enclose one rational-turn phase.
 :func:`all_normal_arithmetic_supported`
@@ -42,6 +66,30 @@ Routine Listings
     Enclose one positive-denominator quotient from below.
 :func:`downward_sqrt`
     Enclose one nonnegative square root from below.
+:func:`enclose_censored_poisson_fisher_information`
+    Enclose the expected information of one censored Poisson law.
+:func:`enclose_censored_poisson_mean`
+    Enclose the expectation of one censored Poisson count.
+:func:`enclose_censored_poisson_nll`
+    Enclose one censored Poisson negative log-likelihood.
+:func:`enclose_censored_poisson_nll_differential`
+    Enclose one censored-Poisson NLL score and curvature.
+:func:`enclose_censored_poisson_probability`
+    Enclose one probability in a censored Poisson law.
+:func:`enclose_complex_exp`
+    Enclose the complex exponential on one rational rectangle.
+:func:`enclose_complex_exprel`
+    Enclose the entire complex exprel function on one rectangle.
+:func:`enclose_complex_phi2`
+    Enclose the entire complex second exponential phi function.
+:func:`enclose_real_exp`
+    Enclose the real exponential on one rational interval.
+:func:`enclose_real_log`
+    Enclose the real natural logarithm on one positive rational interval.
+:func:`enclose_real_sin_cos`
+    Enclose real sine and cosine through the complex exponential.
+:func:`enclose_real_sinh_cosh`
+    Enclose real hyperbolic sine and cosine through real exponentials.
 :func:`fraction_from_float`
     Return the exact rational value of one finite binary64.
 :func:`fraction_lower_float`
@@ -118,6 +166,25 @@ from .canonical_digest import (
     sha256,
     stored_value_payload,
 )
+from .censored_poisson_differential_interval import (
+    CensoredPoissonDifferentialError,
+    CensoredPoissonDifferentialFailure,
+    CensoredPoissonDifferentialWorkTranscript,
+    enclose_censored_poisson_fisher_information,
+    enclose_censored_poisson_nll_differential,
+)
+from .entire_interval import (
+    EntireEnclosureError,
+    EntireEnclosureFailure,
+    EntireWorkTranscript,
+    enclose_complex_exp,
+    enclose_complex_exprel,
+    enclose_complex_phi2,
+    enclose_real_exp,
+    enclose_real_log,
+    enclose_real_sin_cos,
+    enclose_real_sinh_cosh,
+)
 from .host_interval import (
     ComplexRectangle,
     RationalInterval,
@@ -163,11 +230,25 @@ from .numeric import (
     has_subnormal_components,
 )
 from .physics import coupled_interaction_value, helmholtz_coupling_value
+from .poisson_interval import (
+    CensoredPoissonEnclosureError,
+    CensoredPoissonEnclosureFailure,
+    CensoredPoissonWorkTranscript,
+    enclose_censored_poisson_mean,
+    enclose_censored_poisson_nll,
+    enclose_censored_poisson_probability,
+)
 
 __all__: list[str] = [
     "all_normal_arithmetic_supported",
     "arithmetic_environment_probes",
     "array_payload",
+    "CensoredPoissonDifferentialError",
+    "CensoredPoissonDifferentialFailure",
+    "CensoredPoissonDifferentialWorkTranscript",
+    "CensoredPoissonEnclosureError",
+    "CensoredPoissonEnclosureFailure",
+    "CensoredPoissonWorkTranscript",
     "coefficient_error_fraction",
     "complex_rectangle_multiply",
     "ComplexRectangle",
@@ -175,6 +256,21 @@ __all__: list[str] = [
     "coupled_interaction_value",
     "downward_divide",
     "downward_sqrt",
+    "enclose_censored_poisson_fisher_information",
+    "enclose_censored_poisson_mean",
+    "enclose_censored_poisson_nll",
+    "enclose_censored_poisson_nll_differential",
+    "enclose_censored_poisson_probability",
+    "enclose_complex_exp",
+    "enclose_complex_exprel",
+    "enclose_complex_phi2",
+    "enclose_real_exp",
+    "enclose_real_log",
+    "enclose_real_sin_cos",
+    "enclose_real_sinh_cosh",
+    "EntireEnclosureError",
+    "EntireEnclosureFailure",
+    "EntireWorkTranscript",
     "fraction_from_float",
     "fraction_lower_float",
     "fraction_upper_float",
